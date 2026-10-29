@@ -95,7 +95,7 @@ export function OrganizationSettings() {
             <p>{t("organization.advancedHelp")}</p>
             <label className="flex flex-col gap-1.5">{t("organization.address")}
               <input type="url" required value={address} disabled={busy} onChange={(event) => setAddress(event.target.value)}
-                placeholder={DEFAULT_PORTAL_ORIGIN} autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={2048}
+                placeholder="https://admin.example.com" autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false} maxLength={2048}
                 className="w-full rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[14px] text-ink outline-none focus:border-accent/50" />
             </label>
             <button type="submit" disabled={busy || !address.trim()} className="ui-button w-fit">{t("organization.customSignIn")}</button>

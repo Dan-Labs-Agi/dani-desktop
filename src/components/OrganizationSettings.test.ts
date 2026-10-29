@@ -106,7 +106,9 @@ describe("optional desktop Organisation settings", () => {
   it("uses the default portal from one sign-in action and keeps custom setup advanced", async () => {
     await ready();
     let view = render();
-    expect(view.html).toContain("https://admin.openmausbot.com");
+    // The advanced form hints a neutral example; the vendor portal is only ever typed explicitly.
+    expect(view.html).toContain("https://admin.example.com");
+    expect(view.html).not.toContain("admin.openmausbot.com");
     expect(view.html).toContain("Sign in with your organization");
     expect(view.html).toContain("<summary");
     expect(view.html).toContain("Advanced");

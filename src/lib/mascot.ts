@@ -121,17 +121,15 @@ export function normalizeState(value: string | null | undefined): MausState | nu
   return LEGACY_STATES[value] ?? null;
 }
 
+// Only the states the Manzanilla robot renders distinctly are pickable:
+// idle, the working pose (working/thinking render the same), and the waiting
+// pose (listening maps to waiting). Every other MausState stays valid in
+// storage - normalizeState keeps it and the robot renders it as idle - so
+// saved expressions from older versions keep loading untouched.
 export const PICKABLE_STATES: MausState[] = [
   "idle",
-  "happy",
-  "curious",
-  "drowsy",
   "working",
-  "thinking",
   "listening",
-  "sleeping",
-  "suspicious",
-  "proud",
 ];
 
 type MascotMessage = {

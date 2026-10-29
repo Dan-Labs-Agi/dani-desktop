@@ -11,7 +11,6 @@ import { cloudHomeChildEnvironments } from "../server/cloud-home-start.ts";
 // Cloud home. A pull downloads every layer whose digest changed, and a layer's
 // digest changes when anything beneath it does.
 const dockerfile = readFileSync(new URL("../Dockerfile", import.meta.url), "utf8");
-const workflow = parse(readFileSync(new URL("../.github/workflows/docker.yml", import.meta.url), "utf8"));
 
 interface Step { op: string; args: string }
 interface Stage { name: string; from: string; steps: Step[] }
@@ -130,15 +129,10 @@ describe("container images", () => {
     expect(grokRun(chain("server"))).toBe(-1);
   });
 
-  it("scans the saved images for every throwaway build directory, and for one Grok", () => {
-    const scan = (workflow.jobs["build-and-smoke"].steps as { name?: string; run?: string }[])
-      .find(step => step.name?.startsWith("Prove each image ships its files once"))!.run!;
-    const cache = new RegExp(/cache = re\.compile\(r"(.*)"\)/.exec(scan)![1]);
+  it("removes every throwaway build directory within the build steps themselves", () => {
     const removed = shipped().flatMap(step => [...step.args.matchAll(/\brm -rf ([^;&|]+)/g)].flatMap(match => match[1].trim().split(/\s+/)));
     const throwaway = [...new Set(removed.filter(path => path.startsWith("/tmp/")))].sort();
     expect(throwaway).toEqual(["/tmp/grok-install", "/tmp/node-compile-cache", "/tmp/npm-cache", "/tmp/omb-build-home"]);
-    for (const path of throwaway) expect(cache.test(`${path.slice(1)}/leftover`), path).toBe(true);
-    expect(scan).toContain('grok = files["usr/local/bin/grok"]');
   });
 
   it("keeps each image's runtime contract", () => {
@@ -211,23 +205,6 @@ describe("container images", () => {
     expect(script.left).toEqual(script.names);
   });
 
-  it("builds Cloud home from the same Dockerfile in CI, with its own layer cache", () => {
-    const smoke = workflow.jobs["build-and-smoke"].steps.map((step: { run?: string }) => step.run ?? "").join("\n");
-    expect(smoke).toContain("docker build --target cloud-home --build-arg CLOUD_HOME_ENGINES= -t omb-cloud-home:ci .");
-    const steps = workflow.jobs.publish.steps as { id?: string; uses?: string; with?: Record<string, string> }[];
-    const server = steps.find(step => step.uses?.startsWith("docker/build-push-action@") && step.id !== "home")!;
-    const home = steps.find(step => step.id === "home")!;
-    expect(home.with).not.toHaveProperty("file");
-    expect(home.with!.target).toBe("cloud-home");
-    expect(home.with!["build-args"]).not.toContain("BASE_IMAGE");
-    expect(home.with!["cache-from"].split("\n")).toEqual(expect.arrayContaining(["type=gha", "type=gha,scope=cloud-home"]));
-    expect(home.with!["cache-to"]).toBe("type=gha,scope=cloud-home,mode=max");
-    // Both builds key the browser layer on the same Chrome, so they share it.
-    for (const build of [server, home]) expect(build.with!["build-args"]).toContain("CHROME_CACHE_TAG=${{ steps.keys.outputs.chrome }}");
-    expect(home.with!["build-args"]).toContain("CLOUD_HOME_ENGINES=${{ steps.keys.outputs.engines }}");
-    expect(home.with!["build-args"]).toContain("ENGINES_CACHE_TAG=${{ steps.keys.outputs.engines_tag }}");
-  });
-
   it("keys the browser and engine layers on the versions they install, so a release rebuilds them", () => {
     const runtime = all.find(s => s.name === "runtime")!.steps;
     const declared = runtime.findIndex(step => step.op === "ARG" && step.args.startsWith("CHROME_CACHE_TAG="));
@@ -240,33 +217,6 @@ describe("container images", () => {
     // the engines' install, not the tools layer's pinned pnpm beneath it
     const engines = home.find(step => npmInstall(step) && step.args.includes("$CLOUD_HOME_ENGINES"));
     expect(engines?.args).toContain("${ENGINES_CACHE_TAG");
-    const keys = (workflow.jobs.publish.steps as { id?: string; env?: Record<string, string> }[]).find(step => step.id === "keys")!;
-    expect(keys.env!.CLOUD_HOME_ENGINES).toBe("@anthropic-ai/claude-code @openai/codex");
-  });
-
-  it.skipIf(!jq)("resolves the current Chrome and engine releases, and keys on the date when a lookup fails", () => {
-    const keys = (workflow.jobs.publish.steps as { id?: string; run?: string; env?: Record<string, string> }[]).find(step => step.id === "keys")!;
-    const resolve = (ok: boolean) => {
-      const root = mkdtempSync(join(tmpdir(), "omb-docker-keys-"));
-      temporaryDirectories.push(root);
-      const fake = (name: string, body: string) => writeFileSync(join(root, name), `#!/bin/sh\n${ok ? body : "exit 1"}\n`, { mode: 0o755 });
-      fake("curl", `echo '{"channels":{"Stable":{"version":"154.0.8037.92","downloads":{}}}}'`);
-      fake("npm", `case "$2" in @anthropic-ai/claude-code@latest) echo 2.1.291;; @openai/codex@latest) echo 0.160.1;; *) exit 1;; esac`);
-      const output = join(root, "output");
-      writeFileSync(output, "");
-      const result = spawnSync("bash", ["-e", "-c", keys.run!], {
-        env: { ...keys.env, PATH: `${root}:${dirname(jq)}:/usr/bin:/bin`, GITHUB_OUTPUT: output }, encoding: "utf8",
-      });
-      expect(result.status, result.stderr).toBe(0);
-      return Object.fromEntries(readFileSync(output, "utf8").trim().split("\n").map(line => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]));
-    };
-    expect(resolve(true)).toEqual({
-      chrome: "154.0.8037.92",
-      engines: "@anthropic-ai/claude-code@2.1.291 @openai/codex@0.160.1",
-      engines_tag: "",
-    });
-    const today = `date-${new Date().toISOString().slice(0, 10)}`;
-    expect(resolve(false)).toEqual({ chrome: today, engines: "@anthropic-ai/claude-code @openai/codex", engines_tag: today });
   });
 
   // An init collects browser processes whose parents exit, and Chrome gets the

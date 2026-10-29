@@ -244,9 +244,10 @@ describe("header name", () => {
       const idleMarkup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false } }));
       const pillOf = (markup: string) => {
         const start = markup.indexOf("data-chathead-pill");
-        return markup.slice(start, markup.indexOf("data-chathead-status", start));
+        return markup.slice(start, markup.indexOf("data-chathead-status", start)).replace(/data-robot-motion="[a-z]+"/, 'data-robot-motion="motion"');
       };
       expect(pillOf(busyMarkup)).not.toContain("animate-status-pulse");
+      // the robot span may flip data-robot-motion between idle and working; the pill keeps one width and no extra dots either way
       expect(pillOf(busyMarkup)).toBe(pillOf(idleMarkup));
       expect(busyMarkup).toMatch(/<span role="status" class="sr-only" data-chathead-status="true">Working…<\/span>/);
       expect(idleMarkup).toMatch(/<span role="status" class="sr-only" data-chathead-status="true"><\/span>/);

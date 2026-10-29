@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  CUA_HOST_BUNDLE_ID,
   DRIVER_FILE_IDENTITY_KEYS,
   REQUIRED_LINUX_TOOLS,
   cuaUnavailableReason,
@@ -131,7 +132,7 @@ afterEach(() => {
 
 describe("local computer descriptor", () => {
   it("reports an unavailable reason without making that record mountable", () => {
-    const reason = "embedded host failed: Screen Recording required; grant access in System Settings and restart OpenMausBot";
+    const reason = "embedded host failed: Screen Recording required; grant access in System Settings and restart Dani Bot";
     const record = { mode: "unavailable", reason };
     expect(decodeCuaConnection(record, { platform: "darwin" })).toBeNull();
     expect(cuaUnavailableReason(record, "darwin")).toBe(reason);

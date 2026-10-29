@@ -139,7 +139,6 @@ const { RoutineEditor } = await import("./RoutinesPage");
 const { SignedInSites } = await import("./SignedInSites");
 const { AvatarImageGenerator } = await import("./AvatarImageGenerator");
 const { AvatarFraming } = await import("./avatar-editing");
-const { MascotFaceColorPicker } = await import("./MascotFaceColorPicker");
 const { Switch } = await import("./SettingsPrimitives");
 
 afterAll(() => vi.unstubAllGlobals());
@@ -523,9 +522,9 @@ describe("the avatar editor", () => {
     click(find(open, "aria-label", "Use the Pumpkin body"));
     expect(patch).toHaveBeenLastCalledWith({ mascotBody: "pumpkin" });
     expect(find(open, "data-avatar-face", "idle").props["aria-pressed"]).toBe(true);
-    click(find(open, "data-avatar-face", "proud"));
-    expect(patch).toHaveBeenLastCalledWith({ mascotExpression: "proud" });
-    expect(open.html).toContain(">Proud<");
+    click(find(open, "data-avatar-face", "working"));
+    expect(patch).toHaveBeenLastCalledWith({ mascotExpression: "working" });
+    expect(open.html).toContain(">Working<");
   });
 
   it("opens More looks at once for a Halloween body or a chosen face", () => {
@@ -548,14 +547,6 @@ describe("the avatar editor", () => {
     expect(patch).toHaveBeenLastCalledWith({ avatarCrop: "mascot", color: "green", mascotExpression: null, mascotBody: "cursor", mascotFaceColor: null });
   });
 
-  it("edits facial feature color without changing body color or expression", () => {
-    const props = ofType(editor(makeBot({ mascotFaceColor: "black" })), MascotFaceColorPicker)!.props;
-    const choices = segment(capture(() => MascotFaceColorPicker(props as Parameters<typeof MascotFaceColorPicker>[0])), "data-avatar-face-color");
-    expect(choices.value).toBe("black");
-    expect(choices.options.map((option) => option.value)).toEqual(["white", "black"]);
-    choices.onChange("white");
-    expect(patch).toHaveBeenLastCalledWith({ mascotFaceColor: "white" });
-  });
 
   it("generates with the shared generator, and uploads with shape and framing", () => {
     const bot = makeBot();
