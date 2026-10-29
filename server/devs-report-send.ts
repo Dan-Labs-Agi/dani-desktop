@@ -1,4 +1,4 @@
-// Sending one @devs report to the MausBot team's endpoint and reading its answer: 201 {id}; 400 or 413 {error}; 429
+// Sending one @devs report to the Dani Bot team's endpoint and reading its answer: 201 {id}; 400 or 413 {error}; 429
 // {error, retryAfter} (seconds, also Retry-After).
 import { DEVS_REPORT_LIMITS, withoutContact, type DevsReportPayload } from "./devs-report.ts";
 

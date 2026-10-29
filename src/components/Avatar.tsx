@@ -13,9 +13,8 @@ import { CHROME_EYES, CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMot
 import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
 import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, mascotFaceInk, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import { MASCOT_BODIES, botMascotBody } from "../../shared/mascot-bodies";
-import { isHalloweenBody, type BotBodyId } from "../../shared/bot-body";
+import type { BotBodyId } from "../../shared/bot-body";
 import { useHalloweenDressed, wornBody } from "@/lib/halloween-dress";
-import { CarvedAvatar } from "./CarvedAvatar";
 import { steelBodyImage } from "@/lib/steel-body";
 
 export const EYE_SCALE = 1.12;
@@ -99,25 +98,8 @@ export type MausAvatarProps = {
 };
 
 function MausAvatarComponent(props: MausAvatarProps, ref: React.Ref<MausAvatarHandle>) {
-  const { bodyId, color, size, state, motion, motionKey, gaze, trackPointer, animated, label } = props;
-  if (isHalloweenBody(bodyId)) {
-    return (
-      <CarvedAvatar
-        ref={ref}
-        body={bodyId}
-        color={color}
-        faceColor={props.faceColor}
-        size={size}
-        state={state}
-        motion={motion}
-        motionKey={motionKey}
-        gaze={gaze}
-        trackPointer={trackPointer}
-        animated={animated}
-        label={label}
-      />
-    );
-  }
+  // Every body - including saved seasonal costume picks - renders the Dani robot.
+  // The preference data is kept; only the old artwork is gone.
   return <GradientAvatar ref={ref} {...props} />;
 }
 

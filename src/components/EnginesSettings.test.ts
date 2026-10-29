@@ -30,6 +30,28 @@ function render(authenticated: boolean, options: { email?: string; signOut?: boo
   return renderToStaticMarkup(createElement(EnginesSettings));
 }
 
+
+describe("Settings → Engines → Dani Free", () => {
+  it("lists the bundled keyless provider as Ready with its Dan Lab subtitle, never as needing setup", () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", { userAgent: "Linux" });
+    fixture.bots = [];
+    fixture.instances = [{
+      instanceId: "daniFree",
+      driverKind: "daniFree",
+      displayName: "Dani Free",
+      snapshot: { state: "available" },
+      models: { default: "dani-free-auto", options: [{ id: "dani-free-auto", label: "Dani Free Auto" }] },
+    }];
+    const html = renderToStaticMarkup(createElement(EnginesSettings));
+    expect(html).toContain('data-engine-card="daniFree"');
+    expect(html).toContain(">Dani Free<");
+    expect(html).toContain(">Dan Lab<");
+    expect(html).toContain(">Ready<");
+    expect(html).not.toContain("Needs setup");
+  });
+});
+
 describe("Settings → Engines → ChatGPT accounts", () => {
   it("lists a signed-out account with one Sign in button", () => {
     const html = render(false);
