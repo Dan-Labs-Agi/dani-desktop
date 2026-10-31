@@ -94,6 +94,7 @@ import { acquireDataDirLease } from "./data-dir-lease.mjs";
 import { switchLocalEnvironment } from "./environment-switch.mjs";
 import { createManagedDesktopClient, createManagedDesktopRelay, createManagedDesktopStore } from "./managed-desktop.mjs";
 import { CHECKOUT_SOURCES, cloudMenuSublabel, cloudTarget, createCloudAccountClient, createCloudAccountStore } from "./cloud-account.mjs";
+import { CLOUD_UNAVAILABLE_MESSAGE, cloudServicePosture } from "./cloud-backend.mjs";
 import { installCloudPlanIpc } from "./cloud-plan-ipc.mjs";
 import { cloudLinkOpensSheet, colorDotIcons, createCloudLook, createCloudReadyNotice, installCloudBuy, lookFile } from "./cloud-buy.mjs";
 import { createTrialNotices } from "./cloud-trial-notice.mjs";
@@ -820,14 +821,19 @@ function syncPhoneSecretKey(proc) {
 
 function ensureCloudAccount() {
   if (cloudAccount) return cloudAccount;
-  if (!app.isPackaged || desktopRemoteAccess) throw new Error("MausBot Cloud sign-in requires the local desktop app.");
+  if (!app.isPackaged || desktopRemoteAccess) throw new Error("Dani Bot Cloud sign-in requires the local desktop app.");
+  // Inert by default: with no owned backend, no cloud-account client is ever built, so no
+  // token, device grant or account request can leave for the upstream vendor's service.
+  const posture = cloudServicePosture(process.env);
+  if (posture.inert) throw new Error(CLOUD_UNAVAILABLE_MESSAGE);
   cloudAccount = createCloudAccountClient({
+    origin: posture.origin,
     store: createCloudAccountStore({ file: path.join(app.getPath("userData"), cloudTarget(process.env).file), encryption: {
       available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
         (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
       encrypt: value => safeStorage.encryptStringAsync(value), decrypt: value => safeStorage.decryptStringAsync(value),
     } }),
-    platform: process.platform, deviceName: os.hostname().slice(0, 100) || "My computer", appVersion: app.getVersion(), origin: cloudTarget(process.env).origin,
+    platform: process.platform, deviceName: os.hostname().slice(0, 100) || "My computer", appVersion: app.getVersion(),
     openBrowser: url => shell.openExternal(url), awaitingWake: () => cloudPower.awaiting(),
     onState: state => {
       rememberCloudHome(state);

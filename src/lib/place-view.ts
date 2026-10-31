@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { activeLocale, t } from "@/lib/i18n";
 import { cloudPlanView } from "@/lib/cloud-plan";
+import { cloudSignInSurface } from "@/lib/cloud-backend";
 import { engineSignedOut } from "@/lib/failed-turn";
 import { browserAvailable, builtInBrowserEnabled, type FeatureFlagConfig } from "@/lib/feature-flags";
 import { writeComputerPanelView } from "@/lib/computer-panel-view";
@@ -91,7 +92,7 @@ export function placeHasIssue(view: PlaceView): boolean {
 }
 
 export function useCloudPlanPaid(): boolean {
-  const bridge = typeof window === "undefined" || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
+  const bridge = typeof window === "undefined" || !cloudSignInSurface().available || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const [account, setAccount] = useState<CloudAccountState | null>(null);
   useEffect(() => {
     if (!bridge) return;
@@ -130,6 +131,7 @@ export function openPlaceAction(
       return true;
     case "open-team-map": dispatch({ type: "showTeamMap" }); return true;
     case "see-plan": {
+      if (!cloudSignInSurface().available) { appSettings("cloudAccount"); return true; }
       const desktop = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
       if (desktop) { void desktop.openDashboard().catch(() => {}); return true; }
       if (window.ogb?.cloudPlan) { void window.ogb.cloudPlan.manage().catch(() => {}); return true; }
@@ -137,7 +139,7 @@ export function openPlaceAction(
       return true;
     }
     case "open-my-cloud": {
-      const desktop = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
+      const desktop = !cloudSignInSurface().available || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
       if (desktop) void desktop.connectHome().catch(() => {});
       else appSettings("cloudAccount");
       return true;

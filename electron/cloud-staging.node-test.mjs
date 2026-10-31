@@ -75,6 +75,7 @@ test("main keeps each Admin's sign-in, saved servers, Files state and Cloud name
   for (const name of ['"environments.json"', '"cloud-home-look.json"']) assert.equal(main.includes(name), false, `no fixed ${name}`);
   const ensure = main.slice(main.indexOf("function ensureCloudAccount() {"), main.indexOf("\n}\n", main.indexOf("function ensureCloudAccount() {")));
   assert.match(ensure, /createCloudAccountStore\(\{ file: path\.join\(app\.getPath\("userData"\), cloudTarget\(process\.env\)\.file\)/);
-  assert.match(ensure, /origin: cloudTarget\(process\.env\)\.origin,/);
+  // The client origin now comes from the owned-backend posture, never from the upstream staging toggle.
+  assert.match(ensure, /origin: posture\.origin,/);
   assert.equal(main.includes('"cloud-account.bin"'), false, "no second, fixed token file");
 });

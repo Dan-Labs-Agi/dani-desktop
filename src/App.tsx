@@ -49,6 +49,7 @@ import { CloudWelcome } from "@/components/cloud-welcome/CloudWelcome";
 import { WelcomeKeeper } from "@/components/cloud-welcome/WelcomeKeeper";
 import { EmptyChatShell } from "@/components/onboarding/EmptyChatShell";
 import { cloudFirstRun, cloudWelcomeVisible, useCloudWelcome } from "@/lib/cloud-welcome";
+import { cloudSignInSurface } from "@/lib/cloud-backend";
 import { engineReady } from "@/components/EngineLibrary";
 import { CommandPalette } from "@/components/CommandPalette";
 import { setLocale, t } from "@/lib/i18n";
@@ -101,10 +102,13 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       (cloud && window.ogb.cloudAccount && !remoteClient)) {
       url.searchParams.delete("desktop-settings");
       window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      const cloudAvailable = cloudSignInSurface().available;
       if (requestedSettings === "organization") dispatch({ type: "toggleAppSettings", open: true, section: "organization" });
-      else if (requestedSettings === "cloud") dispatch(CLOUD_LINK_SETTINGS);
+      else if (requestedSettings === "cloud" && cloudAvailable) dispatch(CLOUD_LINK_SETTINGS);
       else if (requestedSettings === "cloud-settings") dispatch({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
-      else if (requestedSettings === "cloud-add" || requestedSettings === "cloud-add-howto") dispatch({ type: "openCloudAdd", source: requestedSettings === "cloud-add" ? "app_menu" : "app_howto" });
+      else if ((requestedSettings === "cloud-add" || requestedSettings === "cloud-add-howto") && cloudAvailable)
+        dispatch({ type: "openCloudAdd", source: requestedSettings === "cloud-add" ? "app_menu" : "app_howto" });
+      else if (cloud) dispatch({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
       else open();
     }
     return window.ogb.environments.onOpenSettings?.(open);
@@ -263,11 +267,13 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
     state.pluginsOpen;
 
   useEffect(() => {
-    return window.ogb?.onOpenAppSettings?.(section => dispatch((section === "cloud-add" || section === "cloud-add-howto") && window.ogb?.cloudAccount && !remoteClient
+    // Cloud boundary: without a configured backend, cloud sales/link routes open the
+    // settings section instead - it explains the local-only posture honestly.
+    return window.ogb?.onOpenAppSettings?.(section => dispatch((section === "cloud-add" || section === "cloud-add-howto") && cloudSignInSurface().available && window.ogb?.cloudAccount && !remoteClient
       ? { type: "openCloudAdd", source: section === "cloud-add" ? "app_menu" : "app_howto" }
-      : section === "cloud" && window.ogb?.cloudAccount && !remoteClient
+      : section === "cloud" && cloudSignInSurface().available && window.ogb?.cloudAccount && !remoteClient
         ? CLOUD_LINK_SETTINGS
-        : section === "cloud-settings" && (window.ogb?.cloudAccount || window.ogb?.cloudPlan) && !remoteClient
+        : (section === "cloud-settings" || section === "cloud" || section === "cloud-add" || section === "cloud-add-howto") && (window.ogb?.cloudAccount || window.ogb?.cloudPlan) && !remoteClient
           ? { type: "toggleAppSettings", open: true, section: "cloudAccount" }
           : { type: "toggleAppSettings", open: true, ...(section === "organization" && window.ogb?.organization && !remoteClient ? { section } : {}) }));
   }, [dispatch]);

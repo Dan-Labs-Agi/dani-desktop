@@ -7,6 +7,10 @@ import type { Switch } from "./SettingsPrimitives";
 import { SECTIONS, SIMPLE_FOLDED, SIMPLE_HIDDEN_SECTIONS, SIMPLE_PAGES, SettingsModal, revealSettingsBlock } from "./SettingsModal";
 import { SIMPLE_ADVANCED_ONLY } from "./SettingsSimplePages";
 
+// Cloud boundary mocked open: these tests pin the account/settings machinery for a
+// configured build. The real boundary's suppression is covered by gate tests.
+vi.mock("@/lib/cloud-backend", () => ({ cloudSignInSurface: () => ({ available: true }) }));
+
 const fixture = vi.hoisted(() => ({
   section: "general" as AppSettingsSection,
   advancedMode: false,
