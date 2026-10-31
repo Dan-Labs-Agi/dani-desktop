@@ -1,6 +1,6 @@
 // Screenshots of the REAL packaged app: launches the unpacked desktop build with an empty disposable home,
 // attaches over the Chrome DevTools protocol, and captures full pages of what the renderer actually shows.
-// Run under xvfb. Nothing is mocked: no fixture server, no isolated renderer.
+// Run under xvfb (a packaged app that never leaves its startup screen fails this step). Nothing is mocked: no fixture server, no isolated renderer.
 //
 //   xvfb-run -a node scripts/capture-product-pages.mjs --exe release/linux-unpacked/danibot --out shots
 //

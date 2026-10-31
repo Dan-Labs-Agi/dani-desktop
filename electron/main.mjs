@@ -3112,7 +3112,9 @@ app.whenReady().then(async () => {
   // Fresh local use never makes a Cloud request; start only restores an existing grant.
   if (app.isPackaged && !desktopRemoteAccess) {
     cloudAccountRestoring = true;
-    cloudAccountStarted = ensureCloudAccount().start().catch(() => {}).finally(() => { cloudAccountRestoring = false; });
+    // ensureCloudAccount() throws while no cloud service is configured (the default here); that must not abort startup
+    // before the window is shown, so it runs inside the promise chain.
+    cloudAccountStarted = Promise.resolve().then(() => ensureCloudAccount().start()).catch(() => {}).finally(() => { cloudAccountRestoring = false; });
   }
   void cloudAccountStarted.then(() => { cloudSignInRestored = true; void oneHome.kick(); void homeWindow.refresh(); });
   if (!desktopRemoteAccess && serverReady && companionEnabledAtRest() && !oneHome.away()) {
