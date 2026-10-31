@@ -177,31 +177,16 @@ describe("the plan cards", () => {
       cancelPlan: vi.fn(async () => ({ outcome: "browser" as const })), keepPlan: vi.fn(async () => ({ outcome: "kept" as const, state })) } as unknown as CloudAccountBridge;
   }
 
-  it("this computer's Settings: Cancel trial for the account that pays, through main's own bridge; nothing for anyone else", async () => {
-    const bridge = accountBridge(paidState(trial));
-    vi.stubGlobal("window", Object.assign(window, { ogb: { cloudAccount: bridge } }));
+  it("this computer's Settings: no plan management without a configured backend, even with a bridge present", async () => {
+    // SHIPPED_CLOUD_BACKEND is null in this build, so the section shows the
+    // honest local-only notice and no plan controls - a stray cloudAccount
+    // global must not reopen plan management.
+    vi.stubGlobal("window", Object.assign(window, { ogb: { cloudAccount: accountBridge(paidState(trial)) } }));
     await show(createElement(CloudAccountSettings));
-    expect(text()).toContain("Pro active · verified by MausBot Cloud");
-    expect(button("Manage Cloud subscription")).toBeTruthy();
-    await click(button("Cancel trial"));
-    await click(button("Missing a feature"));
-    await click(button("Cancel my trial"));
-    expect(bridge.cancelPlan).toHaveBeenCalledExactlyOnceWith({ answer: "feature" });
-    expect(text()).toContain("The Cloud page's Billing opened in your browser.");
-    await act(async () => root.unmount()); root = createRoot(container);
-    vi.stubGlobal("window", Object.assign(window, { ogb: { cloudAccount: accountBridge(paidState()) } }));
-    await show(createElement(CloudAccountSettings));
-    expect(text()).toContain("Pro active · verified by MausBot Cloud");
+    expect(text()).toContain("no cloud service configured");
     expect(button("Cancel trial")).toBeUndefined();
     expect(button("Cancel plan")).toBeUndefined();
-    // Cancelled during the trial: Keep my plan is the way back, so the trial's own button doesn't offer a second one.
-    const ending = { ...paidState(cancelledTrial), trial: { state: "ending" as const, tier: "pro", endsAt: END, amount: 4900, chargeAt: null, holdUntil: null, deleteAt: END + 3 * DAY, keep: "portal" as const } };
-    await act(async () => root.unmount()); root = createRoot(container);
-    vi.stubGlobal("window", Object.assign(window, { ogb: { cloudAccount: accountBridge(ending) } }));
-    await show(createElement(CloudAccountSettings));
-    expect(button("Keep my plan")).toBeTruthy();
-    expect(button("Subscribe to keep it")).toBeUndefined();
-    expect(button("Manage Cloud subscription")).toBeTruthy();
+    expect(button("Manage Cloud subscription")).toBeUndefined();
   });
 
   it("the Cloud page in home mode: Cancel trial beside Manage in your browser, and the plan read again after; none without a renewal", async () => {

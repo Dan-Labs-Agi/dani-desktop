@@ -11,6 +11,11 @@ import { EMPTY_ONBOARDING, MET_CHIEF_HINT, WELCOME_VERSION } from "@/lib/onboard
 import { saveWelcomeDraft } from "@/lib/welcome-draft";
 import type { InstanceInfo } from "@/state/store";
 
+// Cloud boundary mocked open: these tests pin the welcome/settle machinery for a
+// configured build. With the real boundary the cloud beat is impossible by
+// construction (covered by the boundary's own tests).
+vi.mock("@/lib/cloud-backend", () => ({ cloudSignInSurface: () => ({ available: true }) }));
+
 const f = vi.hoisted(() => ({ state: {} as Record<string, unknown>, dispatch: vi.fn(), api: vi.fn(), landed: vi.fn(), onDone: vi.fn(),
   checks: [] as string[] }));
 vi.mock("@/state/store", () => ({ useStore: () => ({ state: f.state, dispatch: f.dispatch }), api: f.api }));

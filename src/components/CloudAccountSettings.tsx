@@ -6,6 +6,7 @@ import { cloudFilesBridge } from "@/lib/cloud-files";
 import { moveLine } from "@/lib/cloud-send";
 import { activeLocale, t } from "@/lib/i18n";
 import { buyOfferAllowed, cloudCreditLine, cloudPlanLabel, cloudPlanLine, cloudPlanView, cloudTrialView, moneyBackLine, offerTrialDays, trialRunning, type CloudPlanView } from "@/lib/cloud-plan";
+import { cloudSignInSurface } from "@/lib/cloud-backend";
 import { useCloudOffer } from "@/lib/use-cloud-offer";
 import type { LocaleKey } from "@/locales";
 import { Card } from "./SettingsPrimitives";
@@ -181,7 +182,9 @@ export function TeamPeopleCard({ team }: { team: { name: string; cloudPage?: str
 export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamHome, onConnectPhone, onAddCloud, onSignIn }: {
   linkRequest?: number; cloudHome?: boolean; teamHome?: { name: string; cloudPage?: string }; onConnectPhone?: () => void; onAddCloud?: () => void; onSignIn?: () => void;
 } = {}) {
-  const bridge = window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
+  // Cloud boundary: no configured backend - the section shows an honest notice only.
+  const cloudAvailable = cloudSignInSurface().available;
+  const bridge = !cloudAvailable || window.ogb?.remoteClient?.active ? undefined : window.ogb?.cloudAccount;
   const { platform } = useDesktopCapabilities().capabilities.host;
   const [account, setAccount] = useState<CloudAccountState | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(false), [confirm, setConfirm] = useState(false);
@@ -246,6 +249,13 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
   const moving = move && move.kind !== "done" ? move.text : null;
   const offer = useCloudOffer(Boolean(account) && buyOfferAllowed(cloudPlanView(account)), account?.offer);
   const renewal: CloudRenewalActions | null = bridge?.cancelPlan && bridge.keepPlan ? { cancel: survey => bridge.cancelPlan!(survey), keep: () => bridge.keepPlan!() } : null;
+  if (!cloudAvailable) return <>
+    <p className="text-[13px] leading-relaxed text-ink-secondary">{t("cloudAccount.optional")}</p>
+    <Card title={t("settings.section.cloudAccount")} subtitle={t("cloudAccount.separate")}>
+      <p role="note" className="text-[13px] text-ink-secondary">{t("cloudAccount.noConfiguredBackend")}</p>
+    </Card>
+  </>;
+
   if (!bridge) {
     const plan = window.ogb?.remoteClient?.active || !cloudHome ? undefined : window.ogb?.cloudPlan;
     return <>

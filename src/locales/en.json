@@ -6787,5 +6787,8 @@
   "engineSetup.apiKey.inline": "Paste it here. It saves and checks itself, and the models show up here.",
   "secretCard.ref": "OpenMausBot keeps it for one use by its own tools. Your bot never sees it, and it is never added to chat.",
   "secretCard.file": "Saved to a private file your bot's commands can read for 24 hours, then deleted. It is never added to chat.",
-  "secretCard.resumed": "Bot resumed"
+  "secretCard.resumed": "Bot resumed",
+  "organization.noOwnedBackend": "This build of Dani Bot has no cloud service of its own - it runs entirely on this computer. One-click cloud sign-in is off; the hosted service it used to open belongs to the upstream OpenMausBot project, not to Dan Lab.",
+  "onboarding.org.noOwnedBackend": "Dani Bot runs locally in this build. There is no Dan Lab cloud to join - one-click sign-in is off (the hosted service belongs to the upstream OpenMausBot project).",
+  "cloudAccount.noConfiguredBackend": "This build of Dani Bot has no cloud service configured - it runs entirely on this computer. Cloud sign-in is off; the hosted service it used to open belongs to the upstream OpenMausBot project, not to Dan Lab."
 }

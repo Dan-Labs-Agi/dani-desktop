@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKe
 import { setEmailGateDone, track } from "@/lib/analytics";
 import { brandStatus } from "@/lib/brand";
 import { cn } from "@/lib/cn";
+import { cloudSignInSurface } from "@/lib/cloud-backend";
 import { chiefStepFits, myDefaultBot, setChiefStepOpen, useViewerEmail } from "@/lib/default-bot";
 import { CLOUD_PRO_UPDATE_NOTICE, dismissNotice } from "@/lib/notices";
 import { beatsFor, cloudBeatPossible, completionPatch, firstRunPatch, markWelcomeFinished, resumeBeat, showWelcome, type BeatId } from "@/lib/onboarding";
@@ -17,7 +18,8 @@ const FADE_MS = 150;
 /** A first run where the Cloud could have been offered settles the Cloud Pro popup with it. */
 function settlesCloudPopup(hosted: boolean): boolean {
   const remote = !localDesktopPage() || window.ogb?.remoteClient?.active === true;
-  return cloudBeatPossible({ bridge: Boolean(window.ogb?.cloudAccount?.offer), branded: brandStatus().source === "file", hosted, remote });
+  // Cloud boundary: with no configured backend the cloud beat is never possible.
+  return cloudSignInSurface().available && cloudBeatPossible({ bridge: Boolean(window.ogb?.cloudAccount?.offer), branded: brandStatus().source === "file", hosted, remote });
 }
 
 type Config = ReturnType<typeof useStore>["state"]["config"];

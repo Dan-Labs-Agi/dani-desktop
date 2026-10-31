@@ -95,7 +95,7 @@ export function OrganisationRow({
         </button>
       </>
     );
-    action = (
+    action = !cloudSignInSurface().available ? null : (
       <button
         type="button"
         disabled={busy}

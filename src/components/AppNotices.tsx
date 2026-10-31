@@ -13,6 +13,7 @@ import { cornerPopupWaits, firstReplyPending } from "@/lib/corner-popup";
 import { CLOUD_INTRO, CLOUD_NOTICE, CLOUD_PRO_UPDATE_NOTICE, CLOUD_TRIAL_NOTICE, dismissNotice, introShown, introStage, nextNotice, noticeSeen, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, SIMPLE_MODE_NOTICE, STAR_NOTICE, UPDATES_CONSENT_NOTICE, usedBefore } from "@/lib/notices";
 import { useSimpleModePromptSeen } from "@/lib/simple-mode-prompt";
 import { cloudSignInDue, onboardingCloudOffered, welcomeFinishedThisLaunch, type WelcomeViewer } from "@/lib/onboarding";
+import { cloudSignInSurface } from "@/lib/cloud-backend";
 import { launchDialogShown, markLaunchDialog } from "@/lib/launch-dialogs";
 import { useUpdaterState } from "@/lib/updater";
 import { t } from "@/lib/i18n";
@@ -56,11 +57,14 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const { state, dispatch } = useStore();
   const remote = window.ogb?.remoteClient?.active === true;
   const local = localDesktopPage();
-  const bridge = !remote && local ? window.ogb?.cloudAccount : undefined;
+  // Cloud boundary: with no configured backend the cloud sales/notice surfaces stay
+  // hidden; the bridges would only lead to the honest unavailable error anyway.
+  const cloudAvailable = cloudSignInSurface().available;
+  const bridge = cloudAvailable && !remote && local ? window.ogb?.cloudAccount : undefined;
   const desktop = remote ? undefined : window.ogb?.desktopNotices;
   const desktopState = useDesktopNotices(desktop);
   // Asked once main has restored the Cloud sign-in, which it waits for before answering desktopState.
-  const planBridge = !remote && (bridge || (viewer?.cloudHome && (desktopState || !desktop))) ? window.ogb?.cloudPlan : undefined;
+  const planBridge = cloudAvailable && !remote && (bridge || (viewer?.cloudHome && (desktopState || !desktop))) ? window.ogb?.cloudPlan : undefined;
   const [account, setAccount] = useState<CloudAccountState | null>(null);
   const plan = useCloudPlanSnapshot(planBridge);
   const [offer, setOffer] = useState<CloudOffer | null | undefined>(undefined);

@@ -1,3 +1,4 @@
+import { cloudSignInSurface } from "@/lib/cloud-backend";
 import { useEffect, useRef, useState } from "react";
 import type { ManagedDesktopState } from "../../electron/managed-desktop.mjs";
 import { activeLocale, t } from "@/lib/i18n";
@@ -84,8 +85,12 @@ export function OrganizationSettings() {
       {licenseExpired && <p role="alert" className="mb-3 text-[13px] text-ink">{t("organization.licenseExpired")}</p>}
       {connection?.status === "signed-out" && <div className="flex flex-col gap-3">
         <p className="text-[13px] text-ink-secondary">{t("organization.signInHelp")}</p>
+        {!cloudSignInSurface().available ? (
+          <p role="note" className="text-[13px] text-ink-secondary">{t("organization.noOwnedBackend")}</p>
+        ) : (
         <button type="button" disabled={busy} onClick={() => void perform(() => bridge.begin({ portalOrigin: DEFAULT_PORTAL_ORIGIN }))}
           className="w-fit rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50">{busy ? t("organization.working") : t("organization.signIn")}</button>
+        )}
         <details className="text-[12px] text-ink-secondary">
           <summary className="w-fit cursor-pointer hover:text-ink">{t("organization.advanced")}</summary>
           <form className="mt-2 flex flex-col gap-2" onSubmit={(event) => {
