@@ -1,10 +1,9 @@
 // The real cloud boundary: with no owned backend, the one-click sign-in
 // button is replaced by an honest local-only notice; the explicitly
 // user-entered custom-address form stays available.
-import { Children, createElement, isValidElement, type EffectCallback, type ReactElement, type ReactNode } from "react";
+import { createElement, isValidElement, type EffectCallback, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ManagedDesktopBridge, ManagedDesktopState } from "../../electron/managed-desktop.mjs";
 import { setLocale } from "@/lib/i18n";
 
 const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], updating: false }));
@@ -20,7 +19,7 @@ vi.mock("react", async (original) => ({ ...await original<typeof import("react")
 
 import { OrganizationSettings } from "./OrganizationSettings";
 
-const walk = (node: ReactNode): string => {
+const _walk = (node: ReactNode): string => {
   if (node == null || typeof node === "boolean") return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(walk).join("");

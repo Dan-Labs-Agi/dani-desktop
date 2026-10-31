@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyRound, X } from "lucide-react";
 import type { PasskeyWall } from "../../../shared/passkey-wall";
-import { openExternalLink } from "@/lib/app-links";
 import { t } from "@/lib/i18n";
 import { api, useStore } from "@/state/store";
 

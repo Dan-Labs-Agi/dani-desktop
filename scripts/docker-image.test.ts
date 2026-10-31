@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { cloudHomeConfiguration } from "../server/cloud-home.ts";
@@ -44,7 +44,7 @@ const npmInstall = (step: Step) => step.op === "RUN" && /\bnpm install\b/.test(s
 const browserRun = () => chain("runtime").find(step => step.op === "RUN" && step.args.includes("agent-browser install"))!;
 const grokRun = (steps: Step[]) => steps.findIndex(step => step.op === "RUN" && step.args.includes("https://x.ai/cli/install.sh"));
 // The keys step parses Chrome for Testing's JSON with jq, as on GitHub's runners.
-const jq = process.platform === "win32" ? "" : spawnSync("sh", ["-c", "command -v jq"], { encoding: "utf8" }).stdout.trim();
+const _jq = process.platform === "win32" ? "" : spawnSync("sh", ["-c", "command -v jq"], { encoding: "utf8" }).stdout.trim();
 
 const temporaryDirectories: string[] = [];
 afterEach(() => {
