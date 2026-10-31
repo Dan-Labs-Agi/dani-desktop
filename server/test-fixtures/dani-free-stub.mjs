@@ -18,4 +18,15 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ data: [{ id: "dani-free-auto", object: "model" }] }));
     return;
   }
-  if (req.url === "/v1/models/refresh" 
+  if (req.url === "/v1/models/refresh" && req.method === "POST") {
+    res.writeHead(200, { "content-type": "application/json" }).end("{}");
+    return;
+  }
+  res.writeHead(404).end("{}");
+});
+server.listen(0, "127.0.0.1", () => {
+  const { port } = server.address();
+  console.log(`DANI_FREE_READY ${JSON.stringify({ baseUrl: `http://127.0.0.1:${port}/v1`, port, pid: process.pid, apiKeyFile, privateMode: process.env.DANI_FREE_PRIVATE_MODE === "1" })}`);
+});
+process.on("SIGTERM", () => { server.close(); process.exit(0); });
+if (process.env.STUB_DIE_EARLY) { console.error("stub: refusing to start"); process.exit(3); }

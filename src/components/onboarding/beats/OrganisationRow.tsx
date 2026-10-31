@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Building2, Check } from "lucide-react";
 import type { ManagedDesktopBridge, ManagedDesktopState } from "../../../../electron/managed-desktop.mjs";
 import { brand } from "@/lib/brand";
+import { cloudSignInSurface } from "@/lib/cloud-backend";
 import { t } from "@/lib/i18n";
 import { companyModelCount, DEFAULT_ADMIN_ORIGIN } from "@/lib/onboarding";
 import { staggerIndex } from "./shared";

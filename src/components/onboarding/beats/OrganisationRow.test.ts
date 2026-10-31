@@ -8,6 +8,10 @@ import { setLocale } from "@/lib/i18n";
 // The real boundary's gating is covered by OrganizationSettings.cloud-gate.test.ts.
 vi.mock("@/lib/cloud-backend", () => ({ cloudSignInSurface: () => ({ available: true }) }));
 
+// Cloud boundary mocked open: these tests pin the row's sign-in machinery.
+// The real boundary's gating is covered by OrganizationSettings.cloud-gate.test.ts.
+vi.mock("@/lib/cloud-backend", () => ({ cloudSignInSurface: () => ({ available: true }) }));
+
 const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[] }));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),

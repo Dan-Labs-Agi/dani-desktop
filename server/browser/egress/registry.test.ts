@@ -194,7 +194,7 @@ describe("one gate per browser session", () => {
       expect(cloud.takeNotice("bot-1"), "a site that loads from My Cloud anyway: nothing to say").toBeNull();
       await socksCode(port, "www.instagram.com", 443);
       expect(cloud.takeNotice("bot-1")).toBe(UNSHARED_NOTICE);
-      expect(UNSHARED_NOTICE).toContain("these sites open through their own computer's internet connection while Dani Bot is open on it, signed in to Dani Bot Cloud");
+      expect(UNSHARED_NOTICE).toContain("these sites open through their own computer's internet connection while Dani Bot is open on it, signed in to My Cloud");
       expect(UNSHARED_NOTICE).not.toContain("use-my-computer");
       await socksCode(port, "www.instagram.com", 443);
       expect(cloud.takeNotice("bot-1"), "said once while none shares").toBeNull();

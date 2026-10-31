@@ -193,6 +193,10 @@ describe("Marco's assistant", () => {
   };
 
   it("answers a free/busy question itself, says so where it was asked and in his inbox, and notifies him once", async () => {
+    // The BUSY window is fixed at Thu 29 Oct 2026: pin the clock to the Monday before so it stays upcoming.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 26, 9)));
+    try {
     const { f, generate, busy } = assistant('{"answer": "Marco is busy on Thursday 14:00–15:00 and free after."}');
     f.bots.push({ id: "marcos-mausbot", name: "Dani Bot", color: "silver", threadId: "mm-main", defaultBot: { person: MARCO.email }, visibility: { people: [MARCO.email] }, tasks: [{ threadId: "mm-main", title: "Dani Bot" }] });
     f.said("philipp-private", "Ask Marco if he's free Thursday at 2. My bonus is private.", PHILIPP);
@@ -209,6 +213,9 @@ describe("Marco's assistant", () => {
     const inbox = f.inboxOf(MARCO);
     expect(f.lines(inbox.threadId)[0]!.inbox!.answers).toEqual([expect.objectContaining({ by: "assistant", text: "Marco is busy on Thursday 14:00–15:00 and free after." })]);
     expect(f.notified[0]).toMatchObject({ forPerson: key(MARCO.email), threadId: inbox.threadId, title: "Message from Philipp via Scout · your assistant answered" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("leaves decisions to Marco without asking the model, and he is notified of the question", async () => {

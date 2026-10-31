@@ -11,8 +11,10 @@ export interface PeerLine {
   unattended?: boolean;
 }
 
+// The workspace word is the current mark; the legacy product name stays so
+// notes in saved histories from before the rebrand still parse.
 const PROVENANCE_NOTE =
-  /^\[(Message from|Delegated by|Thread opened by) @([^,\]]+), another bot in this OpenMausBot workspace[^\]]*\]\s*/;
+  /^\[(Message from|Delegated by|Thread opened by) @([^,\]]+), another bot in this (?:Dani Bot|OpenMausBot) workspace[^\]]*\]\s*/;
 
 const DELIVERY: Record<string, PeerDelivery> = {
   "Message from": "ask_bot",
