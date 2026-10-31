@@ -4,7 +4,7 @@ artifactName: DaniBot-${version}-${arch}.${ext}
 
 protocols:
   - name: Dani Bot package install
-    schemes: [openmausbot]
+    schemes: [danibot]
 
 # electron-updater's feed: GitHub Releases on Som's repo. Packaging publishes
 # nowhere until a release is cut deliberately; verify-linux-package.mjs fails

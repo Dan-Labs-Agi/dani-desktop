@@ -2,7 +2,7 @@
 // owner just by being here, so it signs in once with the link printed for it.
 import qrcode from "qrcode-terminal";
 
-/** `url` opens the web app (browsers, the iOS app); `inviteUrl` (openmausbot://) is the only thing the Android app scans;
+/** `url` opens the web app (browsers, the iOS app); `inviteUrl` (danibot://) is the only thing the Android app scans;
  * `localUrl` signs in a browser on this computer. */
 export function pairingBlock(input: {
   code: string;

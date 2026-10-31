@@ -10,6 +10,11 @@ describe("BotMRR package deep links", () => {
     assert.equal(packageUrlFromCommandLine(["OpenMausBot", "--flag", `openmausbot://install?url=${encodeURIComponent(target)}`]), target);
   });
 
+  it("accepts the danibot:// scheme this app registers", () => {
+    const target = "https://raw.githubusercontent.com/acme/bots/main/reddit-lead-miner.md";
+    assert.equal(packageUrlFromDeepLink(`danibot://install?url=${encodeURIComponent(target)}`), target);
+  });
+
   it("accepts a Grok Bot share link as its canonical x.ai address", () => {
     const share = "https://x.ai/bot/d8OshqLZvtcKDcNluPuyo";
     assert.equal(packageUrlFromDeepLink(`openmausbot://install?url=${encodeURIComponent(share)}`), share);

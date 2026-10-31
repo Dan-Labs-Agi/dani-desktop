@@ -14,6 +14,11 @@ test("recognizes the links Copy link and a dashboard make", () => {
   assert.equal(chatLinkFrom("OpenMausBot://Bot/abc"), "OpenMausBot://Bot/abc");
 });
 
+test("recognizes danibot:// links, the scheme this app registers", () => {
+  assert.equal(chatLinkFrom("danibot://bot/abc"), "danibot://bot/abc");
+  assert.equal(chatLinkFrom("danibot://thread/abc?bot=1"), "danibot://thread/abc?bot=1");
+});
+
 test("leaves every other link to its own handler", () => {
   for (const other of [
     "openmausbot://cloud",
