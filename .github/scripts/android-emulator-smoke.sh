@@ -25,3 +25,5 @@ adb logcat -d -v time > "$OUT/logcat-after-link.txt"
 grep -E 'FATAL EXCEPTION|ANR in' "$OUT/logcat-after-link.txt" > "$OUT/crashes-after-link.txt" || true
 [ ! -s "$OUT/crashes-after-link.txt" ] || { echo "crash after link"; cat "$OUT/crashes-after-link.txt"; exit 1; }
 echo "emulator smoke ok"
+# Then pair the installed app with the real Dani server from this checkout (its own evidence folder).
+bash .github/scripts/android-pairing-e2e.sh "$APK" "$OUT/pairing"
