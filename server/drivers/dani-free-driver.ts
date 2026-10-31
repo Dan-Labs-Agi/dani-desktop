@@ -47,6 +47,9 @@ function executableCandidates(): string[] {
     .filter((path): path is string => Boolean(path));
 }
 
+/** Test seam: lets a test run the real driver against a stub process on any OS. Unset in production. */
+export const daniFreeDriverSeams: { spawnProcess?: typeof import("node:child_process").spawn } = {};
+
 export const DaniFreeDriver: ProviderDriver<DaniFreeConfig> = {
   driverKind: DRIVER_KIND,
   metadata: {
@@ -74,6 +77,7 @@ export const DaniFreeDriver: ProviderDriver<DaniFreeConfig> = {
         supervisor = new DaniFreeSupervisor({
           executable,
           home: join(DATA_DIR, "dani-free"),
+          ...(daniFreeDriverSeams.spawnProcess ? { spawnProcess: daniFreeDriverSeams.spawnProcess } : {}),
         });
         source = await supervisor.start();
         if (!source) unavailable = "Dani Free did not start; the app keeps its other providers.";

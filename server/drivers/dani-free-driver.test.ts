@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawn, type SpawnOptions } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 const dirs: string[] = [];
@@ -9,10 +10,10 @@ process.on("exit", () => { for (const d of dirs) rmSync(d, { recursive: true, fo
 
 const STUB = join(import.meta.dirname, "..", "test-fixtures", "dani-free-stub.mjs");
 
-/** An executable shim that runs the stub proxy as `node stub.mjs start`. */
+/** A placeholder file the driver finds as the bundled binary; the spawn seam runs the stub instead. */
 function shim(dir: string): string {
-  const path = join(dir, "dani-free-shim");
-  writeFileSync(path, `#!/bin/sh\nexec "${process.execPath}" "${STUB}" "$@"\n`);
+  const path = join(dir, "dani-free-placeholder");
+  writeFileSync(path, "placeholder\n");
   chmodSync(path, 0o755);
   return path;
 }
@@ -21,14 +22,15 @@ async function loadDriver(dataDir: string, executable: string) {
   process.env.OMB_DATA_DIR = dataDir;
   process.env.DANI_FREE_EXECUTABLE = executable;
   // config.ts fixes DATA_DIR at import; the driver module reads it through config.ts.
-  const { DaniFreeDriver } = await import("./dani-free-driver.ts");
+  const { DaniFreeDriver, daniFreeDriverSeams } = await import("./dani-free-driver.ts");
+  // Run the stub as `node stub.mjs start` through the real driver; works on every OS (no sh shim).
+  daniFreeDriverSeams.spawnProcess = ((file: string, args: readonly string[] = [], options: SpawnOptions = {}) =>
+    spawn(file, [STUB, ...args], options)) as unknown as typeof spawn;
   return DaniFreeDriver;
 }
 
 describe("DaniFreeDriver", () => {
-  // The shim is a POSIX `#!/bin/sh` script; Windows cannot spawn it. The packaged Windows
-  // build runs a real .exe, and the supervisor spawn path is covered by dani-free.test.ts.
-  it.skipIf(process.platform === "win32")("starts the bundled proxy and serves exactly the Dani Free Auto model", async () => {
+  it("starts the bundled proxy and serves exactly the Dani Free Auto model", async () => {
     const dir = tmp();
     const driver = await loadDriver(dir, shim(dir));
     const instance = await driver.create({
