@@ -6,9 +6,14 @@ protocols:
   - name: Dani Bot package install
     schemes: [openmausbot]
 
-# PROTOTYPE BRANCH: upstream publish configuration removed deliberately.
-# No release destination exists for this local prototype; packaging must never
-# upload anywhere. Reintroduce a provider only when Som owns the target repo.
+# electron-updater's feed: GitHub Releases on Som's repo. Packaging publishes
+# nowhere until a release is cut deliberately; verify-linux-package.mjs fails
+# any package whose app-update.yml points elsewhere. A release shipping a
+# Windows artifact without latest.yml strands those installs.
+publish:
+  - provider: github
+    owner: somdipto
+    repo: dani-desktop
 
 directories:
   buildResources: build
