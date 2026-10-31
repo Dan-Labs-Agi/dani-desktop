@@ -1,3 +1,4 @@
+import { spawn, type SpawnOptions } from "node:child_process";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +9,9 @@ import {
 } from "./dani-free.ts";
 
 const STUB = join(import.meta.dirname, "test-fixtures", "dani-free-stub.mjs");
+
+const stubSpawn = ((file: string, args: readonly string[] = [], options: SpawnOptions = {}) =>
+  spawn(file, [STUB, ...args], options)) as unknown as typeof spawn;
 const homes: string[] = [];
 function home(): string { const h = mkdtempSync(join(tmpdir(), "dani-free-test-")); homes.push(h); return h; }
 process.on("exit", () => { for (const h of homes) rmSync(h, { recursive: true, force: true }); });
@@ -65,11 +69,8 @@ describe("DaniFreeSupervisor", () => {
       home: h,
       privateMode: true,
       env: { STUB_MODE: "1" },
-      spawnProcess: (file, args, options) => {
-        // The real binary takes ["start"]; the stub runs as `node stub.mjs start`.
-        const { spawn } = require("node:child_process");
-        return spawn(file, [STUB, ...(args ?? [])], options);
-      },
+      // The real binary takes ["start"]; the stub runs as `node stub.mjs start`.
+      spawnProcess: stubSpawn,
     });
     const source = await supervisor.start();
     expect(supervisor.isRunning()).toBe(true);
@@ -87,10 +88,7 @@ describe("DaniFreeSupervisor", () => {
       executable: process.execPath,
       home: home(),
       env: { STUB_DIE_EARLY: "1" },
-      spawnProcess: (file, args, options) => {
-        const { spawn } = require("node:child_process");
-        return spawn(file, [STUB, ...(args ?? [])], options);
-      },
+      spawnProcess: stubSpawn,
     });
     expect(await supervisor.start()).toBeNull();
     expect(supervisor.isRunning()).toBe(false);
