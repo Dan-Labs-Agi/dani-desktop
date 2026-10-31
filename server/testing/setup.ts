@@ -1,4 +1,4 @@
-// Every test file gets a throwaway home, so DATA_DIR (~/.openmausbot) never touches the real one;
+// Every test file gets a throwaway home, so DATA_DIR (~/.danibot) never touches the real one;
 // os.homedir() reads HOME / USERPROFILE at call time, and this runs before server/config.ts is imported.
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";

@@ -185,7 +185,7 @@ export async function launchCloudSendFixture({ onePasswordToken, cloudOnePasswor
 
   async function start(name: string, own: NodeJS.ProcessEnv, port: number, extra: string[] = [], ipc = false, acceptedToken = onePasswordToken, calls = 0, engine = "", signedIn = true): Promise<ChildProcess> {
     const home = join(root, name);
-    const dataDir = join(home, ".openmausbot");
+    const dataDir = join(home, ".danibot");
     mkdirSync(dataDir, { recursive: true });
     const cli = join(home, "fixture-claude.mjs");
     const tools = calls ? JSON.stringify(Array.from({ length: calls }, (_, i) => ({ name: "Bash", input: { command: `echo step ${i}` } }))) : "";
@@ -487,7 +487,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     listenIt();
     desks.push({ close: () => deskMain.close() });
     return {
-      base, dataDir: join(root, name, ".openmausbot"), local: deskLocal, account: deskAccount, journalFile, spies,
+      base, dataDir: join(root, name, ".danibot"), local: deskLocal, account: deskAccount, journalFile, spies,
       oneHome: { kick: () => deskMain.kick(), view: () => deskMain.view(), away: () => deskMain.away() },
       async relaunch({ kill = true } = {}) {
         deskMain.close();

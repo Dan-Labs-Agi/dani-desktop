@@ -70,7 +70,7 @@ const linkType = process.platform === "win32" ? "junction" : "dir";
 
 describe("Antigravity's temp folder", () => {
   it("is one short, stable folder per instance under tmp/agy", () => {
-    const dataDir = join("C:", "Users", "ada", ".openmausbot");
+    const dataDir = join("C:", "Users", "ada", ".danibot");
     const work = antigravityTempDir(dataDir, "work");
     expect(work).toBe(antigravityTempDir(dataDir, "work"));
     expect(dirname(work)).toBe(join(dataDir, "tmp", "agy"));

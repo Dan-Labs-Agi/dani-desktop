@@ -177,7 +177,7 @@ describe("the box a bot's Chrome runs in", () => {
   it.skipIf(process.platform === "win32")("has the host's network and the read-only paths asked for, and none of HOME or the data folder", async () => {
     const box = new BotBox();
     boxes.push(box);
-    const dataDir = join(temp(), "home", ".openmausbot"), home = dirname(dataDir);
+    const dataDir = join(temp(), "home", ".danibot"), home = dirname(dataDir);
     mkdirSync(dataDir, { recursive: true });
     await box.start({ dataDir, home, port: 8799, denyEnv: new Set(), env: {}, log: () => {}, detect: () => ({ box: "bwrap", reason: null, tools: { bwrap: "/usr/bin/bwrap", socat: null } }) });
     const uploads = join(dataDir, "browser-uploads");

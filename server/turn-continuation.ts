@@ -1,9 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { defaultDataDir } from "../electron/data-dir-default.mjs";
 
 export function handoffDir(): string {
-  return join(process.env.OMB_DATA_DIR || join(homedir(), ".openmausbot"), "handoffs");
+  return join(process.env.DANI_DATA_DIR || process.env.OMB_DATA_DIR || defaultDataDir(homedir()), "handoffs");
 }
 
 export interface HandoffInput {
