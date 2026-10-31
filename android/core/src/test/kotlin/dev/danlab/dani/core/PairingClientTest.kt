@@ -91,6 +91,21 @@ class PairingClientTest {
     }
 
     @Test
+    fun pairsWithADesktopThatAnswersTheUpstreamHealthIdentity() = runBlocking {
+        // The Dani Bot desktop answers {"app":"openmausbot"} on /api/health; earlier Dani builds answered "danibot".
+        val tailnet = endpoint("http://mac.tail1234.ts.net:8810", CompanionEndpointKind.TAILNET, 100)
+        val stub = PairingStub { request ->
+            if (request.url.encodedPath == "/api/health") StubAction.reply(200, UPSTREAM_HEALTH)
+            else StubAction.reply(201, PAIRED)
+        }
+
+        val outcome = CompanionClient.pairFirstReachable(typedConnection(tailnet), CREDENTIAL, "Pixel", client = stub.client)
+
+        assertEquals(tailnet, outcome.connection.activeEndpoint)
+        assertEquals(1, stub.pairRequests.size)
+    }
+
+    @Test
     fun transportFailureRetriesProtectedFallbackWithSameRequestId() = runBlocking {
         val hosted = endpoint("https://mac.companion.example", CompanionEndpointKind.HOSTED, 0)
         val tailnet = endpoint("http://mac.tail1234.ts.net:8810", CompanionEndpointKind.TAILNET, 100)
@@ -412,6 +427,7 @@ class PairingClientTest {
 
     private companion object {
         const val CREDENTIAL = "omb_pair_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        const val UPSTREAM_HEALTH = """{"app":"openmausbot","pid":42,"static":true}"""
         const val HEALTH = """{"app":"danibot","pid":42,"static":true}"""
         const val PAIRED =
             """{"token":"omb_device","device":{"id":"d","name":"Pixel","createdAt":1,"lastSeenAt":1},"serverName":"Mac","hosts":["192.168.1.42"]}"""
