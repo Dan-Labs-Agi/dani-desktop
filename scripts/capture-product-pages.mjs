@@ -45,7 +45,24 @@ async function pageTarget() {
   throw new Error(`no page target appeared\n${log.slice(-2000)}`);
 }
 
-const target = await pageTarget();
+// The window first shows the startup screen (a data: page); the product is the page the server serves over http(s).
+async function appTarget() {
+  const deadline = Date.now() + 120_000;
+  let seen = "";
+  while (Date.now() < deadline) {
+    try {
+      const list = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+      const pages = list.filter((t) => t.type === "page" && !t.url.startsWith("devtools:"));
+      seen = pages.map((t) => t.url.slice(0, 60)).join(" | ");
+      const app = pages.find((t) => /^https?:\/\//.test(t.url));
+      if (app) return app;
+    } catch {}
+    await sleep(1000);
+  }
+  throw new Error(`the app never left its startup screen; pages seen: ${seen}\n${log.slice(-2000)}`);
+}
+await pageTarget();
+const target = await appTarget();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
 let seq = 0;
@@ -111,8 +128,8 @@ const click = (pattern) => evaluate(`(() => {
 })()`);
 
 try {
-  await sleep(4000);
-  await shoot("01-first-screen", "first paint of an empty profile");
+  await sleep(3000);
+  await shoot("01-first-screen", `first screen of an empty profile at ${target.url.slice(0, 60)}`);
   const steps = (opt("--steps", "") || "").split("|").filter(Boolean);
   let n = 2;
   for (const pattern of steps) {
