@@ -32,11 +32,13 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y xvfb dbus-x11
       - run: pnpm package:linux:dir
       - name: Capture
+        env:
+          STEPS: ${{ inputs.steps || '+^Next$|^You$|^Settings$|ESC|^You$|^About$|ESC' }}
         run: |
           exe=$(ls release/linux-unpacked/danibot)
           xvfb-run -a --server-args="-screen 0 1600x1000x24" \
             node scripts/capture-product-pages.mjs --exe "$exe" --out shots \
-            --steps "${{ inputs.steps || 'Settings|About' }}"
+            --steps "$STEPS"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
