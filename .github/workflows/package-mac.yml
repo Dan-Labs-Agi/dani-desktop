@@ -37,8 +37,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: clean build outputs
         run: rm -rf dist dist-server release
-      - name: Stage pinned cloudflared for both Mac architectures
-        run: node scripts/prepare-cloudflared.mjs --target darwin-arm64 --target darwin-x64
+      # package:mac stages cloudflared (both Mac arches, via package:prepare) and the pinned Dani Free proxy
+      # (both arches); electron-builder's beforePack rejects a missing or mismatched binary.
       - run: pnpm package:mac
       - name: report what was built
         shell: bash
