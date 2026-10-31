@@ -350,7 +350,7 @@ test("the menu-bar item: which Clouds are using this Mac, Pause or Resume, See a
   assert.equal(trays.length, 1);
   assert.deepEqual(labels(), ["Client A is using this Mac", "-", "Pause", "See activity"]);
   assert.equal(trays[0].title, "Client A is using this Mac");
-  assert.equal(trays[0].tip, "OpenMausBot: Client A is using this Mac");
+  assert.equal(trays[0].tip, "Dani Bot: Client A is using this Mac");
   trays[0].menu.find(item => item.label === "Pause").click();
   trays[0].menu.find(item => item.label === "See activity").click();
   indicator.update({ clouds: ["My Cloud"], using: [], paused: true });
