@@ -145,7 +145,10 @@ function modelFor(role: RobotRole, color: string) {
   return model;
 }
 
+let unavailableReason = "3D renderer unavailable.";
+
 function failRendering(reason: string) {
+  unavailableReason = reason;
   for (const instance of instances.values()) {
     setReady(instance, false);
     instance.onFailure(reason);
@@ -427,6 +430,8 @@ function register(instance: AvatarInstance) {
   releaseTimer = null;
   startListening();
   instances.set(instance.element, instance);
+  // A renderer that already failed never reports again, so late avatars would stay on the loading placeholder.
+  if (unavailable) instance.onFailure(unavailableReason);
   if (observer) observer.observe(instance.element);
   else instance.visible = inViewport(instance.element);
   requestFrame();

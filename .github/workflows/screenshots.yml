@@ -33,7 +33,7 @@ jobs:
       - run: pnpm package:linux:dir
       - name: Capture
         env:
-          STEPS: ${{ inputs.steps || '+^Next$|^You$|^Settings$|ESC|^You$|^About$|ESC' }}
+          STEPS: ${{ inputs.steps || '+^Next$|^You$|^Settings$|ESC|^You$|^Help and support$|^About$|ESC' }}
         run: |
           exe=$(ls release/linux-unpacked/danibot)
           xvfb-run -a --server-args="-screen 0 1600x1000x24" \
