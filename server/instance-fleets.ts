@@ -24,7 +24,9 @@ export const API_KEY_FLEET: InstanceConfigMap = {
 
 // Google retired Gemini CLI for the free/Pro/Ultra tiers on 2026-06-18; enterprise licences restore it with
 // `{"instances": {"gemini": {"driver": "geminiAgent"}}}`.
+// Dani Free leads: the bundled keyless proxy, no account or key to set up.
 export const DEFAULT_FLEET: InstanceConfigMap = {
+  daniFree: { driver: "daniFree", displayName: "Dani Free" },
   grok: { driver: "grokAgent" },
   kimi: { driver: "kimiAgent" },
   droid: { driver: "droidAgent" },
