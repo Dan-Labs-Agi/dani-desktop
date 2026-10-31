@@ -1,9 +1,9 @@
-appId: com.openmausbot.app
-productName: OpenMausBot
+appId: com.danibot.app
+productName: Dani Bot
 artifactName: OpenMausBot-${version}-${arch}.${ext}
 
 protocols:
-  - name: OpenMausBot package install
+  - name: Dani Bot package install
     schemes: [openmausbot]
 
 # In-app auto-update reads latest-mac.yml + the .zip (macOS) or latest.yml +
@@ -193,7 +193,7 @@ nsis:
   perMachine: false
   shortcutName: OpenMausBot
   # Versioned, like the .dmg. The README's /latest/download/ button needs a
-  # STABLE filename, so ship a second copy named OpenMausBot-setup.exe on the
+  # STABLE filename, so ship a second copy named Dani-Bot-setup.exe on the
   # release — the same trick as OpenMausBot.dmg beside OpenMausBot-${version}.dmg.
   artifactName: OpenMausBot-${version}-setup.${ext}
 
