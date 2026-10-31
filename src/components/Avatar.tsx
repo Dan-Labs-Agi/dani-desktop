@@ -3,23 +3,21 @@ import {
   memo,
   useEffect,
   useImperativeHandle,
-  useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/cn";
-import { CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMotion, type MausState } from "@/lib/mascot";
+import { CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMotion } from "@/lib/mascot";
 import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import type { BotBodyId } from "../../shared/bot-body";
 import { RobotAvatar } from "./manzanilla/RobotAvatar";
-import type { RobotMotion, RobotRole } from "./manzanilla/robot-model";
+import type { RobotMotion } from "./manzanilla/robot-model";
 import { botRobotRole } from "@/lib/robot-role";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
 
-const POINTER_GAZE = { forward: 1, authored: 0.25 };
+const _POINTER_GAZE = { forward: 1, authored: 0.25 };
 
 
 
@@ -36,7 +34,7 @@ function mix(hex: string, toward: string, t: number): string {
     .join("")}`;
 }
 
-const gradientFor = (color: MausColor): [string, string, string] => {
+const _gradientFor = (color: MausColor): [string, string, string] => {
   if (color === "chrome") return CHROME_GRADIENT;
   const fill = MAUS_COLORS[color] ?? MAUS_COLORS.green;
   return [mix(fill, "#ffffff", 0.55), fill, mix(fill, "#000000", 0.42)];
@@ -134,7 +132,7 @@ export function resolveBotAvatarOutcome(params: {
   return "flatImage";
 }
 
-export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotProps }: BotAvatarProps) {
+export function BotAvatar({ bot, size = 44, label, readable: _readable = false, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
   const [imageFailed, setImageFailed] = useState(false);
 

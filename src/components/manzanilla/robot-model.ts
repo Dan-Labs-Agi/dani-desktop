@@ -84,7 +84,7 @@ const colorPresets: Record<string, string> = {
 export function resolveRobotColor(role: RobotRole = "default", color?: string): string {
   const value = color?.trim().toLowerCase();
   if (value && /^#[\da-f]{6}$/.test(value)) return value.toUpperCase();
-  if (value && /^#[\da-f]{3}$/.test(value)) return `#${[...value.slice(1)].map((c) => c + c).join("")}`.toUpperCase();
+  if (value && /^#[\da-f]{3}$/.test(value)) return `#${value.slice(1).map((c) => c + c).join("")}`.toUpperCase();
   if (value && Object.hasOwn(colorPresets, value)) return colorPresets[value];
   return ROBOT_ROLES.find((item) => item.id === role)?.color ?? ROBOT_ROLES[0].color;
 }
