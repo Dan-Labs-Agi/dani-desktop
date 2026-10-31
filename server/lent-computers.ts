@@ -121,6 +121,6 @@ export function awayNotice(known: LentComputer[], online: ReadonlySet<string>): 
   const device = deviceWord(latest.platform);
   const say = latest.stoppedAt === null
     ? `Their ${device} ${latest.name} is shared with the Cloud but offline (last online ${dateText(latest.lastSeenAt)}): Dani Bot on it is closed, or the ${device} is asleep or off. Ask them to open Dani Bot on that ${device}; it reconnects by itself.`
-    : `Their ${device} ${latest.name} no longer shares itself with the Cloud: Dani Bot on it is paused, or signed out of Dani Bot Cloud. Ask them to choose Resume from Dani Bot's icon in the ${device === "Mac" ? "menu bar" : "taskbar"} on that ${device}, or sign in there again.`;
+    : `Their ${device} ${latest.name} no longer shares itself with the Cloud: Dani Bot on it is paused, or signed out of MausBot Cloud. Ask them to choose Resume from Dani Bot's icon in the ${device === "Mac" ? "menu bar" : "taskbar"} on that ${device}, or sign in there again.`;
   return { offline, say };
 }
