@@ -24,8 +24,8 @@ async function loadDriver(dataDir: string, executable: string) {
   // config.ts fixes DATA_DIR at import; the driver module reads it through config.ts.
   const { DaniFreeDriver, daniFreeDriverSeams } = await import("./dani-free-driver.ts");
   // Run the stub as `node stub.mjs start` through the real driver; works on every OS (no sh shim).
-  daniFreeDriverSeams.spawnProcess = ((file: string, args: readonly string[] = [], options: SpawnOptions = {}) =>
-    spawn(file, [STUB, ...args], options)) as unknown as typeof spawn;
+  daniFreeDriverSeams.spawnProcess = ((_file: string, args: readonly string[] = [], options: SpawnOptions = {}) =>
+    spawn(process.execPath, [STUB, ...args], options)) as unknown as typeof spawn;
   return DaniFreeDriver;
 }
 
