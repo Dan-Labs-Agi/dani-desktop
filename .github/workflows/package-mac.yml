@@ -2,6 +2,7 @@
 # as a workflow artifact only. Never creates a release or a public feed.
 # These builds have no Apple Developer ID signature and are not notarized:
 # Gatekeeper may block them and macOS auto-update cannot be relied on.
+# Rebuilt on every change to the packaged app that must be verified on macOS (it runs when this file changes).
 name: Package macOS
 
 on:

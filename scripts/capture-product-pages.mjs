@@ -85,6 +85,21 @@ const evaluate = async (expression) => {
   return result.result.value;
 };
 
+const diagnostics = { console: [], failedRequests: [] };
+ws.addEventListener("message", (event) => {
+  const message = JSON.parse(event.data);
+  if (message.method === "Runtime.consoleAPICalled" && ["error", "warning"].includes(message.params.type)) {
+    diagnostics.console.push(`${message.params.type}: ${message.params.args.map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 300)}`);
+  } else if (message.method === "Runtime.exceptionThrown") {
+    diagnostics.console.push(`exception: ${(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text).slice(0, 300)}`);
+  } else if (message.method === "Network.loadingFailed") {
+    diagnostics.failedRequests.push(`${message.params.errorText} ${message.params.type}`);
+  } else if (message.method === "Network.responseReceived" && message.params.response.status >= 400) {
+    diagnostics.failedRequests.push(`${message.params.response.status} ${message.params.response.url.slice(0, 160)}`);
+  }
+});
+await cdp("Runtime.enable");
+await cdp("Network.enable");
 await cdp("Page.enable");
 await cdp("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 
@@ -96,6 +111,8 @@ const SNAPSHOT = `(() => {
     url: location.href,
     headings: [...document.querySelectorAll("h1,h2,h3,[role=dialog]")].filter(visible).map(label).filter(Boolean).slice(0, 20),
     buttons: [...document.querySelectorAll("button,[role=button],[role=tab],a[href]")].filter(visible).map(label).filter(Boolean).slice(0, 120),
+    webgl: (() => { try { const c = document.createElement("canvas"); return Boolean(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } })(),
+    robots: [...document.querySelectorAll("[data-robot-renderer]")].map((el) => el.getAttribute("data-robot-renderer") + (el.getAttribute("data-robot-error") ? ": " + el.getAttribute("data-robot-error") : "")).slice(0, 5),
     scrollHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
   };
 })()`;
@@ -132,14 +149,28 @@ try {
   await shoot("01-first-screen", `first screen of an empty profile at ${target.url.slice(0, 60)}`);
   const steps = (opt("--steps", "") || "").split("|").filter(Boolean);
   let n = 2;
-  for (const pattern of steps) {
-    const hit = await click(pattern);
-    if (!hit) { record.push({ name: `step-${n}`, note: `NOT REACHED: no visible control matching /${pattern}/` }); console.log(`[capture] not reached: ${pattern}`); continue; }
-    await shoot(`${String(n).padStart(2, "0")}-${pattern.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`, `clicked "${hit}"`);
-    n += 1;
+  for (const raw of steps) {
+    const repeat = raw.startsWith("+");
+    const pattern = repeat ? raw.slice(1) : raw;
+    for (let round = 0; round < (repeat ? 8 : 1); round += 1) {
+      if (pattern === "ESC") {
+        for (const type of ["keyDown", "keyUp"]) await cdp("Input.dispatchKeyEvent", { type, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+        await shoot(`${String(n).padStart(2, "0")}-escape`, "pressed Escape");
+        n += 1;
+        break;
+      }
+      const hit = await click(pattern);
+      if (!hit) {
+        if (!repeat || round === 0) { record.push({ name: `step-${n}`, note: `NOT REACHED: no visible control matching /${pattern}/` }); console.log(`[capture] not reached: ${pattern}`); }
+        break;
+      }
+      await shoot(`${String(n).padStart(2, "0")}-${pattern.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`, `clicked "${hit}"`);
+      n += 1;
+    }
   }
 } finally {
   writeFileSync(path.join(out, "tour.json"), JSON.stringify(record, null, 2));
+  writeFileSync(path.join(out, "diagnostics.json"), JSON.stringify(diagnostics, null, 2));
   writeFileSync(path.join(out, "app.log"), log.slice(-20000));
   ws.close();
   child.kill("SIGTERM");
