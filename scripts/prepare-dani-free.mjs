@@ -31,6 +31,12 @@ export function stagedBinaryPath(resourcesDir, platform, arch) {
   return join(resourcesDir, "dani-free", platform, arch, platform === "win32" ? "dani-free.exe" : "dani-free");
 }
 
+/** Public, non-expiring release the pins above were published as; every file is digest-verified before it is staged. */
+export const DANI_FREE_RELEASE_TAG = "v0.1.1-dani-dex.1";
+export function releaseAssetUrl(file, tag = DANI_FREE_RELEASE_TAG) {
+  return `https://github.com/${DANI_FREE_ARTIFACT.repository}/releases/download/${tag}/${file}`;
+}
+
 export function artifactZipUrl(artifact = DANI_FREE_ARTIFACT) {
   return `https://api.github.com/repos/${artifact.repository}/actions/artifacts/${artifact.artifactId}/zip`;
 }
@@ -89,6 +95,29 @@ async function main() {
     return !existsSync(target) || sha256(readFileSync(target)) !== DANI_FREE_BINARIES[key].sha256;
   });
   if (!missing.length) { console.log("dani-free binaries staged and digest-verified"); return; }
+  // Preferred: the public release, which needs no token and does not expire like a workflow artifact.
+  const stillMissing = [];
+  for (const key of missing) {
+    const [platform, arch] = key.split("-");
+    const pin = DANI_FREE_BINARIES[key];
+    try {
+      const response = await fetch(releaseAssetUrl(pin.file), { redirect: "follow", signal: AbortSignal.timeout(300_000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const work = mkdtempSync(join(tmpdir(), "dani-free-"));
+      try {
+        const file = join(work, pin.file);
+        writeFileSync(file, Buffer.from(await response.arrayBuffer()));
+        console.log(`staged ${stageBinary(file, platform, arch, resourcesDir)} (public release ${DANI_FREE_RELEASE_TAG})`);
+      } finally {
+        rmSync(work, { recursive: true, force: true });
+      }
+    } catch (error) {
+      console.error(`public release download for ${pin.file} failed (${error instanceof Error ? error.message : error}); trying the pinned artifact`);
+      stillMissing.push(key);
+    }
+  }
+  missing.splice(0, missing.length, ...stillMissing);
+  if (!missing.length) return;
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
   if (!token) {
     throw new Error(`dani-free binaries missing for ${missing.join(", ")} and no GH_TOKEN/GITHUB_TOKEN is set; the artifact lives in the private ${DANI_FREE_ARTIFACT.repository} repo`);
