@@ -3,9 +3,9 @@
 The Android counterpart to the iOS companion app: pair a phone with a computer
 running Dani Bot, then read and answer from the phone.
 
-- `applicationId` — `com.danibot.companion`
+- `applicationId` — `dev.danlab.dani`
 - `minSdk` 26 (Android 8.0), `targetSdk` / `compileSdk` 37
-- Deep-link scheme — `danibot`
+- Deep-link scheme — `danibot` (the older `openmausbot` scheme is still accepted so existing pairing links keep working)
 - Two modules: `:core` (protocol, ported from `ios/Sources/CompanionCore`) and
   `:app` (Compose UI, Android platform)
 
@@ -19,7 +19,7 @@ cd android
 ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug
 ```
 
-That is the same command CI runs (`.github/workflows/ci.yml`). Gradle caches
+The manual `Android` workflow (`.github/workflows/android.yml`) runs the same command on a GitHub-hosted runner and uploads the debug APK. It is not part of `ci.yml`, so it does not run on every push. Gradle caches
 aggressively — a suspiciously fast `BUILD SUCCESSFUL` usually means nothing ran.
 Prefix `cleanTest` when a test count matters:
 
