@@ -25,6 +25,9 @@ directories:
 # electron-builder makes copied directories group-writable by default. The
 # Linux CUA trust boundary requires root-owned package ancestors to be 0755.
 afterPack: ./scripts/after-pack.mjs
+# The bundled Dani Free proxy is packaged only when the staged binary checksum-matches
+# the pinned manifest (scripts/prepare-dani-free.mjs); anything else fails the build.
+beforePack: ./scripts/verify-dani-free-packaged.mjs
 
 # The app is three self-contained pieces, none needing node_modules at
 # runtime: the Electron main/preload (plain .mjs/.cjs), the built UI
@@ -119,6 +122,10 @@ mac:
       to: cua-driver
     - from: dist-native/${arch}/cua-sdk
       to: cua-sdk
+    # Dani Free: keyless proxy, staged ONLY by scripts/prepare-dani-free.mjs
+    # (digest-pinned); a missing stage fails packaging loudly, never silently.
+    - from: resources/dani-free/darwin/${arch}
+      to: dani-free/darwin/${arch}
     - from: dist-native/cloudflared/darwin-${arch}/cloudflared
       to: cloudflared/cloudflared
     - from: dist-native/browser/darwin-${arch}
@@ -178,6 +185,10 @@ win:
       to: cua-driver-background.exe
     - from: dist-native/cua-win32-x64/cua-sdk
       to: cua-sdk
+    # Dani Free: keyless proxy, staged ONLY by scripts/prepare-dani-free.mjs
+    # (digest-pinned); a missing stage fails packaging loudly, never silently.
+    - from: resources/dani-free/win32/x64
+      to: dani-free/win32/x64
   # No signing config yet (would go under win.signtoolOptions or
   # win.azureSignOptions — eb 26 nests it, there is no top-level
   # win.certificateFile). The installer is unsigned, so SmartScreen shows
@@ -224,6 +235,10 @@ linux:
       to: browser-engine
     - from: dist-native/duckdb/linux-x64/node_modules
       to: duckdb/node_modules
+    # Dani Free: keyless proxy, staged ONLY by scripts/prepare-dani-free.mjs
+    # (digest-pinned); a missing stage fails packaging loudly, never silently.
+    - from: resources/dani-free/linux/x64
+      to: dani-free/linux/x64
     - from: build/linux-openmausbot-browser.apparmor
       to: openmausbot-browser.apparmor
   desktop:

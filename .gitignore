@@ -40,3 +40,7 @@ deploy/podman/.env
 deploy/podman/.env.*
 !deploy/podman/.env.example
 /.env
+
+# Staged Dani Free proxy binaries: populated only by scripts/prepare-dani-free.mjs
+# (digest-verified). Never commit the staged artifacts.
+resources/dani-free/
