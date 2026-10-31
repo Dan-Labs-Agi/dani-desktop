@@ -1,6 +1,7 @@
 // openmausbot://thread/<thread-id>?bot=<bot-id> and openmausbot://bot/<bot-id>. The page checks them strictly against
 // its chats; opening one never sends, interrupts or creates anything.
-const CHAT_LINK_PREFIXES = ["openmausbot://thread/", "openmausbot://bot/"];
+// danibot:// is what this app registers and writes; openmausbot:// links from the upstream app still parse.
+const CHAT_LINK_PREFIXES = ["danibot://thread/", "danibot://bot/", "openmausbot://thread/", "openmausbot://bot/"];
 const MAX_LINK_LENGTH = 1024;
 
 export function chatLinkFrom(value) {

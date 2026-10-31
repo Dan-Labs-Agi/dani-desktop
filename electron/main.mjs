@@ -2961,7 +2961,8 @@ app.whenReady().then(async () => {
   }
   installServerSessions({ app, defaultSession: session.defaultSession, serverPort: () => SERVER_PORT,
     ownerToken: () => (app.isPackaged && serverReady ? desktopMutationToken : null) });
-  if (app.isPackaged) app.setAsDefaultProtocolClient("openmausbot");
+  // danibot:// is this app's scheme. openmausbot:// is never claimed from the OS, so an installed upstream OpenMausBot keeps its own links.
+  if (app.isPackaged) app.setAsDefaultProtocolClient("danibot");
   if (process.platform === "darwin") app.dock.setIcon(APP_ICON);
   secureCredentials = await loadSecureCredentials();
   // An orphaned third-party key with no clear handler left: drop it rather than keep it at rest.
