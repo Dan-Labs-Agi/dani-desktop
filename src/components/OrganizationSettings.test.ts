@@ -5,6 +5,12 @@ import type { ManagedDesktopBridge, ManagedDesktopState } from "../../electron/m
 import { setLocale, t } from "@/lib/i18n";
 import { locales } from "@/locales";
 
+// The cloud boundary is mocked open here: these tests pin the component's
+// sign-in machinery (begin/custom/disconnect flows), which stays intact for
+// explicitly configured destinations. The real boundary's gating is covered
+// by OrganizationSettings.cloud-gate.test.ts and cloud-backend's own tests.
+vi.mock("@/lib/cloud-backend", () => ({ cloudSignInSurface: () => ({ available: true }) }));
+
 const fixture = vi.hoisted(() => ({ values: [] as unknown[], index: 0, effects: [] as EffectCallback[], updating: false,
   store: { bots: [] as unknown[], instances: [] as unknown[], dispatch: (() => {}) as (action: unknown) => void, flushBotPatches: (async () => null) as (botId: string) => Promise<unknown> } }));
 vi.mock("react", async (original) => ({ ...await original<typeof import("react")>(),
@@ -198,7 +204,7 @@ describe("optional desktop Organisation settings", () => {
   it("explains a lapsed Admin licence without a sign-in loop and shows Company models unavailable", async () => {
     await ready({ ...connected, status: "license-expired" });
     const html = render().html;
-    expect(html).toContain("Your organization&#x27;s OpenMaus Admin license has expired. Contact your admin.");
+    expect(html).toContain("Your organization&#x27;s Dani Bot Admin license has expired. Contact your admin.");
     expect(html).not.toContain("Disconnect below, then sign in again");
     expect(html).not.toContain("Sign in with your organization");
     expect(html).toContain("Unavailable until the licence is renewed");
