@@ -37,7 +37,8 @@ adb install -r "$APK" > "$OUT/install.txt" 2>&1; cat "$OUT/install.txt"
 grep -q '^Success' "$OUT/install.txt" || { echo "install failed"; exit 1; }
 adb shell am start -W -n "$PKG/com.openmausbot.companion.MainActivity" > "$OUT/start.txt" 2>&1
 sleep 8
-adb shell am start -W -a android.intent.action.VIEW -d "$(cat "$DATA/link.txt")" "$PKG" > "$OUT/link.txt" 2>&1
+# The link holds '&': it must be single-quoted for the device's own shell (the link carries no single quote).
+adb shell "am start -W -a android.intent.action.VIEW -d '$(cat "$DATA/link.txt")' $PKG" > "$OUT/link.txt" 2>&1
 sed 's/token=[^&]*/token=REDACTED/' "$OUT/link.txt" | head -5
 for i in 1 2 3 4 5 6; do sleep 5; adb exec-out screencap -p > "$OUT/pair-$i.png"; done
 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui.xml" >/dev/null 2>&1
