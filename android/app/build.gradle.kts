@@ -69,7 +69,7 @@ private val releaseKeystore: java.io.File? = when {
 // The one line to edit at a release. `versionCode` is derived from it below, so
 // there is no second number to bump and no way to build a new version under a
 // code the Play Store has already accepted.
-private val appVersionName = "1.0.0"
+private val appVersionName = "1.5.0"
 
 // Play orders uploads by `versionCode` alone and refuses one it has already
 // seen, so the code has to rise whenever the name does — and rise in the
@@ -91,7 +91,7 @@ private val appVersionCode = run {
 }
 
 android {
-    namespace = "dev.danlab.dani"
+    namespace = "com.openmausbot.companion"
     compileSdk = 37
 
     defaultConfig {
@@ -135,6 +135,15 @@ android {
     }
 
     buildTypes {
+        create("preview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-threads-preview"
+            matchingFallbacks += "debug"
+            // Reuse Gradle's local debug key; this package installs alongside
+            // the separately signed release and keeps its own pairing/data.
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             // Null whenever no signing material was supplied — the unsigned
             // handover build — and the "release" config whenever it was.

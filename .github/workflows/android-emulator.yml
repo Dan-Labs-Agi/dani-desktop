@@ -1,0 +1,58 @@
+name: Android emulator smoke
+
+# Builds the Dani debug APK on a free GitHub-hosted runner and runs it in an emulator: install, launch,
+# screenshots, device log, and a danibot:// link reaching the app. It uses no account, no pairing code and
+# no secret, publishes nothing, and does not sign a release. Manual, or on a push to the Android branch.
+on:
+  workflow_dispatch:
+  push:
+    branches: [integration/dani-android-v1.5]
+    paths: ["android/**", ".github/workflows/android-emulator.yml", ".github/scripts/android-emulator-smoke.sh"]
+
+permissions:
+  contents: read
+
+jobs:
+  emulator:
+    name: build + emulator launch (Ubuntu 24.04, API 34)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use the runner's preinstalled JDK 17
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - name: Unit tests and debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:assembleDebug
+      - name: Show the built APKs
+        run: ls -l android/app/build/outputs/apk/debug/
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install, launch and capture in the emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: .github/scripts/android-emulator-smoke.sh android/app/build/outputs/apk/debug/app-universal-debug.apk emulator-out
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dani-android-emulator-evidence
+          path: emulator-out
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload the debug APKs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dani-android-v1-5-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
