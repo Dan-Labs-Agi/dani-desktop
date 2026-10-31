@@ -242,12 +242,15 @@ describe("header name", () => {
       fixture.advanced = advanced;
       const busyMarkup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: true, tasks: (bot.tasks ?? []).map((task) => ({ ...task, busy: true })) } }));
       const idleMarkup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false } }));
-      const pillOf = (markup: string) => {
+      const rawPillOf = (markup: string) => {
         const start = markup.indexOf("data-chathead-pill");
-        return markup.slice(start, markup.indexOf("data-chathead-status", start)).replace(/data-robot-motion="[a-z]+"/, 'data-robot-motion="motion"');
+        return markup.slice(start, markup.indexOf("data-chathead-status", start));
       };
+      const pillOf = (markup: string) => rawPillOf(markup).replace(/data-robot-motion="[a-z]+"/, 'data-robot-motion="motion"');
       expect(pillOf(busyMarkup)).not.toContain("animate-status-pulse");
-      // the robot span may flip data-robot-motion between idle and working; the pill keeps one width and no extra dots either way
+      // the robot span must flip data-robot-motion between idle and working; beyond that the pill keeps one width and no extra dots either way
+      expect(rawPillOf(busyMarkup)).toContain('data-robot-motion="working"');
+      expect(rawPillOf(idleMarkup)).toContain('data-robot-motion="idle"');
       expect(pillOf(busyMarkup)).toBe(pillOf(idleMarkup));
       expect(busyMarkup).toMatch(/<span role="status" class="sr-only" data-chathead-status="true">Working…<\/span>/);
       expect(idleMarkup).toMatch(/<span role="status" class="sr-only" data-chathead-status="true"><\/span>/);
