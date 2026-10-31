@@ -59,6 +59,20 @@ adb shell input tap $XY
 for i in 1 2 3 4 5 6; do sleep 5; adb exec-out screencap -p > "$OUT/pair-$i.png"; done
 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui.xml" >/dev/null 2>&1
 curl -fs "http://127.0.0.1:$PORT/api/auth/pairing" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("open pairings after:",JSON.parse(s).pairings.length))' | tee "$OUT/pairings-after.txt"
+# After redemption the app shows the notification prompt. Decline it like a person and capture what comes next.
+adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui-after-pair.xml" >/dev/null 2>&1
+XY2="$(python3 - "$OUT/ui-after-pair.xml" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'text="Not now"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+if m:
+    a, b, c, d = map(int, m.groups())
+    print((a + c) // 2, (b + d) // 2)
+PY
+)"
+[ -z "$XY2" ] || adb shell input tap $XY2
+for i in 1 2 3; do sleep 8; adb exec-out screencap -p > "$OUT/connected-$i.png"; done
+adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui-connected.xml" >/dev/null 2>&1
 adb logcat -d -v time > "$OUT/logcat.txt"
 grep -E 'FATAL EXCEPTION|ANR in' "$OUT/logcat.txt" > "$OUT/crashes.txt" || true
 grep -E 'POST /api/auth/pair|auth/pair' "$OUT/server.log" | sed 's/token=[^& ]*/token=REDACTED/' | tail -5 > "$OUT/server-pair-lines.txt" || true
