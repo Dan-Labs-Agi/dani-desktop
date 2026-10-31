@@ -20,35 +20,35 @@ const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
   );
 
 describe("MausAvatar body", () => {
-  it("wears the Dani robot for every body and color", () => {
+  it("wears the Manzanilla robot for every body and color", () => {
     for (const bodyId of [undefined, "star", "pumpkin", "vampire", "circle"] as const) {
       for (const color of ["green", "chrome", "purple", "red"] as const) {
         const markup = render({ bodyId, color });
-        expect(markup).toContain("/src/assets/dani-robot/");
-        expect(markup).toContain('visibility="hidden"');
+        expect(markup).toContain("mz-robot-avatar");
+        expect(markup).not.toContain("/src/assets/dani-robot/");
+        expect(markup).not.toContain("<svg");
       }
     }
   });
 
-  it("maps palette colors onto the rig's four preset shells", () => {
-    expect(render({ color: "green" })).toContain("dani-robot/teal-idle");
-    expect(render({ color: "purple" })).toContain("dani-robot/violet-idle");
-    expect(render({ color: "red" })).toContain("dani-robot/pink-idle");
-    expect(render({ color: "chrome" })).toContain("dani-robot/blue-idle");
+  it("wears the requested dani-dex character, defaulting to name inference", () => {
+    expect(render({ robotRole: "chief" })).toContain('data-robot-role="chief"');
+    expect(render({ robotRole: "builder" })).toContain('data-robot-role="builder"');
+    expect(render({ label: "Invoice Collector" })).toContain('data-robot-role="invoice"');
   });
 
-  it("switches the robot's pose with the bot's state", () => {
-    expect(render({ state: "working" })).toContain("dani-robot/teal-working");
-    expect(render({ state: "listening" })).toContain("dani-robot/teal-waiting");
-    expect(render({ state: "happy" })).toContain("dani-robot/teal-replied");
+  it("switches the robot's motion with the bot's state", () => {
+    expect(render({ state: "working" })).toContain('data-robot-motion="working"');
+    expect(render({ state: "listening" })).toContain('data-robot-motion="waiting"');
+    expect(render({ state: "happy" })).toContain('data-robot-motion="idle"');
   });
 
   it("renders the robot even when a saved face-color override exists", () => {
     // The drawn-mascot face-ink preference is kept in the profile, but the old
     // mascot never renders: the Dani robot is the only character.
     const markup = renderBot({ mascotFaceColor: "black" });
-    expect(markup).toContain("/src/assets/dani-robot/");
-    expect(markup).toContain('visibility="hidden"');
+    expect(markup).toContain("mz-robot-avatar");
+    expect(markup).not.toContain("/src/assets/dani-robot/");
   });
 
   it("does not paint features over an uploaded image", () => {
@@ -86,16 +86,22 @@ describe("BotAvatar's two avatar outcomes", () => {
     expect(markup).not.toContain("radialGradient");
   });
 
-  it("renders the gradient mascot when the crop is mascot, image or not", () => {
+  it("renders the robot when the crop is mascot, image or not", () => {
     const markup = renderBot({ avatarUrl: "/api/attachments/cat.webp", avatarCrop: "mascot" });
     expect(markup).not.toContain("<img");
-    expect(markup).toContain("<svg");
+    expect(markup).toContain("mz-robot-avatar");
   });
 
-  it("falls back to the gradient mascot when a flat crop has no valid image", () => {
+  it("gives a bot its dani-dex character", () => {
+    expect(renderBot({ name: "Talent Scout" })).toContain('data-robot-role="talent"');
+    expect(renderBot({ readyBotId: "coder" })).toContain('data-robot-role="builder"');
+    expect(renderBot({ chiefOfStaff: true })).toContain('data-robot-role="chief"');
+  });
+
+  it("falls back to the robot when a flat crop has no valid image", () => {
     const markup = renderBot({ avatarUrl: undefined, avatarCrop: "circle" });
     expect(markup).not.toContain("<img");
-    expect(markup).toContain("<svg");
+    expect(markup).toContain("mz-robot-avatar");
   });
 });
 

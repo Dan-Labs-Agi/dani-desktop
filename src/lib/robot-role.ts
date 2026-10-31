@@ -30,4 +30,9 @@ export const READY_BOT_ROLE: Record<string, RobotRole> = {
 
 export function botRobotRole(bot: { readyBotId?: string | null; name?: string | null; title?: string | null; chiefOfStaff?: boolean | null }): RobotRole {
   if (bot.chiefOfStaff) return "chief";
-  if (bot.readyBotId 
+  if (bot.readyBotId && READY_BOT_ROLE[bot.readyBotId]) return READY_BOT_ROLE[bot.readyBotId];
+  return inferRobotRole(bot.name ?? "", bot.title ?? undefined);
+}
+
+/** Every dani-dex character id, for surfaces that must offer the full cast. */
+export const ALL_ROBOT_ROLES: readonly RobotRole[] = ROBOT_ROLES.map((role) => role.id);
