@@ -5,6 +5,11 @@
 name: Package macOS
 
 on:
+  # the dispatch button only exists for workflows on the default branch, so this
+  # integration branch builds when this file itself changes
+  push:
+    branches: [integration/dani-rebrand]
+    paths: [.github/workflows/package-mac.yml]
   workflow_dispatch:
     inputs:
       ref:
