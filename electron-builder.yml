@@ -200,6 +200,10 @@ nsis:
   oneClick: true
   perMachine: false
   shortcutName: Dani Bot
+  # R6: uninstall removes %APPDATA%\Dani Bot (window state, app logs, stored
+  # app credentials). The data directory ~/.danibot is outside appData and
+  # stays by design - a reinstall picks the fleet back up.
+  deleteAppDataOnUninstall: true
   # Versioned, like the .dmg. The README's /latest/download/ button needs a
   # STABLE filename, so ship a second copy named DaniBot-setup.exe on the
   # release — the same trick as Dani Bot.dmg beside DaniBot-${version}.dmg.
@@ -218,8 +222,8 @@ linux:
   executableName: danibot
   synopsis: Your own team of AI agents, in a chat app
   description: A local-first chat app for running a team of AI agents.
-  maintainer: Somdipto Nandy <somdiptonandy@gmail.com>
-  vendor: Dan Lab
+  maintainer: Dani <somdiptonandy@gmail.com>
+  vendor: Dani Bot
   syncDesktopName: true
   # The reviewed x64 CLI runtime is staged before packaging and remains
   # outside ASAR so executable modes and adjacent sidecars are preserved.
@@ -245,6 +249,8 @@ linux:
       Keywords: AI;Agents;Chat;Productivity;
 
 deb:
+  # package.json "name" is the fpm default; the published package is danibot, matching docs/linux-desktop.md and the verifier.
+  packageName: danibot
   packageCategory: utils
   priority: optional
   # Add the narrow browser policy's parser without replacing Electron's

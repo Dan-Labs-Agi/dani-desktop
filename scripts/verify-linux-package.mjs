@@ -425,7 +425,7 @@ const fields = execFileSync(
 for (const expected of [
   "Package: danibot",
   "Architecture: amd64",
-  "Maintainer: Somdipto",
+  "Maintainer: Dani",
   "Section: utils",
   "Priority: optional",
 ]) {
