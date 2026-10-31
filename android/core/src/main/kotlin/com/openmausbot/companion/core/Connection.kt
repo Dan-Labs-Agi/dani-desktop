@@ -347,15 +347,15 @@ data class Connection(
         }
 
         private const val MAX_ENDPOINTS = 8
-
-        /** The upstream scheme plus the one the Dani desktop writes into its pairing links. */
-        private val PAIRING_SCHEMES = listOf("openmausbot", "danibot")
     }
 }
 
 data class PairingInvite(val connection: Connection, val credential: String) {
     companion object {
         private const val MAX_ENDPOINTS = 8
+
+        /** The upstream scheme plus the one the Dani desktop writes into its pairing links. */
+        private val PAIRING_SCHEMES = listOf("openmausbot", "danibot")
 
         fun parse(url: URI): PairingInvite? {
             if (url.scheme.equals("https", true) || url.scheme.equals("http", true)) {
