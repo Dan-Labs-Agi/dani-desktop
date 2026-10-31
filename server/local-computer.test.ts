@@ -31,7 +31,7 @@ const require = createRequire(import.meta.url);
 const { DRIVER_FILE_IDENTITY_KEYS: ELECTRON_DRIVER_FILE_IDENTITY_KEYS } = require(
   "../electron/cua-linux.cjs",
 );
-const { REQUIRED_TOOLS: ELECTRON_REQUIRED_TOOLS } = require("../electron/cua-linux-runtime.cjs");
+const { REQUIRED_TOOLS: ELECTRON_REQUIRED_TOOLS, HOST_BUNDLE_ID: ELECTRON_HOST_BUNDLE_ID } = require("../electron/cua-linux-runtime.cjs");
 
 function linuxDescriptor(userData: string, { session = "x11" }: { session?: "x11" | "wayland" } = {}) {
   const binary = join(userData, "cua-driver");
@@ -78,7 +78,7 @@ function linuxDescriptor(userData: string, { session = "x11" }: { session?: "x11
       args: ["mcp", "--embedded", "--socket", socket],
       env: {
         CUA_DRIVER_EMBEDDED: "1",
-        CUA_DRIVER_HOST_BUNDLE_ID: "com.openmausbot.app",
+        CUA_DRIVER_HOST_BUNDLE_ID: CUA_HOST_BUNDLE_ID,
         CUA_DRIVER_RS_UPDATE_CHECK: "false",
         CUA_DRIVER_RS_TELEMETRY_ENABLED: "false",
         ...(session === "wayland" ? { CUA_DRIVER_RS_ENABLE_WAYLAND: "1" } : {}),
@@ -107,6 +107,8 @@ describe("local computer descriptor contract", () => {
     expect(gated.env.ELECTRON_RUN_AS_NODE).toBe("1");
   });
   it("stays synchronized with the Electron producer", () => {
+    expect(CUA_HOST_BUNDLE_ID).toBe(ELECTRON_HOST_BUNDLE_ID);
+    expect(CUA_HOST_BUNDLE_ID).toBe("com.danibot.app");
     expect(DRIVER_FILE_IDENTITY_KEYS).toEqual([...ELECTRON_DRIVER_FILE_IDENTITY_KEYS]);
     expect(REQUIRED_LINUX_TOOLS).toEqual([...ELECTRON_REQUIRED_TOOLS]);
   });
