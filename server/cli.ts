@@ -110,7 +110,6 @@ export interface CliOptions {
   guided?: boolean;
   phone?: "ios" | "android";
 }
-
 const COMMANDS = ["setup", "start", "serve", "pair", "sessions", "status", "login", "logout", "access", "service", "browser", "fleet", "help", "--help", "-h"];
 
 export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): CliOptions | { error: string } {

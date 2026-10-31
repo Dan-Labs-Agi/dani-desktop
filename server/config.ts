@@ -1,4 +1,4 @@
-// <data dir>/config.json (~/.danibot, or an existing ~/.openmausbot), with env vars overriding its credentials.
+// <data dir>/config.json (~/.danibot), with env vars overriding its credentials.
 import { readFileSync, mkdirSync, existsSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -71,7 +71,6 @@ export function normalizeVpsConfig(raw: unknown): { sshAlias?: string } {
   }
   return { sshAlias: alias };
 }
-
 const vpsConfigSchema = z.object({
   sshAlias: z.string().refine((value) => value === "" || isValidSshAlias(value), { message: "must be a simple SSH config alias" }).optional(),
 });
@@ -747,7 +746,6 @@ export function changedInstanceIds(before: Record<string, unknown>, after: Recor
     .filter((id) => !isDeepStrictEqual(before[id], after[id]));
 }
 
-// DANI_DATA_DIR, then the upstream name OMB_DATA_DIR, isolate test/soak rigs; otherwise ~/.danibot, or an existing ~/.openmausbot read in place.
 export const DATA_DIR = process.env.DANI_DATA_DIR ?? process.env.OMB_DATA_DIR ?? defaultDataDir(homedir());
 const LEGACY_DATA_DIR = join(homedir(), ".opengrokbot");
 export const EVENTS_DIR = join(DATA_DIR, "events");
