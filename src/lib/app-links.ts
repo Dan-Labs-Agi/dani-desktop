@@ -4,7 +4,9 @@ export const DOCS_URL = `${APP_REPOSITORY}/tree/main/docs`;
 export const HELP_CENTER_URL = DOCS_URL;
 export const APPROVAL_LEVELS_URL = `${APP_REPOSITORY}/blob/main/docs/approval-levels.md`;
 export const FEEDBACK_URL = "https://discord.gg/9Wb8MEpXRs";
-export const RELEASES_URL = `${APP_REPOSITORY}/releases`;
+/** Where Dani Desktop is released: the update indicator sends people here, and the update check reads it. */
+export const DANI_REPOSITORY = "https://github.com/somdipto/dani-desktop";
+export const RELEASES_URL = `${DANI_REPOSITORY}/releases`;
 export function withSource(url: string, source: string): string {
   const target = new URL(url);
   target.searchParams.set("src", source);
