@@ -159,7 +159,12 @@ try {
         n += 1;
         break;
       }
-      const hit = await click(pattern);
+      // a menu or dialog can still be opening: look again for a few seconds before calling the control absent
+      let hit = await click(pattern);
+      for (let attempt = 0; !hit && attempt < 8 && !repeat; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        hit = await click(pattern);
+      }
       if (!hit) {
         if (!repeat || round === 0) { record.push({ name: `step-${n}`, note: `NOT REACHED: no visible control matching /${pattern}/` }); console.log(`[capture] not reached: ${pattern}`); }
         break;

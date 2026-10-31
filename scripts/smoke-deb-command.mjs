@@ -35,6 +35,10 @@ function inContainer(script, { expectFailure = false } = {}) {
       RUNTIME,
       [
         "run", "--rm",
+        // The package's post-install fails closed on a host that restricts user namespaces while AppArmor is not
+        // running, which is what any container on a current runner looks like. The prepare step models the other
+        // supported host (restriction off), so this smoke tests the install command, not the kernel's AppArmor state.
+        "--cap-add", "SYS_ADMIN", "--security-opt", "apparmor=unconfined",
         "-v", `${deb}:/tmp/package.deb:ro`,
         "-e", "DEBIAN_FRONTEND=noninteractive",
         IMAGE,
@@ -60,6 +64,9 @@ const prepare = [
   "apt-get install -y -qq sudo >/dev/null",
   `mkdir -p "$(dirname "${staged}")"`,
   `cp /tmp/package.deb "${staged}"`,
+  // Model a host without the user-namespace restriction; the post-install treats that host as unrestricted.
+  "restriction=/proc/sys/kernel/apparmor_restrict_unprivileged_userns",
+  'if [ -e "$restriction" ]; then printf 0 > /tmp/userns-unrestricted; mount --bind /tmp/userns-unrestricted "$restriction"; echo "userns restriction now: $(cat $restriction)"; fi',
 ].join("\n");
 
 console.log("[smoke-deb-command] installing with the command the app hands over…");
