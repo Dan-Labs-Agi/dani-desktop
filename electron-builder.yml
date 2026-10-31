@@ -25,9 +25,6 @@ afterPack: ./scripts/after-pack.mjs
 # The bundled Dani Free proxy is packaged only when the staged binary checksum-matches
 # the pinned manifest (scripts/prepare-dani-free.mjs); anything else fails the build.
 beforePack: ./scripts/verify-dani-free-packaged.mjs
-# The bundled Dani Free proxy is packaged only when the staged binary checksum-matches
-# the pinned manifest (scripts/prepare-dani-free.mjs); anything else fails the build.
-beforePack: ./scripts/verify-dani-free-packaged.mjs
 
 # The app is three self-contained pieces, none needing node_modules at
 # runtime: the Electron main/preload (plain .mjs/.cjs), the built UI
