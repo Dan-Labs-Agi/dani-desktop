@@ -1,6 +1,6 @@
 appId: com.danibot.app
 productName: Dani Bot
-artifactName: Dani-Bot-${version}-${arch}.${ext}
+artifactName: DaniBot-${version}-${arch}.${ext}
 
 protocols:
   - name: Dani Bot package install
@@ -52,9 +52,9 @@ asar: true
 extraResources:
   # Ship the app's own license terms in every desktop distribution.
   - from: LICENSE
-    to: licenses/Dani-Bot-LICENSE.txt
+    to: licenses/DaniBot-LICENSE.txt
   - from: NOTICE
-    to: licenses/Dani-Bot-NOTICE.txt
+    to: licenses/DaniBot-NOTICE.txt
   # cloudflared is distributed under Apache-2.0 as a separate executable.
   # Dani Bot itself uses the same full license text; ship another named
   # copy so the third-party executable's terms remain unambiguous.
@@ -148,7 +148,7 @@ dmg:
   # ${arch} is load-bearing: without it the x64 dmg silently overwrites
   # the arm64 one when both arches build (this section overrides both the
   # top-level and mac-level artifactName, so it must carry the arch itself)
-  artifactName: Dani-Bot-${version}-${arch}.dmg
+  artifactName: DaniBot-${version}-${arch}.dmg
   # x/y are icon centres in points. electron-builder 26.15.3 sizes the window
   # from build/background.png and ignores dmg.window whenever a background is set.
   iconSize: 112
@@ -201,9 +201,9 @@ nsis:
   perMachine: false
   shortcutName: Dani Bot
   # Versioned, like the .dmg. The README's /latest/download/ button needs a
-  # STABLE filename, so ship a second copy named Dani-Bot-setup.exe on the
-  # release — the same trick as Dani Bot.dmg beside Dani-Bot-${version}.dmg.
-  artifactName: Dani-Bot-${version}-setup.${ext}
+  # STABLE filename, so ship a second copy named DaniBot-setup.exe on the
+  # release — the same trick as Dani Bot.dmg beside DaniBot-${version}.dmg.
+  artifactName: DaniBot-${version}-setup.${ext}
 
 linux:
   target:

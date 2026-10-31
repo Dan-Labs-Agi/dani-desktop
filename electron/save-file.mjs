@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
+import { defaultDataDir } from "./data-dir-default.mjs";
 
 export function revealDownloadWhenDone(item, reveal) {
   item.once("done", (_event, state) => {
@@ -52,7 +53,7 @@ function isSameFile(left, right) {
 async function resolveSource(rawPath, { home, fsp, platform }) {
   const target = normalizeSourcePath(rawPath);
   const root = await canonicalPath(
-    path.join(home, ".openmausbot"),
+    process.env.DANI_DATA_DIR || process.env.OMB_DATA_DIR || defaultDataDir(home),
     fsp,
     "Only files created by your bots can be saved",
   );

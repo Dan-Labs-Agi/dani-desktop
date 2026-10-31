@@ -86,9 +86,12 @@ export function stageBinary(sourceFile, targetPlatform, arch, resourcesDir) {
 async function main() {
   const currentOnly = process.argv.includes("--current");
   const resourcesDir = join(ROOT, "resources");
+  const platformFlag = process.argv.indexOf("--platform");
+  const onlyPlatform = platformFlag > 0 ? process.argv[platformFlag + 1] : null;
   const wanted = currentOnly
     ? [`${process.platform}-${process.arch}`]
-    : Object.keys(DANI_FREE_BINARIES);
+    : Object.keys(DANI_FREE_BINARIES).filter((key) => !onlyPlatform || key.startsWith(`${onlyPlatform}-`));
+  if (!wanted.length) throw new Error(`no Dani Free pin for platform ${onlyPlatform}`);
   const missing = wanted.filter((key) => {
     const [platform, arch] = key.split("-");
     const target = stagedBinaryPath(resourcesDir, platform, arch);

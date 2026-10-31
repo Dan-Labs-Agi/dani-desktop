@@ -1,75 +1,95 @@
-# Builds Dani Desktop installers on free GitHub-hosted runners and assembles a
-# DRAFT release in this repository. It never publishes: a person reviews the
-# draft and publishes it by hand, because the in-app updater reads the latest
-# published release and a half-built feed strands every install.
-#
-# Needs no secrets beyond the repository's own GITHUB_TOKEN. Builds are
-# unsigned: Windows updates work without a publisherName (SmartScreen warns on
-# first install), Linux AppImage updates work, and macOS auto-update needs a
-# signed app per electron-builder's auto-update docs, so the macOS job is
-# best-effort and a Mac user installs by hand until a signing identity exists.
-name: Release (draft)
+# Native desktop release builds. Each package is built on the OS it runs on,
+# then collected into one draft release for human review.
+name: Release
 
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Commit/tag/branch to build (defaults to the branch this runs from)"
+        description: "Commit, tag, or branch to release (defaults to the selected branch)"
         required: false
         type: string
+  push:
+    branches:
+      - main
+      - prod
+    tags:
+      - "v*"
 
 permissions:
   contents: read
 
+concurrency:
+  # A newer push to the same branch supersedes an older build. Tags and manual
+  # runs use their own refs, so they do not cancel branch releases.
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  windows:
-    name: Windows (NSIS, unsigned)
-    runs-on: windows-latest
-    timeout-minutes: 45
+  prepare:
+    name: Pin release commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.release.outputs.version }}
+      published: ${{ steps.release.outputs.published }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: clean build outputs
+      - id: release
         shell: bash
-        run: rm -rf dist dist-server release
-      - run: pnpm package:win
-      - name: the updater feed must point at this repository and carry no publisherName
-        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          res=release/win-unpacked/resources
-          test -f release/latest.yml || { echo "::error::no latest.yml"; exit 1; }
-          if [ -f "$res/app-update.yml" ]; then
-            grep -Eq '^owner: somdipto$' "$res/app-update.yml" && grep -Eq '^repo: dani-desktop$' "$res/app-update.yml" || { echo "::error::app-update.yml does not point at somdipto/dani-desktop"; exit 1; }
-            ! grep -q publisherName "$res/app-update.yml" || { echo "::error::publisherName on an unsigned build"; exit 1; }
-          else
-            echo "::error::no app-update.yml: this build has no update feed"; exit 1
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          version=$(node -p "require('./package.json').version")
+          release_tag="v$version"
+
+          # Branch pushes release the exact commit that caused the run. Only a
+          # tag-triggered run has a tag whose name must match package.json.
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            test "$sha" = "$GITHUB_SHA" || {
+              echo "::error::checkout $sha does not match triggering commit $GITHUB_SHA"
+              exit 1
+            }
           fi
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: release-windows
-          path: |
-            release/*.exe
-            release/*.exe.blockmap
-            release/latest.yml
-          if-no-files-found: error
-          retention-days: 14
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            test "$GITHUB_REF" = "refs/tags/$release_tag" || {
+              echo "::error::tag must be $release_tag to match package.json"
+              exit 1
+            }
+          fi
+          # A branch push whose package.json version is already published has
+          # nothing new to release: still build every package (that is the
+          # cross-platform packaging signal), but skip the draft step instead
+          # of failing on "already published". Bump package.json to cut the
+          # next release. A tag push for a published version still fails.
+          published=false
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            is_draft=$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)
+            if [[ "$is_draft" == false ]]; then
+              published=true
+              echo "::notice::$release_tag is already published; packages are built but no draft release is created. Bump package.json to release."
+            fi
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
 
   linux:
-    name: Linux (AppImage + deb)
-    runs-on: ubuntu-24.04
+    name: Linux x64 (AppImage + deb)
+    needs: prepare
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -77,30 +97,49 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm clean
-      - run: pnpm package:linux:offline
-      - run: node scripts/verify-linux-package.mjs
+      - name: Stage pinned cloudflared for Linux
+        run: node scripts/prepare-cloudflared.mjs --target linux-x64
+      - name: Build Linux packages
+        run: pnpm package:linux
+      - name: Verify release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-amd64.deb
+          test -f release/latest-linux.yml
+      - name: Create stable download names
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          cp "release/DaniBot-$version-x86_64.AppImage" release/DaniBot.AppImage
+          cp "release/DaniBot-$version-amd64.deb" release/danibot-amd64.deb
+          test -s release/DaniBot.AppImage
+          test -s release/danibot-amd64.deb
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-linux
+          name: linux-release
           path: |
-            release/*.AppImage
-            release/*.deb
+            release/DaniBot-*.AppImage
+            release/DaniBot.AppImage
+            release/DaniBot-*.deb
+            release/danibot-amd64.deb
             release/latest-linux.yml
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
-  macos:
-    name: macOS (unsigned, best effort)
-    runs-on: macos-14
-    timeout-minutes: 60
-    continue-on-error: true
+  windows:
+    name: Windows x64 (NSIS)
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 45
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -108,48 +147,218 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm clean
-      - run: pnpm package:mac
+      - name: Stage pinned cloudflared for Windows
+        run: node scripts/prepare-cloudflared.mjs --target win32-x64
+      - name: Build Windows packages
+        run: pnpm package:win
+      - name: Verify release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-setup.exe
+          test -f release/latest.yml
+      - name: Create stable download name
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          cp "release/DaniBot-$version-setup.exe" release/DaniBot-setup.exe
+          cp "release/DaniBot-$version-x64.zip" release/DaniBot-Windows-Portable.zip
+          test -s release/DaniBot-setup.exe
+          test -s release/DaniBot-Windows-Portable.zip
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-macos
+          name: windows-release
           path: |
-            release/*.dmg
-            release/*.zip
-            release/*.blockmap
+            release/DaniBot-*.exe
+            release/DaniBot-*.exe.blockmap
+            release/DaniBot-Windows-Portable.zip
+            release/latest.yml
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS arm64 + Intel (dmg + zip)
+    needs: prepare
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      # No Apple Developer ID is configured yet. electron-builder may apply an
+      # ad-hoc signature, but these builds are not Developer ID signed or notarized.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Stage pinned cloudflared for both Mac architectures
+        run: >-
+          node scripts/prepare-cloudflared.mjs
+          --target darwin-arm64
+          --target darwin-x64
+      - name: Build macOS packages
+        run: pnpm package:mac
+      - name: Verify release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          for arch in arm64 x64; do
+            test -f "release/DaniBot-$version-$arch.dmg"
+            test -f "release/DaniBot-$version-$arch.zip"
+          done
+          test -f release/latest-mac.yml
+      - name: Create stable download names
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          cp "release/DaniBot-$version-x64.dmg" release/DaniBot-Intel.dmg
+          cp "release/DaniBot-$version-arm64.dmg" release/DaniBot-Silicon.dmg
+          cp "release/DaniBot-$version-x64.zip" release/DaniBot-Intel-Portable.zip
+          cp "release/DaniBot-$version-arm64.zip" release/DaniBot-Silicon-Portable.zip
+          for file in \
+            DaniBot-Intel.dmg DaniBot-Silicon.dmg \
+            DaniBot-Intel-Portable.zip DaniBot-Silicon-Portable.zip; do
+            test -s "release/$file"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-release
+          path: |
+            release/DaniBot-*.dmg
+            release/DaniBot-*.dmg.blockmap
+            release/DaniBot-${{ needs.prepare.outputs.version }}-arm64.zip
+            release/DaniBot-${{ needs.prepare.outputs.version }}-x64.zip
+            release/DaniBot-Intel-Portable.zip
+            release/DaniBot-Silicon-Portable.zip
+            release/DaniBot-*.zip.blockmap
             release/latest-mac.yml
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
-  draft:
-    name: Assemble a draft release
-    needs: [windows, linux, macos]
-    if: ${{ always() && needs.windows.result == 'success' && needs.linux.result == 'success' }}
-    runs-on: ubuntu-24.04
+  release:
+    name: Create draft release
+    needs: [prepare, linux, windows, macos]
+    if: needs.prepare.outputs.published != 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: assets
-          pattern: release-*
+          path: release-assets
           merge-multiple: true
-      - name: create the draft (never publishes)
+      - name: Verify complete artifact set
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Downloaded release asset inventory:"
+          find release-assets -maxdepth 2 -type f -printf '%P\n' | sort
+          required=(
+            "DaniBot-$VERSION-x86_64.AppImage"
+            "DaniBot-$VERSION-amd64.deb"
+            "DaniBot-$VERSION-setup.exe"
+            "DaniBot-$VERSION-x64.zip"
+            "DaniBot-$VERSION-arm64.dmg"
+            "DaniBot-$VERSION-arm64.zip"
+            "DaniBot-$VERSION-x64.dmg"
+            DaniBot.AppImage
+            danibot-amd64.deb
+            DaniBot-setup.exe
+            DaniBot-Windows-Portable.zip
+            DaniBot-Intel.dmg
+            DaniBot-Intel-Portable.zip
+            DaniBot-Silicon.dmg
+            DaniBot-Silicon-Portable.zip
+            latest-linux.yml latest.yml latest-mac.yml
+          )
+          for file in "${required[@]}"; do
+            test -s "release-assets/$file" || {
+              echo "::error::missing release asset: $file"
+              exit 1
+            }
+          done
+      - name: Create or refresh draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        shell: bash
         run: |
-          version=$(node -p "require('./package.json').version")
-          tag="v$version"
-          state=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo none)
-          if [ "$state" = false ]; then echo "::error::$tag is already published; bump the version"; exit 1; fi
-          if [ "$state" = true ]; then echo "::error::a draft $tag already exists; review or delete it by hand"; exit 1; fi
-          ls -l assets
-          gh release create "$tag" assets/* --repo "$GITHUB_REPOSITORY" --draft --target "$(git rev-parse HEAD)" \
-            --title "Dani Desktop $version" \
-            --notes "Draft. Unsigned builds: Windows shows SmartScreen on first install; macOS needs a manual install until a signing identity exists. Review before publishing."
-          echo "draft $tag created with $(ls assets | wc -l) files"
+          set -euo pipefail
+          tag="v$VERSION"
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          ## Downloads
+
+          | Operating system | Variant | Download |
+          | --- | --- | --- |
+          | Windows x64 | Installer | [DaniBot-setup.exe](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/DaniBot-setup.exe) |
+          | Windows x64 | Portable zip | [DaniBot-Windows-Portable.zip](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/DaniBot-Windows-Portable.zip) |
+          | macOS Intel | DMG | [DaniBot-Intel.dmg](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/DaniBot-Intel.dmg) |
+          | macOS Intel | Portable zip | [DaniBot-Intel-Portable.zip](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/DaniBot-Intel-Portable.zip) |
+          | macOS Apple silicon | DMG | [DaniBot-Silicon.dmg](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/DaniBot-Silicon.dmg) |
+          | macOS Apple silicon | Portable zip | [DaniBot-Silicon-Portable.zip](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/DaniBot-Silicon-Portable.zip) |
+          | Linux x64 | AppImage | [DaniBot.AppImage](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/DaniBot.AppImage) |
+          | Linux x64 | Debian package | [danibot-amd64.deb](https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/danibot-amd64.deb) |
+
+          ## Notes
+
+          - Built from commit \`$SHA\` on native GitHub-hosted Windows, macOS, and Linux runners.
+          - Windows builds are unsigned and may show a SmartScreen warning.
+          - macOS uses hardened runtime but is not signed with an Apple Developer ID or notarized, so Gatekeeper may block it.
+          - The workflow verifies that the expected packages exist. Test installers on clean machines before publishing this draft.
+
+          Blockmap files and \`latest.yml\`, \`latest-mac.yml\`, and \`latest-linux.yml\` are auto-update metadata, not manual downloads.
+          EOF
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            is_draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+            test "$is_draft" = true || {
+              echo "::error::$tag is already published; refusing to overwrite it"
+              exit 1
+            }
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
+              --target "$SHA" --title "Dani Bot $VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --target "$SHA" --draft --title "Dani Bot $VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+          # Upload one unique basename at a time. A single wildcard request can
+          # fail after partially succeeding, which makes a rerun ambiguous.
+          # Per-file clobber plus bounded retries makes this step idempotent.
+          declare -A uploaded=()
+          find release-assets -maxdepth 1 -type f -print0 \
+            | sort -z \
+            | while IFS= read -r -d '' asset; do
+                name=$(basename "$asset")
+                if [[ -n "${uploaded[$name]:-}" ]]; then
+                  echo "::error::duplicate release asset basename: $name"
+                  exit 1
+                fi
+                uploaded[$name]=1
+                for attempt in 1 2 3; do
+                  if gh release upload "$tag" "$asset" \
+                    --repo "$GITHUB_REPOSITORY" --clobber; then
+                    break
+                  fi
+                  if [[ "$attempt" == 3 ]]; then
+                    echo "::error::failed to upload $name after $attempt attempts"
+                    exit 1
+                  fi
+                  echo "retrying $name after upload attempt $attempt"
+                  sleep $((attempt * 5))
+                done
+              done
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft | grep -qx true
