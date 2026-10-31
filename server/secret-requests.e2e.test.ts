@@ -88,7 +88,7 @@ async function proxyFor(start: () => Promise<void>) {
 
 beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-secret-requests-"));
-  const dataDir = join(home, ".danibot");
+  const dataDir = join(home, ".openmausbot");
   mkdirSync(dataDir, { recursive: true });
   const cli = join(home, "fixture-claude.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
@@ -167,7 +167,7 @@ it("keeps a file secret and a ref secret out of every record, and the bot uses e
   expect(await save(fileCard.id, FILE_CANARY)).toMatchObject({ status: 200, body: { provided: true } });
   expect(await save(fileCard.id, FILE_CANARY)).toMatchObject({ status: 409, body: { error: "this secret was already saved" } });
   const fileText = (await tools.call("request_credential", { label: "Stripe secret key", reason: "To create test charges.", delivery: "file" })).text;
-  const secretFile = join(home, ".danibot", "workspaces", bot.id, ".openmausbot-secrets", bot.threadId, fileCard.id);
+  const secretFile = join(home, ".openmausbot", "workspaces", bot.id, ".openmausbot-secrets", bot.threadId, fileCard.id);
   expect(fileText).toContain(`saved Stripe secret key to the file ${secretFile}`);
   expect(fileText).toContain("never print, echo, log or copy it anywhere else");
   expect(readFileSync(secretFile, "utf8")).toBe(FILE_CANARY);
@@ -188,7 +188,7 @@ it("keeps a file secret and a ref secret out of every record, and the bot uses e
 
   const added = await tools.call("add_mcp_server", { name: "notion", url: "https://mcp.notion.test/mcp", headers: { Authorization: `Bearer ${ref}`, "Notion-Version": "2022-06-28" } });
   expect(added).toEqual({ isError: false, text: expect.stringMatching(/^Saved MCP server “notion”/u) });
-  const config = JSON.parse(readFileSync(join(home, ".danibot", "config.json"), "utf8"));
+  const config = JSON.parse(readFileSync(join(home, ".openmausbot", "config.json"), "utf8"));
   expect(config.mcpServers.notion.headers).toEqual({ Authorization: `Bearer ${REF_CANARY}`, "Notion-Version": "2022-06-28" });
   const reused = await tools.call("add_mcp_server", { name: "notion2", url: "https://mcp.notion.test/mcp", headers: { Authorization: `Bearer ${ref}` } });
   expect(reused).toEqual({ isError: true, text: `${ref} was already used: each secretRef works once. Ask again with request_credential.` });
@@ -201,7 +201,7 @@ it("keeps a file secret and a ref secret out of every record, and the bot uses e
 
   // Only the secret file holds one value, and only the MCP server's settings the other.
   expect(filesHolding(home, FILE_CANARY)).toEqual([relative(home, secretFile)]);
-  expect(filesHolding(home, REF_CANARY)).toEqual([join(".danibot", "config.json")]);
+  expect(filesHolding(home, REF_CANARY)).toEqual([join(".openmausbot", "config.json")]);
   for (const where of [...said, log]) {
     expect(where).not.toContain(FILE_CANARY);
     expect(where).not.toContain(REF_CANARY);

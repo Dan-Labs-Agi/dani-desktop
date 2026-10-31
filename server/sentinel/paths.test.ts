@@ -4,12 +4,12 @@ import { defaultSentinelOut, isInside } from "./paths.ts";
 
 describe("sentinel paths", () => {
   it("keeps Sentinel's files in the platform's state folder, outside the data dir", () => {
-    expect(defaultSentinelOut("/Users/maus/.openmausbot", "darwin", "/Users/maus", {})).toBe("/Users/maus/Library/Application Support/openmausbot-sentinel");
-    expect(defaultSentinelOut("/home/maus/.openmausbot", "linux", "/home/maus", {})).toBe("/home/maus/.local/state/openmausbot-sentinel");
-    expect(defaultSentinelOut("/home/maus/.openmausbot", "linux", "/home/maus", { XDG_STATE_HOME: "/var/state/maus" })).toBe("/var/state/maus/openmausbot-sentinel");
+    expect(defaultSentinelOut("/Users/maus/.danibot", "darwin", "/Users/maus", {})).toBe("/Users/maus/Library/Application Support/openmausbot-sentinel");
+    expect(defaultSentinelOut("/home/maus/.danibot", "linux", "/home/maus", {})).toBe("/home/maus/.local/state/openmausbot-sentinel");
+    expect(defaultSentinelOut("/home/maus/.danibot", "linux", "/home/maus", { XDG_STATE_HOME: "/var/state/maus" })).toBe("/var/state/maus/openmausbot-sentinel");
     // a relative XDG_STATE_HOME is invalid by the spec and ignored
-    expect(defaultSentinelOut("/home/maus/.openmausbot", "linux", "/home/maus", { XDG_STATE_HOME: "state" })).toBe("/home/maus/.local/state/openmausbot-sentinel");
-    expect(defaultSentinelOut("C:\\Users\\maus\\.openmausbot", "win32", "C:\\Users\\maus", { LOCALAPPDATA: "D:\\Local" })).toBe("D:\\Local\\openmausbot-sentinel");
+    expect(defaultSentinelOut("/home/maus/.danibot", "linux", "/home/maus", { XDG_STATE_HOME: "state" })).toBe("/home/maus/.local/state/openmausbot-sentinel");
+    expect(defaultSentinelOut("C:\\Users\\maus\\.danibot", "win32", "C:\\Users\\maus", { LOCALAPPDATA: "D:\\Local" })).toBe("D:\\Local\\openmausbot-sentinel");
   });
 
   it("gives any other data dir its own subfolder, the same one every time", () => {

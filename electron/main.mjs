@@ -689,7 +689,6 @@ async function startDesktopCompanion({ waitForHosted = true, remember = true } =
   await startManagedCompanionConnection({ waitForVerification: waitForHosted });
   return desktopCompanionState();
 }
-
 async function stopDesktopCompanion({ remember = true } = {}) {
   companionDesiredThisLaunch = false;
   companionLaunchGeneration += 1;
@@ -823,8 +822,7 @@ function syncPhoneSecretKey(proc) {
 function ensureCloudAccount() {
   if (cloudAccount) return cloudAccount;
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Dani Bot Cloud sign-in requires the local desktop app.");
-  // Inert by default: with no owned backend, no cloud-account client is ever built, so no
-  // token, device grant or account request can leave for the upstream vendor's service.
+  // Inert by default: with no owned backend no cloud-account client is built, so nothing leaves for the upstream service.
   const posture = cloudServicePosture(process.env);
   if (posture.inert) throw new Error(CLOUD_UNAVAILABLE_MESSAGE);
   cloudAccount = createCloudAccountClient({
@@ -908,7 +906,6 @@ async function openCloudAdd(source) {
 const announceCloudReady = createCloudReadyNotice({ Notification, focused: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()),
   sheetOpen: () => cloudBuy.sheetOpen(), name: () => cloudLook.current().name, shown: () => cloudAccount?.checkoutDone(),
   open: () => { if (!desktopTray?.show()) activateExistingWindow(appWindows()); void workspaceMenuAction(() => (homeWindow.cloudOrigin() ? showHome({ place: "cloud" }) : connectCloudHome())); } });
-
 function ensureManagedDesktop() {
   if (managedDesktop) return managedDesktop;
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Organization sign-in requires the installed desktop app running on this computer.");
@@ -3112,8 +3109,7 @@ app.whenReady().then(async () => {
   // Fresh local use never makes a Cloud request; start only restores an existing grant.
   if (app.isPackaged && !desktopRemoteAccess) {
     cloudAccountRestoring = true;
-    // ensureCloudAccount() throws while no cloud service is configured (the default here); that must not abort startup
-    // before the window is shown, so it runs inside the promise chain.
+    // ensureCloudAccount() throws when no cloud service is configured; inside the chain that cannot abort startup.
     cloudAccountStarted = Promise.resolve().then(() => ensureCloudAccount().start()).catch(() => {}).finally(() => { cloudAccountRestoring = false; });
   }
   void cloudAccountStarted.then(() => { cloudSignInRestored = true; void oneHome.kick(); void homeWindow.refresh(); });
