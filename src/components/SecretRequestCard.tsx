@@ -46,7 +46,7 @@ export function SecretRequestCard({
       ? "Saved securely. Your bot is continuing the task."
       : "Saved securely. Your bot will continue when its current turn settles."
     : declined
-      ? "You chose not to provide this credential. OpenMausBot could not resume the bot yet."
+      ? "You chose not to provide this credential. Dani Bot could not resume the bot yet."
       : custom && secret.reason ? secret.reason : secret.description;
   const footerLabel = stopped
     ? "Stopped"
@@ -222,7 +222,7 @@ export function SecretRequestCard({
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-tertiary">
             <span className="flex items-center gap-1">
               <LockKeyhole size={11} />{" "}
-              {!custom ? "Stored securely by OpenMausBot and never added to chat." : secret.delivery === "file" ? t("secretCard.file") : t("secretCard.ref")}
+              {!custom ? "Stored securely by Dani Bot and never added to chat." : secret.delivery === "file" ? t("secretCard.file") : t("secretCard.ref")}
             </span>
             {secret.helpUrl && (
               <a

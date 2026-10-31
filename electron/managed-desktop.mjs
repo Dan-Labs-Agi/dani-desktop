@@ -281,7 +281,7 @@ export function createManagedDesktopClient({ store, applyConnection, applyPolicy
       if (persisted.status === "fulfilled") { cleanupGrant = null; cleanupNeeded = false; }
       if (!current(stamp)) return snapshot();
       const warnings = [];
-      if (runtime.status === "rejected") warnings.push("The local runtime did not confirm stopping Company tasks. Quit and reopen OpenMausBot before using Company models again.");
+      if (runtime.status === "rejected") warnings.push("The local runtime did not confirm stopping Company tasks. Quit and reopen Dani Bot before using Company models again.");
       if (revoked.status === "rejected") warnings.push("The portal was unreachable; ask your administrator to revoke this device there too.");
       if (persisted.status === "rejected") return publish({ status: "unavailable", message: [
         "The saved company sign-in could not be cleared. Unlock your system keychain and Disconnect again before reconnecting.", ...warnings,
