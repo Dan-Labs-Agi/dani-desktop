@@ -1,0 +1,43 @@
+name: Android
+
+# Manual only. Builds the Dani Bot Android companion on a free GitHub-hosted
+# runner: unit tests for :core and :app, then a debug-signed APK as a workflow
+# artifact. It publishes nothing and needs no secrets; a Play-ready signed
+# release is a separate step that needs signing material.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: android tests + debug APK (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use the runner's preinstalled JDK 17
+        run: echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - name: Unit tests and debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:assembleDebug
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dani-android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload test reports on failure
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: android-test-reports
+          path: |
+            android/core/build/reports/tests
+            android/app/build/reports/tests
+          if-no-files-found: ignore
+          retention-days: 7
