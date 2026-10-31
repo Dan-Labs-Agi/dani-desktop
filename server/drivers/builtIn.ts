@@ -16,6 +16,7 @@ import { DeepSeekAgentDriver } from "./acp/deepseek.ts";
 import { ClineAgentDriver } from "./acp/cline.ts";
 import { CopilotAgentDriver } from "./acp/copilot.ts";
 import { OpenAICompatDriver } from "./openai-compat.ts";
+import { DaniFreeDriver } from "./dani-free-driver.ts";
 import { PiDriver } from "./pi.ts";
 import { MistralDriver } from "./mistral.ts";
 import { CerebrasDriver } from "./cerebras.ts";
@@ -25,6 +26,7 @@ import { MuseCodeDriver } from "./muse-code.ts";
 import { MinimaxDriver } from "./minimax.ts";
 
 export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
+  DaniFreeDriver,
   GrokDriver,
   GrokAgentDriver,
   GeminiAgentDriver,
