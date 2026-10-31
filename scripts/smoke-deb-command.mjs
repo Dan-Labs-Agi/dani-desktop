@@ -29,16 +29,15 @@ const staged = "/root/pending dir/o'brien/DaniBot.deb";
 const command = packageInstallCommand("deb", staged);
 console.log(`[smoke-deb-command] command under test:\n    ${command}\n`);
 
-function inContainer(script, { expectFailure = false } = {}) {
+function inContainer(script, { expectFailure = false, modelUnrestrictedHost = false } = {}) {
   try {
     const output = execFileSync(
       RUNTIME,
       [
         "run", "--rm",
-        // The package's post-install fails closed on a host that restricts user namespaces while AppArmor is not
-        // running, which is what any container on a current runner looks like. The prepare step models the other
-        // supported host (restriction off), so this smoke tests the install command, not the kernel's AppArmor state.
-        "--cap-add", "SYS_ADMIN", "--security-opt", "apparmor=unconfined",
+        // Only the unrestricted-host scenario needs extra privilege (to bind-mount a file over the sysctl); every other
+        // run keeps the runtime's default confinement. The container is disposable and holds only the package under test.
+        ...(modelUnrestrictedHost ? ["--cap-add", "SYS_ADMIN", "--security-opt", "apparmor=unconfined"] : []),
         "-v", `${deb}:/tmp/package.deb:ro`,
         "-e", "DEBIAN_FRONTEND=noninteractive",
         IMAGE,
@@ -64,19 +63,27 @@ const prepare = [
   "apt-get install -y -qq sudo >/dev/null",
   `mkdir -p "$(dirname "${staged}")"`,
   `cp /tmp/package.deb "${staged}"`,
-  // Model a host without the user-namespace restriction; the post-install treats that host as unrestricted.
-  "restriction=/proc/sys/kernel/apparmor_restrict_unprivileged_userns",
-  'if [ -e "$restriction" ]; then printf 0 > /tmp/userns-unrestricted; mount --bind /tmp/userns-unrestricted "$restriction"; echo "userns restriction now: $(cat $restriction)"; fi',
 ].join("\n");
 
-console.log("[smoke-deb-command] installing with the command the app hands over…");
+// The post-install fails closed when the kernel restricts user namespaces and AppArmor is not running (what a
+// container on a current runner looks like). Scenario A models the other supported host, restriction off; scenario B
+// keeps the host's real value and, when it is 1, asserts the fail-closed refusal with its diagnostic.
+const RESTRICTION = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns";
+const unrestrictedHost = [
+  `if [ -e ${RESTRICTION} ]; then printf 0 > /tmp/userns-unrestricted; mount --bind /tmp/userns-unrestricted ${RESTRICTION}; fi`,
+  `echo "RESTRICTION=$(cat ${RESTRICTION} 2>/dev/null || echo absent)"`,
+].join("\n");
+
+console.log("[smoke-deb-command] installing with the command the app hands over (host without the userns restriction)…");
 const installed = inContainer(
   [
     prepare,
+    unrestrictedHost,
     command,
     'dpkg-query -W -f="INSTALLED=\\${Version} \\${db:Status-Abbrev}\\n" danibot',
     'test -x "/opt/Dani Bot/danibot" && echo "EXECUTABLE=yes"',
   ].join("\n"),
+  { modelUnrestrictedHost: true },
 );
 
 const version = installed.match(/INSTALLED=(\S+) (\S+)/);
@@ -84,6 +91,29 @@ const checks = [
   ["the package installed and configured", version?.[2]?.startsWith("ii") === true],
   ["the app binary is in place", installed.includes("EXECUTABLE=yes")],
 ];
+
+// Scenario B: the host's own restriction value, default container confinement, nothing modelled.
+console.log("[smoke-deb-command] fail-closed check: the host's real restriction value, AppArmor not running in the container…");
+const closed = inContainer(
+  [
+    prepare,
+    `echo "RESTRICTION=$(cat ${RESTRICTION} 2>/dev/null || echo absent)"`,
+    `${command} || echo "INSTALL_REFUSED"`,
+    'dpkg-query -W -f="STATUS=\\${db:Status-Abbrev}\\n" danibot || true',
+  ].join("\n"),
+  { expectFailure: false },
+);
+const hostRestriction = closed.match(/RESTRICTION=(\S+)/)?.[1];
+if (hostRestriction === "1") {
+  checks.push([
+    "restriction 1 with AppArmor absent refuses the install with its diagnostic and leaves the package unconfigured",
+    closed.includes("INSTALL_REFUSED") &&
+      closed.includes("cannot load its browser sandbox policy while AppArmor restrictions are active") &&
+      !/STATUS=ii/.test(closed),
+  ]);
+} else {
+  console.log(`[smoke-deb-command] fail-closed check skipped: this host reports restriction=${hostRestriction}, so the refusal path is not exercised here`);
+}
 
 // Control: on a clean Ubuntu `dpkg -i` resolves none of the dependencies.
 console.log("[smoke-deb-command] control: the `dpkg -i` the app used to run…");
