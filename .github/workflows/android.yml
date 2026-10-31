@@ -8,7 +8,7 @@ name: Android
 on:
   workflow_dispatch:
   push:
-    branches: [integration/dani-rebrand]
+    branches: [integration/dani-rebrand, integration/dani-android-v1.5]
     paths: ["android/**", ".github/workflows/android.yml"]
 
 permissions:

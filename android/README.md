@@ -1,11 +1,11 @@
-# Dani Bot Android companion
+# Dani Android companion
 
 The Android counterpart to the iOS companion app: pair a phone with a computer
-running Dani Bot, then read and answer from the phone.
+running Dani, then read and answer from the phone.
 
-- `applicationId` — `dev.danlab.dani`
+- `applicationId` — `com.openmausbot.companion`
 - `minSdk` 26 (Android 8.0), `targetSdk` / `compileSdk` 37
-- Deep-link scheme — `danibot` (the older `openmausbot` scheme is still accepted so existing pairing links keep working)
+- Deep-link scheme — `openmausbot`
 - Two modules: `:core` (protocol, ported from `ios/Sources/CompanionCore`) and
   `:app` (Compose UI, Android platform)
 
@@ -19,13 +19,42 @@ cd android
 ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The manual `Android` workflow (`.github/workflows/android.yml`) runs the same command on a GitHub-hosted runner and uploads the debug APK. It is not part of `ci.yml`, so it does not run on every push. Gradle caches
-aggressively — a suspiciously fast `BUILD SUCCESSFUL` usually means nothing ran.
+CI also builds the preview APK described below (`.github/workflows/ci.yml`).
+Gradle caches aggressively — a suspiciously fast `BUILD SUCCESSFUL` usually means nothing ran.
 Prefix `cleanTest` when a test count matters:
 
 ```sh
 ./gradlew cleanTest :core:test :app:testDebugUnitTest :app:assembleDebug
 ```
+
+## Installable threads preview
+
+```sh
+cd android
+./gradlew :app:assemblePreview
+```
+
+Install `app/build/outputs/apk/preview/app-preview.apk`. Its launcher name is
+**Dani Preview**, its application ID is `com.openmausbot.companion.preview`,
+and its version ends in `-threads-preview`. Gradle signs it with the local debug
+key, so no release signing material is needed. It installs beside the released
+app with separate pairing, preferences and messages; it does not update that app.
+
+Open Preview and pair using its QR scanner or manual address form. Preview does
+not register the release's `openmausbot://` pairing links or system share targets.
+Its file-sharing provider uses the preview application ID too.
+
+Pull-request CI runs the core and debug UI unit tests, builds both APK variants,
+and uploads `android-threads-preview-<tested-commit>-<attempt>` for 14 days. Download
+and extract that run's artifact to get the same installable preview APK. Debug
+keys can differ between local builds and CI runners; Android requires the same
+key to update an existing preview installation. A fresh installation after
+removing a differently signed preview loses only that preview's local data.
+
+Verify conversation changes against an isolated fixture as described in
+[`docs/verification/README.md`](../docs/verification/README.md), using a disposable
+emulator. These builds do not exercise live pairing or a physical phone by
+themselves.
 
 ## Building a release APK
 
@@ -56,8 +85,8 @@ The signing key belongs to the maintainer and never enters this repository.
 Create a key once, outside any clone of this repository:
 
 ```sh
-keytool -genkeypair -v -keystore ~/danibot-release.jks \
-  -storetype PKCS12 -alias danibot -keyalg RSA -keysize 4096 -validity 10000
+keytool -genkeypair -v -keystore ~/openmausbot-release.jks \
+  -storetype PKCS12 -alias openmausbot -keyalg RSA -keysize 4096 -validity 10000
 ```
 
 Then, for each release:
@@ -66,7 +95,7 @@ Then, for each release:
 # whichever build-tools version is installed; any recent one works
 APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)/apksigner"
 
-"$APKSIGNER" sign --ks ~/danibot-release.jks --ks-key-alias danibot \
+"$APKSIGNER" sign --ks ~/openmausbot-release.jks --ks-key-alias openmausbot \
   --out app-release.apk app-release-unsigned.apk
 
 "$APKSIGNER" verify --verbose --print-certs app-release.apk
@@ -88,19 +117,19 @@ silently inherit a stale `keystore.properties` from a cached workspace.
 `android/keystore.properties` (gitignored):
 
 ```properties
-storeFile=/absolute/path/to/danibot-release.jks
+storeFile=/absolute/path/to/openmausbot-release.jks
 storePassword=…
-keyAlias=danibot
+keyAlias=openmausbot
 keyPassword=…
 ```
 
 or the environment, for CI secrets:
 
 ```
-DANIBOT_KEYSTORE_FILE
-DANIBOT_KEYSTORE_PASSWORD
-DANIBOT_KEY_ALIAS
-DANIBOT_KEY_PASSWORD   # optional; PKCS12 reuses the store password
+OPENMAUSBOT_KEYSTORE_FILE
+OPENMAUSBOT_KEYSTORE_PASSWORD
+OPENMAUSBOT_KEY_ALIAS
+OPENMAUSBOT_KEY_PASSWORD   # optional; PKCS12 reuses the store password
 ```
 
 Supply all of it or none of it. A build handed only part of the material stops

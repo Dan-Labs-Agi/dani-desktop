@@ -17,6 +17,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "dani-android"
+rootProject.name = "openmausbot-android"
 include(":core")
 include(":app")
