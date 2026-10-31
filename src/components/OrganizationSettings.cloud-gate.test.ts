@@ -1,7 +1,7 @@
 // The real cloud boundary: with no owned backend, the one-click sign-in
 // button is replaced by an honest local-only notice; the explicitly
 // user-entered custom-address form stays available.
-import { createElement, isValidElement, type EffectCallback, type ReactNode } from "react";
+import { createElement, type EffectCallback } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
@@ -18,17 +18,6 @@ vi.mock("react", async (original) => ({ ...await original<typeof import("react")
 }));
 
 import { OrganizationSettings } from "./OrganizationSettings";
-
-const _walk = (node: ReactNode): string => {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(walk).join("");
-  if (isValidElement(node)) {
-    const props = node.props as { children?: ReactNode };
-    return walk(props.children);
-  }
-  return "";
-};
 
 const organization = {
   state: () => Promise.resolve({ status: "signed-out", models: [], message: null }),
