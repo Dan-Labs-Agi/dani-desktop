@@ -452,7 +452,7 @@ try {
     "usr",
     "share",
     "applications",
-    "com.openmausbot.app.desktop",
+    "com.danibot.app.desktop",
   );
   const scalableIcon = path.join(
     extracted,
@@ -471,7 +471,7 @@ try {
     "Name=OpenMausBot",
     "Exec=/opt/OpenMausBot/openmausbot %U",
     "Icon=openmausbot",
-    "StartupWMClass=com.openmausbot.app",
+    "StartupWMClass=com.danibot.app",
     "Categories=Utility;",
   ]) {
     if (!desktop.includes(expected)) fail(`desktop entry is missing ${JSON.stringify(expected)}`);
