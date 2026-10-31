@@ -40,6 +40,22 @@ sleep 8
 # The link holds '&': it must be single-quoted for the device's own shell (the link carries no single quote).
 adb shell "am start -W -a android.intent.action.VIEW -d '$(cat "$DATA/link.txt")' $PKG" > "$OUT/link.txt" 2>&1
 sed 's/token=[^&]*/token=REDACTED/' "$OUT/link.txt" | head -5
+sleep 8
+adb exec-out screencap -p > "$OUT/confirm-screen.png"
+adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui-confirm.xml" >/dev/null 2>&1
+# The app asks the person to confirm the computer. Tap its "Pair with this computer" button, found from the UI dump.
+XY="$(python3 - "$OUT/ui-confirm.xml" <<'PY'
+import re, sys
+xml = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r'text="Pair with this computer"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+if m:
+    a, b, c, d = map(int, m.groups())
+    print((a + c) // 2, (b + d) // 2)
+PY
+)"
+echo "confirm button at: ${XY:-not found}"
+[ -n "$XY" ] || { echo "confirm button not found"; exit 1; }
+adb shell input tap $XY
 for i in 1 2 3 4 5 6; do sleep 5; adb exec-out screencap -p > "$OUT/pair-$i.png"; done
 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui.xml" >/dev/null 2>&1
 curl -fs "http://127.0.0.1:$PORT/api/auth/pairing" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log("open pairings after:",JSON.parse(s).pairings.length))' | tee "$OUT/pairings-after.txt"
