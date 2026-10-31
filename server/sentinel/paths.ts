@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, posix, resolve, win32 } from "node:path";
+import { DANI_DATA_DIRNAME } from "../../electron/data-dir-default.mjs";
 
 const FOLDER = "openmausbot-sentinel";
 
@@ -14,7 +15,7 @@ export function defaultSentinelOut(dataDir: string, platform: NodeJS.Platform = 
     : path.join(state, FOLDER);
   // two workspaces never count into one set of issues
   const resolved = path.resolve(dataDir);
-  if (resolved === path.join(home, ".openmausbot")) return base;
+  if (resolved === path.join(home, DANI_DATA_DIRNAME)) return base;
   return path.join(base, `data-${createHash("sha256").update(resolved).digest("hex").slice(0, 12)}`);
 }
 

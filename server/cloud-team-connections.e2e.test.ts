@@ -151,7 +151,7 @@ it("lets Ada connect her own Gmail and mail key, and nobody reads them back", as
   const read = await team.signed("GET", "/api/cloud/team/admin");
   expect(read.body.scopes).toEqual({ apps: ["gmail"], mcp: ["mail"] });
   expect(read.body.people).toEqual({ apps: { gmail: [ADA.email] }, mcp: { mail: [ADA.email] } });
-  const held = JSON.parse(readFileSync(join(team.home, ".openmausbot", "people-connections", "apps.json"), "utf8")).people[personKey({ id: "", email: ADA.email })].token as string;
+  const held = JSON.parse(readFileSync(join(team.home, ".danibot", "people-connections", "apps.json"), "utf8")).people[personKey({ id: "", email: ADA.email })].token as string;
   for (const answer of [read.body, (await team.as(owner, "GET", "/api/mcp/servers")).body, (await team.as(admin, "GET", "/api/config")).body,
     (await team.as(owner, "GET", "/api/connectors/connected")).body, (await team.as(admin, "GET", "/api/team/my-connections")).body]) {
     expect(JSON.stringify(answer)).not.toContain(ADA_KEY);
@@ -159,7 +159,7 @@ it("lets Ada connect her own Gmail and mail key, and nobody reads them back", as
     expect(JSON.stringify(answer)).not.toContain("ada.private@gmail.example");
   }
   // On the volume: a folder of its own, 0700, that no backup carries.
-  if (process.platform !== "win32") expect(statSync(join(team.home, ".openmausbot", "people-connections")).mode & 0o777).toBe(0o700);
+  if (process.platform !== "win32") expect(statSync(join(team.home, ".danibot", "people-connections")).mode & 0o777).toBe(0o700);
 }, hostTimeout(60_000));
 
 it("gives Ada's own Gmail and mail to her private chat, for her own request, and runs as her", async () => {
@@ -320,7 +320,7 @@ it("skips automatic personal MCP probes after setup and restart while still prob
     expect.soft(personal.seenHeaders.filter((headers) => headers.authorization !== ownAuthorization), "after personal setup").toEqual([]);
 
     personal.seenHeaders.length = 0;
-    rmSync(join(team.home, ".openmausbot", "mcp-app-catalog.json"));
+    rmSync(join(team.home, ".danibot", "mcp-app-catalog.json"));
     await team.relaunch();
     await expect.poll(teamHasApps, { timeout: 40_000 }).toBe(true);
     expect(shared.toolsLists).toBe(2);

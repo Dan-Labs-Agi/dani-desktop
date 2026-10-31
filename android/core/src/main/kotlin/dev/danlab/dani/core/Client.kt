@@ -1017,7 +1017,8 @@ class CompanionClient(
                     companion.makeRequest("GET", "/api/health"),
                     probeClient,
                 )
-                identity.app == "danibot"
+                // the Dani Bot desktop answers "openmausbot" on /api/health (the upstream wire identity); earlier Dani builds said "danibot"
+                identity.app == "danibot" || identity.app == "openmausbot"
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

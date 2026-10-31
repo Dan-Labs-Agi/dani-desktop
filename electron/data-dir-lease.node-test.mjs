@@ -375,7 +375,7 @@ test("legacy data is moved before lease creation", () => {
   const root = mkdtempSync(path.join(tmpdir(), "omb-electron-legacy-"));
   roots.push(root);
   const legacyDataDir = path.join(root, ".opengrokbot");
-  const dataDir = path.join(root, ".openmausbot");
+  const dataDir = path.join(root, ".danibot");
   mkdirSync(legacyDataDir);
   writeFileSync(path.join(legacyDataDir, "keep-me.txt"), "kept");
 
