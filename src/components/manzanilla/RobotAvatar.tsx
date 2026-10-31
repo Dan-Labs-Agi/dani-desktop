@@ -540,7 +540,7 @@ export function RobotAvatar(props: RobotAvatarProps) {
       data-robot-renderer={ready ? "webgl" : failure ? "unavailable" : "loading"}
     >
       <span className="mz-robot-placeholder" aria-hidden="true">
-        {failure ? "3D unavailable" : "Loading 3D"}
+        {validSize < 56 ? "" : failure ? "3D unavailable" : "Loading 3D"}
       </span>
       <canvas ref={canvasRef} className="mz-robot-canvas" />
       {failure ? (

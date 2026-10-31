@@ -51,6 +51,7 @@
   place-items: center;
   text-align: center;
   font: 10px / 1.2 system-ui;
+  overflow: hidden;
   color: var(--dani-dex-text-muted);
   border: 1px solid var(--dani-dex-border-strong);
   border-radius: var(--dani-dex-radius-md);
