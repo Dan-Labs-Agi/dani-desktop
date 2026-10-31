@@ -1,0 +1,155 @@
+# Builds Dani Desktop installers on free GitHub-hosted runners and assembles a
+# DRAFT release in this repository. It never publishes: a person reviews the
+# draft and publishes it by hand, because the in-app updater reads the latest
+# published release and a half-built feed strands every install.
+#
+# Needs no secrets beyond the repository's own GITHUB_TOKEN. Builds are
+# unsigned: Windows updates work without a publisherName (SmartScreen warns on
+# first install), Linux AppImage updates work, and macOS auto-update needs a
+# signed app per electron-builder's auto-update docs, so the macOS job is
+# best-effort and a Mac user installs by hand until a signing identity exists.
+name: Release (draft)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit/tag/branch to build (defaults to the branch this runs from)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows (NSIS, unsigned)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: clean build outputs
+        shell: bash
+        run: rm -rf dist dist-server release
+      - run: pnpm package:win
+      - name: the updater feed must point at this repository and carry no publisherName
+        shell: bash
+        run: |
+          res=release/win-unpacked/resources
+          test -f release/latest.yml || { echo "::error::no latest.yml"; exit 1; }
+          if [ -f "$res/app-update.yml" ]; then
+            grep -Eq '^owner: somdipto$' "$res/app-update.yml" && grep -Eq '^repo: dani-desktop$' "$res/app-update.yml" || { echo "::error::app-update.yml does not point at somdipto/dani-desktop"; exit 1; }
+            ! grep -q publisherName "$res/app-update.yml" || { echo "::error::publisherName on an unsigned build"; exit 1; }
+          else
+            echo "::error::no app-update.yml: this build has no update feed"; exit 1
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-windows
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux (AppImage + deb)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm clean
+      - run: pnpm package:linux:offline
+      - run: node scripts/verify-linux-package.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/latest-linux.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  macos:
+    name: macOS (unsigned, best effort)
+    runs-on: macos-14
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm clean
+      - run: pnpm package:mac
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-macos
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  draft:
+    name: Assemble a draft release
+    needs: [windows, linux, macos]
+    if: ${{ always() && needs.windows.result == 'success' && needs.linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: assets
+          pattern: release-*
+          merge-multiple: true
+      - name: create the draft (never publishes)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          state=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo none)
+          if [ "$state" = false ]; then echo "::error::$tag is already published; bump the version"; exit 1; fi
+          if [ "$state" = true ]; then echo "::error::a draft $tag already exists; review or delete it by hand"; exit 1; fi
+          ls -l assets
+          gh release create "$tag" assets/* --repo "$GITHUB_REPOSITORY" --draft --target "$(git rev-parse HEAD)" \
+            --title "Dani Desktop $version" \
+            --notes "Draft. Unsigned builds: Windows shows SmartScreen on first install; macOS needs a manual install until a signing identity exists. Review before publishing."
+          echo "draft $tag created with $(ls assets | wc -l) files"
