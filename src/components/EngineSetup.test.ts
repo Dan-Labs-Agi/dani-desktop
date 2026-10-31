@@ -226,7 +226,7 @@ describe("install from Settings on the server", () => {
     // A remote client's Settings has no keys, so it names the computer instead of offering the button.
     vi.stubGlobal("window", { ogb: { platform: "linux", remoteClient: { active: true } } });
     const remote = renderToStaticMarkup(createElement(StoreProvider, null, createElement(EngineSetup, { instance: appCopy({ state: "available", authenticated: false, version: "1.19.4" }) })));
-    expect(remote).toContain("on the computer running OpenMausBot");
+    expect(remote).toContain("on the computer running Dani Bot");
     expect(remote).not.toContain("Open API keys");
     // Missing or broken, the app's copy is installed again from here.
     expect(render(appCopy({ state: "unavailable", reason: "`opencode` version check failed." }))).toContain("Install OpenCode here");
@@ -342,7 +342,7 @@ describe("API-key engine setup", () => {
 
   it("has no button on a remote client, whose settings hide the keys", () => {
     const html = render(keyEngine("openai-compat", { state: "unavailable" }), { platform: "darwin", remoteClient: { active: true } });
-    expect(html).toContain("on the computer running OpenMausBot");
+    expect(html).toContain("on the computer running Dani Bot");
     expect(html).not.toContain("Open API keys");
   });
 
