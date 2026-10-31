@@ -361,7 +361,7 @@ describe("cloudHomePrompt", () => {
 
   it("points to a lent computer only when the turn has the shared-computer tools", () => {
     expect(cloudHomePrompt(true)).toContain("check list_shared_computers: a computer they share with the Cloud is reachable through shared_computer");
-    expect(cloudHomePrompt(true)).toContain("otherwise ask them to open Dani Bot on that computer, signed in to Dani Bot Cloud: it shares that computer with you by itself");
+    expect(cloudHomePrompt(true)).toContain("otherwise ask them to open Dani Bot on that computer, signed in to My Cloud: it shares that computer with you by itself");
     expect(cloudHomePrompt(true)).not.toContain("use-my-computer");
     expect(cloudHomePrompt(true)).not.toContain("Settings →");
     expect(cloudHomePrompt(true)).toContain("use its say field when it has one");
@@ -381,7 +381,7 @@ describe("cloudHomePrompt", () => {
   it("names the person's computer by its platform, never a Mac unless it is one, and the product by its name", () => {
     const pc = cloudHomePrompt(true, [], [{ name: "ASH-PC", platform: "win32" }]);
     expect(pc).toContain("If they ask for something on their PC (ASH-PC), check list_shared_computers");
-    expect(pc).toContain("otherwise ask them to open Dani Bot on that PC, signed in to Dani Bot Cloud: it shares that PC with you by itself. It is a PC: call it that, never a Mac unless it is one.");
+    expect(pc).toContain("otherwise ask them to open Dani Bot on that PC, signed in to My Cloud: it shares that PC with you by itself. It is a PC: call it that, never a Mac unless it is one.");
     const mac = cloudHomePrompt(false, [], [{ name: "Ash’s MacBook", platform: "darwin" }, { name: "ASH-PC", platform: "win32" }]);
     expect(mac).toContain("You cannot see or use their Mac (Ash’s MacBook), its screen or its files from here.");
     for (const text of [pc, mac, cloudHomePrompt(true), cloudHomePrompt(true, [], [{ name: "box", platform: "linux" }])]) {

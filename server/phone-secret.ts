@@ -9,7 +9,7 @@ import {
 } from "@hpke/core";
 
 export const PHONE_SECRET_PROTOCOL_VERSION = 1 as const;
-export const PHONE_SECRET_INFO = "Dani Bot phone credential v1";
+export const PHONE_SECRET_INFO = "OpenMausBot phone credential v1";
 export const PHONE_SECRET_MAX_BYTES = 4_096;
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;

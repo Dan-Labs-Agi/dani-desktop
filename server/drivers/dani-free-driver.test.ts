@@ -36,24 +36,29 @@ describe("DaniFreeDriver", () => {
     expect(instance.models.default).toBe("dani-free-auto");
     expect(instance.models.options).toEqual([{ id: "dani-free-auto", label: "Dani Free Auto" }]);
     const snapshot = await instance.snapshot();
-    expect(snapshot.models?.default).toBe("dani-free-auto");
+    expect(snapshot.state).toBe("available");
     await instance.dispose();
   }, 30_000);
 
-  it("rejects, never throws synchronously, when no proxy is bundled", async () => {
+  it("resolves an honest unavailable instance when no proxy is bundled", async () => {
     const dir = tmp();
     const driver = await loadDriver(dir, join(dir, "missing-binary"));
-    await expect(driver.create({
+    const instance = await driver.create({
       instanceId: "daniFree", displayName: "Dani Free", environment: {}, enabled: true, config: {},
-    })).rejects.toThrow("not bundled");
+    });
+    const snapshot = await instance.snapshot();
+    expect(snapshot.state).toBe("unavailable");
+    await instance.dispose();
   }, 15_000);
 
-  it("rejects when the instance config switches the proxy off", async () => {
+  it("resolves unavailable, never throws synchronously, when the config switches the proxy off", async () => {
     const dir = tmp();
     const driver = await loadDriver(dir, shim(dir));
-    await expect(driver.create({
+    const instance = await driver.create({
       instanceId: "daniFree", displayName: "Dani Free", environment: {}, enabled: true, config: { disabled: true },
-    })).rejects.toThrow("switched off");
+    });
+    expect((await instance.snapshot()).state).toBe("unavailable");
+    await instance.dispose();
     expect(driver.decodeConfig({ disabled: true })).toEqual({ disabled: true });
     expect(() => driver.decodeConfig({ disabled: "yes" })).toThrow();
   }, 15_000);

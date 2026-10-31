@@ -29,6 +29,7 @@ const EXPECTED: Record<string, EngineCapabilities> = {
   copilotAgent: bare,
   customAcp: bare,
   "openai-compat": chat,
+  daniFree: chat,
   grok: chat,
   minimax: chat,
   mistral: chat,

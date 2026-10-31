@@ -107,7 +107,7 @@
       }
     },
     "legacy-team.v1.json": {
-      "sha256": "7a4de2ba915592a1a98fc87c196d83f75011a33dead7b8f076a44d8d1bd5e791",
+      "sha256": "ebcfcaf91ec26937da03d31f85eae20ad4e135c199e95179abef2685dafe81c0",
       "keys": [
         "agents:scout",
         "agents:editor",
@@ -148,7 +148,7 @@
       }
     },
     "legacy-botmrr.v1.md": {
-      "sha256": "7a4de2ba915592a1a98fc87c196d83f75011a33dead7b8f076a44d8d1bd5e791",
+      "sha256": "ebcfcaf91ec26937da03d31f85eae20ad4e135c199e95179abef2685dafe81c0",
       "keys": [
         "agents:scout",
         "agents:editor",
