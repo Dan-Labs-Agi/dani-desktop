@@ -4297,7 +4297,7 @@
   "computer.mac.permission.generic": "Local computer control is not ready. OpenMausBot needs Accessibility and Screen Recording to use this Mac. Check Driver detail or System Settings, then click Retry.",
   "computer.mac.permission.screenSettings": "Open Screen Recording Settings",
   "computer.mac.permission.accessibilitySettings": "Open Accessibility Settings",
-  "computer.mac.permission.relaunch": "Relaunch OpenMausBot",
+  "computer.mac.permission.relaunch": "Relaunch Dani Bot",
   "computer.mac.permission.driverDetail": "Driver detail",
   "computer.phase.vmUnavailable": "The private desktop isn't available for this bot",
   "computer.phase.error": "Couldn't reach the bot's screen",
