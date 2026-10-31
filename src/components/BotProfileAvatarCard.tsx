@@ -15,6 +15,7 @@ import { MASCOT_BODIES, MASCOT_BODY_IDS } from "../../shared/mascot-bodies";
 import { HALLOWEEN_BODIES, HALLOWEEN_BODY_IDS } from "../../shared/halloween-bodies";
 import type { BotBodyId } from "../../shared/bot-body";
 import { BotAvatar, MausAvatar } from "./Avatar";
+import { botRobotRole } from "@/lib/robot-role";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
 import { t } from "@/lib/i18n";
@@ -122,7 +123,7 @@ export function BotProfileAvatarCard({
             <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
               {t("botIdentity.expression")}
             </div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {PICKABLE_STATES.map((expression) => (
                 <button
                   key={expression}
@@ -131,13 +132,14 @@ export function BotProfileAvatarCard({
                   aria-pressed={activeState === expression}
                   onClick={() => onPatch({ mascotExpression: expression })}
                   className={cn(
-                    "flex h-[58px] items-center justify-center rounded-xl bg-inset transition-colors hover:bg-control disabled:opacity-50",
+                    "flex flex-col items-center justify-center gap-1 rounded-xl bg-inset py-2 transition-colors hover:bg-control disabled:opacity-50",
                     activeState === expression && "ring-2 ring-accent-border",
                   )}
-                  title={expression}
+                  title={t(`botPanel.face.${expression}` as never)}
                   aria-label={`Use ${expression} expression`}
                 >
-                  <MausAvatar color={bot.color} faceColor={bot.mascotFaceColor} bodyId={bot.mascotBody ?? undefined} state={expression} size={42} animated={false} />
+                  <MausAvatar color={bot.color} state={expression} size={42} robotRole={botRobotRole(bot)} />
+                  <span className="text-[11px] text-ink-secondary">{t(`botPanel.face.${expression}` as never)}</span>
                 </button>
               ))}
             </div>

@@ -22,10 +22,10 @@ describe("CarvedAvatar", () => {
     }
   });
 
-  it("is what MausAvatar wears for a Halloween body", () => {
+  it("is kept as a component, but MausAvatar now wears the Dani robot even for saved Halloween bodies", () => {
     const markup = renderToStaticMarkup(createElement(MausAvatar, { color: "orange", bodyId: "pumpkin", animated: false }));
-    expect(markup).toContain('data-carved-body="pumpkin"');
-    expect(markup).not.toContain("linearGradient");
+    expect(markup).not.toContain('data-carved-body="pumpkin"');
+    expect(markup).toContain("/src/assets/dani-robot/");
   });
 
   it("fills flat with the bot's colour, pale for the ghost, bone for the skull", () => {
