@@ -1,11 +1,15 @@
 name: Android
 
-# Manual only. Builds the Dani Bot Android companion on a free GitHub-hosted
+# Manual, or on a push to the integration branch that touches android/ or this file
+# (a workflow that is not on the default branch cannot be dispatched by hand). Builds the Dani Bot Android companion on a free GitHub-hosted
 # runner: unit tests for :core and :app, then a debug-signed APK as a workflow
 # artifact. It publishes nothing and needs no secrets; a Play-ready signed
 # release is a separate step that needs signing material.
 on:
   workflow_dispatch:
+  push:
+    branches: [integration/dani-rebrand]
+    paths: ["android/**", ".github/workflows/android.yml"]
 
 permissions:
   contents: read
