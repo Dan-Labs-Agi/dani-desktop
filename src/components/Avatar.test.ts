@@ -20,54 +20,41 @@ const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
   );
 
 describe("MausAvatar body", () => {
-  it("wears the cursor when no body is given", () => {
-    expect(render({})).toContain(MASCOT_BODIES.cursor.fit);
-  });
-
-  it("wears the body it is given", () => {
-    const markup = render({ bodyId: "star" });
-    expect(markup).toContain(MASCOT_BODIES.star.fit);
-  });
-
-  it("falls back to the cursor for an unknown body", () => {
-    // SAFETY: "hexagram" is deliberately not a MascotBodyId, to exercise the runtime fallback for persisted or streamed
-    // data.
-    expect(render({ bodyId: "hexagram" as MausAvatarProps["bodyId"] })).toContain(
-      MASCOT_BODIES.cursor.fit,
-    );
-  });
-
-  it("paints the body with the per-bot gradient, never a flat black fill", () => {
-    const markup = render({ bodyId: "circle" });
-    expect(markup).not.toContain('fill="#000000"');
-    expect(markup).not.toContain("{{GRADIENT}}");
-    expect(markup).toContain("url(#");
-  });
-});
-
-describe("mascot facial feature colors", () => {
-  it.each(["white", "black"] as const)("uses %s for both eyes and mouth on every body type", (mascotFaceColor) => {
-    const ink = mascotFaceColor === "white" ? "#ffffff" : "#000000";
-    for (const mascotBody of ["cursor", "star", "pumpkin", "vampire"] as const) {
-      for (const color of ["green", "chrome"] as const) {
-        const markup = renderBot({ color, mascotBody, mascotFaceColor });
-        expect(markup).toContain(`fill="${ink}"`);
-        expect(markup).toContain(`stroke="${ink}"`);
-        expect(markup).not.toContain('visibility="hidden"');
+  it("wears the Dani robot for every body and color", () => {
+    for (const bodyId of [undefined, "star", "pumpkin", "vampire", "circle"] as const) {
+      for (const color of ["green", "chrome", "purple", "red"] as const) {
+        const markup = render({ bodyId, color });
+        expect(markup).toContain("/src/assets/dani-robot/");
+        expect(markup).toContain('visibility="hidden"');
       }
     }
   });
 
-  it("keeps default inks when an override is reset or comes from an older profile", () => {
-    expect(renderBot({ color: "chrome", mascotFaceColor: null })).toContain('stroke="#1E2833"');
-    expect(renderBot({ mascotBody: "pumpkin" })).toContain('stroke="#0d0a10"');
-    expect(renderBot({})).toContain('stroke="#ffffff"');
+  it("maps palette colors onto the rig's four preset shells", () => {
+    expect(render({ color: "green" })).toContain("dani-robot/teal-idle");
+    expect(render({ color: "purple" })).toContain("dani-robot/violet-idle");
+    expect(render({ color: "red" })).toContain("dani-robot/pink-idle");
+    expect(render({ color: "chrome" })).toContain("dani-robot/blue-idle");
+  });
+
+  it("switches the robot's pose with the bot's state", () => {
+    expect(render({ state: "working" })).toContain("dani-robot/teal-working");
+    expect(render({ state: "listening" })).toContain("dani-robot/teal-waiting");
+    expect(render({ state: "happy" })).toContain("dani-robot/teal-replied");
+  });
+
+  it("renders the robot even when a saved face-color override exists", () => {
+    // The drawn-mascot face-ink preference is kept in the profile, but the old
+    // mascot never renders: the Dani robot is the only character.
+    const markup = renderBot({ mascotFaceColor: "black" });
+    expect(markup).toContain("/src/assets/dani-robot/");
+    expect(markup).toContain('visibility="hidden"');
   });
 
   it("does not paint features over an uploaded image", () => {
     const markup = renderBot({ mascotFaceColor: "black", avatarUrl: "/api/attachments/photo.png", avatarCrop: "circle" });
     expect(markup).toContain("<img");
-    expect(markup).not.toContain("<svg");
+    expect(markup).not.toContain('dani-robot');
   });
 });
 

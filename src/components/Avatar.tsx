@@ -9,40 +9,19 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/cn";
-import { CHROME_EYES, CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMotion, type MausState } from "@/lib/mascot";
-import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
-import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, mascotFaceInk, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
-import { MASCOT_BODIES, botMascotBody } from "../../shared/mascot-bodies";
+import { CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMotion, type MausState } from "@/lib/mascot";
+import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import type { BotBodyId } from "../../shared/bot-body";
-import { useHalloweenDressed, wornBody } from "@/lib/halloween-dress";
-import { steelBodyImage } from "@/lib/steel-body";
+import { RobotAvatar } from "./manzanilla/RobotAvatar";
+import type { RobotMotion, RobotRole } from "./manzanilla/robot-model";
+import { botRobotRole } from "@/lib/robot-role";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
 
 const POINTER_GAZE = { forward: 1, authored: 0.25 };
 
-interface MotionFaces
-  extends Partial<
-    Record<Exclude<MausMotion, "none">, { state?: MausState; blink?: boolean; spin?: number }>
-  > {}
 
-const MOTION_FACE: MotionFaces = {
-  arrive: { state: "spawning", spin: 900 },
-  switch: { state: "waking", spin: 620 },
-  customize: { state: "proud", blink: true },
-  alert: { state: "alerting" },
-  thinking: { state: "thinking" },
-  working: { state: "working" },
-  launch: { state: "loading" },
-  success: { state: "happy", blink: true },
-  celebrate: { state: "celebrate", spin: 700 },
-  blink: { blink: true },
-  surprise: { state: "surprised", blink: true },
-  failure: { state: "sad" },
-};
-
-const MOTION_FACE_MS = 1400;
 
 function mix(hex: string, toward: string, t: number): string {
   const a = Number.parseInt(hex.slice(1), 16);
@@ -72,127 +51,53 @@ export function roomAvatarGradient(color: MausColor): [string, string, string] {
   ];
 }
 
-export type MausAvatarHandle = CursorAvatarHandle;
-
-export type MausAvatarProps = {
-  color: MausColor;
-  state?: MausState;
-  expression?: number;
-  size?: number;
-  label?: string;
-  motion?: MausMotion;
-  motionKey?: number;
-  turn?: number;
-  gaze?: { x?: number; y?: number };
-  spring?: number;
-  eyeScale?: number;
-  showMouth?: boolean;
-  mouthStroke?: number;
-  forward?: boolean;
-  lookAround?: number;
-  trackPointer?: boolean;
-  animated?: boolean;
-  bodyId?: BotBodyId;
-  gradient?: [string, string, string];
-  faceColor?: MascotFaceColor | null;
+/** One-shot Maus motions that have a real Manzanilla equivalent; the rest idle. */
+const MOTION_TO_ROBOT: Partial<Record<MausMotion, RobotMotion>> = {
+  celebrate: "celebrate",
+  success: "cheer",
+  blink: "blink",
 };
 
-function MausAvatarComponent(props: MausAvatarProps, ref: React.Ref<MausAvatarHandle>) {
-  // Every body - including saved seasonal costume picks - renders the Dani robot.
-  // The preference data is kept; only the old artwork is gone.
-  return <GradientAvatar ref={ref} {...props} />;
-}
-
-function GradientAvatarComponent(
+function MausAvatarComponent(
   {
     color,
     state = "idle",
-    expression,
     size = 44,
     label,
     motion = "none",
     motionKey = 0,
-    turn,
-    gaze,
-    spring,
-    eyeScale,
-    showMouth,
-    mouthStroke,
-    forward = true,
-    lookAround,
-    trackPointer = true,
     animated = true,
-    bodyId,
-    gradient,
-    faceColor,
+    robotRole,
   }: MausAvatarProps,
   ref: React.Ref<MausAvatarHandle>,
 ) {
-  const silhouette = MASCOT_BODIES[botMascotBody(bodyId)];
-  const chrome = color === "chrome";
-  const faceInk = mascotFaceInk(faceColor);
-  const inner = useRef<CursorAvatarHandle>(null);
+  // Every bot wears its dani-dex Manzanilla character. Shape bodies, costume
+  // picks, face plates, gaze and gradient props are still accepted so callers
+  // keep compiling; the robot supersedes them all.
+  const [blinkKey, setBlinkKey] = useState(0);
   useImperativeHandle(ref, () => ({
-    blink: () => inner.current?.blink(),
-    spin: (durationMs?: number) => inner.current?.spin(durationMs),
-    setExpression: (index: number) => inner.current?.setExpression(index),
+    blink: () => setBlinkKey((key) => key + 1),
+    spin: () => {},
+    setExpression: () => {},
   }));
-
-  const [motionState, setMotionState] = useState<MausState | null>(null);
-  useEffect(() => {
-    if (motion === "none" || !animated) return;
-    const beat = MOTION_FACE[motion];
-    if (!beat) return;
-    if (beat.blink) inner.current?.blink();
-    if (beat.spin) inner.current?.spin(beat.spin);
-    if (!beat.state) return;
-    setMotionState(beat.state);
-    const timer = setTimeout(() => setMotionState(null), MOTION_FACE_MS);
-    return () => clearTimeout(timer);
-  }, [motion, motionKey, animated]);
-
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
-  const range = forward ? POINTER_GAZE.forward : POINTER_GAZE.authored;
-  const onPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
-    if (!trackPointer || !animated) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    setPointer({
-      x: Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1)) * range,
-      y: Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1)) * range,
-    });
-  };
-  const onPointerLeave = () => setPointer({ x: 0, y: 0 });
-
+  // Chrome is a three-stop gradient; the single-color robot wears its mid-tone.
+  const hex = color === "chrome" ? CHROME_GRADIENT[1] : MAUS_COLORS[color];
+  const oneShot = MOTION_TO_ROBOT[motion];
+  // The robot knows working/waiting families; "listening" keeps its waiting pose.
+  const robotState = state === "listening" ? "waiting" : state;
   return (
-    <span
-      className="inline-flex shrink-0"
-      onPointerMove={trackPointer && animated ? onPointerMove : undefined}
-      onPointerLeave={trackPointer && animated ? onPointerLeave : undefined}
-    >
-      <CursorAvatar
-        ref={inner}
-        state={motionState ?? state}
-        expression={expression}
-        size={size}
-        silhouette={silhouette}
-        gradient={gradient ?? gradientFor(color)}
-        picture={chrome && !faceInk ? steelBodyImage(silhouette.id, size, globalThis.devicePixelRatio ?? 1) : null}
-        eyeColor={faceInk ?? (chrome ? CHROME_EYES : undefined)}
-        title={label ?? null}
-        lookAround={lookAround ?? (forward ? 0 : 1)}
-        gaze={{ x: (gaze?.x ?? 0) + pointer.x, y: (gaze?.y ?? 0) + pointer.y }}
-        turn={turn}
-        spring={spring}
-        eyeScale={eyeScale}
-        showMouth={showMouth}
-        mouthStroke={mouthStroke}
-        paused={!animated}
-      />
-    </span>
+    <RobotAvatar
+      size={size}
+      label={label ?? "Dani Bot"}
+      color={hex}
+      role={robotRole}
+      state={robotState}
+      animated={animated}
+      motion={oneShot ?? (blinkKey ? "blink" : undefined)}
+      motionKey={oneShot ? motionKey : blinkKey}
+    />
   );
 }
-
-const GradientAvatar = forwardRef(GradientAvatarComponent);
 
 export const MausAvatar = memo(forwardRef(MausAvatarComponent));
 
@@ -200,6 +105,9 @@ export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
   readable?: boolean;
   bot: {
     name?: string;
+    title?: string | null;
+    readyBotId?: string | null;
+    chiefOfStaff?: boolean | null;
     color: MausColor;
     avatarUrl?: string | null;
     avatarCrop?: BotAvatarCrop;
@@ -228,7 +136,6 @@ export function resolveBotAvatarOutcome(params: {
 
 export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
-  const dressed = useHalloweenDressed();
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => setImageFailed(false), [profile.avatarUrl]);
@@ -242,11 +149,9 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
   if (outcome !== "flatImage") {
     return (
       <MausAvatar
-        bodyId={wornBody(bot.mascotBody, bot.color, dressed)}
         {...mascotProps}
         color={bot.color}
-        faceColor={bot.mascotFaceColor}
-        gradient={readable ? roomAvatarGradient(bot.color) : undefined}
+        robotRole={botRobotRole(bot)}
         size={size}
         label={label ?? bot.name}
       />
