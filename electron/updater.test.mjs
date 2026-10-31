@@ -58,6 +58,8 @@ function mainRule() {
     createCloudAccountStore: () => ({}), rememberCloudHome: () => {}, rememberedCloudHome, computerSharing: null, updatesConsent: null,
     sendUpdaterState: () => {}, refreshCloudMenus: () => {}, announceCloudReady: () => {}, installCloudPlanIpc: () => {},
     includedX: { onState: async () => {} }, includedPages: { onState: async () => {} }, cloudPower: { changed: () => {}, awaiting: () => false }, cloudLogins: { kick: () => {} },
+    // A configured, non-inert cloud backend: this test is about sign-in routing, not the inert default.
+    cloudServicePosture: () => ({ inert: false, origin: CLOUD }), CLOUD_UNAVAILABLE_MESSAGE: "unavailable",
     createCloudAccountClient: (options) => {
       signIn.options = options;
       return {

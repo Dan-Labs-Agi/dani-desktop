@@ -26,7 +26,9 @@ async function loadDriver(dataDir: string, executable: string) {
 }
 
 describe("DaniFreeDriver", () => {
-  it("starts the bundled proxy and serves exactly the Dani Free Auto model", async () => {
+  // The shim is a POSIX `#!/bin/sh` script; Windows cannot spawn it. The packaged Windows
+  // build runs a real .exe, and the supervisor spawn path is covered by dani-free.test.ts.
+  it.skipIf(process.platform === "win32")("starts the bundled proxy and serves exactly the Dani Free Auto model", async () => {
     const dir = tmp();
     const driver = await loadDriver(dir, shim(dir));
     const instance = await driver.create({

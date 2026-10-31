@@ -162,7 +162,7 @@ it("shares a PC folder as a read-only copy: changes go to My Cloud, a bot's edit
   }
 }, 60_000);
 
-it("a bot's turn wakes the desktop, and its new work comes down to Documents/Dani Bot/<bot>/<conversation>", async () => {
+it("a bot's turn wakes the desktop, and its new work comes down to Documents/MausBot/<bot>/<conversation>", async () => {
   const pcHome = realpathSync(mkdtempSync(join(tmpdir(), "omb-files-pc-")));
   const created = await api("POST", "/api/bots", { body: { name: "Report Owl", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } } });
   const bot = created.body.bot as { id: string; threadId: string };
@@ -181,7 +181,7 @@ it("a bot's turn wakes the desktop, and its new work comes down to Documents/Dan
     expect((await api("POST", `/api/bots/${bot.id}/messages`, { body: { text: "write the report" } })).status).toBe(202);
     expect((await woken).folderIds).toContain(`bot-${bot.id}-${bot.threadId}`);
     await service.pass();
-    const owl = join(pcHome, "Documents", "Dani Bot", "Report Owl");
+    const owl = join(pcHome, "Documents", "MausBot", "Report Owl");
     const [conversation] = readdirSync(owl);
     expect(readFileSync(join(owl, conversation!, "report.md"), "utf8")).toBe("# Q3");
   } finally {
