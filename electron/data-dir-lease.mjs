@@ -509,7 +509,7 @@ function acquireDataDirLeaseInternal(dataDir, options = {}) {
     unlinkExact(candidatePath, "OpenMausBot could not remove its lease candidate.");
   }
 
-  if (!acquired) throw leaseError("OpenMausBot could not acquire its data-directory lease.");
+  if (!acquired) throw leaseError("Dani Bot could not acquire its data-directory lease.");
   let released = false;
   return Object.freeze({
     ownerPid: owner.pid,
@@ -519,18 +519,18 @@ function acquireDataDirLeaseInternal(dataDir, options = {}) {
       if (options.guardDelegatedChild !== false) assertNoLiveDelegatedChild(dataDir);
       const current = readOwner(leasePath);
       if (!current || current.pid !== owner.pid || current.host !== owner.host || current.token !== owner.token) {
-        throw leaseError("OpenMausBot will not release a data-directory lease owned by another process.");
+        throw leaseError("Dani Bot will not release a data-directory lease owned by another process.");
       }
       try {
         unlinkSync(leasePath);
       } catch (error) {
-        throw leaseError("OpenMausBot could not release its data-directory lease.", error);
+        throw leaseError("Dani Bot could not release its data-directory lease.", error);
       }
       released = true;
       return true;
     },
     utilityServerLeaseEnvironment() {
-      if (released) throw leaseError("OpenMausBot cannot delegate a released data-directory lease.");
+      if (released) throw leaseError("Dani Bot cannot delegate a released data-directory lease.");
       return Object.freeze({ [CHILD_LEASE_ENV]: capabilityFor(owner) });
     },
   });
@@ -554,7 +554,7 @@ export function clearRecordsFromOtherMachines(dataDir) {
     entries = readdirSync(dataDir);
   } catch (error) {
     if (error?.code === "ENOENT") return [];
-    throw leaseError("OpenMausBot cannot read its data directory.", error);
+    throw leaseError("Dani Bot cannot read its data directory.", error);
   }
   const paths = [
     join(dataDir, LEASE_NAME),
@@ -565,7 +565,7 @@ export function clearRecordsFromOtherMachines(dataDir) {
   for (const path of paths) {
     const record = readOwner(path);
     if (!record || sameMachine(record)) continue;
-    unlinkExact(path, "OpenMausBot could not remove the data-directory record another machine left.");
+    unlinkExact(path, "Dani Bot could not remove the data-directory record another machine left.");
     cleared.push({ path, host: record.host, pid: record.pid });
   }
   return cleared;

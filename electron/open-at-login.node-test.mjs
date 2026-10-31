@@ -57,7 +57,7 @@ test("Windows: the person's item has a name of its own, apart from lending's hid
   login.follow(true);
   login.choose(true);
   assert.equal(login.chosen(), true);
-  assert.deepEqual(app.items.get("OpenMausBot at login"), { args: [] }, "no hidden flag");
+  assert.deepEqual(app.items.get("Dani Bot at login"), { args: [] }, "no hidden flag");
   login.follow(false);
   assert.equal(login.chosen(), true, "lending stopping leaves it");
   login.choose(false);
