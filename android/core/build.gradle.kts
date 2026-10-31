@@ -26,6 +26,7 @@ dependencies {
 
 sourceSets.test {
     resources.srcDir(rootProject.projectDir.resolve("../ios/Tests/CompanionCoreTests/Fixtures"))
+    resources.srcDir(projectDir.resolve("src/test/fixtures-upstream-v1.5"))
 }
 
 tasks.test {
