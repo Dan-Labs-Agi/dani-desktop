@@ -7,37 +7,44 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/cn";
-import { CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMotion } from "@/lib/mascot";
+import { CHROME_GRADIENT, MAUS_COLORS, type MausColor, type MausMotion, type MausState } from "@/lib/mascot";
 import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import type { BotBodyId } from "../../shared/bot-body";
 import { RobotAvatar } from "./manzanilla/RobotAvatar";
-import type { RobotMotion } from "./manzanilla/robot-model";
+import type { RobotMotion, RobotRole } from "./manzanilla/robot-model";
+import type { CursorAvatarHandle } from "./CursorAvatar";
 import { botRobotRole } from "@/lib/robot-role";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
 
-const _POINTER_GAZE = { forward: 1, authored: 0.25 };
 
 
 
-function mix(hex: string, toward: string, t: number): string {
-  const a = Number.parseInt(hex.slice(1), 16);
-  const b = Number.parseInt(toward.slice(1), 16);
-  const channel = (shift: number) => {
-    const va = (a >> shift) & 0xff;
-    const vb = (b >> shift) & 0xff;
-    return Math.round(va + (vb - va) * t);
-  };
-  return `#${[channel(16), channel(8), channel(0)]
-    .map((part) => part.toString(16).padStart(2, "0"))
-    .join("")}`;
-}
+export type MausAvatarHandle = CursorAvatarHandle;
 
-const _gradientFor = (color: MausColor): [string, string, string] => {
-  if (color === "chrome") return CHROME_GRADIENT;
-  const fill = MAUS_COLORS[color] ?? MAUS_COLORS.green;
-  return [mix(fill, "#ffffff", 0.55), fill, mix(fill, "#000000", 0.42)];
+export type MausAvatarProps = {
+  color: MausColor;
+  state?: MausState;
+  expression?: number;
+  size?: number;
+  label?: string;
+  motion?: MausMotion;
+  motionKey?: number;
+  turn?: number;
+  gaze?: { x?: number; y?: number };
+  spring?: number;
+  eyeScale?: number;
+  showMouth?: boolean;
+  mouthStroke?: number;
+  forward?: boolean;
+  lookAround?: number;
+  trackPointer?: boolean;
+  animated?: boolean;
+  bodyId?: BotBodyId;
+  gradient?: [string, string, string];
+  faceColor?: MascotFaceColor | null;
+  robotRole?: RobotRole;
 };
 
 export function roomAvatarGradient(color: MausColor): [string, string, string] {
