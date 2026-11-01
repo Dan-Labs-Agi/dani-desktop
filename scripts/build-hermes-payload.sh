@@ -51,6 +51,13 @@ WORK="${3:-$(mktemp -d)}"
 mkdir -p "$WORK"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Native Windows tools (python3, uv, pip) cannot read Git Bash /d/... paths;
+# cygpath -m rewrites to D:/... which both msys tools and native binaries accept.
+if command -v cygpath >/dev/null 2>&1; then
+  SCRIPT_DIR="$(cygpath -m "$SCRIPT_DIR")"
+  OUT="$(cygpath -m "$OUT")"
+  WORK="$(cd "$WORK" && pwd)"; WORK="$(cygpath -m "$WORK")"
+fi
 PBS_DIGESTS="$SCRIPT_DIR/pbs-digests.json"
 
 HERMES_REPO="https://github.com/NousResearch/hermes-agent.git"
