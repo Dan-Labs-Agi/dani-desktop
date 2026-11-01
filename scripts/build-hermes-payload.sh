@@ -51,13 +51,6 @@ WORK="${3:-$(mktemp -d)}"
 mkdir -p "$WORK"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Native Windows tools (python3, uv, pip) cannot read Git Bash /d/... paths;
-# cygpath -m rewrites to D:/... which both msys tools and native binaries accept.
-if command -v cygpath >/dev/null 2>&1; then
-  SCRIPT_DIR="$(cygpath -m "$SCRIPT_DIR")"
-  OUT="$(cygpath -m "$OUT")"
-  WORK="$(cd "$WORK" && pwd)"; WORK="$(cygpath -m "$WORK")"
-fi
 PBS_DIGESTS="$SCRIPT_DIR/pbs-digests.json"
 
 HERMES_REPO="https://github.com/NousResearch/hermes-agent.git"
@@ -103,8 +96,11 @@ python3 "$SCRIPT_DIR/hermes_target_reqs.py" --export "$WORK/req-hashes.txt" \
   --out-reqs "$WORK/reqs-target.txt" --out-download "$WORK/reqs-download.txt"
 
 echo "==> [4/10] standalone CPython (digest-pinned)"
-PBS_URL="$(python3 -c "import json;d=json.load(open('$PBS_DIGESTS'));print(d['targets']['$TARGET']['url'])")"
-PBS_SHA="$(python3 -c "import json;d=json.load(open('$PBS_DIGESTS'));print(d['targets']['$TARGET']['sha256'])")"
+# Paths must travel as argv, not embedded in -c source: the Git Bash runtime
+# rewrites POSIX-looking arguments for native Windows python, but cannot see
+# paths inside an inline code string.
+PBS_URL="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d['targets'][sys.argv[2]]['url'])" "$PBS_DIGESTS" "$TARGET")"
+PBS_SHA="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d['targets'][sys.argv[2]]['sha256'])" "$PBS_DIGESTS" "$TARGET")"
 PBS_TARBALL="$WORK/$(basename "$PBS_URL")"
 [ -f "$PBS_TARBALL" ] || curl -sL -o "$PBS_TARBALL" "$PBS_URL"
 if [ "$(sha256_of "$PBS_TARBALL")" != "$PBS_SHA" ]; then
