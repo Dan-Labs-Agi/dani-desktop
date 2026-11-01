@@ -21,7 +21,7 @@
 # the Windows layout. On Windows runners, always invoke the probe explicitly:
 #   cmd.exe /c probe\run-probe.cmd
 #
-# Requires: git, uv (>=0.5), python3 (+packaging), curl, rsync, tar,
+# Requires: git, uv (>=0.5), python3 (+packaging), curl, tar,
 #           sha256sum or shasum.
 #
 # Supply-chain model (all enforcement, no intent):
@@ -151,10 +151,13 @@ PYEOF2
     --no-deps -r "$WORK/reqs-win-supplement.txt" 2>&1 | tail -1
 fi
 
-rsync -a --exclude=.git --exclude=tests --exclude=tests-js --exclude=website \
-  --exclude=.github --exclude=docker --exclude=nix --exclude=evals \
-  --exclude=apps --exclude=web --exclude=ui-tui --exclude=node_modules \
-  --exclude=package-lock.json "$WORK/src/" "$PAYLOAD/app/"
+# Portable copy (no rsync dependency: Git Bash on Windows runners lacks it).
+mkdir -p "$PAYLOAD/app"
+( cd "$WORK/src" && tar --exclude=.git --exclude=tests --exclude=tests-js \
+    --exclude=website --exclude=.github --exclude=docker --exclude=nix \
+    --exclude=evals --exclude=apps --exclude=web --exclude=ui-tui \
+    --exclude=node_modules --exclude=package-lock.json -cf - . ) \
+  | ( cd "$PAYLOAD/app" && tar -xf - )
 
 echo "==> [8/10] launchers (self-locating; payload is fully relocatable)"
 cat > "$PAYLOAD/bin/hermes" <<'LAUNCHER_SH'
