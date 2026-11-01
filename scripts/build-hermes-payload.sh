@@ -274,14 +274,21 @@ find "$PAYLOAD" -type f -exec chmod a-w,go-w {} +
 chmod 0755 "$PAYLOAD/bin/hermes" "$PAYLOAD/bin/hermes-acp" "$PAYLOAD/probe/run-probe.sh"
 python3 - "$PAYLOAD" <<'PYMODE'
 import os, stat, sys
-for base, dirs, files in os.walk(sys.argv[1], followlinks=False):
-    for name in dirs + files:
-        path = os.path.join(base, name)
-        mode = os.lstat(path).st_mode
-        if stat.S_ISLNK(mode):
-            continue
-        if mode & 0o022:
-            raise SystemExit(f"unsafe group/world-write mode {mode & 0o777:o}: {path}")
+# On Windows hosts (os.name == 'nt') the POSIX mode bits are a Git Bash
+# emulation artifact: the cygdrive mount reports 0777 and chmod cannot
+# change it, so the live-tree assertion cannot hold there. The shipped
+# trust boundary is enforced regardless by tar --mode='go-w' at pack time
+# and the archive-metadata audit right after, and the app's own runtime
+# mode check skips win32 the same way.
+if os.name != "nt":
+    for base, dirs, files in os.walk(sys.argv[1], followlinks=False):
+        for name in dirs + files:
+            path = os.path.join(base, name)
+            mode = os.lstat(path).st_mode
+            if stat.S_ISLNK(mode):
+                continue
+            if mode & 0o022:
+                raise SystemExit(f"unsafe group/world-write mode {mode & 0o777:o}: {path}")
 PYMODE
 ARCHIVE="$OUT/hermes-payload-$TARGET-v2026.9.21.tar.gz"
 tar --mode='go-w' -czf "$ARCHIVE" -C "$OUT" "hermes-payload-$TARGET"
