@@ -188,7 +188,7 @@ describe("setupSystemPrompt connected apps", () => {
       "restarting OpenMausBot usually brings them back, or they can add their own Composio project key in Settings → API keys, under Self-host connected apps.",
     );
     const cloud = prompt({ state: "not-configured", host: "cloud" });
-    expect(cloud).toContain("Connected apps come with their MausBot Cloud plan but are not answering right now");
+    expect(cloud).toContain("Connected apps come with their Cloud plan but are not answering right now");
     expect(cloud).not.toContain("Composio");
     expect(prompt({ state: "unsupported" })).toContain("Your current model cannot use connected apps");
   });

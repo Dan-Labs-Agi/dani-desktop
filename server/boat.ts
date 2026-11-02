@@ -71,7 +71,7 @@ const MAX_BOAT_INVENTORY_PAGES = 10;
 const LEGACY_MANAGED_BOAT_NAME = /^ogb-[a-z0-9]{1,8}-[a-f0-9]{6}$/;
 const SCOPED_MANAGED_BOAT_NAME = /^ogb-[a-f0-9]{12}-[a-z0-9]{1,8}-[a-f0-9]{6}$/;
 const BOAT_ID = /^bx_[23456789abcdefghjkmnpqrstuvwxyz]{8}$/;
-/** Sandbox.state in v1, plus OpenMausBot's own `removing` for a sandbox whose deletion is under way. */
+/** Sandbox.state in v1, plus OpenDani's own `removing` for a sandbox whose deletion is under way. */
 const BOAT_STATES = new Set([
   "init", "provisioning", "provisioned", "cloning", "ready", "idle", "running", "archiving", "archived", "error", "cancelled", "removing",
 ]);
@@ -924,7 +924,7 @@ export async function verifyToken(token: string): Promise<{ ok: true } | { ok: f
 }
 
 const INCLUDED_BOAT_UNAVAILABLE = "The cloud computers included with your Cloud plan aren't available right now. Try again later.";
-const boatServiceName = (included: boolean) => included ? "MausBot Cloud's computer service" : "boat.dev";
+const boatServiceName = (included: boolean) => included ? "Cloud's computer service" : "boat.dev";
 
 export function boatErrorMessage(status: number, what: string, body?: any, included = false): string {
   const theirs = typeof body?.message === "string" ? body.message.trim() : "";

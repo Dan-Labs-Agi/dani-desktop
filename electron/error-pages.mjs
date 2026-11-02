@@ -10,8 +10,8 @@ export function buildErrorPage({ allPortsOccupied, logDir }) {
   const serverLogPath = path.join(logDir, "server.log");
   const serverLogHref = pathToFileURL(serverLogPath).href;
   const reason = allPortsOccupied
-    ? "Every OpenMausBot port answered health checks from another process — likely a second copy of the app, or another program on ports 8799–28799. Quit that program, then quit and reopen OpenMausBot."
-    : "The background server didn't come up in time — this is usually slow startup, not a port conflict. Quit and reopen OpenMausBot.";
+    ? "Every Dani Bot port answered health checks from another process — likely a second copy of the app, or another program on ports 8799–28799. Quit that program, then quit and reopen Dani Bot."
+    : "The background server didn't come up in time — this is usually slow startup, not a port conflict. Quit and reopen Dani Bot.";
   return (
     "data:text/html;charset=utf-8," +
     encodeURIComponent(

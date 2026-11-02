@@ -13,7 +13,7 @@ import {
 } from "./managed-companion-tunnel.mjs";
 
 // Dani ships no hosted companion control plane of its own, and a Dani
-// build must not send accounts to the upstream OpenMausBot service. Until a
+// build must not send accounts to the upstream Dani Bot service. Until a
 // Dani control plane is deployed, hosted Companion sign-in stays off unless
 // DANI_CONTROL_PLANE_URL points at one explicitly. Direct LAN, Bonjour, and
 // Tailscale pairing are unaffected.
@@ -185,7 +185,7 @@ const FRIENDLY_MESSAGES = Object.freeze({
   unauthorized: "Your sign-in expired. Email yourself a new code to reconnect.",
   forbidden: "The secure connection request was not allowed. Try signing in again.",
   signed_out: "Your sign-in expired. Email yourself a new code to reconnect.",
-  network_unavailable: "OpenMausBot could not reach its secure connection service. Check your internet and try again.",
+  network_unavailable: "Dani Bot could not reach its secure connection service. Check your internet and try again.",
   rate_limited: "Too many attempts were made. Wait a little, then try again.",
   credential_rotation_rate_limited: "This computer was reconnected too often. Wait a little, then try again.",
   installation_limit_reached: "This account has reached its computer limit. Remove an old computer and try again.",

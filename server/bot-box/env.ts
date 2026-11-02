@@ -30,7 +30,7 @@ export const BOX_ENV_NEVER_PREFIXES: readonly string[] = ["OMB_CLOUD_"];
 
 /** `allow` is what one spawn vouches for: the keys the person saved for its engine, under whatever name that engine reads
  * (NANO_GPT_API_KEY, OPENCODE_API_KEY). Security: it lifts the allow-list and `deny` for that process only, and never for
- * a name of OpenMausBot's own (`OMB_`) or one on the never-list. */
+ * a name of OpenDani's own (`OMB_`) or one on the never-list. */
 export function boxEnvironmentAllows(name: string, deny: ReadonlySet<string> = new Set(), allow: ReadonlySet<string> = new Set()): boolean {
   if (BOX_ENV_NEVER.has(name) || BOX_ENV_NEVER_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
   if (allow.has(name) && !name.startsWith("OMB_")) return true;

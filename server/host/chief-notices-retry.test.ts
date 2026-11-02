@@ -70,7 +70,7 @@ const CRASH = "claude exited 3 before result: fake-claude: simulated crash befor
 const DENIED = "One or more tool operations failed or were denied. See the tool results; the final response is not an execution receipt.";
 const RETRIED = "OpenMausBot already retried this run once by itself; the failure above is how that retry ended.";
 
-describe("OpenMausBot's one automatic retry of a teammate's failed thread", () => {
+describe("OpenDani's one automatic retry of a teammate's failed thread", () => {
   it("runs the thread once more before its Chief hears, then tells the Chief how that retry ended, and never retries the retry", () => {
     const f = fixture();
     f.store.appendMessage("ada-job", { role: "user", kind: "text", text: "Reconcile the September invoices." });

@@ -682,7 +682,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         const literalEnvs = new Map<string, Record<string, string>>();
         const scopedServer = (name: string, mountName: string, server: McpServerSpec): StdioMcpSpec | null => {
           if (!canUseMcpServer(turn.toolScope, name)) return null;
-          // Every URL server goes through OpenMausBot's remote proxy: Codex's own client adds fields
+          // Every URL server goes through OpenDani's remote proxy: Codex's own client adds fields
           // strict servers refuse (codex-cli 0.160.1 sends elicitation.form/url; rmcp 3.2 can add
           // schemaValidation), and Codex does not speak SSE. A plan turn has no tool_search, so its URL
           // servers use the proxy's tool directory.
@@ -716,7 +716,7 @@ export const CodexDriver: ProviderDriver<CodexConfig> = {
         if (turn.integrations?.composio) mountSelected("composio", "openmausbot_connectors", turn.integrations.composio);
         if (turn.integrations?.composioOwn) mountSelected(OWN_APPS_SERVER, `openmausbot_${OWN_APPS_SERVER}`, turn.integrations.composioOwn);
         if (turn.integrations?.agents) {
-          // OpenMausBot's own coordination tools never ask: "auto" quiets only read-only tools.
+          // OpenDani's own coordination tools never ask: "auto" quiets only read-only tools.
           mountSelected("agents", "agents", turn.integrations.agents, "approve"); if (selectedMcp.has("agents")) appServerArgs.push("-c", `mcp_servers.agents.tool_timeout_sec=${AGENTS_TOOL_TIMEOUT_SECONDS}`);
         }
         if (turn.integrations?.localComputer) {

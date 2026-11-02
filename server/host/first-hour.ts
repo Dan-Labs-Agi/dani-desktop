@@ -85,7 +85,7 @@ export interface FirstHourDeps {
   store: Pick<Store, "bot" | "messagesFor" | "activePath" | "appendMessage" | "patchMessage" | "patchTask" | "patchBot" | "taskByThread" | "groupByThread">;
   dataDir: string;
   now?: () => number;
-  /** The Chief the first hour belongs to: the place's MausBot, or its main Chief. */
+  /** The Chief the first hour belongs to: the place's Dani, or its main Chief. */
   chief(): BotRecord | null;
   mainThread(botId: string): string | undefined;
   threadBusy(botId: string, threadId: string): boolean;

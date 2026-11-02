@@ -164,7 +164,7 @@ export function createBrowserHost(deps: BrowserHostDeps) {
     const url = doorUrls.get(session);
     return url !== undefined && spec.env.AGENT_BROWSER_CDP === url;
   }
-  // A tool call that would open Reddit from MausBot Cloud is refused before it reaches the browser. My Chrome is the
+  // A tool call that would open Reddit from Cloud is refused before it reaches the browser. My Chrome is the
   // person's own, outside the egress gate too; on My Cloud a call that can't reach it now says why instead.
   const browserRuntime = new RuntimeRouter(agentBrowserRuntime, chromeEngine, {
     refusal: (_session, spec, params) => (attachesToChrome(spec.env) ? null : browserEgress.callRefusal(params)),
