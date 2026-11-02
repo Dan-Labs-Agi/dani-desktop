@@ -119,7 +119,13 @@ const support: AcpSupport = {
     }
   },
 
-  configureSession: async ({ request, sessionId, config }) => {
+  configureSession: async ({ request, sessionId, config, configOptions }) => {
+    // An ACP server that does not advertise a mode option rejects
+    // session/set_config_option for it, failing the turn. Only set the mode
+    // the server says it has.
+    if (!Array.isArray(configOptions) || !configOptions.some((option) => option?.id === "mode")) {
+      return;
+    }
     const wanted = antigravityPermissionMode(config.fullAuto);
     const result = await request("session/set_config_option", {
       sessionId,
