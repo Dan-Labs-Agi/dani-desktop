@@ -21,7 +21,7 @@
 # the Windows layout. On Windows runners, always invoke the probe explicitly:
 #   cmd.exe /c probe\run-probe.cmd
 #
-# Requires: git, uv (>=0.5), python3 (+packaging), curl, rsync, tar,
+# Requires: git, uv (>=0.5), python3 (+packaging), curl, tar,
 #           sha256sum or shasum.
 #
 # Supply-chain model (all enforcement, no intent):
@@ -96,8 +96,11 @@ python3 "$SCRIPT_DIR/hermes_target_reqs.py" --export "$WORK/req-hashes.txt" \
   --out-reqs "$WORK/reqs-target.txt" --out-download "$WORK/reqs-download.txt"
 
 echo "==> [4/10] standalone CPython (digest-pinned)"
-PBS_URL="$(python3 -c "import json;d=json.load(open('$PBS_DIGESTS'));print(d['targets']['$TARGET']['url'])")"
-PBS_SHA="$(python3 -c "import json;d=json.load(open('$PBS_DIGESTS'));print(d['targets']['$TARGET']['sha256'])")"
+# Paths must travel as argv, not embedded in -c source: the Git Bash runtime
+# rewrites POSIX-looking arguments for native Windows python, but cannot see
+# paths inside an inline code string.
+PBS_URL="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d['targets'][sys.argv[2]]['url'])" "$PBS_DIGESTS" "$TARGET")"
+PBS_SHA="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d['targets'][sys.argv[2]]['sha256'])" "$PBS_DIGESTS" "$TARGET")"
 PBS_TARBALL="$WORK/$(basename "$PBS_URL")"
 [ -f "$PBS_TARBALL" ] || curl -sL -o "$PBS_TARBALL" "$PBS_URL"
 if [ "$(sha256_of "$PBS_TARBALL")" != "$PBS_SHA" ]; then
@@ -151,10 +154,13 @@ PYEOF2
     --no-deps -r "$WORK/reqs-win-supplement.txt" 2>&1 | tail -1
 fi
 
-rsync -a --exclude=.git --exclude=tests --exclude=tests-js --exclude=website \
-  --exclude=.github --exclude=docker --exclude=nix --exclude=evals \
-  --exclude=apps --exclude=web --exclude=ui-tui --exclude=node_modules \
-  --exclude=package-lock.json "$WORK/src/" "$PAYLOAD/app/"
+# Portable copy (no rsync dependency: Git Bash on Windows runners lacks it).
+mkdir -p "$PAYLOAD/app"
+( cd "$WORK/src" && tar --exclude=.git --exclude=tests --exclude=tests-js \
+    --exclude=website --exclude=.github --exclude=docker --exclude=nix \
+    --exclude=evals --exclude=apps --exclude=web --exclude=ui-tui \
+    --exclude=node_modules --exclude=package-lock.json -cf - . ) \
+  | ( cd "$PAYLOAD/app" && tar -xf - )
 
 echo "==> [8/10] launchers (self-locating; payload is fully relocatable)"
 cat > "$PAYLOAD/bin/hermes" <<'LAUNCHER_SH'
@@ -268,14 +274,21 @@ find "$PAYLOAD" -type f -exec chmod a-w,go-w {} +
 chmod 0755 "$PAYLOAD/bin/hermes" "$PAYLOAD/bin/hermes-acp" "$PAYLOAD/probe/run-probe.sh"
 python3 - "$PAYLOAD" <<'PYMODE'
 import os, stat, sys
-for base, dirs, files in os.walk(sys.argv[1], followlinks=False):
-    for name in dirs + files:
-        path = os.path.join(base, name)
-        mode = os.lstat(path).st_mode
-        if stat.S_ISLNK(mode):
-            continue
-        if mode & 0o022:
-            raise SystemExit(f"unsafe group/world-write mode {mode & 0o777:o}: {path}")
+# On Windows hosts (os.name == 'nt') the POSIX mode bits are a Git Bash
+# emulation artifact: the cygdrive mount reports 0777 and chmod cannot
+# change it, so the live-tree assertion cannot hold there. The shipped
+# trust boundary is enforced regardless by tar --mode='go-w' at pack time
+# and the archive-metadata audit right after, and the app's own runtime
+# mode check skips win32 the same way.
+if os.name != "nt":
+    for base, dirs, files in os.walk(sys.argv[1], followlinks=False):
+        for name in dirs + files:
+            path = os.path.join(base, name)
+            mode = os.lstat(path).st_mode
+            if stat.S_ISLNK(mode):
+                continue
+            if mode & 0o022:
+                raise SystemExit(f"unsafe group/world-write mode {mode & 0o777:o}: {path}")
 PYMODE
 ARCHIVE="$OUT/hermes-payload-$TARGET-v2026.9.21.tar.gz"
 tar --mode='go-w' -czf "$ARCHIVE" -C "$OUT" "hermes-payload-$TARGET"
