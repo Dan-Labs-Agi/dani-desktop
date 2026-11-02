@@ -3,22 +3,22 @@
 <plist version="1.0">
   <dict>
     <key>CFBundleDisplayName</key>
-    <string>Dani Bot</string>
+    <string>OpenMausBot</string>
     <key>CFBundleExecutable</key>
     <string>speech-helper</string>
     <key>CFBundleIdentifier</key>
-    <string>com.danibot.app.speech-helper</string>
+    <string>com.openmausbot.app.speech-helper</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Dani Bot Speech</string>
+    <string>OpenMausBot Speech</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSBackgroundOnly</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Dani Bot listens while you dictate messages or talk to a bot.</string>
+    <string>OpenMausBot listens while you dictate messages or talk to a bot.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Dani Bot converts your speech into text during dictation and calls.</string>
+    <string>OpenMausBot converts your speech into text during dictation and calls.</string>
   </dict>
 </plist>

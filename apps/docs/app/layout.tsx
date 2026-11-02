@@ -6,14 +6,14 @@ import './global.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://docs.danibot.com'),
+  metadataBase: new URL('https://docs.openmausbot.com'),
   title: {
-    default: 'Dani Bot Docs',
-    template: '%s · Dani Bot Docs',
+    default: 'OpenMausBot Docs',
+    template: '%s · OpenMausBot Docs',
   },
   description: 'Install, configure, and extend your local-first team of AI agents.',
   openGraph: {
-    title: 'Dani Bot Docs',
+    title: 'OpenMausBot Docs',
     description: 'Your own team of AI agents, in a chat app.',
     type: 'website',
   },

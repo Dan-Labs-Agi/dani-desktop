@@ -1,14 +1,17 @@
 # Desktop-to-desktop companion mode
 
-Every Dani Bot desktop build can play either role:
+Every OpenMausBot desktop build can play either role:
 
 - **Host mode** is the normal app. It owns the agents, conversations, credentials, routines, and computers.
 - **Client mode** controls a paired host through the same authenticated, default-deny companion API used by the phone app.
 
 The roles are platform-independent. A Windows, macOS, or Ubuntu build can host, and any other desktop build can be its client. One app installation uses one role at a time; disconnecting a client returns that installation to host mode without deleting its local host data.
 
-This mode is separate from the desktop app's **Server** menu. The Server menu
-loads a remote server's web UI directly using that server's browser session.
+This mode is separate from **Self-hosted server** in **Settings → Remote
+access → Connect to another computer** (also available through the **Server**
+menu). Self-hosted server connections load the remote server's web UI directly
+using that server's browser session. Use that option for a custom HTTPS domain
+or Cloudflare tunnel to a self-hosted server and its 12-character pairing link.
 Desktop companion mode instead keeps the bundled UI and native integrations on
 the client, sends API traffic through the default-deny companion boundary, and
 provides the per-device VPS viewer and client-local Mac voice behavior described
@@ -18,17 +21,19 @@ below. The two connection types intentionally do not share credentials.
 
 1. On the host, open **Settings → Remote access** and finish **Secure HTTPS pairing**.
 2. Open a pairing window so the host displays a six-digit code.
-3. On the client, open **Settings → Remote access**.
-4. Enter the host's managed companion HTTPS address and the six-digit code.
+3. On the client, open **Settings → Remote access → Connect to another computer**
+   and choose **Desktop companion**.
+4. Enter the host's managed companion address (`https://c-….openmausbot.com` or `https://c-….mausbot.si`) and the six-digit code.
 5. Choose **Pair and switch to client mode**. The client restarts and opens the host's bot UI.
 
-The HTTPS address uses the host's managed outbound tunnel. TLS is verified by the operating system, and the client does not need Tailscale. HTTPS is intentionally restricted to Dani Bot-managed companion names so a typo cannot redirect a paired-device token to an unrelated site.
+The HTTPS address uses the host's managed outbound tunnel. TLS is verified by the operating system, and the client does not need Tailscale. HTTPS is intentionally restricted to the names OpenMausBot issues (`c-` and 32 hexadecimal characters under `openmausbot.com` or `mausbot.si`) so a typo, or any other host in those domains, cannot receive the pairing code or a paired-device token. Desktop releases up to 0.1.103 accept only `openmausbot.com` names; update the client to pair with a host whose address is on `mausbot.si`, or pair over Tailscale.
 
 ## Pair over Tailscale
 
 1. Install Tailscale on both computers, sign into the same tailnet, and leave MagicDNS enabled.
 2. On the host, open **Settings → Remote access**, turn on Remote access, and open **Pair over Tailscale** to display a six-digit code.
-3. On the client, open **Settings → Remote access**.
+3. On the client, open **Settings → Remote access → Connect to another computer**
+   and choose **Desktop companion**.
 4. Enter the host's full `.ts.net` MagicDNS name and the six-digit code.
 5. Choose **Pair and switch to client mode**. The client restarts and opens the host's bot UI.
 
@@ -46,7 +51,9 @@ The client Calendar supports scheduled routines end to end: create, edit, move, 
 
 The remote Computer panel includes the host panel's per-agent **Scheduled tasks** card. It lists that agent's next routines and active run, opens the full schedule view, and creates a new schedule already assigned to the agent.
 
-A Mac remote client supports dictation and live calls against any host: Apple Speech runs locally on the Mac, and only the transcript crosses the paired connection. When a Mac client selects a built-in system voice, reply speech is synthesized and played locally on that Mac; ElevenLabs reply audio is synthesized by the host and relayed byte for byte. A Windows remote client still needs a future Windows speech-to-text implementation for microphone input.
+A Mac remote client supports dictation and live calls against any host: Apple Speech runs locally on the Mac, and only the transcript crosses the paired connection. When a Mac client selects a built-in system voice, reply speech is synthesized and played locally on that Mac; ElevenLabs and Fish Audio reply audio is synthesized by the host and relayed byte for byte. A Windows remote client still needs a future Windows speech-to-text implementation for microphone input.
+
+Voice-note attachments stream through the same relay: the mp3 serving route is on the companion allowlist, the audio crosses byte for byte, and `Range` requests are forwarded so a player can seek inside a clip without re-downloading it.
 
 The host must be running and awake. Cleartext HTTP is accepted only for a `.ts.net` MagicDNS hostname because that connection is encrypted inside Tailscale's WireGuard tunnel. Raw IP addresses, LAN hostnames, URL credentials, paths, queries, and fragments are rejected.
 
@@ -78,4 +85,4 @@ host companion :8810
 host harness 127.0.0.1:8799
 ```
 
-While client mode is active, Electron does not start its local harness, companion sidecar, computer-use daemon, or built-in browser host. The renderer still uses ordinary same-origin API calls and `EventSource`, so the existing UI and streaming store do not learn or handle a second transport.
+While client mode is active, Electron does not start its local harness, companion sidecar, computer-use daemon, or browser engine host. The renderer still uses ordinary same-origin API calls and `EventSource`, so the existing UI and streaming store do not learn or handle a second transport.

@@ -1,8 +1,6 @@
-// Turning the inspector's two record shapes into one-line summaries. Pure
-// so the panel stays a thin renderer and the labels can be tested.
-import type { RuntimeEvent } from "../../server/contracts.ts";
-import type { InspectorEntry, NativeRecord } from "../../server/thread-events.ts";
-export type { InspectorEntry, InspectorPage, NativeRecord } from "../../server/thread-events.ts";
+import type { RuntimeEvent } from "../../shared/runtime-events";
+import type { InspectorEntry, NativeRecord } from "../../shared/inspector";
+export type { InspectorEntry, InspectorPage, NativeRecord } from "../../shared/inspector";
 
 interface FoldPreview {
   text: string;
@@ -10,23 +8,15 @@ interface FoldPreview {
   overflow: boolean;
 }
 
-/** A row in the panel: adjacent content.delta events fold into one so a
- * streamed paragraph is one line, not three hundred. */
 export interface InspectorRow {
   key: string;
   kind: "runtime" | "native";
   at: string;
-  /** short badge — the event type, or in/out for native */
   tag: string;
-  /** what happened, in one line */
   summary: string;
-  /** visual weight: a turn boundary, a failure, or plain */
   tone: "boundary" | "error" | "plain";
-  /** the record(s) behind the row, for the expanded view */
   data: unknown;
-  /** > 1 when deltas were folded */
   count: number;
-  /** bounded, incrementally normalized preview for a folded delta run */
   preview?: FoldPreview;
 }
 
@@ -78,10 +68,25 @@ export function summarizeRuntime(e: RuntimeEvent): { summary: string; tone: Insp
       if (e.denials?.length) parts.push(`${e.denials.length} denied`);
       return { summary: parts.join(" · "), tone: e.ok ? "boundary" : "error" };
     }
+    case "turn.wait_started":
+      return {
+        summary: `waiting for computer — ${e.holder ? `${e.holder.name}${e.holder.task ? ` (${e.holder.task})` : ""}` : "holder unknown"}`,
+        tone: "plain",
+      };
+    case "turn.wait_ended": {
+      const seconds = Math.round(e.waitedMs / 1000);
+      const waited = e.waitedMs < 1_000 ? "under a second" : `${seconds}s`;
+      if (e.outcome === "acquired") return { summary: `computer acquired after ${waited}`, tone: "boundary" };
+      if (e.outcome === "parked") return { summary: `computer wait parked after ${waited}`, tone: "plain" };
+      if (e.outcome === "gave_up") return { summary: `computer wait gave up after ${waited}`, tone: "error" };
+      return { summary: `computer wait stopped after ${waited}`, tone: "plain" };
+    }
     case "item.started":
       return { summary: `${e.itemType}${e.title ? `: ${clip(oneLine(e.title))}` : " started"}`, tone: "plain" };
     case "item.updated":
       return { summary: `${e.itemType} updated${typeof e.tokens === "number" ? ` · ${e.tokens} tok` : ""}`, tone: "plain" };
+    case "turn.progress":
+      return { summary: `live: ${[e.activity, e.tool, e.file, typeof e.bytes === "number" ? `${e.bytes} bytes` : undefined].filter(Boolean).join(" · ")}`, tone: "plain" };
     case "item.completed":
       if (e.itemType === "assistant_text") return { summary: `assistant: ${clip(oneLine(e.text))}`, tone: "plain" };
       if (e.itemType === "assistant_image") return { summary: "assistant image generated", tone: "plain" };
@@ -89,13 +94,18 @@ export function summarizeRuntime(e: RuntimeEvent): { summary: string; tone: Insp
     case "content.delta":
       return { summary: `${e.streamKind}: ${clip(oneLine(e.delta))}`, tone: "plain" };
     case "request.opened":
-      return { summary: `${e.requestType}: ${e.tool} — ${clip(oneLine(e.summary))}`, tone: "plain" };
+      return {
+        summary: `${e.requestType}${e.origin === "output" ? " (agent-composed)" : ""}: ${e.tool} — ${clip(oneLine(e.summary))}`,
+        tone: "plain",
+      };
     case "request.resolved":
       return { summary: `resolved ${e.behavior} · ${e.source}`, tone: "plain" };
     case "thread.token-usage.updated":
       return { summary: `tokens in ${e.input} · out ${e.output}`, tone: "plain" };
     case "runtime.error":
       return { summary: `${e.setup ? "setup: " : ""}${clip(oneLine(e.message))}`, tone: "error" };
+    case "runtime.notice":
+      return { summary: `notice: ${clip(oneLine(e.message))}`, tone: "plain" };
     default:
       return { summary: (e as { type: string }).type, tone: "plain" };
   }
@@ -114,8 +124,7 @@ export function summarizeNative(r: NativeRecord): string {
     return typeof status === "string" ? `${msg.event} · ${status}` : msg.event;
   }
   if (type) {
-    // claude stream-json: surface the role/subtype so a user turn and an
-    // assistant chunk don't both read as "message"
+    // claude stream-json: surface role/subtype so a user turn and an assistant chunk don't both read "message"
     const inner = msg.message as Record<string, unknown> | undefined;
     const role = typeof inner?.role === "string" ? ` · ${inner.role}` : "";
     const subtype = typeof msg.subtype === "string" ? ` · ${msg.subtype}` : "";
@@ -126,7 +135,6 @@ export function summarizeNative(r: NativeRecord): string {
   return clip(oneLine(JSON.stringify(msg)));
 }
 
-/** Entries → rows, folding runs of content.delta on the same stream. */
 export function toRows(entries: InspectorEntry[]): InspectorRow[] {
   const rows: InspectorRow[] = [];
   for (const [i, entry] of entries.entries()) {

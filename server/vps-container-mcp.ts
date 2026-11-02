@@ -1,10 +1,9 @@
-// Transparent stdio bridge to the official Cua MCP server in a VPS
-// container. Docker's SSH transport handles authentication through the
-// user's normal SSH config and agent; this process stores no credentials.
-// The piping, drain-safe exit, and dead-transport watchdog live in
-// mcp-bridge.ts, shared with the Local VM entry point.
+// Stdio bridge to the Cua MCP server in a VPS container; auth is the user's SSH config and agent, and nothing is stored here.
 import { runMcpBridge } from "./mcp-bridge.ts";
 import { vpsContainerMcpArgs, vpsDockerArgs } from "./vps-computer.ts";
+import { DATA_DIR } from "./config.ts";
+import { augmentedPath } from "./env-path.ts";
+import { prepareVpsSsh } from "./vps-ssh.ts";
 
 const [alias, containerName] = process.argv.slice(2);
 const sshAlias = alias ?? "";
@@ -16,18 +15,17 @@ try {
   process.exit(2);
 }
 
-// The who-is-driving pair rides in env, not argv — argv is world-readable
-// through `ps`, and the token guards a loopback endpoint.
-const controlUrl = (process.env.DANI_CONTROL_URL ?? process.env.OMB_CONTROL_URL) ?? "";
-const controlToken = (process.env.DANI_CONTROL_TOKEN ?? process.env.OMB_CONTROL_TOKEN) ?? "";
+// The driving pair rides in env, not argv: argv is world-readable through `ps`.
+const controlUrl = process.env.OMB_CONTROL_URL ?? "";
+const controlToken = process.env.OMB_CONTROL_TOKEN ?? "";
+const ssh = prepareVpsSsh(DATA_DIR, augmentedPath());
 
 runMcpBridge({
   command: "docker",
   args,
+  env: { ...process.env, PATH: ssh.path },
   label: "VPS Cua Driver",
-  // The probe checks the TRANSPORT (SSH + daemon), deliberately not the
-  // driver: a busy desktop mid-tool-call must never look dead, while an
-  // unreachable VPS must, and `docker version` distinguishes exactly that.
+  // Probe the transport, not the driver: a busy desktop mid-tool-call must never look dead.
   liveness: { command: "docker", args: vpsDockerArgs(sshAlias, ["version", "--format", "{{.Server.Version}}"]) },
   ...(controlUrl && controlToken ? { gate: { url: controlUrl, token: controlToken } } : {}),
 });

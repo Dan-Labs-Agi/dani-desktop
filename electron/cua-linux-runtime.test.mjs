@@ -72,7 +72,7 @@ function handshake(pid = 4321) {
       mcp_protocol_version: "2025-06-18",
       pid,
       embedded: true,
-      host_bundle_id: "com.danibot.app",
+      host_bundle_id: "com.openmausbot.app",
     },
     tools: ["click", "get_window_state", "list_apps", "type_text"],
   };
@@ -262,9 +262,7 @@ describe("unavailable Linux CUA runtime", () => {
   });
 });
 
-// Windows does not provide the POSIX executable and Unix-socket semantics this
-// lifecycle contract exercises. Canonical short temp paths keep it portable
-// across Linux and macOS.
+// Windows lacks the POSIX executable and Unix-socket semantics this exercises; short canonical temp paths keep it portable.
 describe.skipIf(process.platform === "win32")("Linux CUA opt-in and lifecycle", () => {
   it("cleans only known private runtime files from a dead owner", () => {
     const root = temporaryDirectory();
@@ -305,7 +303,7 @@ describe.skipIf(process.platform === "win32")("Linux CUA opt-in and lifecycle", 
   });
 
   it("passes the exact packaged candidate and architecture into inspection", async () => {
-    const bundledDriverPath = "/opt/Dani Bot/resources/cua-linux-x64/cua-driver";
+    const bundledDriverPath = "/opt/OpenMausBot/resources/cua-linux-x64/cua-driver";
     const context = harness({
       runtimeOptions: { bundledDriverPath, arch: "x64" },
     });
@@ -362,7 +360,7 @@ describe.skipIf(process.platform === "win32")("Linux CUA opt-in and lifecycle", 
     expect(spawnOptions.env).toMatchObject({
       CUA_DRIVER_EMBEDDED: "1",
       CUA_DRIVER_PARENT_LIVENESS_STDIN: "1",
-      CUA_DRIVER_HOST_BUNDLE_ID: "com.danibot.app",
+      CUA_DRIVER_HOST_BUNDLE_ID: "com.openmausbot.app",
       CUA_DRIVER_RS_UPDATE_CHECK: "false",
       CUA_DRIVER_RS_TELEMETRY_ENABLED: "false",
     });
@@ -393,7 +391,7 @@ describe.skipIf(process.platform === "win32")("Linux CUA opt-in and lifecycle", 
         args: ["mcp", "--embedded", "--socket", expect.stringMatching(/driver\.sock$/)],
         env: {
           CUA_DRIVER_EMBEDDED: "1",
-          CUA_DRIVER_HOST_BUNDLE_ID: "com.danibot.app",
+          CUA_DRIVER_HOST_BUNDLE_ID: "com.openmausbot.app",
           CUA_DRIVER_RS_UPDATE_CHECK: "false",
           CUA_DRIVER_RS_TELEMETRY_ENABLED: "false",
         },

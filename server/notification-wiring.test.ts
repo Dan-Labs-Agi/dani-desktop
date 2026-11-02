@@ -1,8 +1,4 @@
-// Notification policy has pure unit coverage; this pins the production wiring
-// from a real failed routine turn through RoutineManager and the server's SSE
-// stream. A generic `done` frame for the same failure would produce two desktop
-// notifications, so the marker PATCH below is an ordering barrier before the
-// exact emitted set is asserted.
+// A generic `done` frame for the same failure would make two desktop notifications, so the marker PATCH below is an ordering barrier.
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,10 +14,6 @@ const FAKE_CLI = join(SERVER_DIR, "testing", "fake-acp-cli.ts");
 const PORT = 18800 + Math.floor(Math.random() * 10_000);
 const WEBHOOK_PORT = 39000 + Math.floor(Math.random() * 10_000);
 const BASE = `http://127.0.0.1:${PORT}`;
-// 43 base64url chars satisfying OWNER_CAPABILITY_PATTERN (server/config.ts);
-// adopted by the child server as DANI_OWNER_TOKEN (security/epic-9-B) and
-// presented on every API call below.
-const OWNER_TOKEN = `e2e-owner-capability-${"0".repeat(22)}`;
 const posixOnly = describe.skipIf(process.platform === "win32");
 
 let child: ChildProcess;
@@ -38,7 +30,7 @@ interface RoutineBody {
   name: string;
   prompt: string;
   botId: string;
-  runOn: "dani";
+  runOn: "maus";
   schedule: { type: "once"; at: number };
 }
 
@@ -49,10 +41,7 @@ const api = async (
 ): Promise<{ status: number; body: any }> => {
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: {
-      "x-danibot-desktop-owner": OWNER_TOKEN,
-      ...(body ? { "content-type": "application/json" } : {}),
-    },
+    headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   return { status: res.status, body: res.status === 204 ? null : await res.json() };
@@ -62,17 +51,14 @@ posixOnly("routine failure notification wiring", () => {
   beforeAll(async () => {
     chmodSync(FAKE_CLI, 0o755);
     home = mkdtempSync(join(tmpdir(), "omb-notifications-e2e-"));
-    mkdirSync(join(home, ".danibot"), { recursive: true });
+    mkdirSync(join(home, ".openmausbot"), { recursive: true });
     writeFileSync(
-      join(home, ".danibot", "config.json"),
+      join(home, ".openmausbot", "config.json"),
       JSON.stringify({
         instances: {
           grok: {
             driver: "grokAgent",
-            // fail-after-text streams a partial answer before failing: with a
-            // NON-empty reply, only the routine-failed/done dedup suppresses
-            // the generic done — exit-early would pass on the empty-reply
-            // rule alone and leave the dedup guard untested.
+            // a partial answer before failing: with a non-empty reply only the routine-failed/done dedup suppresses the generic done
             environment: { FAKE_ACP_MODE: "fail-after-text" },
             config: { cli: FAKE_CLI, fullAuto: false },
           },
@@ -84,7 +70,6 @@ posixOnly("routine failure notification wiring", () => {
       HOME: home,
       USERPROFILE: home,
       OMB_PORT: String(PORT),
-      DANI_OWNER_TOKEN: OWNER_TOKEN,
       OMB_WEBHOOK_PORT: String(WEBHOOK_PORT),
     };
     if (process.env.PATH) env.PATH = process.env.PATH;
@@ -102,7 +87,6 @@ posixOnly("routine failure notification wiring", () => {
       try {
         if ((await fetch(`${BASE}/api/health`)).ok) break;
       } catch {
-        /* not up yet */
       }
       if (Date.now() > deadline) throw new Error(`server never came up. stderr:\n${stderr}`);
       if (child.exitCode !== null) throw new Error(`server exited ${child.exitCode}. stderr:\n${stderr}`);
@@ -116,11 +100,10 @@ posixOnly("routine failure notification wiring", () => {
   });
 
   it(
-    "emits one routine-failed notification for the detached task and no generic done notification",
+    "emits one routine-failed notification linking the chat that says the run failed, and no generic done notification",
     async () => {
-      // A fresh boot without a live model route seeds no starter (issue #18),
-      // so create the bot this routine runs on.
-      const bot = (await api("POST", "/api/bots")).body.bot;
+      const listed = await api("GET", "/api/bots");
+      const bot = listed.body.bots[0];
       expect(
         (
           await api("PATCH", `/api/bots/${bot.id}`, {
@@ -135,7 +118,7 @@ posixOnly("routine failure notification wiring", () => {
         name: "Broken nightly report",
         prompt: "Prepare the report",
         botId: bot.id,
-        runOn: "dani",
+        runOn: "maus",
         schedule: { type: "once", at: Date.now() + 60_000 },
       });
       expect(created.status).toBe(201);
@@ -158,7 +141,7 @@ posixOnly("routine failure notification wiring", () => {
           botId: bot.id,
           title: "Routine Scout's routine failed",
         });
-        expect(frame.notification.threadId).not.toBe(bot.threadId);
+        expect(frame.notification.threadId).toBe(bot.threadId);
         expect(frame.notification.body).toContain("Broken nightly report");
 
         const receipts = await api("GET", "/api/routines");
@@ -166,12 +149,19 @@ posixOnly("routine failure notification wiring", () => {
         expect(receipt).toMatchObject({
           status: "failed",
           botId: bot.id,
-          threadId: frame.notification.threadId,
+          resultsThreadId: frame.notification.threadId,
         });
+        expect(receipt.threadId).not.toBe(frame.notification.threadId);
+        const report = await api("GET", `/api/threads/${frame.notification.threadId}/messages?limit=20`);
+        expect(report.status).toBe(200);
+        expect(report.body.messages.find((message: any) => message.automation?.runId === receipt.id)).toMatchObject({
+          kind: "text", text: expect.stringMatching(/^This run didn't finish: /), automation: { failed: true, executionThreadId: receipt.threadId },
+        });
+        const currentBot = (await api("GET", "/api/bots")).body.bots.find((candidate: any) => candidate.id === bot.id);
+        expect(currentBot.tasks.find((task: any) => task.threadId === receipt.resultsThreadId).routineRunId).toBeUndefined();
+        expect(currentBot.tasks.find((task: any) => task.threadId === receipt.threadId))
+          .toMatchObject({ routineRunId: receipt.id, unread: false });
 
-        // A unique bot patch is an SSE ordering barrier: by the time it is
-        // observed, every notification emitted by the failed turn is already
-        // in `frames`, including an accidental generic `done` duplicate.
         expect((await api("PATCH", `/api/bots/${bot.id}`, { name: "Failure observed" })).status).toBe(200);
         await stream.until(
           (candidate) => candidate.kind === "bot" && candidate.bot?.id === bot.id && candidate.bot?.name === "Failure observed",
@@ -181,7 +171,7 @@ posixOnly("routine failure notification wiring", () => {
           stream.frames
             .filter(
               (candidate) =>
-                candidate.kind === "notify" && candidate.notification?.threadId === frame.notification.threadId,
+                candidate.kind === "notify" && candidate.notification?.botId === bot.id,
             )
             .map((candidate) => candidate.notification.kind),
         ).toEqual(["routine-failed"]);

@@ -1,32 +1,24 @@
-<!-- One concern per PR. Behavior-changing work requires an approved issue/spec. -->
+<!--
+Please read CONTRIBUTING.md first — it's short. One concern per PR;
+big changes should have an issue agreeing on the approach before code.
+-->
 
-## What changed and why
+## What changed
 
-## Spec traceability
+## Why
 
-- Requirements:
-- Tasks:
-- Acceptance rows and minimum evidence class:
-- Baseline `main` SHA/tree:
+## How it was verified
 
-## Exact file map and rollback
+<!-- commands run, platforms tested on, what you clicked through -->
 
-## RED/GREEN and impacted validation
+## Screenshots (UI changes)
 
-<!-- Commands, exit codes, immutable run URLs, artifact hashes, OS/device. Classify evidence honestly. -->
-
-## Independent critic/review
-
-<!-- Malformed input, stale state, concurrency, restart, legacy data, authorization, platform, and real-serving-path attacks. -->
-
-## Screenshots/video for visual changes
+<!-- before/after images; video for anything animated -->
 
 ## Checklist
 
-- [ ] `pnpm sdd:check`, `pnpm typecheck`, and impacted tests pass
-- [ ] No task introduces behavior absent from the approved spec
-- [ ] Server behavior changes have real contract/serving-path tests
-- [ ] No `dist-server/` edits or generated/fake production evidence
-- [ ] No secrets in logs, responses, events, argv, artifacts, or Hermes config
-- [ ] Platform-specific code is gated; no remote shell installer or unsafe string-built command
-- [ ] Migration, rollback, residual risks, and claims still UNVERIFIED are explicit
+- [ ] `pnpm typecheck` and `pnpm test` pass locally
+- [ ] Server behavior changes come with tests (see CONTRIBUTING.md → Tests)
+- [ ] No `dist-server/` edits (it's build output)
+- [ ] macOS-only code is platform-gated; no `shell: true` / cmd.exe string-building
+- [ ] No secrets in logs, responses, events, or argv

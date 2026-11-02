@@ -41,7 +41,7 @@ describe("desktop capability cache", () => {
       resolveInitial = resolve;
     });
     vi.stubGlobal("window", {
-      dani: {
+      ogb: {
         platform: "linux",
         getCapabilities: () => initial,
       },

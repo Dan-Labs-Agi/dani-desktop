@@ -1,25 +1,36 @@
 import type { Bot, BotAnnouncement } from "./store";
 
-/** Every field written through the desktop's broad bot PATCH boundary. */
 export type BotUpdatePatch = Partial<
   Pick<
     Bot,
     | "name"
     | "title"
     | "description"
+    | "soul"
     | "notifications"
     | "cloudBackend"
     | "autoStartVps"
     | "color"
     | "mascotExpression"
+    | "mascotFaceColor"
     | "avatarUrl"
     | "avatarCrop"
+    | "avatarZoom"
+    | "avatarFocusX"
+    | "avatarFocusY"
     | "autoApprove"
     | "approvalMode"
+    | "outbound"
+    | "fallback"
     | "speakReplies"
+    | "replyStyle"
     | "voice"
+    | "voiceNotes"
+    | "xResearch"
     | "pinned"
     | "hidden"
+    | "sidebarHidden"
+    | "welcomed"
     | "section"
     | "pinnedMessageId"
     | "chiefOfStaff"
@@ -27,29 +38,35 @@ export type BotUpdatePatch = Partial<
     | "composio"
     | "browser"
     | "browserProfile"
+    | "memoryUpkeep"
+    | "cacheKeepWarm"
+    | "mcpServers"
     | "modelSelection"
   >
 > & {
-  /** null is the wire representation for clearing an explicit destination
-   * and returning to Auto. Bot state itself keeps Auto as an absent field. */
   computer?: Bot["computer"] | null;
-  /** Rides the PATCH body only: the server's proof that the local-auto
-   * warning dialog was shown (see server/index.ts's consent gate). It must
-   * reach the wire inside the coalesced body and must never fold into bot
-   * state — the queue strips it from every overlay it hands back. */
+  connectorTools?: Bot["connectorTools"] | null;
+  connectorScopes?: Bot["connectorScopes"] | null;
+  phoneApps?: Bot["phoneApps"] | null;
+  /** null: talks to every bot again. */
+  peers?: string[] | null;
+  /** The server's proof the local-auto warning was shown: wire-only, never folded into bot state. */
   acknowledgeLocalAuto?: boolean;
-  /** Renderer-local marker that the elevated-risk Full access dialog was
-   * confirmed. StoreProvider consumes it before the private Electron request;
-   * it is never sent over HTTP or folded into bot state. */
-  confirmFullAccess?: boolean;
+  applyToAllThreads?: boolean;
+  keepThreadModels?: boolean;
+  /** With modelSelection: the thread this client shows. Body only: Bot.threadId is the server's selection. */
+  threadId?: string;
 };
 
-/** A wire patch after clear-only values have been normalized for Bot state. */
 export type BotStatePatch = Omit<
   BotUpdatePatch,
-  "computer" | "acknowledgeLocalAuto" | "confirmFullAccess"
+  "computer" | "connectorTools" | "connectorScopes" | "phoneApps" | "peers" | "acknowledgeLocalAuto" | "applyToAllThreads" | "keepThreadModels" | "threadId"
 > & {
+  peers?: string[];
   computer?: Bot["computer"];
+  connectorTools?: Bot["connectorTools"];
+  connectorScopes?: Bot["connectorScopes"];
+  phoneApps?: Bot["phoneApps"];
 };
 
 interface BotPatchQueueEntry {
@@ -71,6 +88,7 @@ export interface BotPatchQueueOptions {
     patch: BotUpdatePatch,
     signal: AbortSignal,
     current: BotAnnouncement,
+    leaving: boolean,
   ) => Promise<BotAnnouncement>;
   reconcile: (botId: string, signal: AbortSignal) => Promise<BotAnnouncement | null>;
   onAuthoritative: (bot: BotAnnouncement, optimisticOverlay: BotStatePatch) => void;
@@ -79,14 +97,12 @@ export interface BotPatchQueueOptions {
 
 export interface BotPatchQueue {
   enqueue: (botId: string, patch: BotUpdatePatch, fallback: BotAnnouncement) => void;
-  /** Wait for the lane to settle and return the server-authoritative bot.
-   * null means there was no queued write (or the lane was cancelled). */
   flush: (botId: string) => Promise<BotAnnouncement | null>;
+  /** Sends every edit still waiting out its pause now: the page is going away. */
+  flushAll: () => void;
   overlayFor: (botId: string) => BotStatePatch;
   cancel: (botId: string) => void;
-  /** Undo a dispose. Exists for React StrictMode, whose dev-mode mount probe
-   * runs the effect cleanup once against the SAME memoized queue — without
-   * this, dispose() would permanently disable saving in development. */
+  /** Undo a dispose: StrictMode's dev mount probe runs the cleanup once against the same memoized queue. */
   revive: () => void;
   dispose: () => void;
 }
@@ -98,24 +114,32 @@ const hasOwn = (value: object, key: PropertyKey): boolean =>
 const isAbortError = (error: unknown): boolean =>
   Boolean(error && typeof error === "object" && (error as { name?: unknown }).name === "AbortError");
 
-/** What may fold back into renderer bot state: everything except the consent
- * flag, which is wire-only. One strip point covers both overlay paths. */
 const stateOverlay = (patch: BotUpdatePatch): BotStatePatch => {
   const {
     acknowledgeLocalAuto: _localAck,
-    confirmFullAccess: _fullConfirmation,
+    applyToAllThreads: _allThreads,
+    keepThreadModels: _keepThreadModels,
+    threadId: _threadId,
     computer,
+    connectorTools,
+    connectorScopes,
+    phoneApps,
+    peers,
     ...fields
   } = patch;
-  if (computer === null) return { ...fields, computer: undefined };
-  return computer === undefined ? fields : { ...fields, computer };
+  const normalized: BotStatePatch = { ...fields };
+  if (computer === null) normalized.computer = undefined;
+  else if (computer !== undefined) normalized.computer = computer;
+  if (connectorTools === null) normalized.connectorTools = undefined;
+  else if (connectorTools !== undefined) normalized.connectorTools = connectorTools;
+  if (connectorScopes === null) normalized.connectorScopes = undefined;
+  else if (connectorScopes !== undefined) normalized.connectorScopes = connectorScopes;
+  if (phoneApps === null) normalized.phoneApps = undefined;
+  else if (phoneApps !== undefined) normalized.phoneApps = phoneApps;
+  if (peers !== undefined) normalized.peers = peers ?? undefined;
+  return normalized;
 };
 
-/**
- * A per-bot mutation lane: edits debounce together, requests never overtake
- * one another, and every response/error is folded back from an authoritative
- * server bot while preserving only edits that were made later.
- */
 export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueue {
   const entries = new Map<string, BotPatchQueueEntry>();
   const delayMs = options.delayMs ?? 400;
@@ -127,7 +151,7 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
     for (const resolve of entry.idleWaiters.splice(0)) resolve(entry.fallback);
   };
 
-  const drain = async (entry: BotPatchQueueEntry): Promise<void> => {
+  const drain = async (entry: BotPatchQueueEntry, leaving = false): Promise<void> => {
     if (disposed || entry.running || entry.timer !== null || !hasFields(entry.pending)) return;
     entry.running = true;
     const patch = entry.pending;
@@ -137,7 +161,7 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
     entry.controller = controller;
 
     try {
-      const bot = await options.send(entry.botId, patch, controller.signal, entry.fallback);
+      const bot = await options.send(entry.botId, patch, controller.signal, entry.fallback, leaving);
       if (disposed || entry.cancelled) return;
       entry.fallback = bot;
       options.onAuthoritative(bot, stateOverlay(entry.pending));
@@ -147,19 +171,15 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
           hasOwn(entry.pending, "approvalMode") &&
           isAbortError(caught);
         if (supersededApproval) return;
-        // A rejected patch is no longer optimistic. Re-read before rolling back
-        // because a lost HTTP response may still have committed and broadcast.
+        // A lost HTTP response may still have committed and broadcast: re-read before rolling back.
         entry.inFlight = {};
         let bot: BotAnnouncement | null = entry.fallback;
         try {
           bot = await options.reconcile(entry.botId, controller.signal);
           if (bot) entry.fallback = bot;
         } catch {
-          // The captured pre-edit bot is safer than leaving rejected input in
-          // state when the reconciliation request is unavailable too.
         }
-        // Deletion may cancel this lane while the re-read is in flight. Folding
-        // that result back into state would resurrect the deleted bot.
+        // Deletion may cancel this lane mid-read; folding the result back would resurrect the bot.
         if (disposed || entry.cancelled) return;
         if (bot) options.onAuthoritative(bot, stateOverlay(entry.pending));
         options.onError(caught instanceof Error ? caught : new Error(String(caught)));
@@ -199,9 +219,8 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
       };
       entries.set(botId, entry);
       entry.pending = { ...entry.pending, ...patch };
-      // A private Full/Custom grant cannot be cancelled after it crosses the
-      // Electron bridge. Signal the sender as soon as a newer level exists so
-      // it can compensate a late grant back to Ask before this lane advances.
+      if (hasOwn(patch, "approvalMode") && !hasOwn(patch, "applyToAllThreads")) delete entry.pending.applyToAllThreads;
+      // A private Full/Custom grant cannot be cancelled once it crosses the Electron bridge.
       const inFlightMode = entry.inFlight.approvalMode;
       if (
         entry.running &&
@@ -211,11 +230,10 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
       ) {
         entry.controller?.abort();
       }
-      // Execution-boundary edits must start immediately. They still share the
-      // same serialized lane, but never sit behind the cosmetic 400 ms
-      // debounce where a message/routine could begin under stale permissions.
+      // Execution-boundary edits skip the debounce: work must never start under stale permissions or revoked tools.
       const immediate = Object.prototype.hasOwnProperty.call(patch, "approvalMode") ||
-        Object.prototype.hasOwnProperty.call(patch, "modelSelection");
+        Object.prototype.hasOwnProperty.call(patch, "modelSelection") ||
+        Object.prototype.hasOwnProperty.call(patch, "connectorTools");
       if (immediate) {
         if (entry.timer !== null) clearTimeout(entry.timer);
         entry.timer = null;
@@ -236,6 +254,15 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
       void drain(entry);
       settleIfIdle(entry);
       return idle;
+    },
+
+    flushAll() {
+      for (const entry of entries.values()) {
+        if (entry.timer === null) continue;
+        clearTimeout(entry.timer);
+        entry.timer = null;
+        void drain(entry, true);
+      }
     },
 
     overlayFor(botId) {
@@ -267,5 +294,19 @@ export function createBotPatchQueue(options: BotPatchQueueOptions): BotPatchQueu
       }
       entries.clear();
     },
+  };
+}
+
+/** Browsers cancel an ordinary request when the page reloads; a keepalive one still arrives, if its body is under 64 KiB. */
+export const keepaliveFits = (body: string) => new TextEncoder().encode(body).length < 60_000;
+
+/** Saves every edit still waiting at once (`flushAll`) when the page is left; returns the listeners' removal. */
+export function flushWhenLeaving(queue: Pick<BotPatchQueue, "flushAll">, target: Pick<Window, "addEventListener" | "removeEventListener">): () => void {
+  const leaving = () => queue.flushAll();
+  target.addEventListener("pagehide", leaving);
+  target.addEventListener("beforeunload", leaving);
+  return () => {
+    target.removeEventListener("pagehide", leaving);
+    target.removeEventListener("beforeunload", leaving);
   };
 }

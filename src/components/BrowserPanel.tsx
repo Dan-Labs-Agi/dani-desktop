@@ -1,838 +1,395 @@
-// The Browser tab of the computer panel. The page itself is a native
-// WebContentsView the Electron main process owns; this component only draws
-// the chrome around it (address, back, take-over, profile) and keeps main
-// told where its rectangle is. Anything the renderer draws is painted UNDER
-// the native view, so menus and dialogs that would overlap it hide it
-// instead. Compact in the panel; expanded when handed the main column.
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  ExternalLink,
-  Globe,
-  Hand,
-  Loader2,
-  Maximize2,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  UserRound,
-} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Globe, Hand, Loader2, LockKeyhole, Moon, X } from "lucide-react";
+import { browserUnavailableReason } from "@/lib/feature-flags";
+import { t } from "@/lib/i18n";
 import { usePageVisible } from "@/lib/page-visible";
-import { cn } from "@/lib/cn";
-import { transitionBrowserControlLease } from "@/lib/computer-control";
-import { api, useStore, type Bot, type BotAnnouncement, type BrowserProfile } from "@/state/store";
-import { browserProfilePartitionId, browserProfilesForPatch } from "@/lib/browser-profiles";
-import { useNativeViewObscured } from "@/hooks/use-native-view-obscured";
-import { aspectFitNativeViewBounds } from "@/lib/local-vm-workspace";
-import {
-  beginBrowserPanelOperation,
-  useBrowserPanelOperationPending,
-} from "@/lib/browser-panel-operation";
+import { api, useStore, type Bot } from "@/state/store";
+import { BrowserProfilesManager } from "./BrowserProfilesManager";
+import { ChromeRow, type BrowserNav, type BrowserTab } from "./browser/ChromeRow";
+import { MoreMenu } from "./browser/MoreMenu";
+import { PasskeyNotice } from "./browser/PasskeyNotice";
+import { StreamSurface, type StreamSurfaceHandle, type SurfaceConnect } from "./browser/StreamSurface";
+import { createBrowserControl, streamTransport, type BrowserControl, type BrowserTakeStatus } from "@/lib/browser-control";
+import { resolveAddressBarInput } from "@/lib/browser-address";
+import { closeBrowserPictureInPicture, openBrowserPictureInPicture, supportsBrowserPictureInPicture, useBrowserPictureInPicture } from "@/lib/browser-pip";
+import { browserStreamAccess, createPreviewStreamClient, type PreviewStreamClient, type PreviewStreamControl, type PreviewStreamInput, type PreviewViewportSetting } from "@/lib/browser-stream-client";
+import { createLiveStreamClient, type LiveResume, type LiveStreamClient } from "@/lib/browser-stream-v1";
+import { BROWSER_HELD_ELSEWHERE } from "../../shared/browser-held";
+import { passkeyWallAt } from "../../shared/passkey-wall";
+import { browserScope, withBrowserScope } from "@/lib/team-browser";
 
-type ControlSnapshot = { held: boolean; helpReason: string | null };
+const button = "rounded-md p-1.5 text-ink-secondary hover:bg-inset hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed";
+const NO_NAV: BrowserNav = { url: "", loading: false, canGoBack: false, canGoForward: false };
 
-const OWN_PROFILE = "";
-const GUEST_PROFILE = "guest";
+export type BrowserSignIn = { url: string; site: string; nonce: number };
+/** A page to open in a new tab once the view is connected and awake: a published page's Open (usePageOpener). */
+export type BrowserPage = { url: string; nonce: number };
 
-export type BrowserSurfacePresentation = "connecting" | "empty" | "loading" | "ready" | "failed";
-
-function elementBounds(element: HTMLElement | null): DesktopWorkspaceBounds | null {
-  const rect = element?.getBoundingClientRect();
-  if (!rect || rect.width < 1 || rect.height < 1) return null;
-  return { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) };
+function tabsOf(value: unknown): BrowserTab[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((tab) => tab && typeof tab === "object" && typeof tab.tabId === "string"
+    ? [{ tabId: tab.tabId, title: typeof tab.title === "string" ? tab.title : "", url: typeof tab.url === "string" ? tab.url : "", active: tab.active === true }]
+    : []);
 }
 
-/** Center the fixed 1280×800 browser viewport inside an arbitrary workspace.
- * Electron receives only this rectangle, leaving an even renderer-owned
- * letterbox instead of anchoring the page to the top-left. */
-export function aspectFitBrowserBounds(bounds: DesktopWorkspaceBounds): DesktopWorkspaceBounds {
-  return aspectFitNativeViewBounds(bounds, 1.6);
-}
-
-/** The editable address must retain the exact page URL. A shortened host/path
- * silently dropped schemes, queries and fragments on the next submission. */
-export function editableUrl(url: string): string {
-  if (!url || url === "about:blank") return "";
-  return url;
-}
-
-function sameSurfaceState(left: BrowserSurfaceState | null, right: BrowserSurfaceState): boolean {
-  return Boolean(
-    left &&
-      left.botId === right.botId &&
-      left.open === right.open &&
-      left.url === right.url &&
-      left.title === right.title &&
-      left.loading === right.loading &&
-      left.canGoBack === right.canGoBack &&
-      left.canGoForward === right.canGoForward &&
-      left.visible === right.visible &&
-      left.partition === right.partition &&
-      left.profile === right.profile &&
-      left.mode === right.mode &&
-      left.code === right.code,
-  );
-}
-
-/** Ignore a late event from the profile that was just switched away from. */
-export function browserSurfaceForProfile(
-  surface: BrowserSurfaceState | null,
-  botId: string,
-  profile: string,
-): BrowserSurfaceState | null {
-  return surface?.botId === botId && surface.profile === profile ? surface : null;
-}
-
-export function shouldAcceptBrowserSurfaceState(
-  next: BrowserSurfaceState,
-  botId: string,
-  profile: string,
-): boolean {
-  // Every state, including terminal crash/eviction notices, carries the
-  // originating profile. An old hidden page may navigate or die after a
-  // switch and must never replace the selected profile's page or error state.
-  return next.botId === botId && next.profile === profile;
-}
-
-export function browserSurfacePresentation(input: {
-  surface: BrowserSurfaceState | null;
-  botId: string;
-  profile: string;
-  failureCode?: BrowserSurfaceState["code"];
-  actionPending?: boolean;
-  retrying?: boolean;
-}): BrowserSurfacePresentation {
-  if (input.retrying || input.actionPending) return "loading";
-  if (input.failureCode) return "failed";
-  const active = browserSurfaceForProfile(input.surface, input.botId, input.profile);
-  if (!active) return "connecting";
-  if (active.loading) return "loading";
-  if (!active.url || active.url === "about:blank") return "empty";
-  return "ready";
-}
-
-export function shouldClearBrowserSurfaceFailure(
-  presentation: BrowserSurfacePresentation,
-  next: BrowserSurfaceState,
-): boolean {
-  return !next.code && presentation !== "failed";
-}
-
-function browserSurfaceFailureText(code: BrowserSurfaceState["code"]): string {
-  if (code === "renderer-gone") return "The page stopped unexpectedly.";
-  if (code === "evicted") return "This page was paused to free memory.";
-  return "The browser surface needs to be reopened.";
-}
-
-export function BrowserSurfacePlaceholder({
-  presentation,
-  botName,
-  failureCode,
-  onRetry,
-}: {
-  presentation: BrowserSurfacePresentation;
-  botName: string;
-  failureCode?: BrowserSurfaceState["code"];
-  onRetry?: () => void;
-}) {
-  if (presentation === "ready") return null;
-  if (presentation === "failed") {
-    return (
-      <div
-        className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6 text-center text-[13px] text-ink-secondary"
-        role="alert"
-      >
-        <AlertTriangle size={22} className="text-danger" aria-hidden="true" />
-        <div>
-          <div className="font-medium text-ink">Page unavailable</div>
-          <div className="mt-0.5">{browserSurfaceFailureText(failureCode)}</div>
-        </div>
-        {onRetry ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onRetry();
-            }}
-            className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-control px-3 py-1.5 font-medium text-ink outline-none hover:bg-raised-hover focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <RotateCcw size={13} aria-hidden="true" /> Retry
-          </button>
-        ) : null}
-      </div>
-    );
-  }
-  if (presentation === "empty") {
-    return (
-      <div
-        className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center text-[13px] text-ink-secondary"
-        role="status"
-      >
-        <Globe size={22} className="opacity-60" aria-hidden="true" />
-        <span>Nothing open yet. Ask {botName} to look something up, or enter an address above.</span>
-      </div>
-    );
-  }
-  return (
-    <div
-      className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[13px] text-ink-secondary"
-      role="status"
-      aria-live="polite"
-    >
-      <Loader2 size={20} className="animate-spin text-accent" aria-hidden="true" />
-      <span>{presentation === "connecting" ? "Preparing browser…" : "Opening page…"}</span>
-    </div>
-  );
-}
-
-/** "Work Microsoft" → "work-microsoft"; collisions get a numeric suffix. */
-export function profileIdFor(name: string, taken: BrowserProfile[]): string {
-  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "profile";
-  let candidate = base;
-  for (let n = 2; candidate === GUEST_PROFILE || taken.some((profile) => profile.id === candidate); n += 1) {
-    candidate = `${base}-${n}`;
-  }
-  return candidate;
-}
-
-export type BrowserInteractionPlan = "ignore" | "expand" | "take" | "expand-and-take";
-
-export function browserInteractionPlan(input: {
-  botId: string;
-  eventBotId: string;
-  profile: string;
-  eventProfile: string;
-  compact: boolean;
-  held: boolean;
-  pending: boolean;
-  takeInFlight: boolean;
-}): BrowserInteractionPlan {
-  if (input.botId !== input.eventBotId || input.profile !== input.eventProfile) return "ignore";
-  if (input.held) return input.compact ? "expand" : "ignore";
-  if (input.pending || input.takeInFlight) return "ignore";
-  return input.compact ? "expand-and-take" : "take";
-}
-
-export function browserProfileChangesDisabled(
-  bot: Pick<Bot, "busy">,
-  pending: { browserAction?: boolean; controlTransition?: boolean } = {},
-): boolean {
-  return bot.busy === true || pending.browserAction === true || pending.controlTransition === true;
-}
-
-export function BrowserPanel({
-  bot,
-  control,
-  controlPending,
-  onControl,
-  size = "compact",
-  onExpand,
-}: {
-  bot: Bot;
-  control: ControlSnapshot;
-  controlPending: boolean;
-  onControl: (action: "take" | "release") => Promise<boolean>;
-  size?: "compact" | "expanded";
-  /** Compact only: hand the tab to the main column. */
-  onExpand?: () => void;
-  /** Expanded only: hand the tab back to the panel. */
-  onCollapse?: () => void;
-}) {
-  const { state, dispatch } = useStore();
-  const bridge = window.dani?.browser;
+/**
+ * A bot's browser: the page fills the panel on either engine, streamed over the v2 WebSocket when the new engine runs
+ * it, else over the v1 live view. Security: a new connection never replays old input. Only the server gives this view a
+ * hold: one of the same person's, when none of their views uses it or when they take it over here.
+ */
+export function LiveBrowser({ bot, signIn, page }: { bot: Bot; signIn?: BrowserSignIn; page?: BrowserPage }) {
+  const { state } = useStore();
+  const [fallback, setFallback] = useState(false);
+  const stream = state.config?.browserEngine?.engine === "chrome" && !fallback;
+  const [attempt, setAttempt] = useState(0);
+  const [connected, setConnected] = useState(false);
+  const [control, setControl] = useState<PreviewStreamControl | null>(null);
+  const [tabs, setTabs] = useState<BrowserTab[]>([]);
+  const [nav, setNav] = useState<BrowserNav>(NO_NAV);
+  const [setting, setSetting] = useState<PreviewViewportSetting>({ mode: "fill" });
+  const [zoom, setZoom] = useState(1);
+  const [takeStatus, setTakeStatus] = useState<BrowserTakeStatus>("");
+  const [error, setError] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [gone, setGone] = useState(false);
+  const [asleep, setAsleep] = useState<"" | "asleep" | "waking">("");
+  const [kept, setKept] = useState(false);
+  const [showProfiles, setShowProfiles] = useState(false);
+  const [showTyping, setShowTyping] = useState(false);
+  const [masked, setMasked] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const [passkeyDismissed, setPasskeyDismissed] = useState("");
+  const floating = useBrowserPictureInPicture();
   const pageVisible = usePageVisible();
-  const layoutOwner = useId();
-  const hostRef = useRef<HTMLDivElement>(null);
-  const nativeViewObscured = useNativeViewObscured(hostRef, size === "expanded" ? 1.6 : null);
-  const operationPending = useBrowserPanelOperationPending(bot.id);
-  const nativeTakePending = useRef(false);
-  const botBusyRef = useRef(browserProfileChangesDisabled(bot));
-  // Async profile creation must only observe committed bot state. Updating the
-  // ref during render lets an interrupted concurrent render leak a busy value
-  // that React never committed and can strand the newly-created profile.
-  useLayoutEffect(() => {
-    botBusyRef.current = browserProfileChangesDisabled(bot);
-  }, [bot.busy]);
-  const [surface, setSurface] = useState<BrowserSurfaceState | null>(null);
-  const [surfaceFailure, setSurfaceFailure] = useState<{
-    profile: string;
-    code: NonNullable<BrowserSurfaceState["code"]>;
-  } | null>(null);
-  const [address, setAddress] = useState("");
-  const [addressFocused, setAddressFocused] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [addingProfile, setAddingProfile] = useState(false);
-  const [newProfileName, setNewProfileName] = useState("");
-  const [profileBusy, setProfileBusy] = useState(false);
-  const [retrying, setRetrying] = useState(false);
-  const acceptSurface = useCallback((next: BrowserSurfaceState) => {
-    setSurface((current) => (sameSurfaceState(current, next) ? current : next));
+  const panel = useRef<HTMLDivElement>(null);
+  const address = useRef<HTMLInputElement>(null);
+  const surface = useRef<StreamSurfaceHandle>(null);
+  const profilesDialog = useRef<HTMLDialogElement>(null);
+  const typingDialog = useRef<HTMLDialogElement>(null);
+  const clientRef = useRef<PreviewStreamClient | null>(null);
+  const controlRef = useRef<PreviewStreamControl | null>(null);
+  const controlListeners = useRef(new Set<(control: PreviewStreamControl | null) => void>());
+  const browserControl = useRef<BrowserControl | null>(null);
+  // The v1 view this panel had for this bot and profile when its stream dropped: only its reconnect gets the hold back.
+  const resume = useRef<LiveResume & { key: string }>({ key: "", viewer: "" });
+  const keepNow = useRef(false);
+  const signInHandled = useRef(0);
+  const pageHandled = useRef(0);
+  const signInPage = useRef<string | null>(null);
+  const pageNow = useRef<string | null>(null);
+  const latest = useRef({ openSignInPage: () => {}, takeControl: () => {} });
+  const signInOpen = state.computerControl?.[bot.id]?.help?.place === "browser";
+  const scopedThread = browserScope(state.config?.team, bot.threadId).threadId;
+  keepNow.current = kept || signInOpen;
+  const profileName = bot.browserProfile === "guest" ? "Temporary browser"
+    : state.config?.browserProfiles?.find((profile) => profile.id === bot.browserProfile)?.name ?? `${bot.name}’s own browser`;
+  useEffect(() => { if (showProfiles) profilesDialog.current?.showModal(); else profilesDialog.current?.close(); }, [showProfiles]);
+  useEffect(() => {
+    browserControl.current?.hold(showTyping);
+    if (showTyping) typingDialog.current?.showModal(); else typingDialog.current?.close();
+  }, [showTyping]);
+
+  const reconnect = useCallback(() => {
+    setGone(false);
+    setError("");
+    setFallback(false);
+    setAttempt((value) => value + 1);
   }, []);
-  const botId = bot.id;
-  const profiles = state.config?.browserProfiles ?? [];
-  // a profile that was deleted falls back to the bot's own session; Guest is
-  // never in the list, it is a throwaway the surface forgets on switch-away
-  const activeProfile =
-    bot.browserProfile === GUEST_PROFILE
-      ? GUEST_PROFILE
-      : bot.browserProfile && profiles.some((profile) => profile.id === bot.browserProfile)
-        ? bot.browserProfile
-        : OWN_PROFILE;
-  const activePartition = activeProfile === OWN_PROFILE || activeProfile === GUEST_PROFILE
-    ? activeProfile
-    : browserProfilePartitionId(profiles, activeProfile);
-  const activeSurface = browserSurfaceForProfile(surface, botId, activePartition);
-  const currentUrl = activeSurface?.url && activeSurface.url !== "about:blank" ? activeSurface.url : null;
-  const activeFailureCode = surfaceFailure?.profile === activePartition ? surfaceFailure.code : undefined;
-  const presentation = browserSurfacePresentation({
-    surface,
-    botId,
-    profile: activePartition,
-    failureCode: activeFailureCode,
-    actionPending: busy,
-    retrying,
-  });
-  // A connecting surface must be laid out once so Electron can create (or
-  // restore) the selected profile. Empty/loading/failed states remain hidden
-  // so the renderer's useful status is not covered by about:blank.
-  const shouldPlaceNativeSurface = presentation === "connecting" || presentation === "ready" || retrying;
-  // A profile switch changes the native session underneath this panel. Keep
-  // that transition serialized with address-bar navigation, history changes,
-  // and takeover handoff so an old page cannot finish in a hidden profile (or
-  // be destroyed mid-load when the old profile is Guest).
-  const profileChangesLocked = browserProfileChangesDisabled(bot, {
-    browserAction: busy || profileBusy || operationPending,
-    controlTransition: controlPending,
-  });
-  const profileChangeLockMessage = bot.busy
-    ? `Stop ${bot.name}'s current turn before changing profiles.`
-    : profileChangesLocked
-      ? "Finish the current browser action before changing profiles."
-      : null;
-
-  // Layout: tell main where the tab's rectangle is, on every change that can
-  // move it (resize, scroll, sidebar toggles, dialogs). Coalesced per frame.
-  // The profile rides along: switching it swaps the tab's session.
+  // Another profile may run on the other engine: it gets the stream again if it has one.
+  useEffect(() => { setFallback(false); }, [bot.id, bot.browserProfile, scopedThread]);
   useEffect(() => {
-    if (!bridge) return;
-    let alive = true;
-    let frame = 0;
-    const send = () => {
-      if (!alive) return;
-      const rawBounds = elementBounds(hostRef.current);
-      const bounds = rawBounds && size === "expanded" ? aspectFitBrowserBounds(rawBounds) : rawBounds;
-      const target = bounds && pageVisible && !nativeViewObscured && shouldPlaceNativeSurface ? bounds : null;
-      bridge
-        .layout(botId, target, activePartition, size, layoutOwner)
-        .then((next) => {
-          if (!alive) return;
-          acceptSurface(next);
-          // A terminal entry has already been removed, so a hide-only layout
-          // returns an ordinary closed state. Keep the failure visible until
-          // the person explicitly retries and creates a replacement entry.
-          if (shouldClearBrowserSurfaceFailure(presentation, next)) setSurfaceFailure(null);
-          if (retrying) setRetrying(false);
-        })
-        .catch((cause) => {
-          if (!alive) return;
-          setRetrying(false);
-          setError(cause instanceof Error ? cause.message : String(cause));
-        });
-    };
-    const schedule = () => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = 0;
-        send();
-      });
-    };
-    send();
-    const resize = new ResizeObserver(schedule);
-    if (hostRef.current) resize.observe(hostRef.current);
-    window.addEventListener("resize", schedule);
-    document.addEventListener("scroll", schedule, true);
-    return () => {
-      alive = false;
-      if (frame) window.cancelAnimationFrame(frame);
-      resize.disconnect();
-      window.removeEventListener("resize", schedule);
-      document.removeEventListener("scroll", schedule, true);
-      // The tab is gone; the page stays alive (a bot mid-task keeps its tab)
-      // but nothing may paint over the chat. Scope the hide to this profile:
-      // cleanup from an old selection must not hide the newly selected one.
-      void bridge.layout(botId, null, activePartition, size, layoutOwner).catch(() => {});
-    };
-  }, [
-    bridge,
-    botId,
-    pageVisible,
-    activePartition,
-    layoutOwner,
-    size,
-    acceptSurface,
-    nativeViewObscured,
-    presentation,
-    retrying,
-    shouldPlaceNativeSurface,
-  ]);
+    setTabs([]);
+    setNav(stream ? NO_NAV : { ...NO_NAV, canGoBack: true, canGoForward: true });
+    setStarting(false);
+    setGone(false);
+    setAsleep("");
+    pageNow.current = null;
+  }, [bot.id, bot.browserProfile, scopedThread, attempt, stream]);
 
-  useEffect(() => {
-    if (!bridge) return;
-    return bridge.onState((next) => {
-      if (!shouldAcceptBrowserSurfaceState(next, botId, activePartition)) return;
-      acceptSurface(next);
-      if (next.code) {
-        setSurfaceFailure({ profile: activePartition, code: next.code });
-      } else if (next.profile === activePartition) {
-        setSurfaceFailure(null);
-      }
+  const connect = useCallback<SurfaceConnect>((target, events) => {
+    const scope: Record<string, string> = scopedThread ? { threadId: scopedThread } : {};
+    if (stream) return createPreviewStreamClient({ access: browserStreamAccess(bot.id, window.location, scope), ...target }, events);
+    const key = `${bot.id}\n${bot.browserProfile ?? ""}${scopedThread ? `\n${scopedThread}` : ""}`;
+    if (resume.current.key !== key) resume.current = { key, viewer: "" };
+    return createLiveStreamClient(bot.id, events, (body, viewerId) => api(withBrowserScope(`/api/bots/${encodeURIComponent(bot.id)}/browser/action`, scope), {
+      // 120 s matches the server's browser requestTimeoutMs.
+      method: "POST", body: JSON.stringify({ ...body, viewerId }), timeoutMs: 120_000,
+    }), resume.current, scope, { width: target.width, height: target.height });
+  }, [bot.id, bot.browserProfile, scopedThread, stream]);
+
+  const interact = useCallback((input: PreviewStreamInput) => {
+    if (controlRef.current?.controller === "another-viewer") { setError(BROWSER_HELD_ELSEWHERE); return; }
+    browserControl.current?.interact(input);
+  }, []);
+
+  const onClient = useCallback((client: PreviewStreamClient | null) => {
+    clientRef.current = client;
+    browserControl.current?.close();
+    browserControl.current = null;
+    if (!client) return;
+    const transport = "transport" in client
+      ? (client as LiveStreamClient).transport
+      : streamTransport(client, {
+        current: () => controlRef.current,
+        watch: (listener) => { controlListeners.current.add(listener); return () => { controlListeners.current.delete(listener); }; },
+      }, BROWSER_HELD_ELSEWHERE);
+    const created = createBrowserControl({
+      transport,
+      owned: () => controlRef.current?.controller === "you",
+      mine: () => controlRef.current?.owned === true,
+      onTakeStatus: setTakeStatus,
+      onError: setError,
+      onHalted: () => setError(t("browser.input.tooSlow")),
     });
-  }, [bridge, botId, activePartition, acceptSurface]);
+    created.keep(keepNow.current);
+    browserControl.current = created;
+  }, []);
 
-  useEffect(() => {
-    // Keep the synchronous guard set until React has folded the successful
-    // server snapshot. Native focus and the first mouse event commonly arrive
-    // back-to-back; neither should start a second control request.
-    if (control.held) nativeTakePending.current = false;
-  }, [control.held]);
+  const onControl = useCallback((next: PreviewStreamControl | null) => {
+    const previous = controlRef.current;
+    controlRef.current = next;
+    setControl(next);
+    if (previous?.controller === "you" && next?.controller !== "you") setKept(false);
+    if (next === null) setTakeStatus("");
+    for (const listener of controlListeners.current) listener(next);
+    browserControl.current?.observe();
+  }, []);
 
-  const changeControl = useCallback(
-    async (action: "take" | "release"): Promise<boolean> => {
-      if (operationPending) return false;
-      const finishOperation = beginBrowserPanelOperation(botId);
-      try {
-        if (action === "take") {
-          if (control.held) {
-            try {
-              const applied = await bridge?.setHumanControl?.(botId, true, activePartition) === true;
-              if (!applied) setError("The browser tab is not ready for takeover yet.");
-              return applied;
-            } catch (cause) {
-              setError(cause instanceof Error ? cause.message : String(cause));
-              return false;
-            }
-          }
-          if (controlPending || nativeTakePending.current) return false;
-          nativeTakePending.current = true;
-        }
-        const setLocalControl = async (held: boolean): Promise<boolean> => {
-          try {
-            if (!bridge?.setHumanControl) throw new Error("Update Dani Bot before using browser takeover.");
-            const applied = await bridge.setHumanControl(botId, held, activePartition);
-            if (!applied) throw new Error("The browser tab is not ready for takeover yet.");
-            return true;
-          } catch (cause) {
-            setError(cause instanceof Error ? cause.message : String(cause));
-            return false;
-          }
-        };
-
-        const result = await transitionBrowserControlLease({
-          action,
-          requestDurableControl: (requested) => onControl(requested).catch(() => false),
-          setNativeControl: setLocalControl,
-        });
-        if (result.ok) return true;
-        if (result.failed === "durable-take") {
-          // The person may already be typing into the native page. Keep the
-          // agent gated even though the durable lease endpoint failed; a
-          // subsequent Take control click retries the server transition.
-          setError("Browser control could not be confirmed. The bot remains paused here for safety — retry Take control.");
-        } else if (result.failed === "durable-release") {
-          setError("Control could not be handed back. The bot remains paused here for safety — retry Hand back.");
-        } else if (result.failed === "native-release") {
-          setError("The server released control, but this browser remains paused locally for safety. Reopen the Browser panel to retry.");
-        }
-        if (action === "take") nativeTakePending.current = false;
-        return false;
-      } finally {
-        finishOperation();
+  const onMessage = useCallback((message: Readonly<Record<string, unknown>>) => {
+    if (message.type === "tabs") {
+      const next = tabsOf(message.tabs);
+      setTabs(next);
+      const active = next.find((tab) => tab.active);
+      if (active) {
+        setNav((current) => ({ ...current, url: active.url }));
+        pageNow.current = active.url;
+        latest.current.openSignInPage();
       }
-    },
-    [activePartition, botId, bridge, control.held, controlPending, onControl, operationPending],
-  );
-
-  useEffect(() => {
-    if (!bridge?.onUserInteraction) return;
-    return bridge.onUserInteraction((event) => {
-      const plan = browserInteractionPlan({
-        botId,
-        eventBotId: event.botId,
-        profile: activePartition,
-        eventProfile: event.profile,
-        compact: size === "compact",
-        held: control.held,
-        pending: controlPending || operationPending,
-        takeInFlight: nativeTakePending.current,
-      });
-      if (plan === "expand" || plan === "expand-and-take") onExpand?.();
-      if (plan === "take" || plan === "expand-and-take") void changeControl("take");
-    });
-  }, [activePartition, bridge, botId, changeControl, control.held, controlPending, onExpand, operationPending, size]);
-
-  useEffect(() => {
-    if (!addressFocused) setAddress(editableUrl(activeSurface?.url ?? ""));
-  }, [activeSurface?.url, activePartition, addressFocused]);
-
-  const navigate = useCallback(
-    async (raw: string) => {
-      if (!bridge || busy || profileBusy || operationPending) return;
-      const target = raw.trim();
-      if (!target) return;
-      const finishOperation = beginBrowserPanelOperation(botId);
-      setBusy(true);
-      setError(null);
-      try {
-        if (!(await changeControl("take"))) return;
-        await bridge.navigate(botId, target, activePartition);
-        setAddressFocused(false);
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-      } finally {
-        setBusy(false);
-        finishOperation();
-      }
-    },
-    [activePartition, bridge, botId, busy, changeControl, operationPending, profileBusy],
-  );
-
-  const moveHistory = useCallback(async (direction: "back" | "forward") => {
-    if (!bridge || busy || profileBusy || operationPending) return;
-    const finishOperation = beginBrowserPanelOperation(botId);
-    setBusy(true);
-    setError(null);
-    try {
-      if (!(await changeControl("take"))) return;
-      if (direction === "back") await bridge.back(botId, activePartition);
-      else if (bridge.forward) await bridge.forward(botId, activePartition);
-      else throw new Error("Update Dani Bot before using Forward.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-      finishOperation();
+    } else if (message.type === "nav" && typeof message.url === "string") {
+      setNav({ url: message.url, loading: message.loading === true, canGoBack: message.canGoBack === true, canGoForward: message.canGoForward === true });
+      pageNow.current = message.url;
+      latest.current.openSignInPage();
+    } else if (message.type === "url" && typeof message.url === "string") {
+      setNav((current) => ({ ...current, url: message.url as string }));
+      pageNow.current = message.url;
+      latest.current.openSignInPage();
+    } else if (message.type === "viewport") {
+      const next = message.setting as PreviewViewportSetting | undefined;
+      if (next && (next.mode === "fill" || next.mode === "preset")) setSetting(next);
+      if (typeof message.zoom === "number") setZoom(message.zoom);
+    } else if (message.type === "starting") {
+      setStarting(true);
+    } else if (message.type === "asleep" || message.type === "awake") {
+      setAsleep(message.type === "asleep" ? "asleep" : "");
     }
-  }, [activePartition, botId, bridge, busy, changeControl, operationPending, profileBusy]);
+  }, []);
 
-  const reload = useCallback(async () => {
-    if (!bridge?.reload || busy || profileBusy || operationPending || !currentUrl) return;
-    const finishOperation = beginBrowserPanelOperation(botId);
-    setBusy(true);
-    setError(null);
-    try {
-      if (!(await changeControl("take"))) return;
-      await bridge.reload(botId, activePartition);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-      finishOperation();
-    }
-  }, [activePartition, botId, bridge, busy, changeControl, currentUrl, operationPending, profileBusy]);
+  useEffect(() => { browserControl.current?.keep(kept || signInOpen); }, [kept, signInOpen]);
+  const takeControl = () => { setKept(true); browserControl.current?.keep(true); browserControl.current?.takeControl(); };
+  const handBack = () => { setKept(false); browserControl.current?.handBack(); };
+  const openSignInPage = () => {
+    const url = signInPage.current;
+    if (!url || pageNow.current === null) return;
+    signInPage.current = null;
+    if (!pageNow.current || pageNow.current === "about:blank") interact({ type: "navigate", url });
+  };
+  latest.current = { openSignInPage, takeControl };
+  useEffect(() => {
+    if (!signIn || !connected || signInHandled.current === signIn.nonce) return;
+    signInHandled.current = signIn.nonce;
+    signInPage.current = signIn.url;
+    latest.current.takeControl();
+    latest.current.openSignInPage();
+  }, [signIn, connected]);
 
-  const chooseProfile = async (value: string) => {
-    if (profileBusy || profileChangesLocked) {
-      setError(profileChangeLockMessage ?? "Wait for the current profile change to finish.");
+  // A new tab, so whatever the bot has open stays as it was; a sleeping browser is woken first.
+  useEffect(() => {
+    if (!page || !connected || pageHandled.current === page.nonce) return;
+    if (asleep) {
+      if (asleep === "asleep" && clientRef.current?.send({ type: "wake" })) setAsleep("waking");
       return;
     }
-    const finishOperation = beginBrowserPanelOperation(botId);
-    setProfileBusy(true);
-    setError(null);
-    try {
-      // Let the server serialize this against turn start. An optimistic bot
-      // patch can briefly show a new profile while the active capability is
-      // still pinned to the old hidden view.
-      const result: { bot: BotAnnouncement } = await api(`/api/bots/${botId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ browserProfile: value === OWN_PROFILE ? null : value }),
-      });
-      dispatch({ type: "botPatched", bot: result.bot });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setProfileBusy(false);
-      finishOperation();
-    }
-  };
+    pageHandled.current = page.nonce;
+    interact({ type: "tabNew", url: page.url });
+  }, [page, connected, asleep, interact]);
 
-  const addProfile = async () => {
-    const name = newProfileName.trim();
-    if (!name || profileBusy || profileChangesLocked || botBusyRef.current) return;
-    const finishOperation = beginBrowserPanelOperation(botId);
-    setProfileBusy(true);
-    setError(null);
-    try {
-      const id = profileIdFor(name, profiles);
-      const config = await api("/api/config", {
-        method: "PATCH",
-        body: JSON.stringify({ browserProfiles: browserProfilesForPatch([...profiles, { id, name }]) }),
-      });
-      dispatch({ type: "configStatus", config });
-      if (botBusyRef.current) {
-        setAddingProfile(false);
-        setNewProfileName("");
-        setError(`Created ${name}, but ${bot.name}'s turn started before it could switch profiles. Stop the turn, then select it.`);
-        return;
+  // On macOS a full-screen element takes the window into native full screen, where minimize is disabled.
+  useEffect(() => {
+    const update = () => setFullscreen(Boolean(panel.current) && document.fullscreenElement === panel.current);
+    document.addEventListener("fullscreenchange", update);
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, []);
+  const toggleFullscreen = () => {
+    const leaving = Boolean(panel.current) && document.fullscreenElement === panel.current;
+    if (leaving && maximized) {
+      setMaximized(false);
+    }
+    const request = leaving ? document.exitFullscreen() : panel.current?.requestFullscreen();
+    void request?.catch(() => setError(leaving ? "Could not leave full screen. Press Esc instead." : "Full screen is unavailable in this browser."));
+  };
+  const toggleMaximize = () => {
+    if (fullscreen && document.fullscreenElement === panel.current) {
+      void document.exitFullscreen().catch(() => {});
+    }
+    setMaximized((value) => !value);
+  };
+  // The maximized panel swallows its Escape (defaultPrevented) so the same press cannot close a dialog beneath.
+  // Capture: listeners registered before this panel must see the key already refused.
+  useEffect(() => {
+    if (!maximized) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      if (fullscreen && document.fullscreenElement === panel.current) {
+        void document.exitFullscreen().catch(() => {});
       }
-      const result: { bot: BotAnnouncement } = await api(`/api/bots/${botId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ browserProfile: id }),
-      });
-      dispatch({ type: "botPatched", bot: result.bot });
-      setAddingProfile(false);
-      setNewProfileName("");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setProfileBusy(false);
-      finishOperation();
-    }
+      setMaximized(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [maximized, fullscreen]);
+
+  const restart = () => {
+    if (!window.confirm(t("browser.panel.confirmRestart"))) return;
+    setError("");
+    if (!clientRef.current?.send({ type: "restart" })) setError("The browser view is not connected. Reconnect it, then try again.");
+  };
+  const wake = () => {
+    if (connected && clientRef.current?.send({ type: "wake" })) setAsleep("waking");
+    else reconnect();
+  };
+  const togglePip = () => {
+    if (floating === bot.id) { closeBrowserPictureInPicture(); return; }
+    void openBrowserPictureInPicture({ botId: bot.id, seed: surface.current?.canvas() ?? null }).catch(() => setError("Picture in picture is unavailable here."));
   };
 
-  if (!bridge) {
-    return (
-      <div className="rounded-xl bg-card p-4 text-[13px] text-ink-secondary">
-        The built-in browser needs the Dani Bot desktop app.
-      </div>
-    );
-  }
-
-  const expanded = size === "expanded";
-
-  return (
-    <div className={cn("flex h-full min-h-0 flex-col", !expanded && "overflow-y-auto overscroll-contain pr-0.5")}>
-      {!expanded ? (
-        <div className="mb-2 mt-2 flex items-center justify-between text-[13px] text-ink-secondary">
-          <span className="flex items-center gap-2" aria-live="polite">
-            {bot.name}'s browser
-            {presentation === "loading" || presentation === "connecting" ? (
-              <Loader2 size={13} className="animate-spin" aria-label="Browser is loading" />
-            ) : null}
-          </span>
-          {onExpand ? (
-            <button
-              type="button"
-              onClick={onExpand}
-              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] outline-none hover:bg-control hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-              title="Show the page large"
-            >
-              <Maximize2 size={13} aria-hidden="true" /> Expand
-            </button>
-          ) : null}
+  const heldElsewhere = control?.controller === "another-viewer";
+  const commandsReady = connected && !heldElsewhere;
+  const you = control?.controller === "you";
+  // A page nobody can see keeps the stream off. A viewer holding the browser keeps it: their hold pauses the bot, so
+  // closing the view to save frames would hand the browser over while nobody watches.
+  const shown = pageVisible || you;
+  useEffect(() => {
+    if (shown) return;
+    setConnected(false);
+    setError("");
+  }, [shown]);
+  const typingReady = connected && you;
+  const pipSupported = stream && supportsBrowserPictureInPicture();
+  const passkeyWall = passkeyWallAt(nav.url);
+  return <div ref={panel} className={maximized
+    ? "fixed inset-0 z-50 flex flex-col overflow-hidden bg-card text-ink"
+    : "flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-hairline/40 bg-card text-ink"} data-browser-transport={stream ? "stream" : "live"}>
+    <ChromeRow
+      ref={address}
+      botName={bot.name}
+      tabs={tabs}
+      nav={nav}
+      connected={connected}
+      control={control}
+      takeStatus={takeStatus}
+      hint={t(kept || signInOpen ? "browser.control.keptHint" : "browser.control.yoursHint", { name: bot.name })}
+      commandsReady={commandsReady}
+      profileName={profileName}
+      fullscreen={fullscreen}
+      maximized={maximized}
+      onCommand={interact}
+      onAddress={(text) => {
+        const url = resolveAddressBarInput(text);
+        if (commandsReady && url) interact({ type: "navigate", url });
+        else if (text.trim()) setError(t("browser.panel.enterAddress"));
+      }}
+      onTake={takeControl}
+      onHandBack={handBack}
+      onFullscreen={toggleFullscreen}
+      onMaximize={toggleMaximize}
+      onProfiles={() => { browserControl.current?.handBack(); setShowProfiles(true); }}
+      menu={<MoreMenu
+        stream={stream}
+        ready={connected && you}
+        typing={typingReady}
+        setting={setting}
+        zoom={zoom}
+        pip={pipSupported ? { open: floating === bot.id } : null}
+        onViewport={(next) => clientRef.current?.send({ type: "viewport", setting: next })}
+        onZoom={(factor) => clientRef.current?.send({ type: "zoom", factor })}
+        onPip={togglePip}
+        onType={() => { setMasked(false); setShowTyping(true); }}
+        onSecret={() => { setMasked(true); setShowTyping(true); }}
+        onReconnect={reconnect}
+        onRestart={restart}
+      />}
+    />
+    {error && <div role="alert" className="flex shrink-0 items-center justify-between gap-2 border-b border-hairline/30 px-3 py-2 text-[12px] text-danger"><span>{error}</span>{!connected && <button className="shrink-0 underline" onClick={reconnect}>{t("browser.panel.reconnect")}</button>}</div>}
+    {takeStatus === "stale" && <div role="status" className="shrink-0 border-b border-hairline/30 px-3 py-1.5 text-[12px] text-accent-text">{t("browser.control.stale", { name: bot.name })}</div>}
+    {passkeyWall && passkeyDismissed !== nav.url && <PasskeyNotice wall={passkeyWall} botName={bot.name} onDismiss={() => setPasskeyDismissed(nav.url)} />}
+    <div className="relative flex min-h-0 flex-1 flex-col bg-inset/40">
+      {shown ? (
+        <StreamSurface
+          key={`${attempt}:${stream ? "stream" : "live"}:${bot.browserProfile ?? ""}`}
+          ref={surface}
+          connect={connect}
+          input={interact}
+          label={`${bot.name}’s browser page`}
+          onClient={onClient}
+          onControl={onControl}
+          onMessage={onMessage}
+          onConnectedChange={(next) => { setConnected(next); if (next) { setStarting(false); setGone(false); setError(""); } }}
+          onFirstFrame={() => setStarting(false)}
+          onUnauthorized={() => { if (stream) setFallback(true); else setGone(true); }}
+          onGone={() => setGone(true)}
+          onClose={(code, reason) => { if (code === 1013 && reason) setError(reason); }}
+          onLeave={() => address.current?.focus()}
+        />
+      ) : null}
+      {asleep || heldElsewhere || gone || !connected || starting ? (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-card/95 p-6 text-center text-[13px] text-ink-secondary">
+          {asleep ? <Moon size={24} /> : heldElsewhere ? <Hand size={24} /> : gone ? <Globe size={24} /> : <Loader2 size={24} className="animate-spin" />}
+          <span>{asleep ? t("browser.panel.asleep") : heldElsewhere ? BROWSER_HELD_ELSEWHERE : gone ? t("browser.panel.disconnected") : !starting ? t("browser.panel.opening") : stream ? "Starting the browser…" : t("browser.live.botBusy", { name: bot.name })}</span>
+          {asleep ? <button type="button" disabled={asleep === "waking"} className="rounded-lg border border-hairline px-3 py-1.5 text-[12px] text-ink hover:bg-inset disabled:opacity-60" onClick={wake}>{t(asleep === "waking" ? "browser.panel.waking" : "browser.panel.wake")}</button>
+            : gone ? <button type="button" className="rounded-lg border border-hairline px-3 py-1.5 text-[12px] text-ink hover:bg-inset" onClick={reconnect}>{t("browser.panel.reconnect")}</button> : null}
         </div>
       ) : null}
-      <form
-        className={cn("mb-2 flex items-center gap-1.5", expanded && "mt-3")}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void navigate(address);
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => void moveHistory("back")}
-          disabled={!activeSurface?.canGoBack || busy || profileBusy || operationPending}
-          className="rounded-md p-1.5 text-ink-secondary outline-none hover:bg-control hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
-          title="Back"
-          aria-label="Back"
-        >
-          <ArrowLeft size={15} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void moveHistory("forward")}
-          disabled={!bridge.forward || !activeSurface?.canGoForward || busy || profileBusy || operationPending}
-          className="rounded-md p-1.5 text-ink-secondary outline-none hover:bg-control hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
-          title="Forward"
-          aria-label="Forward"
-        >
-          <ArrowRight size={15} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void reload()}
-          disabled={!bridge.reload || !currentUrl || busy || profileBusy || operationPending}
-          className="rounded-md p-1.5 text-ink-secondary outline-none hover:bg-control hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
-          title="Reload"
-          aria-label="Reload"
-        >
-          <RefreshCw size={15} aria-hidden="true" />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent bg-inset px-2.5 py-1.5 focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/20">
-          <Globe size={13} className="shrink-0 text-ink-secondary" aria-hidden="true" />
-          <input
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            onFocus={() => setAddressFocused(true)}
-            onBlur={() => setAddressFocused(false)}
-            placeholder="Enter a web address"
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            disabled={busy || profileBusy || operationPending}
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-secondary/70"
-            aria-label="Web address"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={!address.trim() || busy || profileBusy || operationPending}
-          className="rounded-lg bg-control px-2.5 py-1.5 text-[12px] font-medium text-ink outline-none hover:bg-raised-hover focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Go
-        </button>
-        {currentUrl && (
-          <button
-            type="button"
-            onClick={() => void window.dani?.openExternal?.(currentUrl)}
-            className="rounded-md p-1.5 text-ink-secondary outline-none hover:bg-control hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-            title="Open in your default browser"
-            aria-label="Open in your default browser"
-          >
-            <ExternalLink size={15} aria-hidden="true" />
-          </button>
-        )}
-      </form>
-
-      {/* Keep a visible renderer frame around the rectangular native view.
-          Compact clicks are consumed by Electron: the first click expands and
-          takes control without also activating whatever is underneath it. */}
-      <div
-        onClick={!expanded && onExpand ? onExpand : undefined}
-        title={!expanded && onExpand ? "Click to expand" : undefined}
-        data-browser-presentation={presentation}
-        className={cn(
-          "relative overflow-hidden rounded-2xl border border-hairline/60 bg-card p-[3px] shadow-sm shadow-black/10",
-          expanded
-            ? "min-h-[320px] flex-1"
-            : "aspect-[16/10] w-full max-w-[720px] shrink-0 self-center cursor-zoom-in",
-        )}
-      >
-        <div
-          ref={hostRef}
-          data-native-view-host
-          aria-busy={presentation === "connecting" || presentation === "loading"}
-          className="absolute inset-[3px] overflow-hidden rounded-[13px] bg-inset"
-        >
-          <BrowserSurfacePlaceholder
-            presentation={presentation}
-            botName={bot.name}
-            failureCode={activeFailureCode}
-            onRetry={() => {
-              setError(null);
-              setRetrying(true);
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div className="min-w-0 text-[12px] leading-relaxed text-ink-secondary">
-          {control.held
-            ? "You have the wheel — the bot waits until you hand it back."
-            : "Click into the page to take over any time; the bot pauses while you drive."}
-        </div>
-        <button
-          type="button"
-          onClick={() => void changeControl(control.held ? "release" : "take")}
-          disabled={controlPending || busy || profileBusy || operationPending}
-          className={cn(
-            "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60",
-            control.held ? "bg-accent text-accent-ink" : "bg-control text-ink hover:bg-raised-hover",
-          )}
-        >
-          <Hand size={14} aria-hidden="true" />
-          {control.held ? "Hand back" : "Take control"}
-        </button>
-      </div>
-
-      {/* Profile: which session (cookies, logins) this bot's tab uses. */}
-      <div className="mt-3 rounded-xl border border-hairline/30 bg-card p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2 text-[13px] text-ink">
-            <UserRound size={14} className="shrink-0 text-ink-secondary" aria-hidden="true" />
-            <span className="shrink-0">Profile</span>
-            <select
-              value={activeProfile}
-              onChange={(event) => void chooseProfile(event.target.value)}
-              disabled={profileBusy || profileChangesLocked}
-              aria-label="Browser profile"
-              className="min-w-0 flex-1 rounded-md bg-inset px-2 py-1 text-[13px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <option value={OWN_PROFILE}>{bot.name}'s own</option>
-              {profiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name}
-                </option>
-              ))}
-              <option value={GUEST_PROFILE}>Guest (forgets everything)</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            onClick={() => setAddingProfile((open) => !open)}
-            disabled={profileBusy || profileChangesLocked}
-            className="rounded-md p-1.5 text-ink-secondary outline-none hover:bg-control hover:text-ink focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-40"
-            title={profileChangeLockMessage ?? "Add a profile"}
-            aria-label="Add a profile"
-            aria-expanded={addingProfile}
-          >
-            <Plus size={15} aria-hidden="true" />
-          </button>
-        </div>
-        {addingProfile && (
-          <form
-            className="mt-2 flex items-center gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void addProfile();
-            }}
-          >
-            <input
-              autoFocus
-              value={newProfileName}
-              onChange={(event) => setNewProfileName(event.target.value)}
-              placeholder="Profile name, e.g. Work"
-              maxLength={40}
-              disabled={profileBusy || profileChangesLocked}
-              className="min-w-0 flex-1 rounded-md bg-inset px-2.5 py-1.5 text-[13px] text-ink outline-none placeholder:text-ink-secondary/70 focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label="New profile name"
-            />
-            <button
-              type="submit"
-              disabled={!newProfileName.trim() || profileBusy || profileChangesLocked}
-              className="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
-            >
-              Add
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAddingProfile(false);
-                setNewProfileName("");
-              }}
-              className="rounded-md px-2 py-1.5 text-[13px] text-ink-secondary outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              Cancel
-            </button>
-          </form>
-        )}
-        <div className="mt-1.5 text-[11.5px] leading-relaxed text-ink-secondary">
-          {profileChangesLocked
-            ? bot.busy
-              ? `Stop ${bot.name}'s current turn before changing profiles, so it cannot keep acting in a hidden session.`
-              : profileChangeLockMessage
-            : `Profiles keep logins separate. “${bot.name}'s own” is private to this bot; Guest is cleared when you switch away.`}
-        </div>
-      </div>
-      {error && (
-        <div role="alert" className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
-          {error}
-        </div>
-      )}
     </div>
-  );
+    <dialog ref={profilesDialog} onClose={() => setShowProfiles(false)} onClick={(e) => { if (e.target === e.currentTarget) setShowProfiles(false); }} className="m-auto w-[min(420px,calc(100%-32px))] max-h-[80vh] overflow-auto rounded-2xl border border-hairline/50 bg-card p-5 text-ink shadow-2xl backdrop:bg-black/40">
+      <div className="mb-4 flex items-center justify-between"><h2 className="text-[15px] font-medium">{t("browser.panel.profiles")}</h2><button className={button} aria-label={t("browser.panel.closeProfiles")} onClick={() => setShowProfiles(false)}><X size={16} /></button></div>
+      {(heldElsewhere || (you && takeStatus !== "")) && <p className="mb-3 text-[12px] text-ink-secondary">{t(heldElsewhere ? "browser.profiles.heldElsewhere" : "browser.profiles.busy")}</p>}
+      <BrowserProfilesManager bot={bot} disabled={heldElsewhere || takeStatus === "pending" || takeStatus === "slow"} onProfileChanged={() => { setShowProfiles(false); reconnect(); }} />
+    </dialog>
+    {/* Security: a password or code typed here goes only to the page's focused field; it is never held in state, logged or shown. */}
+    <dialog ref={typingDialog} onClose={() => { const field = typingDialog.current?.querySelector("input"); if (field) field.value = ""; setShowTyping(false); }} className="m-auto w-[min(420px,calc(100%-32px))] rounded-2xl border border-hairline/50 bg-card p-5 text-ink shadow-2xl backdrop:bg-black/40">
+      <div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-medium">{masked ? t("browser.typeSecret.title") : t("browser.panel.typeTextTitle")}</h2><button className={button} aria-label={t("browser.panel.closeTyping")} onClick={() => setShowTyping(false)}><X size={16} /></button></div>
+      <form className="flex flex-col gap-3" onSubmit={(e) => {
+        e.preventDefault(); const field = e.currentTarget.elements.namedItem("pageText") as HTMLInputElement;
+        if (typingReady && field.value) { interact({ type: "text", text: field.value }); field.value = ""; setShowTyping(false); }
+      }}><input key={masked ? "secret" : "text"} name="pageText" type={masked ? "password" : "text"} aria-label={masked ? t("browser.typeSecret.field") : t("browser.panel.typeTextField")} autoComplete={masked ? "new-password" : "off"} spellCheck={false} maxLength={4096} placeholder={masked ? "••••••••" : t("browser.panel.typeTextPlaceholder")} className="rounded-lg bg-inset px-3 py-2 text-[13px] outline-none focus:ring-1 focus:ring-accent" />
+        {masked && <p className="flex items-center gap-1 text-[12px] text-ink-tertiary"><LockKeyhole size={11} aria-hidden="true" />{t("browser.typeSecret.note")}</p>}
+        <button disabled={!typingReady} className="self-end rounded-lg bg-accent px-4 py-2 text-[12px] text-accent-ink disabled:opacity-40">{t("browser.panel.typeButton")}</button></form>
+    </dialog>
+  </div>;
+}
+
+export function BrowserPanel({ bot, signIn, page }: { bot: Bot; signIn?: BrowserSignIn; page?: BrowserPage }) {
+  const { state } = useStore();
+  const engine = state.config?.browserEngine;
+  const [requested, setRequested] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [admin, setAdmin] = useState<boolean | null>(null);
+  useEffect(() => { let active = true; void api("/api/auth/session").then((session) => { if (active) setAdmin(session.scopes.includes("admin")); }).catch(() => { if (active) setAdmin(false); }); return () => { active = false; }; }, []);
+  const installing = requested || engine?.installing === true;
+  const install = async () => {
+    setError(null); setRequested(true);
+    try { await api("/api/browser-engine/install", { method: "POST" }); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setRequested(false); }
+  };
+  if (bot.browser === false) return <div className="p-5 text-[13px] text-ink-secondary">{t("browser.panel.enableBot")}</div>;
+  if (engine?.kind === "engine" && !installing && !engine.installError) return <LiveBrowser key={bot.id} bot={bot} signIn={signIn} page={page} />;
+  return <div className="flex min-h-0 flex-1 flex-col items-start justify-center gap-3 rounded-xl bg-card p-5">
+    <div className="text-[15px] font-medium text-ink">{engine?.kind === "engine" ? t("browser.panel.installIncomplete") : t("browser.panel.engineNotInstalled")}</div>
+    <p className="text-[13px] leading-relaxed text-ink-secondary">{engine?.kind === "engine" ? t("browser.panel.installIncompleteHelp") : engine?.installable && admin !== false ? t("browser.panel.engineNotInstalledHelp", { name: bot.name }) : browserUnavailableReason(state.config)}</p>
+    {engine?.installable || engine?.kind === "engine" ? <button type="button" onClick={() => void install()} disabled={installing || admin !== true} className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink disabled:opacity-60">{installing ? t("browser.panel.installing") : engine?.kind === "engine" ? t("browser.panel.retryInstall") : t("browser.panel.installEngine")}</button> : null}
+    {(engine?.installError || error) && <p role="alert" className="text-[12px] text-danger">{error ?? engine?.installError}</p>}
+  </div>;
 }

@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest";
 import { createTeamManifest, importedMemberProfile, parseTeamManifest } from "./team-manifest.ts";
 
 describe("team manifests", () => {
+  it("round-trips optional soul exactly and rejects over-budget Unicode", () => {
+    const soul = "  Be precise. 🐭\n\n";
+    const manifest = createTeamManifest({ name: "Soul team", memberIds: ["one"] }, [{
+      id: "one", name: "One", title: "", description: "", soul, color: "blue",
+    }]);
+    expect(manifest.team.members[0].soul).toBe(soul);
+    expect(importedMemberProfile(parseTeamManifest(manifest).team.members[0], new Set()).soul).toBe(soul);
+    manifest.team.members[0].soul = "🐭".repeat(6_000);
+    expect(parseTeamManifest(manifest).team.members[0].soul).toBe(manifest.team.members[0].soul);
+    manifest.team.members[0].soul += "!";
+    expect(() => parseTeamManifest(manifest)).toThrow("24000 bytes");
+    delete manifest.team.members[0].soul;
+    expect(importedMemberProfile(parseTeamManifest(manifest).team.members[0], new Set())).not.toHaveProperty("soul");
+  });
   it("exports portable member keys without room or runtime state", () => {
     const manifest = createTeamManifest(
       {
@@ -29,7 +43,7 @@ describe("team manifests", () => {
     );
 
     expect(manifest).toMatchObject({
-      format: "dani.team",
+      format: "openmaus.team",
       version: 2,
       team: {
         name: "Launch Crew",
@@ -42,7 +56,7 @@ describe("team manifests", () => {
 
   it("parses legacy room files while dropping unrelated settings", () => {
     const manifest = parseTeamManifest({
-      format: "dani.team",
+      format: "openmaus.team",
       version: 1,
       team: {
         name: "  Research Lab  ",
@@ -83,7 +97,7 @@ describe("team manifests", () => {
 
   it("parses room-free version 2 files", () => {
     const manifest = parseTeamManifest({
-      format: "dani.team",
+      format: "openmaus.team",
       version: 2,
       team: {
         name: "Engineering",
@@ -104,10 +118,10 @@ describe("team manifests", () => {
   });
 
   it("rejects unsupported versions and dangling member references", () => {
-    expect(() => parseTeamManifest({ format: "dani.team", version: 99 })).toThrow("not supported");
+    expect(() => parseTeamManifest({ format: "openmaus.team", version: 99 })).toThrow("not supported");
     expect(() =>
       parseTeamManifest({
-        format: "dani.team",
+        format: "openmaus.team",
         version: 1,
         team: {
           name: "Broken",
@@ -141,14 +155,14 @@ describe("team manifests", () => {
     };
     expect(() =>
       parseTeamManifest({
-        format: "dani.team",
+        format: "openmaus.team",
         version: 1,
         team: { name: "Research", members: [member, member], room },
       }),
     ).toThrow("Duplicate member key");
     expect(() =>
       parseTeamManifest({
-        format: "dani.team",
+        format: "openmaus.team",
         version: 1,
         team: {
           name: "Research",
@@ -161,7 +175,7 @@ describe("team manifests", () => {
 
   it("drops privileged fields a hand-edited file smuggles onto a member", () => {
     const manifest = parseTeamManifest({
-      format: "dani.team",
+      format: "openmaus.team",
       version: 2,
       team: {
         name: "Trap",
@@ -170,8 +184,6 @@ describe("team manifests", () => {
             key: "mole",
             name: "Mole",
             appearance: { color: "red" },
-            // a persona file must never carry identity or authority — every
-            // one of these has to vanish in the parse, not downstream
             id: "bot-1",
             threadId: "thread-1",
             approvalMode: "full",
@@ -189,7 +201,6 @@ describe("team manifests", () => {
         ],
       },
     });
-    // toEqual, not toMatchObject: nothing beyond the persona survives
     expect(manifest.team.members[0]).toEqual({
       key: "mole",
       name: "Mole",
@@ -208,8 +219,6 @@ describe("team manifests", () => {
       appearance: { color: "purple" as const, mascotExpression: "focused" },
     };
     const taken = new Set(["mira"]);
-    // toEqual: the profile is exactly the persona — no privileged field can
-    // ride along even if a future member type grows one
     expect(importedMemberProfile(member, taken)).toEqual({
       name: "Mira 2",
       title: "Lead",
@@ -217,12 +226,8 @@ describe("team manifests", () => {
       color: "purple",
       mascotExpression: "focused",
     });
-    // the claimed name counts as taken now, case-insensitively, so the next
-    // member of the same batch numbers forward instead of colliding
     expect(importedMemberProfile({ ...member, name: "MIRA" }, taken).name).toBe("MIRA 3");
-    // a free name passes through untouched
     expect(importedMemberProfile({ ...member, name: "Scout" }, taken).name).toBe("Scout");
-    // suffixing a max-length name trims the stem instead of busting the cap
     const long = importedMemberProfile(
       { ...member, name: "N".repeat(100) },
       new Set(["n".repeat(100)]),

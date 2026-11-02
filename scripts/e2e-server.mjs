@@ -1,16 +1,9 @@
-// End-to-end check of a running Dani Bot harness server — the exact
-// flows the app drives, over the same HTTP API. No deps; Node 22+.
+// End-to-end check of a running OpenMausBot harness server over the HTTP API
+// the app drives. No deps; Node 22+.
 //
-//   node scripts/e2e-server.mjs [--port 8799] [--with-box]
+//   node scripts/e2e-server.mjs [--port 8799] [--with-boat] [--keep-bots]
 //
-// Covered: server up + SSE hello, instance snapshots, a claude turn with a
-// streamed reply, the permission broker (allow AND deny), interrupt, a
-// codex turn, and — with --with-box + OMB_E2E_BOX_TOKEN — box provisioning,
-// a turn that runs ON the box (boxAgent), the computer MCP tools over the
-// claude driver, and a panel screenshot. Box computers are put to sleep at
-// the end. Test bots are deleted unless --keep-bots.
-//
-// Exits non-zero on the first hard failure; soft notes print as "skip".
+// --with-boat needs OMB_E2E_BOX_TOKEN. Exits non-zero on the first hard failure.
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
@@ -20,7 +13,7 @@ const opt = (n, d) => {
 };
 const PORT = Number(opt("--port", process.env.OMB_PORT ?? 8799));
 const BASE = `http://127.0.0.1:${PORT}`;
-const WITH_BOX = flag("--with-box");
+const WITH_BOAT = flag("--with-boat") || flag("--with-box");
 const KEEP_BOTS = flag("--keep-bots");
 const BOX_TOKEN = process.env.OMB_E2E_BOX_TOKEN ?? "";
 
@@ -43,7 +36,6 @@ async function api(path, init) {
   return body;
 }
 
-/** Poll fn until it returns truthy or the budget runs out. */
 async function until(what, fn, budgetMs, stepMs = 2000) {
   const t0 = Date.now();
   for (;;) {
@@ -67,9 +59,8 @@ async function waitTurnDone(botId, budgetMs) {
   );
 }
 
-/** Poll until a live permission/question card appears OR the turn settles
- * without one (the CLI's safe-command classifier auto-allows sometimes —
- * variance, not a broker failure; only a silent stall is a failure). */
+/** Or the turn settles without one: the CLI's safe-command classifier
+ * sometimes auto-allows. Only a silent stall is a failure. */
 async function waitAskOrSettle(botId, budgetMs) {
   const t0 = Date.now();
   for (;;) {
@@ -109,14 +100,12 @@ async function expectReply(bot, want, budgetMs) {
 }
 
 async function main() {
-  log(`e2e against ${BASE} (box: ${WITH_BOX ? "yes" : "no"})`);
+  log(`e2e against ${BASE} (box: ${WITH_BOAT ? "yes" : "no"})`);
 
-  // ── server up ──
   const { bots } = await api("/api/bots").catch((e) => fail(`server not up at ${BASE} — ${e.message}`));
   if (!Array.isArray(bots)) fail("/api/bots did not return a bots array");
   log("  ✓ server up,", bots.length, "bots");
 
-  // ── SSE hello ──
   const ctrl = new AbortController();
   const sse = await fetch(`${BASE}/api/events`, { signal: ctrl.signal });
   const reader = sse.body.getReader();
@@ -128,7 +117,6 @@ async function main() {
   if (!hello.includes('"hello"')) fail("SSE stream did not open with a hello frame");
   log("  ✓ SSE stream opens with hello");
 
-  // ── instances ──
   const { instances } = await api("/api/instances");
   const byKind = {};
   for (const i of instances) byKind[i.driverKind] = i;
@@ -136,15 +124,13 @@ async function main() {
 
   const created = [];
   try {
-    // ── claude: plain turn ──
     if (byKind.claudeAgent?.snapshot.state === "available") {
       const bot = await makeBot("E2E Claude", "claude", byKind.claudeAgent.models.default);
       created.push(bot.id);
       await expectReply(bot, marker("claude"), 180_000);
 
-      // permission broker: allow (curl usually trips the CLI's permission
-      // layer; its safe-command classifier occasionally auto-allows —
-      // soft-pass then, but a silent stall is a hard failure)
+      // curl usually trips the CLI's permission layer; its safe-command
+      // classifier occasionally auto-allows (soft-pass), a stall is a failure.
       await send(bot.id, `Run exactly one shell command: curl -sS https://example.com -o omb_${tag}_allow.html — then tell me the first word of the downloaded file.`);
       const allowTry = await waitAskOrSettle(bot.id, 180_000);
       if (allowTry.ask) {
@@ -163,8 +149,7 @@ async function main() {
         log("  note: CLI auto-allowed the command (classifier variance) — allow leg soft-passed");
       }
 
-      // permission broker: deny — a fresh bot, because an allow above is
-      // remembered by the resumed CLI session (no second ask otherwise)
+      // A fresh bot: the resumed CLI session remembers the allow above.
       const denyBot = await makeBot("E2E Claude Deny", "claude", byKind.claudeAgent.models.default);
       created.push(denyBot.id);
       await send(denyBot.id, `Run the shell command "curl -sS https://example.org -o omb_${tag}_deny.html" — nothing else.`);
@@ -180,7 +165,6 @@ async function main() {
         log("  note: no ask on the deny leg either (auto-allowed) — soft-passed");
       }
 
-      // interrupt
       await send(bot.id, "Count from 1 to 200, one number per message line, no commentary.");
       await sleep(6000);
       await api(`/api/bots/${bot.id}/interrupt`, { method: "POST" });
@@ -190,11 +174,9 @@ async function main() {
       log("  skip: claude CLI not available");
     }
 
-    // ── codex: plain turn ──
     if (byKind.codex?.snapshot.state === "available") {
-      // the catalog targets the newest CLI; older installs reject newer
-      // model ids ("requires a newer version of Codex") — walk the catalog
-      // until one answers
+      // Older Codex installs reject newer model ids ("requires a newer version
+      // of Codex"), so walk the catalog until one answers.
       let answered = false;
       for (const optn of byKind.codex.models.options) {
         const bot = await makeBot(`E2E Codex ${optn.id}`, "codex", optn.id);
@@ -215,60 +197,33 @@ async function main() {
       log("  skip: codex CLI not available");
     }
 
-    // ── box: cloud computer ──
-    if (WITH_BOX) {
-      if (!BOX_TOKEN) fail("--with-box needs OMB_E2E_BOX_TOKEN");
+    if (WITH_BOAT) {
+      if (!BOX_TOKEN) fail("--with-boat needs OMB_E2E_BOX_TOKEN");
       await api("/api/config", { method: "PUT", body: JSON.stringify({ box: { token: BOX_TOKEN } }) });
       const cfg = await api("/api/config");
       if (!cfg.box?.configured) fail("box token saved but /api/config still says unconfigured");
       log("  ✓ box token configured, providers hot-reloaded");
 
-      // a turn that runs ON the box (boxAgent) — provisions on first use.
-      // One bot, models walked via PATCH: each bot owns one persistent box,
-      // so re-provisioning per attempt would be wasteful. (On this account
-      // the substrate's claude-code auth is expired — codex answers.)
-      const boxBot = await makeBot("E2E Computer", "computer", byKind.boxAgent?.models.default ?? "sonnet");
-      created.push(boxBot.id);
-      let boxSaid = false;
-      for (const optn of byKind.boxAgent?.models.options ?? [{ id: "sonnet" }]) {
-        await api(`/api/bots/${boxBot.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ modelSelection: { instanceId: "computer", model: optn.id } }),
-        });
-        const want = marker("box");
-        await send(boxBot.id, `Say exactly: ${want} — then stop.`);
-        const settled = await waitTurnDone(boxBot.id, 600_000); // first provision can take minutes
-        if (settled.messages.some((m) => m.role === "bot" && m.kind === "text" && m.text?.includes(want))) {
-          log(`  ✓ box agent replied from its own computer on ${optn.id}`);
-          boxSaid = true;
-          break;
-        }
+      // The bot keeps its own engine and uses the boat as its cloud computer.
+      if (byKind.claudeAgent?.snapshot.state !== "available") fail("--with-boat needs the claude CLI");
+      const boatBot = await makeBot("E2E Cloud computer", "claude", byKind.claudeAgent.models.default);
+      created.push(boatBot.id);
+      await api(`/api/bots/${boatBot.id}`, { method: "PATCH", body: JSON.stringify({ computer: "cloud" }) });
+      const want = marker("box");
+      await send(boatBot.id, `Take one screenshot of your cloud computer, then say exactly: ${want}`);
+      const settled = await waitTurnDone(boatBot.id, 600_000); // first provision can take minutes
+      if (!settled.messages.some((m) => m.role === "bot" && m.kind === "text" && m.text?.includes(want))) {
         const last = [...settled.messages].reverse().find((m) => m.role === "bot" && m.kind === "text");
-        log(`  box model ${optn.id} settled without the marker (${(last?.text ?? "?").slice(0, 90)}) — trying next`);
+        fail(`cloud computer turn settled without the marker (${(last?.text ?? "?").slice(0, 90)})`);
       }
-      if (!boxSaid) fail("box agent answered on no catalog model");
+      log("  ✓ Claude worked on its cloud computer");
 
-      const shot = await api(`/api/bots/${boxBot.id}/computer/screenshot`, { method: "POST" });
+      const shot = await api(`/api/bots/${boatBot.id}/computer/screenshot`, { method: "POST" });
       if (!shot.png || shot.png.length < 10_000) fail("box screenshot came back empty");
       log(`  ✓ box screenshot (${Math.round(shot.png.length / 1024)} KB base64)`);
-      await api(`/api/bots/${boxBot.id}/computer/sleep`, { method: "POST" }).catch(() => {});
+      await api(`/api/bots/${boatBot.id}/computer/sleep`, { method: "POST" }).catch(() => {});
       log("  ✓ box asleep (billing paused)");
 
-      // computer tools through the claude driver (computer-proxy MCP)
-      if (byKind.claudeAgent?.snapshot.state === "available") {
-        const handy = await makeBot("E2E Claude+Box", "claude", byKind.claudeAgent.models.default);
-        created.push(handy.id);
-        await api(`/api/bots/${handy.id}/computer/provision`, { method: "POST" });
-        await send(
-          handy.id,
-          `Using your cloud computer's computer_exec tool, run: echo ${marker("box-tool")} — then tell me the output. Do not ask before acting.`,
-        );
-        const settled = await waitTurnDone(handy.id, 420_000);
-        const sawTool = settled.messages.some((m) => m.kind === "activity" && /computer|mcp/i.test(m.tool?.name ?? ""));
-        if (!sawTool) fail("claude turn never touched the computer tools");
-        log("  ✓ claude used the computer tools on its box");
-        await api(`/api/bots/${handy.id}/computer/sleep`, { method: "POST" }).catch(() => {});
-      }
     }
   } catch (e) {
     // keep the bots (and their native/event NDJSON logs) for postmortem

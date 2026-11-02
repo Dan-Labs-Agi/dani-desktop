@@ -1,7 +1,3 @@
-// Chips for what is attached to the next message, plus the window-wide
-// file drop that creates them. A long paste collapses into a card of its
-// first lines instead of flooding the composer; a file dropped anywhere
-// on the window attaches by path.
 import { useEffect, useRef, useState } from "react";
 import { ClipboardPaste, File as FileIcon, Image as ImageIcon, LoaderCircle, MessageSquareText, X } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -9,22 +5,25 @@ import {
   attachmentImageUrl,
   intakeFiles,
   formatSize,
+  imageSlotsLeft,
   pasteSummary,
   type Attachment,
   type PasteAttachment,
 } from "@/lib/composer-attachments";
 import { AttachmentPreviewDialog, previewImage, type PreviewImage } from "./AttachmentPreview";
+import { CitationBadge } from "./CitationUI";
+import type { CitationAttachment } from "@/lib/citations";
 
 /** Electron 32 removed File.path — only the preload can name a file. */
 export function pathForFile(file: File): string {
-  return window.dani?.getPathForFile?.(file) ?? "";
+  return window.ogb?.getPathForFile?.(file) ?? "";
 }
 
-/** Renders pending attachments and their composer actions. */
 export function ComposerAttachments({
   items,
   onAdd,
   onRemove,
+  onChangeCitation,
   onDisplayInChatBox,
   allowImages = true,
   notice,
@@ -35,6 +34,7 @@ export function ComposerAttachments({
   items: Attachment[];
   onAdd: (attachments: Attachment[]) => void;
   onRemove: (id: string) => void;
+  onChangeCitation: (citation: CitationAttachment) => void;
   onDisplayInChatBox: (attachment: PasteAttachment) => void;
   allowImages?: boolean;
   notice: string | null;
@@ -44,11 +44,12 @@ export function ComposerAttachments({
 }) {
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<PreviewImage | null>(null);
-  // dragenter/dragleave fire once per element crossed, so the overlay
-  // tracks depth rather than the last event it happened to see
+  // dragenter/dragleave fire once per element crossed, so the overlay tracks depth.
   const depth = useRef(0);
-  const callbacks = useRef({ onAdd, onNotice, onPendingChange, allowImages, uploadImage });
-  callbacks.current = { onAdd, onNotice, onPendingChange, allowImages, uploadImage };
+  // A drop past the images the message can still take is left out with a notice.
+  const imageSlots = imageSlotsLeft(items);
+  const callbacks = useRef({ onAdd, onNotice, onPendingChange, allowImages, imageSlots, uploadImage });
+  callbacks.current = { onAdd, onNotice, onPendingChange, allowImages, imageSlots, uploadImage };
   const pendingDrops = useRef(new Set<symbol>());
 
   useEffect(() => {
@@ -64,8 +65,7 @@ export function ComposerAttachments({
       depth.current = Math.max(0, depth.current - 1);
       if (depth.current === 0) setDragging(false);
     };
-    // without preventDefault the window navigates to the dropped file and
-    // the app is simply gone
+    // Without preventDefault the window navigates to the dropped file.
     const onOver = (e: DragEvent) => {
       if (carriesFiles(e)) e.preventDefault();
     };
@@ -75,8 +75,6 @@ export function ComposerAttachments({
       depth.current = 0;
       setDragging(false);
       const files = Array.from(e.dataTransfer?.files ?? []);
-      // Same intake the attach button uses: a dropped file and a picked one
-      // must not appear in a different order.
       const operation = Symbol("attachment-drop");
       pendingDrops.current.add(operation);
       callbacks.current.onPendingChange?.(true);
@@ -85,6 +83,7 @@ export function ComposerAttachments({
           allowImages: callbacks.current.allowImages,
           getPath: pathForFile,
           uploadImage: callbacks.current.uploadImage,
+          imageSlots: callbacks.current.imageSlots,
         });
         if (attachments.length) callbacks.current.onAdd(attachments);
         if (message) callbacks.current.onNotice(message);
@@ -131,7 +130,14 @@ export function ComposerAttachments({
       {items.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {items.map((a) =>
-            a.kind === "paste" ? (
+            a.kind === "citation" ? (
+              <CitationBadge
+                key={a.id}
+                citation={a}
+                onChange={onChangeCitation}
+                onRemove={() => onRemove(a.id)}
+              />
+            ) : a.kind === "paste" ? (
               <Chip
                 key={a.id}
                 label="PASTED"
@@ -139,16 +145,16 @@ export function ComposerAttachments({
                 onRemove={() => onRemove(a.id)}
               >
                 <div className="relative h-[76px] overflow-hidden">
-                  <pre className="whitespace-pre-wrap break-words font-mono text-[10.5px] leading-[1.45] text-ink-secondary">
+                  <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-[1.45] text-ink-secondary">
                     {a.text.slice(0, 400)}
                   </pre>
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-b from-transparent to-raised" />
                 </div>
-                <div className="mt-1 text-[10.5px] text-ink-secondary/70">{pasteSummary(a)}</div>
+                <div className="mt-1 text-[11px] text-ink-tertiary">{pasteSummary(a)}</div>
                 <button
                   type="button"
                   onClick={() => onDisplayInChatBox(a)}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-accent/25 bg-accent/5 px-2 py-1.5 text-[10.5px] font-medium text-accent-text transition-colors hover:border-accent/50 hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/60"
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-accent/25 bg-accent/5 px-2 py-1.5 text-[11px] font-medium text-accent-text transition-colors hover:border-accent/50 hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/60"
                   aria-label="Display pasted text in chat box"
                   title="Display in chat box"
                 >
@@ -183,7 +189,7 @@ export function ComposerAttachments({
                     </span>
                   )}
                 </button>
-                <div className="mt-1 truncate text-[10.5px] text-ink-secondary/70">
+                <div className="mt-1 truncate text-[11px] text-ink-tertiary">
                   {a.uploading ? "Uploading…" : formatSize(a.size)}
                 </div>
               </Chip>
@@ -193,7 +199,7 @@ export function ComposerAttachments({
                   <FileIcon size={16} className="shrink-0 text-ink-secondary" />
                   <div className="min-w-0">
                     <div className="truncate text-[12px] text-ink">{a.name}</div>
-                    <div className="text-[10.5px] text-ink-secondary/70">{formatSize(a.size)}</div>
+                    <div className="text-[11px] text-ink-tertiary">{formatSize(a.size)}</div>
                   </div>
                 </div>
               </Chip>
@@ -228,17 +234,16 @@ function Chip({
     >
       {children}
       <div className="mt-1 flex items-center gap-1">
-        <Icon size={11} className="text-ink-secondary/70" />
-        <span className="rounded border border-hairline/60 px-1 py-px text-[9.5px] font-medium tracking-wide text-ink-secondary">
+        <Icon size={11} className="text-ink-tertiary" />
+        <span className="rounded border border-hairline/60 px-1 py-px text-[10px] font-medium tracking-wide text-ink-secondary">
           {label}
         </span>
       </div>
-      {/* hover reveals it, but so must focus: `hidden` would take the only
-          way to drop a chip out of reach of the keyboard */}
+      {/* Not `hidden`: that would take the only way to remove a chip out of the keyboard's reach. */}
       <button
         onClick={onRemove}
         aria-label={`Remove ${label === "PASTED" ? "pasted text" : "file"}`}
-        className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-hairline/60 bg-panel text-ink-secondary opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+        className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border border-hairline/60 bg-panel text-ink-secondary opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
       >
         <X size={11} />
       </button>

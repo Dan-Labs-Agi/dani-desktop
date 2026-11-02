@@ -13,8 +13,6 @@ export function isPushToTalkPress(event: ModifierEvent): boolean {
   return modifier && event.altKey && event.ctrlKey && !event.repeat;
 }
 
-/** Hold Control + Option to replace automatic endpointing with a manually
- * finalized utterance. The ordinary call listener remains the default. */
 export function usePushToTalk(targetId: string, enabled: boolean, onError: () => void): boolean {
   const [active, setActive] = useState(false);
   const held = useRef(false);
@@ -30,7 +28,7 @@ export function usePushToTalk(targetId: string, enabled: boolean, onError: () =>
   }, [enabled]);
 
   useEffect(() => {
-    const bridge = window.dani;
+    const bridge = window.ogb;
     if (!bridge?.speechFinish) return;
 
     const finish = () => {

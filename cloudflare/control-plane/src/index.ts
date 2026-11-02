@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { accountSession, createAuth } from "./auth";
+import { accountSession, createAuth, deleteExpiredVerifications } from "./auth";
 import { readConfig, type ControlPlaneConfig } from "./config";
 import { errorResponse, HTTPError, json, preflight, secureResponse, withBoundedRequestBody } from "./http";
 import { limitedOTPResponse } from "./otp-rate-limit";
@@ -13,6 +13,16 @@ import {
   sweepManagedEndpointCleanup,
 } from "./endpoints";
 import {
+  claimHighLevelFlow,
+  HIGHLEVEL_CALLBACK_PATH,
+  highLevelCallback,
+  refreshHighLevelToken,
+  startHighLevelFlow,
+  sweepHighLevelFlows,
+} from "./highlevel";
+import { registerPushDevice, sendPush, unregisterPushDevice } from "./push";
+import { capacityHealth, reportEndpointAccountProblems, scanTunnelCapacity } from "./tunnel-capacity";
+import {
   createInstallation,
   installationSelf,
   listInstallations,
@@ -20,6 +30,7 @@ import {
   rotateInstallationCredential,
 } from "./installations";
 
+const SIGN_IN_OTP_PATH = "/api/auth/sign-in/email-otp";
 const ROTATE_ROUTE = /^\/v1\/installations\/([^/]+)\/credentials\/rotate$/;
 const INSTALLATION_ROUTE = /^\/v1\/installations\/([^/]+)$/;
 
@@ -52,7 +63,7 @@ async function canonicalAuthResponse(response: Response): Promise<Response> {
 
   // Better Auth error bodies are dependency-owned and may contain prose or
   // change shape between releases (its rate limiter currently returns only a
-  // `message`). Publish only Dani Bot's stable, lowercase error contract.
+  // `message`). Publish only OpenMausBot's stable, lowercase error contract.
   const payload: unknown = await response.json().catch(() => null);
   const parsed = betterAuthErrorSchema.safeParse(payload);
   const dependencyCode = parsed.success ? parsed.data.code : "";
@@ -67,6 +78,8 @@ async function route(
   config: ControlPlaneConfig,
   requestId: string,
   cloudflareFetch: CloudflareFetch,
+  apnsFetch: typeof fetch,
+  highLevelFetch: typeof fetch,
 ) {
   const url = new URL(request.url);
   if (request.method === "OPTIONS") return preflight(request, config);
@@ -74,7 +87,25 @@ async function route(
   if (url.pathname.startsWith("/api/auth/")) {
     const limited = await limitedOTPResponse(request, env);
     if (limited) return limited;
-    const response = await createAuth(env, ctx, config, requestId).handler(request);
+    const auth = createAuth(env, ctx, config, requestId);
+    const response = await auth.handler(request);
+    // Better Auth's inline expired-code cleanup is off, so sign-in sweeps after
+    // responding, except on 429 and 5xx; its per-IP sign-in limit bounds the
+    // other 4xx sweeps.
+    if (
+      request.method === "POST"
+      && url.pathname === SIGN_IN_OTP_PATH
+      && response.status !== 429
+      && response.status < 500
+    ) {
+      ctx.waitUntil(deleteExpiredVerifications(auth).catch(() => {
+        console.error(JSON.stringify({
+          message: "expired verification sweep failed",
+          requestId,
+          errorCode: "auth_internal",
+        }));
+      }));
+    }
     return canonicalAuthResponse(response);
   }
 
@@ -110,6 +141,31 @@ async function route(
     }
   }
 
+  if (request.method === "POST" && url.pathname === "/v1/installations/self/push/register") {
+    return registerPushDevice(request, env);
+  }
+  if (request.method === "POST" && url.pathname === "/v1/installations/self/push/unregister") {
+    return unregisterPushDevice(request, env);
+  }
+  if (request.method === "POST" && url.pathname === "/v1/installations/self/push/send") {
+    return sendPush(request, env, apnsFetch, requestId);
+  }
+
+  // The HighLevel relay carries no credential: the random state and the
+  // tokens themselves are the secrets, and every route is limited per address.
+  if (request.method === "POST" && url.pathname === "/v1/highlevel/start") {
+    return startHighLevelFlow(request, env);
+  }
+  if (request.method === "GET" && url.pathname === HIGHLEVEL_CALLBACK_PATH) {
+    return highLevelCallback(request, env, highLevelFetch, requestId);
+  }
+  if (request.method === "POST" && url.pathname === "/v1/highlevel/claim") {
+    return claimHighLevelFlow(request, env);
+  }
+  if (request.method === "POST" && url.pathname === "/v1/highlevel/refresh") {
+    return refreshHighLevelToken(request, env, highLevelFetch, requestId);
+  }
+
   const rotate = url.pathname.match(ROTATE_ROUTE);
   if (request.method === "POST" && rotate) {
     return rotateInstallationCredential(request, rotate[1], env, auth);
@@ -135,30 +191,47 @@ async function route(
   return errorResponse(404, "not_found");
 }
 
-export function createWorker(cloudflareFetch: CloudflareFetch = fetch) {
+export function createWorker(
+  cloudflareFetch: CloudflareFetch = fetch,
+  apnsFetch: typeof fetch = fetch,
+  highLevelFetch: typeof fetch = fetch,
+) {
   return {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
       const requestId = crypto.randomUUID();
       const url = new URL(request.url);
       if (request.method === "GET" && url.pathname === "/healthz") {
+        let healthConfig: ControlPlaneConfig;
         try {
-          readConfig(env);
+          healthConfig = readConfig(env);
         } catch {
           return secureResponse(errorResponse(503, "misconfigured"), request, null, requestId);
         }
-        return secureResponse(json({ ok: true, service: "openmausbot-control-plane" }), request, null, requestId);
+        // `ok` keeps meaning "this Worker is correctly configured"; desktops
+        // gate hosted sign-in on it. Provider capacity is reported beside it
+        // so a full quota never hides sign-in, recovery, or local pairing.
+        const capacity = await capacityHealth(env, healthConfig, ctx).catch(() => null);
+        return secureResponse(json({
+          ok: true,
+          service: "openmausbot-control-plane",
+          ...(capacity === null ? {} : { capacity }),
+        }), request, null, requestId);
       }
 
       let config: ControlPlaneConfig | null = null;
       try {
         config = readConfig(env);
         const origin = request.headers.get("origin");
-        if (origin && !config.allowedOrigins.has(origin)) {
+        // HighLevel sends the person's browser to the callback: a top-level
+        // navigation that may carry any Origin (or `null` after a cross-site
+        // redirect) and never one of ours. It is a public GET like /healthz.
+        const publicNavigation = request.method === "GET" && url.pathname === HIGHLEVEL_CALLBACK_PATH;
+        if (origin && !publicNavigation && !config.allowedOrigins.has(origin)) {
           return secureResponse(errorResponse(403, "origin_not_allowed"), request, config, requestId);
         }
         const boundedRequest = await withBoundedRequestBody(request);
         return secureResponse(
-          await route(boundedRequest, env, ctx, config, requestId, cloudflareFetch),
+          await route(boundedRequest, env, ctx, config, requestId, cloudflareFetch, apnsFetch, highLevelFetch),
           request,
           config,
           requestId,
@@ -174,14 +247,55 @@ export function createWorker(cloudflareFetch: CloudflareFetch = fetch) {
     scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
       const requestId = crypto.randomUUID();
       ctx.waitUntil((async () => {
+        let config: ControlPlaneConfig;
         try {
-          const config = readConfig(env);
+          config = readConfig(env);
+        } catch {
+          console.error(JSON.stringify({
+            message: "managed endpoint cleanup sweep failed",
+            requestId,
+            errorCode: "misconfigured",
+          }));
+          return;
+        }
+        // The scan only marks idle rows; the sweep below performs every
+        // deletion through the ownership-verified path. A failed scan must
+        // never block cleanup that is already queued. Both act on each
+        // endpoint's own Cloudflare account.
+        try {
+          await scanTunnelCapacity(env, config, cloudflareFetch, requestId);
+        } catch {
+          console.error(JSON.stringify({
+            message: "managed endpoint tunnel scan failed",
+            requestId,
+            errorCode: "endpoint_internal",
+          }));
+        }
+        try {
           await sweepManagedEndpointCleanup(env, config, cloudflareFetch, requestId);
         } catch {
           console.error(JSON.stringify({
             message: "managed endpoint cleanup sweep failed",
             requestId,
             errorCode: "endpoint_internal",
+          }));
+        }
+        try {
+          await reportEndpointAccountProblems(env, config, requestId);
+        } catch {
+          console.error(JSON.stringify({
+            message: "managed endpoint account check failed",
+            requestId,
+            errorCode: "endpoint_internal",
+          }));
+        }
+        try {
+          await sweepHighLevelFlows(env, requestId);
+        } catch {
+          console.error(JSON.stringify({
+            message: "highlevel flow sweep failed",
+            requestId,
+            errorCode: "highlevel_internal",
           }));
         }
       })());

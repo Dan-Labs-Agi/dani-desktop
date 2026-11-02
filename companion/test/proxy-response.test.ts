@@ -1,9 +1,4 @@
-// How the proxy prepares a response body, against a stub harness.
-//
-// proxy.test.ts boots the real harness and is the right place for anything
-// about the seam between the two. This file is the opposite: a harness stub
-// that can be made to return exactly the pathological body a test needs,
-// which is the only way to reach the failure branches below.
+// A stub harness, so a test can get exactly the pathological body it needs.
 import { createServer, type Server, type ServerResponse } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -11,7 +6,7 @@ import { createProxyHandler, proxyHeadersTimeoutMs } from "../src/proxy.ts";
 import type { CompanionEndpoint } from "../src/endpoints.ts";
 import { scrub } from "../src/wire.ts";
 
-const TOKEN = "dani_test_token";
+const TOKEN = "omb_test_token";
 
 /** Nested past any plausible stack, so `scrub`'s recursion gives out while
  * JSON.parse does not. The payload is what the scrubber is meant to remove. */
@@ -27,8 +22,8 @@ let sidecarPort = 0;
 let cloudDesktopAccess = true;
 let companionMarker = "";
 let companionDevice = "";
+let companionRange = "";
 let endpointCandidates: CompanionEndpoint[] = [];
-/** What the stub harness answers with next. Set per test. */
 let respond: (res: ServerResponse) => void = (res) => res.end();
 
 const listen = (server: Server): Promise<number> =>
@@ -37,7 +32,6 @@ const listen = (server: Server): Promise<number> =>
 const close = (server: Server | undefined): Promise<void> =>
   new Promise((resolve) => (server ? server.close(() => resolve()) : resolve()));
 
-/** A request as a paired device makes it. */
 const device = async (
   path = "/api/bots",
   method = "GET",
@@ -56,8 +50,9 @@ const device = async (
 
 beforeAll(async () => {
   harness = createServer((req, res) => {
-    companionMarker = String(req.headers["x-danibot-companion"] ?? "");
-    companionDevice = String(req.headers["x-danibot-companion-device"] ?? "");
+    companionMarker = String(req.headers["x-openmausbot-companion"] ?? "");
+    companionDevice = String(req.headers["x-openmausbot-companion-device"] ?? "");
+    companionRange = String(req.headers.range ?? "");
     respond(res);
   });
   const harnessPort = await listen(harness);
@@ -65,7 +60,7 @@ beforeAll(async () => {
   sidecar = createServer(
     createProxyHandler({
       harnessPort,
-      authenticate: (t) => (t === TOKEN ? { id: "phone-1", cloudDesktopAccess } : null),
+      authenticate: (t) => (t === TOKEN ? { id: "phone-1", cloudDesktopAccess, browserControlAccess: false } : null),
       redeem: () => ({ error: "not used here" }),
       serverName: () => "Test computer",
       endpoints: () => endpointCandidates,
@@ -99,13 +94,13 @@ describe("preparing a harness response for a device", () => {
     }
   });
 
-  it("requires the host to enable cloud desktop for viewer and preview requests", async () => {
+  it("requires the host to enable computer access for viewer and preview requests", async () => {
     cloudDesktopAccess = false;
     try {
-      for (const action of ["join", "screenshot"]) {
-        const { status, text } = await device(`/api/bots/b1/computer/${action}`, "POST");
+      for (const path of ["computer/join", "computer/screenshot", "local-computer/screenshot", "local-computer/join"]) {
+        const { status, text } = await device(`/api/bots/b1/${path}`, "POST");
         expect(status).toBe(403);
-        expect(text).toContain("enable it in Dani Bot");
+        expect(text).toContain("enable it in OpenMausBot");
         expect(text).toContain("Settings → Remote access");
       }
     } finally {
@@ -133,7 +128,7 @@ describe("preparing a harness response for a device", () => {
     const response = await fetch(`http://127.0.0.1:${sidecarPort}/api/bots`, {
       headers: {
         authorization: `Bearer ${TOKEN}`,
-        "x-danibot-companion-device": "another-phone",
+        "x-openmausbot-companion-device": "another-phone",
       },
     });
     expect(response.status).toBe(200);
@@ -157,17 +152,29 @@ describe("preparing a harness response for a device", () => {
     expect(joinUrl).not.toContain("127.0.0.1:45678");
   });
 
+  it("turns the Local VM's loopback viewer into the same device-scoped path", async () => {
+    respond = (res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        joinUrl: "http://127.0.0.1:45679/vnc.html#autoconnect=true&resize=scale&password=vm-secret",
+      }));
+    };
+    const { status, text } = await device("/api/bots/b1/local-computer/join?controlLeaseId=phone-lease-0123456789", "POST");
+    expect(status).toBe(200);
+    const joinUrl = String(JSON.parse(text).joinUrl);
+    expect(joinUrl).toMatch(/^\/vps-viewer\/[A-Za-z0-9_-]{32}\/vnc\.html#/);
+    expect(joinUrl).toContain("password=vm-secret");
+    expect(joinUrl).not.toContain("127.0.0.1:45679");
+
+    const refused = await device("/api/bots/b1/local-computer/join", "POST");
+    expect(refused.status).toBe(502);
+    expect(refused.text).not.toContain("vm-secret");
+  });
+
   it("never forwards a body it could not scrub", async () => {
-    // `scrub` recurses once per level, so a deeply nested body throws
-    // RangeError while JSON.parse handles it without complaint. That gap is
-    // the whole bug: parse-then-scrub under one try/catch treated the throw
-    // as "not JSON after all" and sent the untouched body on to the phone.
-    //
-    // How deep it takes is a property of the runtime's stack, not of this
-    // code, so the assertion is the invariant and not the branch: whatever
-    // comes back is never a success carrying the field the scrubber removes.
-    // On a stack deep enough to scrub this that is a clean 200; on one that
-    // throws it is a 502. The raw body is not among the outcomes.
+    // `scrub` recurses, so deep nesting throws RangeError where JSON.parse does
+    // not. Stack depth belongs to the runtime, so the assertion is the
+    // invariant: never a success carrying the field the scrubber removes.
     respond = (res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(deeplyNested);
@@ -179,9 +186,7 @@ describe("preparing a harness response for a device", () => {
   });
 
   it("answers 502 when scrubbing actually throws", async () => {
-    // The branch above, pinned only on a runtime that reaches it — checked
-    // here rather than assumed, so this reports "not exercised" instead of
-    // failing on a platform with a deeper stack.
+    // Checked rather than assumed, so a deeper stack reports "not exercised".
     let scrubThrows = false;
     try {
       scrub(JSON.parse(deeplyNested));
@@ -201,9 +206,7 @@ describe("preparing a harness response for a device", () => {
   });
 
   it("passes a body through untouched when it was never JSON", async () => {
-    // The tolerant half of the same branch, and the reason it cannot simply
-    // fail closed on everything: a content-type that lies is common enough,
-    // and there is nothing to redact in bytes we cannot read as an object.
+    // A lying content-type is common, and unreadable bytes hold nothing to redact.
     respond = (res) => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end("this is not JSON at all");
@@ -212,6 +215,18 @@ describe("preparing a harness response for a device", () => {
     const { status, text } = await device();
     expect(status).toBe(200);
     expect(text).toBe("this is not JSON at all");
+  });
+
+  it("passes a Live call's 409 needs-key answer through unchanged", async () => {
+    const refusal = { error: "Live calls use your own OpenAI key. Add it in Settings → API keys.", needsKey: true };
+    respond = (res) => {
+      res.writeHead(409, { "content-type": "application/json" });
+      res.end(JSON.stringify(refusal));
+    };
+
+    const { status, text } = await device("/api/live/session", "POST", JSON.stringify({ botId: "b1", sdp: "v=0", client: "ios" }));
+    expect(status).toBe(409);
+    expect(JSON.parse(text)).toEqual(refusal);
   });
 
   it("scrubs a well-formed body and re-frames it", async () => {
@@ -290,5 +305,39 @@ describe("preparing a harness response for a device", () => {
     expect(response.headers.get("content-type")).toBe("audio/mpeg");
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(audio);
+  });
+
+  it("forwards a single Range to a voice-note attachment and relays the 206 window", async () => {
+    const clip = Uint8Array.from([0x10, 0x20, 0x30, 0x40, 0x50, 0x60]);
+    respond = (res) => {
+      res.writeHead(206, {
+        "content-type": "audio/mpeg",
+        "content-length": String(2),
+        "content-range": "bytes 2-3/6",
+      });
+      res.end(clip.subarray(2, 4));
+    };
+
+    const response = await fetch(`http://127.0.0.1:${sidecarPort}/api/attachments/voice-note-1.mp3`, {
+      headers: { authorization: `Bearer ${TOKEN}`, range: "bytes=2-3" },
+    });
+    expect(companionRange).toBe("bytes=2-3");
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-type")).toBe("audio/mpeg");
+    expect(response.headers.get("content-range")).toBe("bytes 2-3/6");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(clip.subarray(2, 4));
+  });
+
+  it("does not forward a non-canonical Range header", async () => {
+    respond = (res) => {
+      res.writeHead(200, { "content-type": "audio/mpeg", "content-length": String(6) });
+      res.end(Uint8Array.from([1, 2, 3, 4, 5, 6]));
+    };
+
+    const response = await fetch(`http://127.0.0.1:${sidecarPort}/api/attachments/voice-note-1.mp3`, {
+      headers: { authorization: `Bearer ${TOKEN}`, range: "bytes=0-1,3-4" },
+    });
+    expect(companionRange).toBe("");
+    expect(response.status).toBe(200);
   });
 });

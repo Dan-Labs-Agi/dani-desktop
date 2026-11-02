@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import localOriginModule from "./local-origin.cjs";
-import { checkArgs } from "./ipc-guard.cjs";
 
 const execFileAsync = promisify(execFile);
 const STATUS_TTL_MS = 750;
@@ -40,7 +39,7 @@ export function resolveAdbBinary({
 } = {}) {
   const executable = executableName(platform);
   const candidates = [
-    (env.DANI_ADB_PATH ?? env.OMB_ADB_PATH),
+    env.OMB_ADB_PATH,
     resourcesPath && path.join(resourcesPath, "android-platform-tools", platform, executable),
     ...String(env.PATH ?? "")
       .split(path.delimiter)
@@ -170,7 +169,6 @@ export function createAndroidDeviceController(options = {}) {
   };
 
   const frame = async (serial) => {
-    checkArgs("android-device:frame", [serial]);
     const { binary } = await readyDevice(serial);
     const { stdout } = await invoke(binary, ["-s", serial, "exec-out", "screencap", "-p"], {
       timeout: 8_000,
@@ -184,7 +182,6 @@ export function createAndroidDeviceController(options = {}) {
   };
 
   const input = async (serial, payload) => {
-    checkArgs("android-device:input", [serial, payload]);
     const { binary } = await readyDevice(serial);
     if (!payload || typeof payload !== "object") throw new Error("Invalid Android input");
     const width = safeDimension(payload.width);

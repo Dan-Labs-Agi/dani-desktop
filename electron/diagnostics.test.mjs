@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { linkSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const require = createRequire(import.meta.url);
 const {
+  appendDesktopCrashRecord,
   buildDiagnosticsReport,
   decodeLogTail,
   diagnosticsFileName,
@@ -17,13 +18,10 @@ const {
   CREDENTIAL_ENV_NAMES,
 } = require("./diagnostics.mjs");
 
-// The desktop shell cannot import TypeScript, so its credential list is a
-// hand copy of server/config.ts WORKSPACE_CREDENTIAL_ENV. This test is the
-// drift alarm: a name added server-side without updating the copy here would
-// otherwise ship an unredacted export path.
-describe("credential env parity with server/config.ts", () => {
+// The desktop credential list is a hand copy of server/credential-env.ts WORKSPACE_CREDENTIAL_ENV; this test is the drift alarm.
+describe("credential env parity with server/credential-env.ts", () => {
   it("matches WORKSPACE_CREDENTIAL_ENV exactly", () => {
-    const config = readFileSync(new URL("../server/config.ts", import.meta.url), "utf8");
+    const config = readFileSync(new URL("../server/credential-env.ts", import.meta.url), "utf8");
     const match = config.match(/WORKSPACE_CREDENTIAL_ENV = \[([\s\S]*?)\] as const/);
     expect(match).not.toBeNull();
     const names = [...match[1].matchAll(/"([A-Z0-9_]+)"/g)].map((m) => m[1]);
@@ -60,6 +58,69 @@ describe("buildDiagnosticsReport", () => {
     expect(report).toContain("rooms.turnTimeoutMinutes=5");
     expect(report).toContain("(no desktop crash events available)");
     expect(report).toContain("(server log unavailable)");
+    expect(report).toContain("(updater log unavailable)");
+  });
+
+  it("includes updater diagnostics separately and redacts signed redirects and headers", () => {
+    const report = buildDiagnosticsReport({
+      appInfo,
+      logTail: "server ready",
+      updaterLogTail: [
+        "[info] Downloading version 0.1.61",
+        "[error] GET https://release-assets.example.test/update.zip?X-Amz-Credential=private-account&X-Amz-Signature=signed-secret&jwt=private-jwt HTTP 403",
+        'headers {"authorization":"Basic dXNlcjpwYXNzd29yZA==","apiKey":"opaque-private-key"}',
+        "Set-Cookie: session=private-session; Secure; HttpOnly",
+      ].join("\n"),
+    });
+    expect(report).toContain("## Updater log tail — credentials and URL parameters auto-masked");
+    expect(report).toContain("Downloading version 0.1.61");
+    expect(report).toContain("https://release-assets.example.test/update.zip?«redacted URL parameters» HTTP 403");
+    for (const secret of ["private-account", "signed-secret", "private-jwt", "dXNlcjpwYXNzd29yZA==", "opaque-private-key", "private-session"]) {
+      expect(report).not.toContain(secret);
+    }
+    expect(report.indexOf("server ready")).toBeLessThan(report.indexOf("Downloading version 0.1.61"));
+  });
+
+  it.each(["", null, undefined])("handles an absent updater log (%s)", (updaterLogTail) => {
+    expect(buildDiagnosticsReport({ appInfo, updaterLogTail })).toContain("(updater log unavailable)");
+  });
+
+  it("removes URL userinfo, fragments, and unfamiliar query capabilities without hiding public paths", () => {
+    const line = "GET https://private-user:private-password@updates.example.test/update.zip?%73ig=encoded-secret#fragment-secret\n"
+      + "GET https://updates.example.test/latest-mac.yml\n"
+      + "GET https://updates.example.test/update.zip#private-fragment";
+    const redacted = redactSecretsInLine(line);
+    expect(redacted).toContain("https://«redacted credentials»@updates.example.test/update.zip?«redacted URL parameters»");
+    expect(redacted).toContain("https://updates.example.test/latest-mac.yml");
+    for (const secret of ["private-user", "private-password", "encoded-secret", "fragment-secret", "private-fragment"]) {
+      expect(redacted).not.toContain(secret);
+    }
+  });
+
+  it("masks JSON credential fields and cookies in updater HTTP dumps", () => {
+    const redacted = redactSecretsInLine([
+      '{"OMB_COMPOSIO_BROKER_TOKEN":"opaque-broker-value","password":"opaque-password-value"}',
+      '{"Cookie":"session=private-cookie; tracking=private-tracker"}',
+      "Cookie: session=private-session; tracking=private-tracking",
+    ].join("\n"));
+    for (const secret of ["opaque-broker-value", "opaque-password-value", "private-cookie", "private-tracker", "private-session", "private-tracking"]) {
+      expect(redacted).not.toContain(secret);
+    }
+  });
+
+  it("masks Groq keys in diagnostic log exports while retaining useful status", () => {
+    const key = `gsk_${"a".repeat(48)}`;
+    const otherKey = `gsk_${"b".repeat(48)}`;
+    const workspaceKey = "opaque-groq-fixture-key";
+    const report = buildDiagnosticsReport({
+      appInfo,
+      configSummary: { groq: { configured: true } },
+      logTail: `Groq HTTP 401: invalid key ${key}\nspawn env OMB_GROQ_API_KEY=${workspaceKey}`,
+      updaterLogTail: `upstream rejected ${otherKey}`,
+    });
+    for (const secret of [key, otherKey, workspaceKey]) expect(report).not.toContain(secret);
+    expect(report).toContain("groq.configured=true");
+    expect(report).toContain("Groq HTTP 401");
   });
 
   it("includes privacy-safe desktop crash metadata separately from the server log", () => {
@@ -115,7 +176,7 @@ describe("buildDiagnosticsReport", () => {
       appInfo,
       configSummary: {},
       logTail: "server ready",
-      logPath: "/Users/ada/Library/Logs/Dani Bot/server.log",
+      logPath: "/Users/ada/Library/Logs/OpenMausBot/server.log",
     });
     expect(report).toContain("## Server log tail");
     expect(report).not.toContain("/Users/ada");
@@ -228,7 +289,7 @@ describe("formatDesktopCrashRecord", () => {
     error.stack = [
       "TypeError: secret user text from C:\\Users\\Ada\\private.txt",
       "secret-client.ts:1:1",
-      "    at boot (file:///C:/Users/Ada/Dani Bot/electron/main.mjs:412:7)",
+      "    at boot (file:///C:/Users/Ada/OpenMausBot/electron/main.mjs:412:7)",
     ].join("\n");
     const record = formatDesktopCrashRecord({ kind: "main", origin: "unhandledRejection", error });
     expect(record).toBe("event=main-process-failure origin=unhandledRejection error=TypeError");
@@ -319,8 +380,27 @@ describe("decodeLogTail", () => {
 });
 
 describe("readSafeLogTail", () => {
+  it("exports only a bounded complete-line updater tail from an isolated log fixture", () => {
+    const directory = mkdtempSync(join(tmpdir(), "openmausbot-updater-diagnostics-"));
+    try {
+      const log = join(directory, "updater.log");
+      const tail = "[info] update staged\n[error] https://updates.example.test/app.zip?jwt=private-query-token\n";
+      writeFileSync(log, `${"old-private-line\n".repeat(20_000)}${tail}`, { mode: 0o600 });
+      const result = readSafeLogTail(log);
+      expect(result.bytes).toBeLessThanOrEqual(256 * 1024);
+      expect(result.tail.endsWith(tail)).toBe(true);
+      const report = buildDiagnosticsReport({ updaterLogTail: result.tail });
+      expect(report).toContain("[info] update staged");
+      expect(report).not.toContain("private-query-token");
+      expect(report).not.toContain(directory);
+      expect(readSafeLogTail(join(directory, "absent-updater.log"))).toBeNull();
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  });
+
   it("reads a bounded tail from a regular app-owned log", () => {
-    const directory = mkdtempSync(join(tmpdir(), "danibot-log-tail-"));
+    const directory = mkdtempSync(join(tmpdir(), "openmausbot-log-tail-"));
     try {
       const log = join(directory, "server.log");
       writeFileSync(log, "partial-secret\nfirst\nsecond\n", { mode: 0o600 });
@@ -331,7 +411,7 @@ describe("readSafeLogTail", () => {
   });
 
   it.skipIf(process.platform === "win32")("rejects a log-path symlink", () => {
-    const directory = mkdtempSync(join(tmpdir(), "danibot-log-symlink-"));
+    const directory = mkdtempSync(join(tmpdir(), "openmausbot-log-symlink-"));
     try {
       const privateFile = join(directory, "private.txt");
       const log = join(directory, "desktop-crashes.log");
@@ -345,9 +425,22 @@ describe("readSafeLogTail", () => {
 });
 
 describe("diagnosticsFileName", () => {
-  it("uses danibot-diagnostics-YYYYMMDD-HHmmss.txt", () => {
+  it("uses openmausbot-diagnostics-YYYYMMDD-HHmmss.txt", () => {
     expect(diagnosticsFileName(new Date(2026, 7, 22, 16, 5, 9))).toBe(
-      "danibot-diagnostics-20260822-160509.txt",
+      "openmausbot-diagnostics-20260822-160509.txt",
     );
   });
+});
+
+it("appends a crash line, truncates a full log, and refuses a hard-linked one", () => {
+  const dir = mkdtempSync(join(tmpdir(), "omb-crash-"));
+  const file = join(dir, "logs", "desktop-crashes.log");
+  appendDesktopCrashRecord(file, 64, "first crash");
+  expect(readFileSync(file, "utf8")).toMatch(/^\[.+\] first crash\n$/);
+  appendDesktopCrashRecord(file, 10, "second crash");
+  expect(readFileSync(file, "utf8")).toMatch(/^\[.+\] second crash\n$/);
+  linkSync(file, join(dir, "other"));
+  appendDesktopCrashRecord(file, 1_000, "third crash");
+  expect(readFileSync(file, "utf8")).not.toContain("third crash");
+  rmSync(dir, { recursive: true, force: true });
 });

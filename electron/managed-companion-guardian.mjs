@@ -1,13 +1,7 @@
-// Parent-death guardian for the managed Companion origin.
-//
-// Electron launches this small Node process with an open stdin pipe. It owns
-// both the stable loopback gateway and cloudflared. If Electron crashes, the
-// pipe reaches EOF; the guardian invalidates forwarding, kills cloudflared,
-// and only then releases port 8812. An orphan connector can therefore never
-// expose whatever process happens to bind a reusable local port later.
+// On Electron's death the stdin pipe hits EOF: the guardian invalidates forwarding, kills cloudflared, and only then
+// releases port 8812, so an orphan connector never exposes whatever binds that port later.
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import {
   createCompanionOriginGateway,
@@ -23,9 +17,7 @@ const copyEnvironmentValue = (source, target, names) => {
   }
 };
 
-/** cloudflared gets OS process plumbing only. An allowlist strips every
- * TUNNEL_*, CF_*, CLOUDFLARED_*, proxy, config, logging, protocol, and secret
- * variable without relying on an inevitably incomplete blocklist. */
+/** An allowlist of OS process plumbing: every TUNNEL_*, CF_*, CLOUDFLARED_*, proxy, config and secret variable is stripped. */
 export function minimalCloudflaredEnvironment(
   environment = process.env,
   platform = process.platform,
@@ -38,8 +30,6 @@ export function minimalCloudflaredEnvironment(
   return minimal;
 }
 
-/** Environment for launching this file through the packaged Electron binary
- * in Node mode. It is just as narrow as the connector environment. */
 export function minimalGuardianEnvironment(
   environment = process.env,
   platform = process.platform,
@@ -76,9 +66,7 @@ async function terminateConnector(child, graceMs = 250) {
     };
     child.once("exit", finish);
     child.once("error", () => {
-      // An asynchronous spawn failure has no process to wait for. Once a pid
-      // exists, an error event alone is not proof that the OS process died;
-      // retaining the gateway is the fail-closed choice until `exit` arrives.
+      // Once a pid exists an `error` event does not prove the process died: keep the gateway until `exit`.
       if (!Number.isSafeInteger(child.pid)) finish();
     });
   });
@@ -90,8 +78,7 @@ async function terminateConnector(child, graceMs = 250) {
   try {
     child.kill("SIGKILL");
   } catch {}
-  // Do not release the gateway on a timer. Holding the loopback port is the
-  // fail-closed state until the OS confirms cloudflared is dead.
+  // Never release the gateway on a timer: holding the port is the fail-closed state until cloudflared is dead.
   await exit;
 }
 
@@ -112,7 +99,6 @@ function ownerLoss(ownerInput, signalSource) {
   });
 }
 
-/** Run one guardian lifetime. Exported for deterministic lifecycle tests. */
 export async function runManagedCompanionGuardian({
   cloudflaredBinary,
   tokenFile,
@@ -187,7 +173,7 @@ export async function runManagedCompanionGuardian({
   return outcome.kind === "connector" ? outcome.code : 0;
 }
 
-function guardianArguments(argv) {
+export function guardianArguments(argv) {
   if (argv.length !== 5) throw new Error("The managed companion guardian arguments are invalid");
   const [cloudflaredBinary, tokenFile, socketPath, rawPid, rawPort] = argv;
   const pid = Number(rawPid);
@@ -199,12 +185,4 @@ function guardianArguments(argv) {
   return { cloudflaredBinary, tokenFile, target, originPort };
 }
 
-const isDirectExecution =
-  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
-
-if (isDirectExecution) {
-  runManagedCompanionGuardian(guardianArguments(process.argv.slice(2))).then(
-    (code) => process.exit(code),
-    () => process.exit(1),
-  );
-}
+// A library on purpose: a "run when executed directly" check here would fire inside any bundle that imports it.

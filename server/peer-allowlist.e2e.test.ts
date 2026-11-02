@@ -1,14 +1,3 @@
-// The per-pair peer allow-list, end to end against the real harness server.
-//
-// Four claims are pinned here that no unit can reach: an ordinary (non-Chief)
-// bot's system prompt now names its teammates; `peers` narrows what that bot
-// can see AND what the internal comms endpoints will let it do, without
-// refusing the peers it still covers; the list survives an approval card that
-// was open while it changed; and the field can only ever be made smaller from
-// the loopback API a bot's own tool call can reach. The
-// endpoints are sealed behind a per-turn token. The real MCP config is still
-// inspected below, while the isolated server's test-only mint route provides
-// an exact synthetic active turn for driving the endpoint after the fake exits.
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -23,16 +12,12 @@ import { freePortBlock } from "./testing/ports.ts";
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(SERVER_DIR, "..");
 const FAKE_CLAUDE = join(SERVER_DIR, "testing", "fake-claude-cli.ts");
-const REFUSED = "not on this bot's allowed peers";
+const REFUSED = "is not one of the bots";
 const TEST_CAPABILITY_KEY = "peer-allowlist-fixture-capability";
 
 let child: ChildProcess;
 let home = "";
 let base = "";
-// 43 base64url chars satisfying OWNER_CAPABILITY_PATTERN (server/config.ts);
-// adopted by the child server as DANI_OWNER_TOKEN (security/epic-9-B).
-const OWNER_TOKEN = `e2e-owner-capability-${"0".repeat(22)}`;
-
 let stderr = "";
 let askerDump = "";
 let boundDump = "";
@@ -45,7 +30,7 @@ const api = async (
 ): Promise<{ status: number; body: any }> => {
   const response = await fetch(`${base}${path}`, {
     method,
-    headers: { "x-danibot-desktop-owner": OWNER_TOKEN, ...(body ? { "content-type": "application/json" } : {}), ...headers },
+    headers: { ...(body ? { "content-type": "application/json" } : {}), ...headers },
     body: body ? JSON.stringify(body) : undefined,
   });
   return { status: response.status, body: await response.json() };
@@ -60,7 +45,7 @@ const fixture = (displayName: string, dump?: string) => ({
 
 beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-peer-allowlist-"));
-  const data = join(home, ".danibot");
+  const data = join(home, ".openmausbot");
   const staticDir = join(home, "static");
   mkdirSync(data, { recursive: true });
   mkdirSync(staticDir, { recursive: true });
@@ -70,10 +55,16 @@ beforeAll(async () => {
   writeFileSync(join(data, "config.json"), JSON.stringify({
     instances: {
       plain: fixture("Plain fixture"),
-      // the dump is the only place a test can read the real per-turn comms token
-      // — and the only place it can read a bot's assembled system prompt
+      // The dump is the only place a test can read the real per-turn comms token and a bot's assembled system prompt.
       asker: fixture("Asker fixture", askerDump),
       bound: fixture("Allow-listed fixture", boundDump),
+      // Never finishes: a bot held mid-turn, the one moment its own shell could be the caller behind a loopback PATCH.
+      stuck: {
+        driver: "claudeAgent",
+        displayName: "Stuck fixture",
+        environment: { FAKE_CLAUDE_MODE: "hang" },
+        config: { cli: FAKE_CLAUDE },
+      },
     },
   }));
   const port = await freePortBlock([0, 1]);
@@ -86,7 +77,6 @@ beforeAll(async () => {
       HOME: home,
       USERPROFILE: home,
       OMB_PORT: String(port),
-      DANI_OWNER_TOKEN: OWNER_TOKEN,
       OMB_WEBHOOK_PORT: String(port + 1),
       OMB_STATIC_DIR: staticDir,
       OMB_TEST_INTERNAL_CAPABILITY_KEY: TEST_CAPABILITY_KEY,
@@ -101,7 +91,6 @@ beforeAll(async () => {
     try {
       if ((await fetch(`${base}/api/health`)).status === 200) break;
     } catch {
-      // Still starting.
     }
     if (Date.now() >= deadline) throw new Error(`server never became healthy: ${stderr}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -124,7 +113,6 @@ const readDump = (path: string) => (): { systemPrompt?: string; mcpConfig?: any 
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    // not written yet, or mid-write
     return undefined;
   }
 };
@@ -144,8 +132,7 @@ const botMessages = async (botId: string): Promise<any[]> => {
   return state.bots.find((bot: { id: string }) => bot.id === botId)?.messages ?? [];
 };
 
-/** Drive a bot through one turn so it owns a task its own thread id resolves
- * to — /api/internal/ask-bot refuses a source thread that has none. */
+/** /api/internal/coordinate-bots refuses a source thread with no task, so the bot runs one turn first. */
 const warmUp = async (botId: string) => {
   expect((await api("POST", `/api/bots/${botId}/messages`, { text: "Warm up" })).status).toBe(202);
   await expect.poll(() => botBusy(botId), { timeout: 15_000 }).toBe(false);
@@ -156,18 +143,19 @@ const mintCapability = async (botId: string, threadId: string): Promise<string> 
     "POST",
     "/api/testing/internal-capability",
     { botId, threadId, kind: "agents" },
-    { "x-danibot-test-capability": TEST_CAPABILITY_KEY },
+    { "x-openmausbot-test-capability": TEST_CAPABILITY_KEY },
   );
   expect(minted.status).toBe(201);
   return String(minted.body.token);
 };
 
+let seededId = "";
 const hideSeededBot = async () => {
-  // the seeded bot would otherwise join the unsectioned team and make the
-  // roster and listing assertions depend on install order
-  // (a fresh boot without a live model route seeds none: issue #18)
+  // The seeded bot is the unsectioned team's Chief and the install's MausBot, which is never archived: it steps down into
+  // a department of its own, and the roster checks below leave it out, since every bot can reach it.
   const seeded = (await api("GET", "/api/bots?messages=0")).body.bots[0];
-  if (seeded) await api("PATCH", `/api/bots/${seeded.id}`, { hidden: true });
+  seededId = seeded.id;
+  expect((await api("PATCH", `/api/bots/${seeded.id}`, { chiefOfStaff: false, section: "Starter" })).status).toBe(200);
 };
 
 const peerNames = async (selfId: string, token: string) => {
@@ -178,10 +166,87 @@ const peerNames = async (selfId: string, token: string) => {
     { authorization: `Bearer ${token}` },
   );
   expect(listed.status).toBe(200);
-  return (listed.body.bots as Array<{ name: string }>).map((bot) => bot.name).sort();
+  return (listed.body.bots as Array<{ id: string; name: string }>).filter((bot) => bot.id !== seededId).map((bot) => bot.name).sort();
+};
+
+/** What a Chief may set up: its own department's and its granted departments' teams and bots. */
+const setupScope = async (token: string) => {
+  const catalog = await api("GET", "/api/internal/team-setup-catalog", undefined, { authorization: `Bearer ${token}` });
+  expect(catalog.status, JSON.stringify(catalog.body)).toBe(200);
+  return { teams: catalog.body.teams as string[], bots: (catalog.body.bots as Array<{ id: string }>).map((bot) => bot.id) };
 };
 
 describe("peer allow-list", () => {
+  it.each(["rename", "delete"])("requires existing departments and never revives a Chief's authority after %s and recreation", async mode => {
+    await hideSeededBot();
+    const clive = await createBot(`Chief ${mode}`, "plain");
+    const engineer = await createBot(`Engineer ${mode}`, "plain");
+    const team = `Lifecycle ${mode}`;
+    const state = async () => (await api("GET", "/api/bots?messages=0")).body.bots.find((bot: any) => bot.id === clive.id);
+    try {
+      await api("PATCH", `/api/bots/${clive.id}`, { section: `Office ${mode}`, chiefOfStaff: true });
+      await api("PATCH", `/api/bots/${engineer.id}`, { section: `Parking ${mode}` });
+      const grant = (managedSections: string[]) => api("PATCH", `/api/bots/${clive.id}`, { managedSections, acknowledgePeerScope: true });
+      expect((await grant([team])).status).toBe(400);
+      expect((await grant([""])).status).toBe(200);
+      expect((await api("POST", "/api/sidebar-sections", { name: team })).status).toBe(200);
+      expect((await grant([team.toLowerCase()])).status).toBe(400);
+      expect((await grant([team])).status).toBe(200);
+      expect((await api("PATCH", `/api/sidebar-sections?section=${encodeURIComponent(team)}`, { name: team })).status).toBe(200);
+      expect((await state()).managedSections).toEqual([team]);
+      await warmUp(clive.id);
+      const token = await mintCapability(clive.id, clive.threadId);
+      const changed = await api(mode === "rename" ? "PATCH" : "DELETE", `/api/sidebar-sections?section=${encodeURIComponent(team)}`,
+        mode === "rename" ? { name: `${team} renamed` } : undefined);
+      expect(changed.status).toBe(200);
+      expect((await state()).managedSections).toEqual([]);
+      expect((await api("POST", "/api/sidebar-sections", { name: team, botIds: [engineer.id] })).status).toBe(200);
+      const scope = await setupScope(token);
+      expect(scope.teams).not.toContain(team);
+      expect(scope.bots).not.toContain(engineer.id);
+      expect(await peerNames(clive.id, token), "reach never depended on the grant").toContain(engineer.name);
+    } finally {
+      for (const bot of [clive, engineer]) {
+        await api("POST", `/api/bots/${bot.id}/interrupt`, {}).catch(() => undefined);
+        await api("DELETE", `/api/bots/${bot.id}`).catch(() => undefined);
+      }
+    }
+  }, 45_000);
+
+  it("consults another department with no grant, and a Chief's grant is authority it loses on demotion", async () => {
+    await hideSeededBot();
+    const clive = await createBot("Clive", "plain");
+    const specialist = await createBot("Engineer", "plain");
+    try {
+      await api("PATCH", `/api/bots/${clive.id}`, { section: "Office" });
+      await api("PATCH", `/api/bots/${specialist.id}`, { section: "Engineering" });
+      await warmUp(clive.id);
+      const token = await mintCapability(clive.id, clive.threadId);
+      expect(await peerNames(clive.id, token)).toEqual(["Engineer"]);
+      const outcome = await api("POST", "/api/internal/coordinate-bots", { botIds: [specialist.id], message: "Review this small test plan", consult: true }, { authorization: `Bearer ${token}` });
+      expect(outcome.status, JSON.stringify(outcome.body)).toBe(200);
+      expect(outcome.body.error).toBeUndefined();
+      expect(outcome.body.receipts).toEqual([expect.objectContaining({ botId: specialist.id, outcome: "queued" })]);
+      await expect.poll(() => botBusy(specialist.id), { timeout: 15_000 }).toBe(false);
+      expect((await api("PATCH", `/api/bots/${clive.id}`, { managedSections: ["Engineering"], acknowledgePeerScope: true })).status).toBe(400);
+      await api("PATCH", `/api/bots/${clive.id}`, { chiefOfStaff: true });
+      expect((await api("PATCH", `/api/bots/${clive.id}`, { managedSections: ["Engineering"] })).status).toBe(400);
+      expect((await api("PATCH", `/api/bots/${clive.id}`, { managedSections: ["Engineering"], acknowledgePeerScope: true })).status).toBe(200);
+      expect((await setupScope(token)).bots).toContain(specialist.id);
+      await api("PATCH", `/api/bots/${clive.id}`, { chiefOfStaff: false });
+      await api("PATCH", `/api/bots/${clive.id}`, { chiefOfStaff: true });
+      expect((await setupScope(token)).bots).not.toContain(specialist.id);
+      expect(await peerNames(clive.id, token)).toEqual(["Engineer"]);
+      const state = (await api("GET", "/api/bots?messages=0")).body.bots.find((bot: any) => bot.id === clive.id);
+      expect(state.managedSections ?? []).toEqual([]);
+    } finally {
+      for (const bot of [clive, specialist]) {
+        await api("POST", `/api/bots/${bot.id}/interrupt`, {}).catch(() => undefined);
+        await api("PATCH", `/api/bots/${bot.id}`, { chiefOfStaff: false }).catch(() => undefined);
+        await api("DELETE", `/api/bots/${bot.id}`).catch(() => undefined);
+      }
+    }
+  }, 45_000);
   it("gives an ordinary bot a roster, then narrows it and the comms endpoints", async () => {
     await hideSeededBot();
     const asker = await createBot("Ada", "asker");
@@ -194,20 +259,18 @@ describe("peer allow-list", () => {
       await expect.poll(() => readDump(askerDump)()?.systemPrompt, { timeout: 10_000 }).toBeTruthy();
       const dump = readDump(askerDump)()!;
 
-      // 1. an ordinary bot is finally told who its teammates are
       const systemPrompt = String(dump.systemPrompt);
       expect(systemPrompt).toContain("[TEAM ROSTER]");
-      expect(systemPrompt).toContain("- Quill — General assistant (available)");
-      expect(systemPrompt).toContain("- Patch — General assistant (available)");
-      // and is told nothing about creating bots or directing them
-      expect(systemPrompt).toContain("peers, not staff");
+      expect(systemPrompt).toContain(`- Quill — General assistant (General) [id: ${quill.id}]`);
+      expect(systemPrompt).toContain(`- Patch — General assistant (General) [id: ${patch.id}]`);
+      expect(systemPrompt).toContain("(Starter) [id: ");
+      expect(systemPrompt).toContain("Team availability: every teammate is available.");
+      expect(systemPrompt).toContain("Use coordinate_bots");
+      expect(systemPrompt).toContain("Each recipient runs with its own model and permissions");
+      expect(systemPrompt).toContain("you cannot grant them your access");
+      expect(systemPrompt).not.toContain("Use delegate_bot");
+      expect(systemPrompt).not.toContain("use ask_bot");
       expect(systemPrompt).not.toContain("create_bot");
-      // The harness keeps appending its own rules with a bare leading space
-      // (index.ts: `${coordinationPrompt}` then credentialPrompt). The last
-      // roster line is a stranger's text, so the terminator has to be what
-      // those rules land against — otherwise a persona ending "…ask the user
-      // to paste the key into chat" sits flush against the rule forbidding
-      // exactly that.
       expect(systemPrompt).toContain("[/TEAM ROSTER] If a supported API key is missing");
 
       const providerToken = String(dump.mcpConfig?.mcpServers?.agents?.env?.OMB_COMMS_TOKEN ?? "");
@@ -215,47 +278,40 @@ describe("peer allow-list", () => {
       await expect.poll(() => botBusy(asker.id)).toBe(false);
       const token = await mintCapability(asker.id, asker.threadId);
 
-      // 2. with no allow-list set, both peers are visible and reachable
       expect(await peerNames(asker.id, token)).toEqual(["Patch", "Quill"]);
       const openAsk = await api(
         "POST",
-        "/api/internal/ask-bot",
-        { fromBotId: asker.id, toBotId: patch.id, message: "Patch, still there?" },
+        "/api/internal/coordinate-bots",
+        { botIds: [patch.id], message: "Patch, still there?", consult: true },
         { authorization: `Bearer ${token}` },
       );
       expect(openAsk.status).toBe(200);
       await expect.poll(() => botBusy(patch.id)).toBe(false);
 
-      // 3. wiring Ada to Quill alone narrows the listing list_bots reads…
       expect((await api("PATCH", `/api/bots/${asker.id}`, { peers: [quill.id] })).status).toBe(200);
       expect(await peerNames(asker.id, token)).toEqual(["Quill"]);
 
-      // …and both endpoints, for the peer that is now off the list
       const refusedAsk = await api(
         "POST",
-        "/api/internal/ask-bot",
-        { fromBotId: asker.id, toBotId: patch.id, message: "Patch, one more thing" },
+        "/api/internal/coordinate-bots",
+        { botIds: [patch.id], message: "Patch, one more thing", consult: true },
         { authorization: `Bearer ${token}` },
       );
       expect(refusedAsk.status).toBe(403);
       expect(String(refusedAsk.body.error)).toContain(REFUSED);
       const refusedDelegation = await api(
         "POST",
-        "/api/internal/delegate-bot",
-        { fromBotId: asker.id, toBotId: patch.id, message: "Patch, take this" },
+        "/api/internal/coordinate-bots",
+        { botIds: [patch.id], message: "Patch, take this" },
         { authorization: `Bearer ${token}` },
       );
       expect(refusedDelegation.status).toBe(403);
       expect(String(refusedDelegation.body.error)).toContain(REFUSED);
 
-      // …while the peer that IS still wired stays reachable on BOTH
-      // endpoints. Without this the gate could refuse every bot that merely
-      // has a list — the exact regression an allow-list introduces — and the
-      // 403s above would still be green.
       const allowedAsk = await api(
         "POST",
-        "/api/internal/ask-bot",
-        { fromBotId: asker.id, toBotId: quill.id, message: "Quill, still there?" },
+        "/api/internal/coordinate-bots",
+        { botIds: [quill.id], message: "Quill, still there?", consult: true },
         { authorization: `Bearer ${token}` },
       );
       expect(allowedAsk.status).toBe(200);
@@ -264,12 +320,12 @@ describe("peer allow-list", () => {
 
       const allowedDelegation = await api(
         "POST",
-        "/api/internal/delegate-bot",
-        { fromBotId: asker.id, toBotId: quill.id, message: "Quill, take this" },
+        "/api/internal/coordinate-bots",
+        { botIds: [quill.id], message: "Quill, take this" },
         { authorization: `Bearer ${token}` },
       );
-      expect(allowedDelegation.status).toBe(200);
-      expect(allowedDelegation.body.queued).toBe(true);
+      expect(allowedDelegation.status, JSON.stringify(allowedDelegation.body)).toBe(200);
+      expect(allowedDelegation.body.receipts).toEqual([expect.objectContaining({ botId: quill.id, outcome: "queued" })]);
     } finally {
       for (const bot of [asker, quill, patch]) {
         await api("POST", `/api/bots/${bot.id}/interrupt`, {}).catch(() => undefined);
@@ -290,8 +346,7 @@ describe("peer allow-list", () => {
       await expect.poll(() => readDump(boundDump)()?.systemPrompt, { timeout: 10_000 }).toBeTruthy();
 
       const systemPrompt = String(readDump(boundDump)()!.systemPrompt);
-      expect(systemPrompt).toContain("- Near — General assistant (available)");
-      // the roster can never name a peer this bot's own ask_bot would refuse
+      expect(systemPrompt).toContain(`- Near — General assistant [id: ${near.id}]`);
       expect(systemPrompt).not.toContain("Farside");
     } finally {
       for (const bot of [bound, near, far]) {
@@ -302,13 +357,8 @@ describe("peer allow-list", () => {
   }, 40_000);
 
   it("re-checks the allow-list after the approval card, not just before it", async () => {
-    // The card can sit open for minutes. Everything the handler captured
-    // before it — including the grant — is stale by the time the user
-    // clicks Allow, so the gate has to run a second time against fresh
-    // records. Nothing else in the suite drives a bot through the card.
     await hideSeededBot();
-    // on the dump fixture, because the real per-turn comms token is only ever
-    // readable out of a bot's MCP config
+    // On the dump fixture: the real per-turn comms token is only readable from a bot's MCP config.
     const asker = await createBot("Iris", "asker");
     const helper = await createBot("Hedge", "plain");
 
@@ -319,13 +369,13 @@ describe("peer allow-list", () => {
       const providerToken = String(readDump(askerDump)()!.mcpConfig?.mcpServers?.agents?.env?.OMB_COMMS_TOKEN ?? "");
       expect(providerToken).toMatch(/^[a-f0-9]{48}$/);
       const token = await mintCapability(asker.id, asker.threadId);
-      expect((await api("PATCH", `/api/bots/${asker.id}`, { approvePeerComms: true })).status).toBe(200);
+      expect((await api("PATCH", `/api/bots/${asker.id}`, { approvePeerComms: true, approvalMode: "ask" })).status).toBe(200);
 
       // parks inside requestPeerApproval until the card below is answered
       const parked = api(
         "POST",
-        "/api/internal/ask-bot",
-        { fromBotId: asker.id, toBotId: helper.id, message: "Hedge, a quick one" },
+        "/api/internal/coordinate-bots",
+        { botIds: [helper.id], message: "Hedge, a quick one", consult: true },
         { authorization: `Bearer ${token}` },
       );
 
@@ -336,7 +386,6 @@ describe("peer allow-list", () => {
       await expect.poll(async () => (await askCard())?.requestId, { timeout: 15_000 }).toBeTruthy();
       const card = (await askCard())!;
 
-      // the operator narrows the sender WHILE the card is open
       expect((await api("PATCH", `/api/bots/${asker.id}`, { peers: [] })).status).toBe(200);
       const allowed = await api("POST", `/api/bots/${asker.id}/respond`, {
         requestId: card.requestId,
@@ -344,11 +393,10 @@ describe("peer allow-list", () => {
       });
       expect(allowed.status).toBe(200);
 
-      // the human said yes to a contact that is no longer permitted
       const outcome = await parked;
-      expect(outcome.status).toBe(200);
-      expect(String(outcome.body.error)).toBe("that bot is no longer an allowed peer");
-      // and the peer turn never started: no inbound message, nothing to mirror
+      expect(outcome.status, JSON.stringify(outcome.body)).toBe(409);
+      expect(String(outcome.body.error)).toContain(REFUSED);
+      expect(outcome.body.receipts).toEqual([expect.objectContaining({ botId: helper.id, outcome: "failed", detail: expect.stringContaining(REFUSED) })]);
       expect(
         (await botMessages(helper.id)).some(
           (message) => message.role === "user" && message.kind === "text",
@@ -363,34 +411,78 @@ describe("peer allow-list", () => {
     }
   }, 60_000);
 
+  it("refuses to loosen a bot from a bare loopback call while any bot is working", async () => {
+    // A bot's own shell can PATCH loopback mid-turn, so an originless, session-less PATCH may loosen a bot only while every bot is idle.
+    await hideSeededBot();
+    const held = await createBot("Held", "stuck");
+    const bound = await createBot("Ivy", "plain");
+    const peer = await createBot("Ash", "plain");
+    const other = await createBot("Elm", "plain");
+    const botState = async (id: string) =>
+      (await api("GET", "/api/bots?messages=0")).body.bots.find((bot: { id: string }) => bot.id === id);
+    const browser = async (path: string, body: unknown) => api("PATCH", path, body, { origin: base });
+
+    try {
+      expect((await api("PATCH", `/api/bots/${bound.id}`, { peers: [peer.id], approvePeerComms: true, section: "Ops" })).status).toBe(200);
+      expect((await api("POST", `/api/bots/${held.id}/messages`, { text: "hold the line" })).status).toBe(202);
+      await expect.poll(async () => (await botState(held.id))?.busy, { timeout: 20_000 }).toBe(true);
+
+      const attempts: Array<Record<string, unknown>> = [
+        { peers: [peer.id, other.id], acknowledgePeerScope: true },
+        { peers: null, acknowledgePeerScope: true },
+        { approvePeerComms: false },
+        { section: "Finance" },
+        { alwaysAllow: ["Bash", "Bash:curl"] },
+      ];
+      for (const body of attempts) {
+        const refused = await api("PATCH", `/api/bots/${bound.id}`, body);
+        expect(refused.status, JSON.stringify(body)).toBe(409);
+        expect(String(refused.body.error)).toContain("desktop app or a paired device");
+      }
+      for (const headers of [{}, { origin: base }] as Record<string, string>[]) {
+        const refused = await api("PATCH", `/api/bots/${bound.id}`, {
+          chiefOfStaff: true, managedSections: ["Engineering"], acknowledgePeerScope: true,
+        }, headers);
+        expect(refused.status).toBe(409);
+        expect(String(refused.body.error)).toContain("paired Full-access session");
+      }
+      expect(await botState(bound.id)).toMatchObject({ peers: [peer.id], approvePeerComms: true, section: "Ops" });
+      expect((await api("PATCH", `/api/bots/${bound.id}`, { peers: [] })).status).toBe(200);
+      expect((await api("PATCH", `/api/bots/${bound.id}`, { name: "Ivy renamed" })).status).toBe(200);
+      expect((await browser(`/api/bots/${bound.id}`, { peers: [peer.id], acknowledgePeerScope: true })).status).toBe(200);
+      expect((await browser(`/api/bots/${bound.id}`, { section: "Finance" })).status).toBe(200);
+
+      expect((await api("POST", `/api/bots/${held.id}/interrupt`, {})).status).toBe(200);
+      await expect.poll(async () => (await botState(held.id))?.busy, { timeout: 20_000 }).toBeFalsy();
+      expect((await api("PATCH", `/api/bots/${bound.id}`, { peers: null, acknowledgePeerScope: true })).status).toBe(200);
+      expect(await botPeers(bound.id)).toBeUndefined();
+    } finally {
+      for (const bot of [held, bound, peer, other]) {
+        await api("POST", `/api/bots/${bot.id}/interrupt`, {}).catch(() => undefined);
+        await api("DELETE", `/api/bots/${bot.id}`).catch(() => undefined);
+      }
+    }
+  }, 60_000);
+
   it("lets the loopback API narrow a bot's peers but never widen them unacknowledged", async () => {
-    // The bot this field constrains can curl this endpoint from a tool call
-    // and gets admin scope for it (request-auth.ts hands every loopback
-    // caller LOOPBACK_SCOPES). A leash a prompt-injected bot can cut is not
-    // a leash, so only the narrowing direction is free.
     await hideSeededBot();
     const bound = await createBot("Ivy", "plain");
     const peer = await createBot("Ash", "plain");
     const other = await createBot("Elm", "plain");
 
     try {
-      // narrowing needs nothing — an operator, a script, or the bot itself
       expect((await api("PATCH", `/api/bots/${bound.id}`, { peers: [peer.id, other.id] })).status).toBe(200);
       expect((await api("PATCH", `/api/bots/${bound.id}`, { peers: [peer.id] })).status).toBe(200);
       expect(await botPeers(bound.id)).toEqual([peer.id]);
 
-      // adding an id back is the privileged direction, and so is clearing
       const readded = await api("PATCH", `/api/bots/${bound.id}`, { peers: [peer.id, other.id] });
       expect(readded.status).toBe(400);
       expect(String(readded.body.error)).toContain("acknowledgePeerScope");
       const cleared = await api("PATCH", `/api/bots/${bound.id}`, { peers: null });
       expect(cleared.status).toBe(400);
       expect(String(cleared.body.error)).toContain("acknowledgePeerScope");
-      // refused means unchanged, not partially applied
       expect(await botPeers(bound.id)).toEqual([peer.id]);
 
-      // the flag the desktop dialog sends — and a tool call cannot forge —
-      // is what carries the human's decision
       const acknowledged = await api("PATCH", `/api/bots/${bound.id}`, {
         peers: [peer.id, other.id],
         acknowledgePeerScope: true,

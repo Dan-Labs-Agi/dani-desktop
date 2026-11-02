@@ -89,7 +89,7 @@ describe("managed Companion origin endpoint", () => {
     const allocated = endpoint();
     const target = createHttpServer((_request, response) => {
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ app: "danibot" }));
+      response.end(JSON.stringify({ app: "openmausbot" }));
     });
     servers.push(target);
     await listen(target, allocated.socketPath);
@@ -213,6 +213,52 @@ describe("managed Companion loopback gateway", () => {
       path: "/vps-viewer/session/websockify",
       upgrade: "websocket",
     });
+    await gateway.close();
+  });
+
+  it("survives a phone resetting its viewer WebSocket and closes the private end", async () => {
+    const allocated = endpoint();
+    let originSocket;
+    const target = createHttpServer();
+    target.on("upgrade", (_request, socket) => {
+      sockets.push(socket);
+      socket.on("error", () => {});
+      originSocket = socket;
+      socket.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\nready");
+    });
+    servers.push(target);
+    await listen(target, allocated.socketPath);
+    const gateway = createCompanionOriginGateway({
+      target: { pid: process.pid, socketPath: allocated.socketPath },
+      originPort: 0,
+    });
+    const address = await gateway.start();
+    const phone = createConnection({ host: "127.0.0.1", port: address.port });
+    sockets.push(phone);
+    phone.on("error", () => {});
+    await new Promise((resolve) => {
+      let text = "";
+      phone.setEncoding("utf8");
+      phone.on("data", (chunk) => {
+        text += chunk;
+        if (text.includes("ready")) resolve();
+      });
+      phone.once("connect", () => phone.write(
+        "GET /vps-viewer/session/websockify HTTP/1.1\r\n"
+          + `Host: 127.0.0.1:${address.port}\r\n`
+          + "Connection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
+      ));
+    });
+    // The origin's server socket is half-open by default: its peer going away shows as `end`.
+    const closed = new Promise((resolve) => {
+      originSocket.once("end", resolve);
+      originSocket.once("close", resolve);
+    });
+    phone.resetAndDestroy();
+    await expect(Promise.race([
+      closed,
+      new Promise((_, fail) => setTimeout(() => fail(new Error("phone reset left the private end open")), 2_000)),
+    ])).resolves.not.toBe("timeout");
     await gateway.close();
   });
 

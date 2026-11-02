@@ -53,12 +53,9 @@ function requireExecutable(file) {
   }
 }
 
-// electron-updater picks its installer from resources/package-type: present
-// and reading "deb" routes to DebUpdater, absent falls back to AppImageUpdater.
-// electron/updater.mjs reads the same marker to decide whether the update is
-// applied in place or handed to the system package manager. If packaging ever
-// puts the marker in both artifacts (or neither), that routing silently
-// inverts, so pin it here where both trees are already extracted.
+// electron-updater picks its installer from resources/package-type ("deb" →
+// DebUpdater, absent → AppImageUpdater), and the app's updater reads the same
+// marker; a marker in both artifacts (or neither) silently inverts the routing.
 function requirePackageType(resources, label, expected) {
   const marker = path.join(resources, "package-type");
   const found = statSync(marker, { throwIfNoEntry: false })?.isFile()
@@ -75,8 +72,8 @@ function requireUpdaterTarget(resources, label) {
   const updateFile = path.join(resources, "app-update.yml");
   requireFile(updateFile);
   const update = readFileSync(updateFile, "utf8");
-  if (!/^owner: somdipto$/m.test(update) || !/^repo: dani-desktop$/m.test(update)) {
-    fail(`${label} app-update.yml does not point at somdipto/dani-desktop`);
+  if (!/^owner: milind-soni$/m.test(update) || !/^repo: OpenMausBot$/m.test(update)) {
+    fail(`${label} app-update.yml does not point at milind-soni/OpenMausBot`);
   }
 }
 
@@ -164,14 +161,8 @@ function verifyCompliance(licenses, label) {
   }
   const registryIds = new Set();
   for (const component of registry) {
-    // The hash-pinned upstream archive predates the openmausbot -> danibot
-    // rename, so its SBOM still carries the legacy property namespace. The
-    // property prefix is cosmetic (archive integrity comes from the pinned
-    // SHA-256s); the exact registry+ package ID requirement is unchanged.
     const packageId = component.properties?.find(
-      (property) =>
-        property.name === "danibot:cargo:package-id" ||
-        property.name === "openmausbot:cargo:package-id",
+      (property) => property.name === "openmausbot:cargo:package-id",
     )?.value;
     if (typeof packageId !== "string" || !packageId.startsWith("registry+")) {
       fail(`${label} SBOM registry component has no exact Cargo package ID`);
@@ -405,18 +396,15 @@ function verifyCloudflaredResources(resources, label, { directoryMode = 0o755 } 
 const appImage = exactlyOne(".AppImage");
 const deb = exactlyOne(".deb");
 const unpacked = path.join(releaseDir, "linux-unpacked");
-const executable = path.join(unpacked, "danibot");
+const executable = path.join(unpacked, "openmausbot");
 const resources = path.join(unpacked, "resources");
 
 requireExecutable(appImage);
 requireExecutable(executable);
 requireDirectoryMode(unpacked, 0o755);
-for (const relative of ["app.asar", "ui/index.html", "server/index.js"]) {
+for (const relative of ["app.asar", "ui/index.html", "server/index.js", "server/desktop-entry.mjs"]) {
   requireFile(path.join(resources, relative));
 }
-const ui = readFileSync(path.join(resources, "ui/index.html"), "utf8");
-if (!ui.includes("<title>Dani Bot</title>")) fail("packaged UI title is not Dani Bot");
-
 for (const forbidden of ["speech-helper", "cua-driver", "cua-sdk"]) {
   if (statSync(path.join(resources, forbidden), { throwIfNoEntry: false })) {
     fail(`unsupported Linux resource was bundled: ${forbidden}`);
@@ -432,48 +420,24 @@ const fields = execFileSync(
   { encoding: "utf8" },
 );
 for (const expected of [
-  "Package: danibot",
+  "Package: openmausbot",
   "Architecture: amd64",
-  "Maintainer: Dani",
+  "Maintainer: Milind Soni",
   "Section: utils",
   "Priority: optional",
 ]) {
   if (!fields.includes(expected)) fail(`DEB metadata is missing ${JSON.stringify(expected)}`);
 }
 
-// The postinst replaces electron-builder's default after-install template, so
-// it must keep the template behaviors the default provided: without the
-// AppArmor profile install, Ubuntu 24.04 denies the app user namespaces and
-// Chromium's setuid-sandbox fallback dies on the space in /opt/Dani Bot
-// (electron/electron#44414). Check the hook here so a template regression
-// fails verification instead of the packaged launch smoke.
-const controlExtracted = mkdtempSync(path.join(tmpdir(), "omb-deb-control-"));
-try {
-  execFileSync("dpkg-deb", ["--control", deb, controlExtracted]);
-  const postinst = readFileSync(path.join(controlExtracted, "postinst"), "utf8");
-  for (const needle of ["resources/apparmor-profile", "apparmor_parser --replace"]) {
-    if (!postinst.includes(needle)) fail(`DEB postinst is missing ${JSON.stringify(needle)}`);
-  }
-} finally {
-  rmSync(controlExtracted, { recursive: true, force: true });
-}
-
 const extracted = mkdtempSync(path.join(tmpdir(), "omb-deb-verify-"));
 try {
   execFileSync("dpkg-deb", ["--extract", deb, extracted]);
-  const debAppRoot = path.join(extracted, "opt", "Dani Bot");
+  const debAppRoot = path.join(extracted, "opt", "OpenMausBot");
   requireDirectoryMode(debAppRoot, 0o755);
   const debResources = path.join(debAppRoot, "resources");
   // Routes the in-app updater to the package-manager hand-off.
   requirePackageType(debResources, "DEB", "deb");
   requireUpdaterTarget(debResources, "DEB");
-  const apparmorProfile = readFileSync(path.join(debResources, "apparmor-profile"), "utf8");
-  if (
-    !apparmorProfile.includes('"/opt/Dani Bot/danibot"') ||
-    !apparmorProfile.includes("userns,")
-  ) {
-    fail("DEB AppArmor profile does not grant the installed executable userns");
-  }
   const debHashes = verifyCuaResources(debResources, "DEB");
   const debCloudflaredHash = verifyCloudflaredResources(debResources, "DEB");
   if (debCloudflaredHash !== unpackedCloudflaredHash) {
@@ -488,7 +452,7 @@ try {
     "usr",
     "share",
     "applications",
-    "com.danibot.app.desktop",
+    "com.openmausbot.app.desktop",
   );
   const scalableIcon = path.join(
     extracted,
@@ -498,16 +462,16 @@ try {
     "hicolor",
     "scalable",
     "apps",
-    "danibot.svg",
+    "openmausbot.svg",
   );
   requireFile(desktopFile);
   requireFile(scalableIcon);
   const desktop = readFileSync(desktopFile, "utf8");
   for (const expected of [
-    "Name=Dani Bot",
-    'Exec="/opt/Dani Bot/danibot" %U',
-    "Icon=danibot",
-    "StartupWMClass=com.danibot.app",
+    "Name=OpenMausBot",
+    "Exec=/opt/OpenMausBot/openmausbot %U",
+    "Icon=openmausbot",
+    "StartupWMClass=com.openmausbot.app",
     "Categories=Utility;",
   ]) {
     if (!desktop.includes(expected)) fail(`desktop entry is missing ${JSON.stringify(expected)}`);

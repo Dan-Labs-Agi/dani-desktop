@@ -1,15 +1,15 @@
-// A settled turn's intermediate assistant messages. Providers such as Grok
-// narrate before tools; the messages stay available without looking like six
-// separate final answers after the turn is done.
+// Providers such as Grok narrate before tools.
 import { useEffect, useState } from "react";
 import { Check, ChevronRight } from "lucide-react";
 
 export function TurnNarrationRun({
   label,
+  title,
   forceOpen = false,
   children,
 }: {
   label: string;
+  title?: string;
   forceOpen?: boolean;
   children: React.ReactNode;
 }) {
@@ -25,8 +25,8 @@ export function TurnNarrationRun({
           type="button"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
-          title={open ? "Hide progress messages" : "Show progress messages"}
-          className="flex items-center gap-2 rounded-full border border-hairline/40 bg-panel px-3 py-1.5 text-[13px] text-ink-secondary hover:bg-control"
+          title={title ?? (open ? "Hide progress messages" : "Show progress messages")}
+          className="ui-pill"
         >
           <Check size={13} className="text-success" />
           <span>{label}</span>

@@ -1,23 +1,19 @@
-// Google Antigravity through its official ACP server. The protocol mechanics
-// stay in the shared ACP core; this file only supplies Antigravity's managed
-// runtime, isolated Google profile, model/mode configuration, and OAuth.
-//
-// The previous community `agy` print-mode bridge mutated the user's global
-// ~/.gemini MCP config and could not surface interactive approvals. Official
-// ACP mounts MCP servers per session and uses the same trusted approval cards
-// as Dani Bot's other ACP engines.
+// Google Antigravity through its official ACP server: managed runtime, isolated Google profile,
+// model/mode configuration and OAuth.
+import type { ApprovalMode } from "../../shared/approval-mode.ts";
+import { antigravityAccount } from "./antigravity-account.ts";
 import type {
   DriverCreateInput,
   ModelCatalog,
   ProviderDriver,
   ProviderInstance,
   ProviderSnapshot,
+  SendTurnInput,
 } from "../contracts.ts";
 import { createAcpDriver, type AcpConfig, type AcpSupport } from "./acp/core.ts";
 import {
   AntigravityAuthController,
   antigravityProfileAuthenticated,
-  catalogFromAntigravityConfigOptions,
   prepareAntigravityProfile,
   probeAntigravityModels,
   validateAntigravityRuntime,
@@ -28,29 +24,47 @@ import {
   resolveAntigravityRuntime,
 } from "./antigravity-runtime.ts";
 import { resolveAntigravityReleaseAsset } from "./antigravity-release.ts";
+import { VERIFICATION_TEMP_KEY, scheduleAntigravityTempSweep } from "./antigravity-temp.ts";
+import { augmentedPath } from "../env-path.ts";
 
 export const STATIC_ANTIGRAVITY_MODELS: ModelCatalog = {
-  default: "gemini-3.8-flash-high",
+  default: "gemini-3.8-flash",
   options: [
-    { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash (High)" },
-    { id: "gemini-3.8-flash-medium", label: "Gemini 3.8 Flash (Medium)" },
-    { id: "gemini-3.8-flash-low", label: "Gemini 3.8 Flash (Low)" },
+    {
+      id: "gemini-3.8-flash",
+      label: "Gemini 3.8 Flash",
+      variants: [
+        { id: "low", label: "Low" },
+        { id: "medium", label: "Medium" },
+        { id: "high", label: "High" },
+      ],
+    },
   ],
 };
 
-export function antigravityPermissionMode(fullAuto: boolean): "yolo" | "default" {
-  return fullAuto ? "yolo" : "default";
+/** Bots saved before the thinking-level option hold `gemini-3.8-flash-{low,medium,high}`; the official runtime
+ * offers only the base model with that option, so run the base at the saved level. A runtime that still offers
+ * the suffixed id, or a turn that chose its own level, keeps its selection. */
+export function normalizeAntigravityTurn(turn: SendTurnInput, offeredModels: readonly string[]): SendTurnInput {
+  if (turn.variant !== undefined) return turn;
+  const match = turn.model?.match(/^(gemini-3\.8-flash)-(low|medium|high)$/u);
+  return match && offeredModels.includes(match[1]) && !offeredModels.includes(match[0])
+    ? { ...turn, model: match[1], variant: match[2] }
+    : turn;
 }
 
-export function antigravityModelsFromSession(value: unknown): ModelCatalog | null {
-  return catalogFromAntigravityConfigOptions(value, STATIC_ANTIGRAVITY_MODELS.default);
+/** Antigravity's session modes: `yolo` for Full, `auto_edit` for auto-accept edits, `default` otherwise (it has no reviewer for Auto). */
+export function antigravityPermissionMode(fullAuto: boolean, approvalMode?: ApprovalMode): "yolo" | "auto_edit" | "default" {
+  if (fullAuto || approvalMode === "full") return "yolo";
+  return approvalMode === "edits" ? "auto_edit" : "default";
 }
 
 const managedAsset = resolveAntigravityReleaseAsset();
 
 const support: AcpSupport = {
   driverKind: "antigravityAgent",
-  displayName: "Antigravity",
+  // Named for what people look for: Google moved personal Gemini subscriptions (free, AI Pro, AI Ultra) from Gemini CLI to Antigravity on 2026-06-18.
+  displayName: "Google Gemini (Antigravity)",
   models: STATIC_ANTIGRAVITY_MODELS,
   defaultCli: "agy", // migration alias: resolveAntigravityRuntime treats it as managed
   nativeSource: "antigravity.acp",
@@ -64,6 +78,12 @@ const support: AcpSupport = {
   images: true,
   spawnArgs: () => [],
   selectModel: { configId: "model" },
+  modelVariants: true,
+  normalizeSessionSelection: normalizeAntigravityTurn,
+  // Google's server reads its new-session default from this variable (agy_acp_server 1.4.3
+  // model_selection.get_default_model_id); a later switch re-fetches the model list (1.3-1.8 s).
+  sessionModelEnv: "AGY_ACP_DEFAULT_MODEL",
+  sessionScopedApproval: true,
   resumeMethod: "resume",
   clientFileSystem: true,
   redactStderr: true,
@@ -73,6 +93,7 @@ const support: AcpSupport = {
   resolveCommand: async (env, config, instanceId) => {
     const runtime = await resolveAntigravityRuntime(config.cli, env);
     const profile = await prepareAntigravityProfile({ instanceId, runtime, baseEnv: env });
+    if (profile.tempDirectory) scheduleAntigravityTempSweep(instanceId);
     return {
       command: runtime.executablePath,
       args: process.platform === "linux" ? ["--uid="] : [],
@@ -113,20 +134,18 @@ const support: AcpSupport = {
         state: "available",
         version: runtime.version,
         authenticated: await antigravityProfileAuthenticated(profile),
+        account: await antigravityAccount(profile.tokenPath),
       };
     } catch (error) {
       return { state: "unavailable", reason: error instanceof Error ? error.message : String(error) };
     }
   },
 
-  configureSession: async ({ request, sessionId, config, configOptions }) => {
-    // An ACP server that does not advertise a mode option rejects
-    // session/set_config_option for it, failing the turn. Only set the mode
-    // the server says it has.
-    if (!Array.isArray(configOptions) || !configOptions.some((option) => option?.id === "mode")) {
+  configureSession: async ({ request, sessionId, config, turn, configOptions }) => {
+    if (!Array.isArray(configOptions) || !configOptions.some(option => option?.id === "mode")) {
       return;
     }
-    const wanted = antigravityPermissionMode(config.fullAuto);
+    const wanted = antigravityPermissionMode(config.fullAuto, turn.approvalMode);
     const result = await request("session/set_config_option", {
       sessionId,
       configId: "mode",
@@ -145,9 +164,13 @@ export const AntigravityDriver: ProviderDriver<AcpConfig> = {
   ...AcpAntigravityDriver,
   async create(input: DriverCreateInput<AcpConfig>): Promise<ProviderInstance> {
     const base = await AcpAntigravityDriver.create(input);
+    scheduleAntigravityTempSweep(input.instanceId);
+    scheduleAntigravityTempSweep(VERIFICATION_TEMP_KEY);
     const auth = new AntigravityAuthController();
+    let installFailure: string | undefined;
     const runtimeAndProfile = async () => {
-      const environment = { ...process.env, ...input.environment };
+      // A GUI launch's raw PATH may omit the official runtime the model picker found.
+      const environment = { ...process.env, ...input.environment, PATH: augmentedPath() };
       const runtime = await resolveAntigravityRuntime(input.config.cli, environment);
       const profile = await prepareAntigravityProfile({
         instanceId: input.instanceId,
@@ -161,10 +184,23 @@ export const AntigravityDriver: ProviderDriver<AcpConfig> = {
       get models() {
         return base.models;
       },
+      snapshot: async () => {
+        const snapshot = await base.snapshot();
+        if (snapshot.state === "available") installFailure = undefined;
+        return snapshot.state === "unavailable" && installFailure
+          ? { ...snapshot, reason: installFailure }
+          : snapshot;
+      },
       ...(antigravityManagedInstallAvailable()
         ? {
             installRuntime: async () => {
-              await installAntigravityRuntime({ validate: validateAntigravityRuntime });
+              installFailure = undefined;
+              try {
+                await installAntigravityRuntime({ validate: validateAntigravityRuntime });
+              } catch (error) {
+                installFailure = error instanceof Error ? error.message : String(error);
+                throw error;
+              }
             },
           }
         : {}),

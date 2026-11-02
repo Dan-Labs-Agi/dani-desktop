@@ -1,28 +1,46 @@
-// Harness-owned Composio MCP bridge.
-//
-// Provider CLIs only see this stdio server. Ordinary MCP traffic is relayed
-// to the configured Composio Session, but connection requests are converted
-// into first-class Dani Bot chat cards. The agent never authors an auth
-// URL and credentials never pass through its transcript.
-//
-// stdout is the MCP transport. Never log there.
+// Connection requests become OpenMausBot chat cards: the agent never authors an auth URL and credentials never pass
+// through its transcript. stdout is the MCP transport: never log there.
 import readline from "node:readline";
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
+import {
+  CONNECTOR_ALLOWED_TOOLS_ENV,
+  CONNECTOR_SERVICE_SLUGS_ENV,
+  filterToolsListFrame,
+  parseConnectorAllowedToolsEnv,
+  parseConnectorServiceSlugsEnv,
+  withAuthConfigParameter,
+} from "./connector-advertisement.ts";
+import { APP_TOOL_NAMES_ENV, APP_TOOLS_ENV, appToolAnswer, appToolCall, appToolEntries, parseAppToolsEnv } from "./connector-app-tools.ts";
+import { ARGUMENT_REFUSAL, argumentRefusalNote, fitArguments, fittedArgumentsNote } from "./connector-arguments.ts";
+import { annotateFailedCall } from "./connector-scope-hint.ts";
+import { withSignedOutHint } from "./connector-signed-out-hint.ts";
+import { AUTH_CONFIG_ID } from "../shared/connector-availability.ts";
+import { fitToolListResult } from "./mcp-tool-schema.ts";
+import { toolSchemaProfileFromEnv } from "./tool-schema-profile.ts";
+import { capToolListResult, toolLimitFromEnv } from "./tool-count-limit.ts";
 
 type Json = Record<string, unknown>;
 
-const UPSTREAM = (process.env.DANI_CONNECTOR_UPSTREAM_URL ?? process.env.OMB_CONNECTOR_UPSTREAM_URL) ?? "";
-const HARNESS = (process.env.DANI_HARNESS_URL ?? process.env.OMB_HARNESS_URL) ?? "http://127.0.0.1:8799";
-const BOT_ID = (process.env.DANI_BOT_ID ?? process.env.OMB_BOT_ID) ?? "";
-const THREAD_ID = (process.env.DANI_THREAD_ID ?? process.env.OMB_THREAD_ID) ?? "";
-const TOKEN = (process.env.DANI_CONNECTOR_TOKEN ?? process.env.OMB_CONNECTOR_TOKEN) ?? (process.env.DANI_COMMS_TOKEN ?? process.env.OMB_COMMS_TOKEN) ?? "";
+const UPSTREAM = process.env.OMB_CONNECTOR_UPSTREAM_URL ?? "";
+const HARNESS = process.env.OMB_HARNESS_URL ?? "http://127.0.0.1:8799";
+const BOT_ID = process.env.OMB_BOT_ID ?? "";
+const THREAD_ID = process.env.OMB_THREAD_ID ?? "";
+const TOKEN = process.env.OMB_CONNECTOR_TOKEN ?? process.env.OMB_COMMS_TOKEN ?? "";
+const ALLOWED_TOOLS = parseConnectorAllowedToolsEnv(process.env[CONNECTOR_ALLOWED_TOOLS_ENV]);
+const SERVICE_SLUGS = parseConnectorServiceSlugsEnv(process.env[CONNECTOR_SERVICE_SLUGS_ENV]);
+const SCHEMA_PROFILE = toolSchemaProfileFromEnv(process.env);
+const TOOL_LIMIT = toolLimitFromEnv(process.env);
+const APP_TOOLS = parseAppToolsEnv(process.env[APP_TOOLS_ENV]);
+const APP_TOOL_NAMES = process.env[APP_TOOL_NAMES_ENV] === "dotted" ? "dotted" : "plain";
 const MAX_RESPONSE_BYTES = 20 * 1024 * 1024;
 const INITIALIZE_RELAY_TIMEOUT_MS = 1_000;
 const RELAY_TIMEOUT_MS = 10 * 60_000;
+const TOOLS_LIST_RETRY_MS = 500;
 
 function parsedHeaders(): Record<string, string> {
   try {
-    const value: unknown = JSON.parse((process.env.DANI_CONNECTOR_UPSTREAM_HEADERS ?? process.env.OMB_CONNECTOR_UPSTREAM_HEADERS) ?? "{}");
+    const value: unknown = JSON.parse(process.env.OMB_CONNECTOR_UPSTREAM_HEADERS ?? "{}");
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     return Object.fromEntries(
       Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
@@ -34,6 +52,10 @@ function parsedHeaders(): Record<string, string> {
 
 const upstreamHeaders = parsedHeaders();
 let upstreamSessionId = "";
+/** Each listed tool's input schema, as the connector service listed it: what a call's arguments are fitted to. */
+const SCHEMAS = new Map<string, unknown>();
+/** The connected apps this bot may use, named when a refused call might read as "no such tool". */
+const USABLE_APPS = ALLOWED_TOOLS ? SERVICE_SLUGS.filter((slug) => Object.hasOwn(ALLOWED_TOOLS, slug)) : SERVICE_SLUGS;
 const send = (message: Json) => process.stdout.write(`${JSON.stringify(message)}\n`);
 
 function textResult(id: unknown, text: string, isError = false): Json {
@@ -51,7 +73,7 @@ function initializeResult(id: unknown, protocolVersion: unknown): Json {
     result: {
       protocolVersion: typeof protocolVersion === "string" && protocolVersion ? protocolVersion : "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "danibot-connectors", version: "1" },
+      serverInfo: { name: "openmausbot-connectors", version: "1" },
     },
   };
 }
@@ -115,41 +137,129 @@ async function relay(message: Json, timeoutMs = RELAY_TIMEOUT_MS): Promise<Json 
   return parseUpstream(await readBounded(response), message.id);
 }
 
-function connectorAdds(args: unknown): string[] {
-  if (!args || typeof args !== "object" || Array.isArray(args)) return [];
-  const toolkits = (args as { toolkits?: unknown }).toolkits;
-  if (!Array.isArray(toolkits)) return [];
-  return [...new Set(toolkits.flatMap((item) => {
-    if (typeof item === "string") return [item.toLowerCase()];
-    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-    const row = item as { name?: unknown; toolkit?: unknown; action?: unknown };
-    const slug = typeof row.toolkit === "string" ? row.toolkit : row.name;
-    const action = String(row.action ?? "add").toLowerCase();
-    return typeof slug === "string" && ["add", "connect", "initiate"].includes(action) ? [slug.toLowerCase()] : [];
-  }))];
+interface ConnectorRequest {
+  slug: string;
+  alias?: string;
+  authConfigId?: string;
 }
 
-async function showConnectorCards(slugs: string[]): Promise<void> {
+const BAD_AUTH_CONFIG_ID = "OpenMausBot showed no card: auth_config_id must be a Composio auth config id (ac_ and then letters "
+  + "or digits), copied from Auth Configs in the person's Composio project. Leave it out to use their newest enabled config.";
+
+/** Composio's own error names `auth_config_override`, so either spelling is read: on a toolkit entry, or at the top level
+ * as one id for a single toolkit or a { toolkit: id } map. */
+function requestedAuthConfig(row: Record<string, unknown>): unknown {
+  return row.auth_config_id ?? row.auth_config_override;
+}
+
+function topLevelAuthConfig(args: Record<string, unknown>, slug: string, toolkitCount: number): unknown {
+  const value = requestedAuthConfig(args);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return Object.entries(value).find(([key]) => key.trim().toLowerCase() === slug)?.[1];
+  }
+  // One id cannot say which of several toolkits it belongs to.
+  return value !== undefined && toolkitCount !== 1 ? null : value;
+}
+
+function connectorAdds(args: unknown): { requests: ConnectorRequest[]; badAuthConfig: boolean } {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return { requests: [], badAuthConfig: false };
+  const toolkits = (args as { toolkits?: unknown }).toolkits;
+  if (!Array.isArray(toolkits)) return { requests: [], badAuthConfig: false };
+  const seen = new Set<string>();
+  const requests: Array<ConnectorRequest & { authConfig?: unknown }> = [];
+  for (const item of toolkits) {
+    if (typeof item === "string") {
+      const slug = item.trim().toLowerCase();
+      const key = JSON.stringify([slug, ""]);
+      if (!seen.has(key)) {
+        seen.add(key);
+        requests.push({ slug });
+      }
+      continue;
+    }
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as { name?: unknown; toolkit?: unknown; action?: unknown; alias?: unknown; account?: unknown };
+    const action = String(row.action ?? "add").toLowerCase();
+    if (!["add", "connect", "initiate"].includes(action)) continue;
+    const slug = typeof row.toolkit === "string" ? row.toolkit : row.name;
+    if (typeof slug !== "string") continue;
+    const normalized = slug.trim().toLowerCase();
+    const alias = (typeof row.alias === "string" ? row.alias : typeof row.account === "string" ? row.account : "").trim();
+    const key = JSON.stringify([normalized, alias.toLowerCase()]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const authConfig = requestedAuthConfig(row as Record<string, unknown>);
+    requests.push({ slug: normalized, ...(alias ? { alias } : {}), ...(authConfig !== undefined ? { authConfig } : {}) });
+  }
+  let badAuthConfig = false;
+  const checked = requests.map(({ authConfig, ...request }) => {
+    const value = authConfig ?? topLevelAuthConfig(args as Record<string, unknown>, request.slug, requests.length);
+    if (value === undefined) return request;
+    if (typeof value !== "string" || !AUTH_CONFIG_ID.test(value.trim())) {
+      badAuthConfig = true;
+      return request;
+    }
+    return { ...request, authConfigId: value.trim() };
+  });
+  return { requests: checked, badAuthConfig };
+}
+
+/** Resolves to the harness's line on which auth config each toolkit connects with, when it names one. */
+async function showConnectorCards(items: ConnectorRequest[]): Promise<string> {
   const response = await fetch(`${HARNESS}/api/internal/connectors/request`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
-    body: JSON.stringify({ botId: BOT_ID, threadId: THREAD_ID, slugs, resumeKey: randomUUID() }),
+    body: JSON.stringify({ botId: BOT_ID, threadId: THREAD_ID, items, resumeKey: randomUUID() }),
     signal: AbortSignal.timeout(30_000),
   });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: unknown };
-    throw new Error(String(body.error ?? `could not show connection card (HTTP ${response.status})`));
-  }
+  const body = (await response.json().catch(() => ({}))) as { error?: unknown; authConfigNote?: unknown };
+  if (!response.ok) throw new Error(String(body.error ?? `could not show connection card (HTTP ${response.status})`));
+  return typeof body.authConfigNote === "string" && body.authConfigNote ? ` ${body.authConfigNote}` : "";
 }
 
-async function handle(message: Json): Promise<void> {
+/** The upstream list with the app tools after it, unless it already has one by that name. */
+function withAppTools(frame: Json): Json {
+  const result = frame.result as { tools?: unknown } | undefined;
+  if (!APP_TOOLS.length || !result || !Array.isArray(result.tools)) return frame;
+  const listed = new Set(result.tools.map((tool) => (tool as { name?: unknown })?.name));
+  const added = appToolEntries(APP_TOOLS, APP_TOOL_NAMES).filter((tool) => !listed.has(tool.name));
+  return { ...frame, result: { ...result, tools: [...result.tools, ...added] } };
+}
+
+function rememberSchemas(frame: Json): Json {
+  const tools = (frame.result as { tools?: unknown } | undefined)?.tools;
+  if (Array.isArray(tools)) {
+    for (const tool of tools) {
+      const { name, inputSchema } = (tool ?? {}) as { name?: unknown; inputSchema?: unknown };
+      if (typeof name === "string" && inputSchema !== undefined) SCHEMAS.set(name, inputSchema);
+    }
+  }
+  return frame;
+}
+
+/** A call refused over its arguments says how to call again; one whose arguments were fitted says how they were read. */
+function withArgumentNotes(name: string, response: Json, changed: readonly string[]): Json {
+  const error = response.error as { message?: unknown } | undefined;
+  if (error && typeof error.message === "string" && ARGUMENT_REFUSAL.test(error.message)) {
+    return textResult(response.id, `${error.message}\n\n${argumentRefusalNote(name, SCHEMAS.get(name), USABLE_APPS)}`, true);
+  }
+  if (annotateFailedCall(response, ARGUMENT_REFUSAL, (tools) => argumentRefusalNote(tools[0] ?? name, SCHEMAS.get(tools[0] ?? name), USABLE_APPS), [name])) return response;
+  const result = response.result as { content?: unknown; isError?: unknown } | undefined;
+  if (changed.length && result && result.isError !== true && Array.isArray(result.content)) result.content.push({ type: "text", text: fittedArgumentsNote(name, changed) });
+  return response;
+}
+
+function fittedList(frame: Json): Json {
+  if ((!SCHEMA_PROFILE && TOOL_LIMIT === undefined) || !("result" in frame)) return frame;
+  const log = (line: string) => process.stderr.write(`connector-proxy: ${line}\n`);
+  return { ...frame, result: capToolListResult(fitToolListResult(frame.result, SCHEMA_PROFILE, log), TOOL_LIMIT, log) };
+}
+
+async function handle(received: Json): Promise<void> {
+  let message = received;
   const id = message.id;
   const method = String(message.method ?? "");
-  // OpenCode (and other MCP clients) mark a stdio server failed unless
-  // initialize returns capabilities/serverInfo. Relaying that handshake to
-  // Composio can time out, return a newer protocolVersion, or throw when the
-  // upstream URL never reached the child env — all of which previously
-  // surfaced as a tools/call-shaped {content,isError} payload.
+  // OpenCode and other MCP clients mark a stdio server failed unless initialize returns capabilities and serverInfo.
   if (method === "notifications/initialized" || method === "initialized") {
     if (UPSTREAM) void relay(message).catch(() => {});
     return;
@@ -157,13 +267,9 @@ async function handle(message: Json): Promise<void> {
   if (method === "initialize") {
     if (UPSTREAM) {
       try {
-        // Capture the upstream session id when the service is healthy, but
-        // never let a stalled provider prevent the local MCP client from
-        // mounting the connector tools. The client sends initialized only
-        // after this bounded attempt and the local initialize response.
+        // A stalled provider must never keep the local MCP client from mounting the connector tools.
         await relay(message, INITIALIZE_RELAY_TIMEOUT_MS);
       } catch {
-        // Best-effort session setup. The client still needs a valid result.
       }
     }
     if (id !== undefined) {
@@ -172,26 +278,52 @@ async function handle(message: Json): Promise<void> {
     }
     return;
   }
+  let changed: string[] = [];
   if (method === "tools/call") {
+    const given = (message.params ?? {}) as Json;
+    const name = String(given.name ?? "");
+    const fitted = SCHEMAS.has(name) ? fitArguments(given.arguments, SCHEMAS.get(name)) : { args: given.arguments, changed: [] };
+    changed = fitted.changed;
+    if (changed.length) message = { ...message, params: { ...given, arguments: fitted.args } };
     const params = (message.params ?? {}) as Json;
-    const name = String(params.name ?? "");
-    const slugs = /MANAGE_CONNECTIONS$/i.test(name) ? connectorAdds(params.arguments) : [];
-    if (slugs.length) {
-      await showConnectorCards(slugs);
+    const { requests, badAuthConfig } = /MANAGE_CONNECTIONS$/i.test(name)
+      ? connectorAdds(params.arguments)
+      : { requests: [], badAuthConfig: false };
+    if (badAuthConfig) {
+      send(textResult(id, BAD_AUTH_CONFIG_ID, true));
+      return;
+    }
+    if (requests.length) {
+      const authConfigNote = await showConnectorCards(requests);
+      const labels = requests.map((r) => (r.alias ? `${r.slug} (${r.alias})` : r.slug)).join(", ");
       send(textResult(
         id,
-        `Dani Bot showed the user a secure connection card for ${slugs.join(", ")}. End this turn now. The app will continue the task automatically after the connection finishes.`,
+        `OpenMausBot showed the user a secure connection card for ${labels}.${authConfigNote} End this turn now. The app will continue the task automatically after the connection finishes.`,
       ));
       return;
     }
     if (/WAIT_FOR_CONNECTIONS$/i.test(name)) {
-      send(textResult(id, "Dani Bot is handling connection completion and will continue the task automatically."));
+      send(textResult(id, "OpenMausBot is handling connection completion and will continue the task automatically."));
+      return;
+    }
+    const app = appToolCall(name, params.arguments);
+    if (app) {
+      const call = app.frame(id);
+      const response = await relay(call);
+      if (response && id !== undefined) send(appToolAnswer(app.slug, withSignedOutHint(call, response, SERVICE_SLUGS)));
       return;
     }
   }
   try {
-    const response = await relay(message);
-    if (response && id !== undefined) send(response);
+    // The engine lists tools once per session, so one failed listing would leave the whole session without them.
+    const response = method === "tools/list"
+      ? await relay(message).catch(() => delay(TOOLS_LIST_RETRY_MS).then(() => relay(message)))
+      : await relay(message);
+    if (response && id !== undefined) {
+      const name = String((message.params as Json | undefined)?.name ?? "");
+      send(method === "tools/list" ? fittedList(rememberSchemas(withAppTools(withAuthConfigParameter(ALLOWED_TOOLS ? filterToolsListFrame(response, ALLOWED_TOOLS, SERVICE_SLUGS) : response))))
+        : method === "tools/call" ? withArgumentNotes(name, withSignedOutHint(message, response, SERVICE_SLUGS), changed) : response);
+    }
   } catch (error) {
     if (id === undefined) return;
     const messageText = error instanceof Error ? error.message : String(error);

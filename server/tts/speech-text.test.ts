@@ -1,7 +1,3 @@
-// The spoken register is the half of voice that decides whether it is
-// pleasant, and it is the piece most likely to be tuned against real
-// transcripts — so its behaviour is pinned here rather than discovered in
-// the kitchen at 8am.
 import { describe, expect, it } from "vitest";
 
 import { narrateTool, speakable, toUtterances } from "./speech-text.ts";
@@ -30,7 +26,7 @@ describe("speakable", () => {
   });
 
   it("turns a bare URL into a noun", () => {
-    expect(speakable("Deployed to https://danibot.example.com/status now")).toBe(
+    expect(speakable("Deployed to https://openmausbot.example.com/status now")).toBe(
       "Deployed to a link now",
     );
   });
@@ -89,7 +85,6 @@ describe("toUtterances", () => {
   });
 
   it("glues a fragment onto its neighbour", () => {
-    // two words handed to a synthesizer produce two words of flat prosody
     const out = toUtterances("Yes. The whole suite is green and nothing else changed.");
     expect(out).toHaveLength(1);
     expect(out[0]).toContain("Yes.");
@@ -100,7 +95,6 @@ describe("toUtterances", () => {
     const out = toUtterances(long, { maxChars: 120 });
     expect(out.length).toBeGreaterThan(1);
     for (const piece of out) expect(piece.length).toBeLessThanOrEqual(140);
-    // nothing lost, nothing cut in half
     expect(out.join(" ")).toContain("item 39");
   });
 
@@ -112,6 +106,45 @@ describe("toUtterances", () => {
   it("is empty for text that speaks to nothing", () => {
     expect(toUtterances("```\ncode only\n```")).not.toContain("code only");
     expect(toUtterances("")).toEqual([]);
+  });
+
+  it("caps a long first block at firstBlockMaxChars without losing or emptying text", () => {
+    const long = `I looked at ${Array.from({ length: 30 }, (_, i) => `item ${i}`).join(", ")} and finished.`;
+    const out = toUtterances(long, { firstBlockMaxChars: 90 });
+    expect(out.length).toBeGreaterThan(1);
+    expect(out[0]!.length).toBeLessThanOrEqual(90);
+    for (const piece of out) expect(piece.length).toBeGreaterThan(0);
+    expect(out.join(" ")).toBe(toUtterances(long).join(" "));
+  });
+
+  it("leaves a first block at exactly the cap untouched", () => {
+    const text = `${Array.from({ length: 18 }, () => "word").join(" ")}. Second sentence here.`;
+    const capped = toUtterances(text, { firstBlockMaxChars: 90 });
+    expect(capped[0]!.length).toBe(90);
+    expect(capped).toEqual(toUtterances(text));
+  });
+
+  it("leaves a short first block and every later block on today's rules", () => {
+    const tail = `${Array.from({ length: 63 }, () => "word").join(" ")}.`;
+    const text = `The tests pass now. ${tail}`;
+    const capped = toUtterances(text, { firstBlockMaxChars: 90 });
+    expect(capped[0]!.length).toBeLessThanOrEqual(90);
+    expect(capped.at(-1)!.length).toBe(315);
+    expect(capped).toEqual(toUtterances(text));
+  });
+
+  it("keeps a short remainder from the capped block as its own block", () => {
+    const text = `${Array.from({ length: 18 }, () => "word").join(" ")} plus.`;
+    const out = toUtterances(text, { firstBlockMaxChars: 90 });
+    expect(out).toEqual([Array.from({ length: 18 }, () => "word").join(" "), "plus."]);
+    expect(out.join(" ")).toBe(toUtterances(text).join(" "));
+  });
+
+  it("keeps an unbreakable first token whole rather than slicing mid-word", () => {
+    const text = `${"a".repeat(95)} and then more words here.`;
+    const capped = toUtterances(text, { firstBlockMaxChars: 90 });
+    expect(capped).toEqual(toUtterances(text));
+    expect(capped[0]).toContain("a".repeat(95));
   });
 });
 

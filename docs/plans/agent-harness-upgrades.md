@@ -1,4 +1,4 @@
-# Dani Bot harness implementation plan
+# OpenMausBot harness implementation plan
 
 - Status: proposed
 - Last repo review: 2026-08-17
@@ -10,13 +10,13 @@ Seventeen changes to `server/` and `src/`, ordered into three rounds, plus a
 deferred list. No external agent harness is adopted as a dependency.
 
 This plan replaces an earlier draft that was built by reading other harnesses
-(pi, agent-orchestrator, deepseek-harness) and asking what Dani Bot lacked by
+(pi, agent-orchestrator, deepseek-harness) and asking what OpenMausBot lacked by
 comparison. That produced a good map of what is *possible* and a poor map of what
 is actually *missing*. The items below come from reading this repository. Their
 designs still borrow from those projects where the design work is genuinely good,
 and the verified facts are retained in [Upstream references](#upstream-references).
 
-**The reframe that reorders everything.** Dani Bot is itself a harness. The
+**The reframe that reorders everything.** OpenMausBot is itself a harness. The
 agent CLIs' own session files are an *optimization* — a per-engine cache that
 happens to hold context for one engine on one machine. The canonical, durable,
 cross-engine record is `server/store.ts`. Every path where that record has to
@@ -61,7 +61,7 @@ drift as `server/index.ts` grows; the symbol names are the stable reference.
 **The main conversation path has no retry.**
 
 - Zero occurrences of retry in `server/drivers/claude.ts`, `codex.ts`, `grok.ts`.
-- Retry exists in `server/box.ts`, `server/computer-proxy.ts`,
+- Retry exists in `server/boat.ts`, `server/computer-proxy.ts`,
   `server/drivers/acp/core.ts`, `server/webhooks.ts`, `server/drivers/antigravity.ts`.
 - The peripheral systems are resilient; the conversation path is not.
 
@@ -592,7 +592,7 @@ required method, across eight existing drivers and 82 test files. Capability
 flags let drivers opt out of *behaviour*, not out of *implementing the surface*.
 Decide deliberately whether the promise survives, and record the answer.
 
-**On-disk forward compatibility.** `~/.danibot` is shared across app versions.
+**On-disk forward compatibility.** `~/.openmausbot` is shared across app versions.
 New message kinds (attachments, compaction), a new state field, and generation
 stamps all mean an older build may read a newer store. There is precedent —
 `server/store.ts:443` already migrates a pre-branching flat file — but a

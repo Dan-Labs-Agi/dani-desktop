@@ -1,12 +1,10 @@
 "use strict";
 
-const DESKTOP_MUTATION_HEADER = "x-danibot-desktop-owner";
+const DESKTOP_MUTATION_HEADER = "X-OpenMausBot-Desktop-Owner";
 
-/** Add the per-launch owner capability to main-process requests. Chromium's
- * webRequest hook cannot see Node fetch, so both paths use this one header
- * contract rather than relying on where a request happened to originate. */
+/** Chromium's webRequest hook cannot see Node fetch, so both paths add the owner capability here. */
 function desktopServerHeaders(headers, { packaged, token }) {
-  const next = { ...(headers ?? {}) };
+  const next = { ...headers };
   if (!packaged) return next;
   if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
     throw new Error("invalid desktop mutation capability");

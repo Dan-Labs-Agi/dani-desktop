@@ -1,12 +1,19 @@
-import { useEffect, useState } from "react";
-import { CalendarClock, CalendarDays, ImageOff, Loader2, Monitor, Plus, X } from "lucide-react";
+import { boatCapableEngine } from "@/lib/remote-desktop";
+import { useEffect, useRef, useState } from "react";
+import { CalendarClock, CalendarDays, Globe, ImageOff, Loader2, Monitor, Plus, X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { usePageVisible } from "@/lib/page-visible";
-import { remoteScreenshotSource } from "@/lib/remote-desktop";
+import { isRemoteScreenshotContention, remoteScreenshotSource } from "@/lib/remote-desktop";
 import type { Routine } from "@/lib/routines";
-import { api, useStore, type Bot } from "@/state/store";
+import { scheduleLabel } from "@/lib/schedule-label";
+import { api, ApiError, useStore, type Bot } from "@/state/store";
+import { releaseComputerPanelFocus, useComputerPanelEntry } from "@/lib/computer-panel-focus";
 import { RoutineEditor } from "./RoutinesPage";
+import { BrowserPanel, type BrowserSignIn } from "./BrowserPanel";
+import { SignInBanner } from "./SignInRequestCard";
+import { productName } from "@/lib/brand";
 
 function viewerAddress(raw: unknown): string {
   if (typeof raw !== "string" || !raw) throw new Error("The host did not return a live desktop link");
@@ -15,6 +22,7 @@ function viewerAddress(raw: unknown): string {
 }
 
 function routineScheduleLabel(routine: Routine) {
+  if (routine.schedule.type === "cron" || routine.schedule.type === "limit_reset") return scheduleLabel(routine.schedule);
   if (routine.schedule.type === "once") {
     return new Date(routine.schedule.at).toLocaleString([], {
       month: "short",
@@ -55,6 +63,8 @@ function nextRunLabel(at: number | null) {
 
 export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
   const { state, dispatch } = useStore();
+  const { dragProps } = useCaptionChrome();
+  const panelRef = useComputerPanelEntry(bot.id);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState<string | null>(null);
@@ -62,7 +72,20 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
   const [previewUnavailable, setPreviewUnavailable] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const pageVisible = usePageVisible();
+  const previewBusy = useRef(bot.busy);
+  useEffect(() => { previewBusy.current = bot.busy; }, [bot.busy]);
   const [creatingRoutine, setCreatingRoutine] = useState(false);
+  const [view, setView] = useState<"desktop" | "browser">("desktop");
+  const [signIn, setSignIn] = useState<BrowserSignIn>();
+  const help = state.computerControl[bot.id]?.help ?? null;
+  const asker = help ? state.bots.find((candidate) => candidate.id === help.botId)?.name ?? bot.name : bot.name;
+  const requestedSignIn = state.signInFocus?.botId === bot.id ? state.signInFocus : undefined;
+  useEffect(() => {
+    if (!requestedSignIn || requestedSignIn.consumed) return;
+    setView(requestedSignIn.place === "browser" ? "browser" : "desktop");
+    if (requestedSignIn.place === "browser") setSignIn({ url: requestedSignIn.url, site: requestedSignIn.site, nonce: requestedSignIn.requestId });
+    dispatch({ type: "signInFocusConsumed", requestId: requestedSignIn.requestId });
+  }, [dispatch, requestedSignIn]);
   const botRoutines = state.routines
     .filter((routine) => routine.botId === bot.id)
     .sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity));
@@ -71,9 +94,7 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
   );
   const cloudRoutineReady = Boolean(
     state.config?.box.configured &&
-      state.instances.some(
-        (instance) => instance.driverKind === "boxAgent" && instance.snapshot.state === "available",
-      ),
+      boatCapableEngine(state.instances, bot.modelSelection.instanceId)?.snapshot.state === "available",
   );
 
   useEffect(() => {
@@ -83,7 +104,7 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
   }, [bot.id]);
 
   useEffect(() => {
-    const viewer = window.dani?.desktopViewer;
+    const viewer = window.ogb?.desktopViewer;
     if (!viewer) return;
     let alive = true;
     void viewer.currentState().then((state) => {
@@ -99,44 +120,63 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
   }, [bot.id]);
 
   useEffect(() => {
-    if (!pageVisible || viewerOpen) return;
-    let alive = true;
+    if (view !== "desktop" || !pageVisible || viewerOpen || pending) return;
+    const controller = new AbortController();
     let requestRunning = false;
+    let lastAttemptAt = -Infinity;
+    let retryDelay: number | null = null;
+    let contentionSince: number | null = null;
     const shoot = async () => {
-      if (requestRunning) return;
+      if (requestRunning || controller.signal.aborted) return;
+      if (Date.now() - lastAttemptAt < (retryDelay ?? (previewBusy.current ? 4000 : 30_000))) return;
       requestRunning = true;
+      retryDelay = null;
       try {
         const source = remoteScreenshotSource(await api(`/api/bots/${bot.id}/computer/screenshot`, {
           method: "POST",
           body: "{}",
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(90_000)]),
         }));
-        if (alive && source) {
+        if (!controller.signal.aborted && source) {
           setFrame(source);
           setPreviewUnavailable(false);
-        } else if (alive) {
+          contentionSince = null;
+        } else if (!controller.signal.aborted) {
           setPreviewUnavailable(true);
         }
-      } catch {
-        if (alive) setPreviewUnavailable(true);
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          if (cause instanceof ApiError && isRemoteScreenshotContention(cause)) {
+            retryDelay = 1000;
+            contentionSince ??= Date.now();
+            const prolonged = Date.now() - contentionSince >= 10_000;
+            setPreviewUnavailable(prolonged);
+            setPreviewPending(!prolonged);
+          } else {
+            contentionSince = null;
+            setPreviewUnavailable(true);
+          }
+        }
       } finally {
-        if (alive) setPreviewPending(false);
+        if (!controller.signal.aborted && retryDelay === null) setPreviewPending(false);
         requestRunning = false;
+        lastAttemptAt = Date.now();
       }
     };
     void shoot();
-    const timer = window.setInterval(shoot, bot.busy ? 4_000 : 30_000);
+    const timer = window.setInterval(shoot, 1000);
     return () => {
-      alive = false;
+      controller.abort();
       window.clearInterval(timer);
     };
-  }, [bot.busy, bot.id, pageVisible, viewerOpen]);
+  }, [bot.id, pageVisible, viewerOpen, pending, view]);
 
   const open = async () => {
     setPending(true);
     setError(null);
     let tookControl = false;
     try {
-      if (!window.dani?.desktopViewer) throw new Error("The desktop viewer is unavailable in this build");
+      if (!window.ogb?.desktopViewer) throw new Error("The desktop viewer is unavailable in this build");
       await api(`/api/bots/${bot.id}/computer/control`, {
         method: "POST",
         body: JSON.stringify({ action: "take" }),
@@ -146,12 +186,12 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
         method: "POST",
         body: "{}",
       });
-      const opened = await window.dani.desktopViewer.open(
+      const opened = await window.ogb.desktopViewer.open(
         viewerAddress(joined.joinUrl),
         `${bot.name}'s live desktop`,
         bot.id,
       );
-      if (!opened) throw new Error("Dani Bot could not open the live desktop");
+      if (!opened) throw new Error(`${productName()} could not open the live desktop`);
     } catch (cause) {
       if (tookControl) {
         await api(`/api/bots/${bot.id}/computer/control`, {
@@ -170,25 +210,56 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
   };
 
   return (
-    <aside className="relative z-20 flex h-full w-[400px] shrink-0 flex-col border-l border-hairline bg-panel">
-      <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
+    <aside className="relative z-20 flex h-full w-[400px] shrink-0 flex-col border-l border-hairline bg-panel" ref={panelRef} data-computer-panel>
+      <div {...dragProps} className="flex items-center justify-between border-b border-hairline px-5 py-4">
         <div>
           <div className="text-[14px] font-medium text-ink">{bot.name}&apos;s computer</div>
           <div className="mt-0.5 text-[11px] text-ink-secondary">
             {bot.cloudBackend === "vps" ? "Self-hosted VPS" : "Cloud desktop"}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "toggleComputer", open: false })}
-          className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink"
-          aria-label="Close computer panel"
-        >
-          <X size={18} />
-        </button>
+        <div className="flex items-center gap-1">
+          <div className="flex rounded-full bg-inset p-0.5" aria-label="Bot panel view">
+            {(["desktop", "browser"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setView(option)}
+                aria-pressed={view === option}
+                className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px]", view === option ? "bg-card text-ink shadow-sm" : "text-ink-secondary hover:text-ink")}
+              >
+                {option === "desktop" ? <Monitor size={12} /> : <Globe size={12} />}
+                {option === "desktop" ? "Desktop" : "Browser"}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            data-computer-panel-close
+            onClick={() => {
+              releaseComputerPanelFocus(panelRef.current, bot.id);
+              dispatch({ type: "toggleComputer", open: false });
+            }}
+            className="rounded-md p-1 text-ink-secondary hover:bg-control hover:text-ink"
+            aria-label="Close computer panel"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
+      {view === "browser" ? (
+        <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-1">
+          {help?.place === "browser" && <div className="-mt-2 mb-3"><SignInBanner help={help} askerName={asker} onError={setError} /></div>}
+          <BrowserPanel bot={bot} signIn={signIn} />
+          {error && <div role="alert" className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">{error}</div>}
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-secondary">
+            Watching and driving this browser needs browser control for this paired device, in Settings → Remote access on the host computer.
+          </p>
+        </div>
+      ) : (
       <div className="flex flex-1 flex-col items-center gap-4 overflow-y-auto px-6 py-5 text-center">
+        {help && help.place !== "browser" && <div className="-mt-3 w-full"><SignInBanner help={help} askerName={asker} onError={setError} /></div>}
         <button
           type="button"
           onClick={() => void open()}
@@ -232,7 +303,7 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
             {error}
           </div>
         )}
-        <p className="text-[11px] leading-relaxed text-ink-tertiary">
+        <p className="text-[11px] leading-relaxed text-ink-secondary">
           The host must enable cloud desktop access for this paired device in Settings → Remote access.
         </p>
 
@@ -271,8 +342,8 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
                 >
                   <span className={cn("size-1.5 shrink-0 rounded-full", routine.enabled ? "bg-success" : "bg-ink-secondary/40")} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12.5px] font-medium text-ink">{routine.name}</span>
-                    <span className="block truncate text-[10.5px] text-ink-secondary">
+                    <span className="block truncate text-[13px] font-medium text-ink">{routine.name}</span>
+                    <span className="block truncate text-[11px] text-ink-secondary">
                       {routineScheduleLabel(routine)}{routine.runOn === "cloud" ? " · runs on VM" : ""}
                     </span>
                   </span>
@@ -302,11 +373,12 @@ export function RemoteDesktopPanel({ bot }: { bot: Bot }) {
           </div>
         </div>
       </div>
+      )}
       {creatingRoutine && (
         <RoutineEditor
           bots={[bot]}
           lockedBotId={bot.id}
-          defaultRunOn={cloudRoutineReady ? "cloud" : "dani"}
+          defaultRunOn={cloudRoutineReady ? "cloud" : "maus"}
           onClose={() => setCreatingRoutine(false)}
         />
       )}

@@ -7,14 +7,21 @@ import {
 } from "./workspace-credentials.mjs";
 
 describe("workspace credential migration", () => {
+  it("stores the router key separately while keeping provider settings", () => {
+    const result = migrateWorkspaceCredentials({ imageGen: {
+      provider: "custom", key: "openai-only", customApiKey: "router-only",
+      customUrl: "http://127.0.0.1:4000/v1", customModel: "local/image",
+    } }, {});
+    expect(result.credentials).toEqual({ openaiImageApiKey: "openai-only", customImageApiKey: "router-only" });
+    expect(result.config.imageGen).toEqual({ provider: "custom", customUrl: "http://127.0.0.1:4000/v1", customModel: "local/image" });
+    expect(workspaceCredentialEnv(result.credentials)).toEqual({ OMB_OPENAI_IMAGE_KEY: "openai-only", OMB_CUSTOM_IMAGE_KEY: "router-only" });
+  });
   it("moves every plaintext secret into the store and deletes the field", () => {
     const config = {
       xai: { key: "xai-secret", url: "https://api.example.test/v1" },
-      openaiCompat: { key: "openai-secret", model: "gpt-test" },
-      box: { token: "box-secret" },
-      tts: { key: "tts-secret", voice: "narrator" },
+      box: { token: "boat-secret" },
+      tts: { key: "tts-secret", fishKey: "fish-secret", voice: "narrator" },
       imageGen: { key: "image-secret" },
-      liveCall: { apiKey: "realtime-secret", provider: "openai-realtime" },
       opencodeGo: { apiKey: "ocg-secret" },
       profile: { name: "Ada" },
     };
@@ -23,27 +30,35 @@ describe("workspace credential migration", () => {
     expect(result.credentialsChanged).toBe(true);
     expect(result.credentials).toEqual({
       xaiApiKey: "xai-secret",
-      openaiApiKey: "openai-secret",
-      boxToken: "box-secret",
+      boxToken: "boat-secret",
       ttsKey: "tts-secret",
+      fishAudioKey: "fish-secret",
       opencodeGoApiKey: "ocg-secret",
       openaiImageApiKey: "image-secret",
-      openaiRealtimeApiKey: "realtime-secret",
     });
-    // secrets are DELETED (not blanked) so "" stays meaningful as "cleared";
-    // non-secret siblings (endpoint url, chosen voice) stay in the file
     expect(result.config).toEqual({
       xai: { url: "https://api.example.test/v1" },
-      openaiCompat: { model: "gpt-test" },
       box: {},
       tts: { voice: "narrator" },
       imageGen: {},
-      liveCall: { provider: "openai-realtime" },
       opencodeGo: {},
       profile: { name: "Ada" },
     });
-    // inputs are never mutated — main.mjs decides which files to rewrite
     expect(config.xai.key).toBe("xai-secret");
+  });
+
+  it("keeps the Jev and OpenRouter decision keys apart, with the model and provider left in the file", () => {
+    const result = migrateWorkspaceCredentials({
+      decider: { provider: "openrouter", openrouterModel: "openai/gpt-4o-mini", key: "jev-secret", openrouterKey: "sk-or-secret", enabled: true },
+      openrouter: { key: "engine-openrouter-key" },
+    }, {});
+    expect(result.credentials).toEqual({ jevApiKey: "jev-secret", openrouterDeciderKey: "sk-or-secret" });
+    expect(result.config.decider).toEqual({ provider: "openrouter", openrouterModel: "openai/gpt-4o-mini", enabled: true });
+    expect(result.config.openrouter).toEqual({ key: "engine-openrouter-key" });
+    expect(workspaceCredentialEnv(result.credentials)).toEqual({
+      OMB_JEV_API_KEY: "jev-secret",
+      OMB_OPENROUTER_DECIDER_KEY: "sk-or-secret",
+    });
   });
 
   it("is idempotent: a second boot over migrated output changes nothing", () => {
@@ -59,8 +74,6 @@ describe("workspace credential migration", () => {
   });
 
   it("treats a saved non-empty value as newest intent and overwrites the store", () => {
-    // mid-session key change: the server persisted the new key to config.json;
-    // the stale stored secret must not win at the next boot
     const result = migrateWorkspaceCredentials(
       { box: { token: "box-NEW" } },
       { boxToken: "box-OLD", xaiApiKey: "xai-keep" },
@@ -70,27 +83,21 @@ describe("workspace credential migration", () => {
   });
 
   it("treats an empty saved value as no information and keeps the stored secret", () => {
-    // The packaged app tombstones every external-mode save as "" in
-    // config.json while the real key goes to credentials.bin — a boot that
-    // read "" as "cleared" would delete freshly saved keys on every restart.
+    // The packaged app tombstones every external-mode save as "" in config.json while the key goes to credentials.bin.
     const result = migrateWorkspaceCredentials(
       { xai: { key: "" }, tts: { key: "   " } },
       { xaiApiKey: "xai-OLD", ttsKey: "tts-OLD", boxToken: "box-keep" },
     );
     expect(result.credentialsChanged).toBe(false);
     expect(result.credentials).toEqual({ xaiApiKey: "xai-OLD", ttsKey: "tts-OLD", boxToken: "box-keep" });
-    // the swept field itself is still removed from the file
     expect(result.config).toEqual({ xai: {}, tts: {} });
     expect(result.configChanged).toBe(true);
   });
 
   it("keeps the packaged save → restart cycle lossless end to end", () => {
-    // first boot migrates the plaintext key in and sweeps the field
     const boot = migrateWorkspaceCredentials({ opencodeGo: { apiKey: "ocg-secret" } }, {});
     expect(boot.credentials).toEqual({ opencodeGoApiKey: "ocg-secret" });
 
-    // an external-mode save commits the key to the store and leaves a ""
-    // tombstone in config.json; the next boot must not read it as a clear
     const afterTombstone = migrateWorkspaceCredentials(
       { opencodeGo: { apiKey: "" }, profile: { name: "Ada" } },
       { opencodeGoApiKey: "ocg-secret" },
@@ -120,25 +127,20 @@ describe("workspace credential env", () => {
     expect(
       workspaceCredentialEnv({
         xaiApiKey: "xai-secret",
-        openaiApiKey: "openai-secret",
-        boxToken: "box-secret",
+        boxToken: "boat-secret",
         ttsKey: "tts-secret",
+        fishAudioKey: "fish-secret",
         opencodeGoApiKey: "ocg-secret",
         openaiImageApiKey: "image-secret",
-        openaiRealtimeApiKey: "realtime-secret",
-      openaiRealtimeApiKey: "realtime-secret",
         composioApiKey: "ak_handled-separately",
       }),
     ).toEqual({
       XAI_API_KEY: "xai-secret",
-      OPENAI_COMPAT_API_KEY: "openai-secret",
-      BOX_TOKEN: "box-secret",
-      DANI_TTS_KEY: "tts-secret",
+      BOX_TOKEN: "boat-secret",
       OMB_TTS_KEY: "tts-secret",
+      OMB_FISH_AUDIO_API_KEY: "fish-secret",
       OPENCODE_API_KEY: "ocg-secret",
-      DANI_OPENAI_IMAGE_KEY: "image-secret",
       OMB_OPENAI_IMAGE_KEY: "image-secret",
-      DANI_OPENAI_REALTIME_KEY: "realtime-secret",
     });
   });
 
@@ -151,7 +153,6 @@ describe("workspace credential env", () => {
   it("covers every credential the migration table declares", () => {
     const credentials = Object.fromEntries(WORKSPACE_CREDENTIALS.map((c) => [c.name, `v-${c.name}`]));
     const env = workspaceCredentialEnv(credentials);
-    const expected = WORKSPACE_CREDENTIALS.flatMap((c) => (c.legacyEnv ? [c.env, c.legacyEnv] : [c.env])).sort();
-    expect(Object.keys(env).sort()).toEqual(expected);
+    expect(Object.keys(env).sort()).toEqual(WORKSPACE_CREDENTIALS.map((c) => c.env).sort());
   });
 });

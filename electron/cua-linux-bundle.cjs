@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const STAGE_PREFIX = "danibot-cua-linux-x64-";
+const STAGE_PREFIX = "openmausbot-cua-linux-x64-";
 const LEGACY_STAGE_GRACE_MS = 10 * 60 * 1000;
 const FILES = Object.freeze({
   "cua-driver": "ed5844fadf07b9b72c4a3b3802e1c47233c166d66d6198608d5991f807aab4ac",
@@ -31,8 +31,7 @@ function processReferencesDirectory(directory, {
   try {
     processes = fileSystem.readdirSync(procRoot);
   } catch {
-    // If process discovery is unavailable, retain the candidate. Cleanup is
-    // optional; deleting a stage that might still be in use is not.
+    // Cleanup is optional; deleting a stage that might still be in use is not.
     return true;
   }
   for (const processName of processes) {
@@ -132,8 +131,6 @@ function reapStaleAppImageCuaBundles({
       fileSystem.rmSync(directory, { recursive: true, force: false });
       removed.push(directory);
     } catch {
-      // A concurrent process may have replaced or started using the stage.
-      // Retaining it is always safer than broadening cleanup.
     }
   }
   return removed;

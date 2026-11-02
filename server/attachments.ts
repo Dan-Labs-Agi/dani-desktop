@@ -1,6 +1,3 @@
-// Image attachments: pasted/dropped images become files under
-// ~/.danibot/attachments so every CLI engine can open them by path —
-// the app never ships image bytes through the prompt itself.
 import { createHash, randomUUID } from "node:crypto";
 import {
   createReadStream,
@@ -14,26 +11,35 @@ import {
 } from "node:fs";
 import { link, open, unlink } from "node:fs/promises";
 import { join, extname } from "node:path";
+import { FILE_MAX_BYTES } from "../shared/upload-limits.ts";
 import { DATA_DIR } from "./config.ts";
 
+export { FILE_MAX_BYTES } from "../shared/upload-limits.ts";
 export const ATTACHMENTS_DIR = join(DATA_DIR, "attachments");
 
-/** The spec's ceiling: a screenshot bigger than this is rejected before it
- * is ever buffered, matching the composer's existing size discipline. */
 export const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
-/** Shared documents are deliberately smaller than Cloudflare's transport
- * ceiling. This is a local inbox, not unbounded remote storage. */
-export const FILE_MAX_BYTES = 25 * 1024 * 1024;
+export const DEFAULT_ATTACHMENTS_MAX_BYTES = 512 * 1024 * 1024;
+/** A person's own Cloud is the only home of everything their computers held, on a volume a move grows to fit. */
+export const CLOUD_HOME_ATTACHMENTS_MAX_BYTES = 8 * 1024 * 1024 * 1024;
 
-/** Attachments are durable because prompts refer to their paths. Never
- * silently evict them: once this ceiling is reached, a new upload gets an
- * explicit 507 and the person can decide what to remove. */
-export const ATTACHMENTS_MAX_BYTES = 512 * 1024 * 1024;
+/** A team server can raise the ceiling with OMB_ATTACHMENTS_MAX_BYTES; a missing or invalid value keeps 512 MB, or 8 GB on a Cloud home. */
+export function attachmentsMaxBytes(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.OMB_ATTACHMENTS_MAX_BYTES?.trim();
+  const parsed = raw ? Number(raw) : NaN;
+  if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+  return env.OMB_CLOUD_ROLE === "home" || env.OMB_CLOUD_ROLE === "team" ? CLOUD_HOME_ATTACHMENTS_MAX_BYTES : DEFAULT_ATTACHMENTS_MAX_BYTES;
+}
 
-/** Interrupted streamed uploads use private partial files. A crash can leave
- * one behind, so future uploads remove only our stale partials — never a
- * committed attachment that a transcript may still reference. */
+/** Never evict: prompts refer to attachment paths, so at this ceiling a new upload gets an explicit 507. */
+export const ATTACHMENTS_MAX_BYTES = attachmentsMaxBytes();
+
+function formatStoreLimit(bytes: number): string {
+  const mb = Math.round(bytes / (1024 * 1024));
+  return mb >= 1 ? `${mb} MB` : `${bytes} bytes`;
+}
+
+/** Cleanup removes only our stale partial files, never a committed attachment a transcript may reference. */
 export const ATTACHMENT_PARTIAL_MAX_AGE_MS = 60 * 60 * 1000;
 
 const PARTIAL_NAME = /^\.openmaus-upload-[0-9a-f-]+-[0-9a-f-]+\.partial$/i;
@@ -43,8 +49,17 @@ const uploadLocks = new Map<string, Promise<void>>();
 let reservedAttachmentBytes = 0;
 const STREAM_RESERVATION_INCREMENT_BYTES = 1024 * 1024;
 
-/** Mimes the endpoint accepts, mapped to the extension stored on disk.
- * Sniffing is not attempted — a lie here only changes the filename. */
+/** Cached quota usage (null: rescan needed); single-process state, since one server owns a data dir. */
+let committedAttachmentBytes: number | null = null;
+// An async link may finish after a scan already counted its file; the version keeps it from counting twice.
+let attachmentAccountingVersion = 0;
+
+function invalidateAttachmentAccounting(): void {
+  committedAttachmentBytes = null;
+  attachmentAccountingVersion += 1;
+}
+
+/** No sniffing: a lying mime only changes the filename. */
 const IMAGE_MIMES: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
@@ -52,12 +67,23 @@ const IMAGE_MIMES: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-/** Useful document formats accepted by the phone share sheet.
- * Generic archives, binaries, HTML, SVG, and executable/script mimes stay
- * out. Office/OpenDocument packages are allowed because they are documents,
- * despite using ZIP internally. The claimed mime determines the extension;
- * an attacker-controlled filename never does. */
+/** No archives, binaries, HTML, SVG or scripts. The claimed mime picks the extension; an attacker's filename never does. */
 const FILE_MIMES: Readonly<Record<string, string>> = {
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "video/quicktime": ".mov",
+  "audio/opus": ".opus",
+  "audio/ogg": ".ogg",
+  "audio/mpeg": ".mp3",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+  "audio/aac": ".aac",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+  "audio/wave": ".wav",
+  "audio/flac": ".flac",
+  "audio/x-flac": ".flac",
+  "audio/webm": ".webm",
   "text/plain": ".txt",
   "text/markdown": ".md",
   "text/csv": ".csv",
@@ -95,16 +121,14 @@ export function validateAttachmentUploadId(value: string | undefined): string | 
   return normalized;
 }
 
-function attachmentUsageAndCleanup(now = Date.now()): { bytes: number; removed: number } {
+function scanAttachmentUsageAndCleanup(now = Date.now()): { bytes: number; removed: number } {
   ensureAttachmentsDir();
   let bytes = 0;
   let removed = 0;
   for (const entry of readdirSync(ATTACHMENTS_DIR, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const path = join(ATTACHMENTS_DIR, entry.name);
-    // A live partial is represented by its in-memory reservation. A fresh
-    // orphan from a crashed process still occupies disk and therefore counts
-    // until this same scan is allowed to remove it.
+    // A live partial is counted by its reservation; a crashed process's orphan counts until this scan removes it.
     if (PARTIAL_NAME.test(entry.name) && activePartials.has(path)) continue;
     try {
       const stat = statSync(path);
@@ -115,22 +139,53 @@ function attachmentUsageAndCleanup(now = Date.now()): { bytes: number; removed: 
         bytes += stat.size;
       }
     } catch {
-      // A concurrent cleanup or manual removal made this entry consume zero.
     }
   }
   return { bytes, removed };
 }
 
-/** Remove only abandoned temporary uploads. Active partials are protected
- * even if a very slow request crosses the age threshold. */
-export function cleanupStaleAttachmentPartials(now = Date.now()): number {
-  return attachmentUsageAndCleanup(now).removed;
+/** Reservations must use this rather than trust a cold cache. */
+function committedBytes(): number {
+  if (committedAttachmentBytes === null) {
+    committedAttachmentBytes = scanAttachmentUsageAndCleanup().bytes;
+    attachmentAccountingVersion += 1;
+  }
+  return committedAttachmentBytes;
 }
 
-/** A retry owns the same UUID namespace as the interrupted attempt. Once it
- * holds that UUID's in-process lock, any inactive partial with the prefix is
- * from a crashed/failed process and can be replaced immediately instead of
- * consuming quota for an hour. */
+/** Never for idempotent retries, which reuse bytes already counted; after an accounting change the next reservation rescans. */
+function addCommittedBytes(delta: number, version = attachmentAccountingVersion): void {
+  if (version !== attachmentAccountingVersion || committedAttachmentBytes === null) {
+    invalidateAttachmentAccounting();
+    return;
+  }
+  committedAttachmentBytes += delta;
+}
+
+export function cleanupStaleAttachmentPartials(now = Date.now()): number {
+  const { bytes, removed } = scanAttachmentUsageAndCleanup(now);
+  committedAttachmentBytes = bytes;
+  attachmentAccountingVersion += 1;
+  return removed;
+}
+
+/** Every removal of a file saveImage/saveFile created must come through here, or the cache overcounts and rejects uploads. */
+export function deleteAttachment(path: string): void {
+  try {
+    const size = committedAttachmentBytes !== null ? statSync(path).size : 0;
+    unlinkSync(path);
+    if (committedAttachmentBytes !== null) {
+      committedAttachmentBytes = Math.max(0, committedAttachmentBytes - size);
+    }
+  } catch {
+  }
+}
+
+export function __resetAttachmentAccountingForTests(): void {
+  invalidateAttachmentAccounting();
+}
+
+/** Holding the upload id's lock, any inactive partial with its prefix is a crashed attempt and can go now. */
 function cleanupAttachmentPartialsForUpload(uploadId: string): void {
   ensureAttachmentsDir();
   const prefix = `.openmaus-upload-${uploadId}-`;
@@ -139,9 +194,12 @@ function cleanupAttachmentPartialsForUpload(uploadId: string): void {
     const path = join(ATTACHMENTS_DIR, entry.name);
     if (activePartials.has(path)) continue;
     try {
+      const size = committedAttachmentBytes !== null ? statSync(path).size : 0;
       unlinkSync(path);
+      if (committedAttachmentBytes !== null) {
+        committedAttachmentBytes = Math.max(0, committedAttachmentBytes - size);
+      }
     } catch {
-      // A concurrent cleanup already removed the abandoned attempt.
     }
   }
 }
@@ -156,17 +214,18 @@ class AttachmentReservation {
   }
 
   private reserveAtLeast(required: number, preferred: number): void {
-    const used = attachmentUsageAndCleanup().bytes;
-    const available = ATTACHMENTS_MAX_BYTES - used - reservedAttachmentBytes;
+    let available = ATTACHMENTS_MAX_BYTES - committedBytes() - reservedAttachmentBytes;
+    if (available < required) {
+      // People free space by deleting attachments outside the app, which the cache never sees.
+      invalidateAttachmentAccounting();
+      available = ATTACHMENTS_MAX_BYTES - committedBytes() - reservedAttachmentBytes;
+    }
     if (available < required) {
       throw statusError(
         507,
-        `attachments storage is full (limit ${ATTACHMENTS_MAX_BYTES} bytes)`,
+        `attachments storage is full (${formatStoreLimit(ATTACHMENTS_MAX_BYTES)} limit)`,
       );
     }
-    // Unknown-length HTTP bodies reserve in bounded chunks. Taking whatever
-    // remains below the preferred increment avoids falsely rejecting a small
-    // final upload near the quota while still bounding directory scans.
     const granted = Math.min(preferred, available);
     reservedAttachmentBytes += granted;
     this.held += granted;
@@ -208,13 +267,27 @@ async function withUploadLock<T>(uploadId: string | undefined, operation: () => 
   }
 }
 
+/** saveFile/saveImage only ever write `${uuid}${extension}` with one of these extensions. */
+const KNOWN_ATTACHMENT_EXTENSIONS = Array.from(
+  new Set([...Object.values(IMAGE_MIMES), ...Object.values(FILE_MIMES)]),
+);
+
+function statSizeIfFile(path: string): number | null {
+  try {
+    const stat = statSync(path);
+    return stat.isFile() ? stat.size : null;
+  } catch {
+    return null;
+  }
+}
+
 function committedPathForUpload(uploadId: string, extension: string): string | null {
   ensureAttachmentsDir();
-  const exact = `${uploadId}${extension}`;
-  for (const entry of readdirSync(ATTACHMENTS_DIR, { withFileTypes: true })) {
-    if (!entry.isFile() || PARTIAL_NAME.test(entry.name)) continue;
-    if (entry.name === exact) return join(ATTACHMENTS_DIR, entry.name);
-    if (entry.name.startsWith(`${uploadId}.`)) {
+  const exactPath = join(ATTACHMENTS_DIR, `${uploadId}${extension}`);
+  if (statSizeIfFile(exactPath) !== null) return exactPath;
+  for (const other of KNOWN_ATTACHMENT_EXTENSIONS) {
+    if (other === extension) continue;
+    if (statSizeIfFile(join(ATTACHMENTS_DIR, `${uploadId}${other}`)) !== null) {
       throw statusError(409, "uploadId was already used for another content type");
     }
   }
@@ -234,8 +307,6 @@ export interface SavedAttachment {
 }
 
 export interface SavedFile extends SavedAttachment {
-  /** Safe display name derived from the shared filename. The on-disk name is
-   * always the UUID at the end of `path`. */
   name: string;
 }
 
@@ -253,13 +324,10 @@ export function extensionForFileMime(mime: string | undefined): string | null {
   return value ? FILE_MIMES[value] ?? null : null;
 }
 
-/** Strip platform-reserved characters and replace any sender-provided
- * extension with the canonical one for the accepted mime. Separators and
- * encoded separators are rejected rather than massaged so traversal attempts
- * remain visible as bad requests. */
+/** Separators and encoded separators are rejected, not massaged, so traversal attempts stay visible as bad requests. */
 export function sanitizeSharedFileName(name: string, mime: string): string {
   const extension = extensionForFileMime(mime);
-  if (!extension) throw statusError(400, "content-type must be a supported document type");
+  if (!extension) throw statusError(400, "content-type must be a supported document or audio type");
 
   const normalized = name.normalize("NFKC").trim();
   if (!normalized) throw statusError(400, "name is required");
@@ -284,9 +352,7 @@ export function sanitizeSharedFileName(name: string, mime: string): string {
   return `${boundedStem}${extension}`;
 }
 
-/** Stream one shared document to a generated file without ever collecting
- * the request in memory. A failed, empty, or oversized upload leaves no
- * partial file behind. */
+/** Never buffers the request; a failed, empty or oversized upload leaves no partial file. */
 export async function saveFile(
   chunks: AsyncIterable<Uint8Array>,
   originalName: string,
@@ -295,7 +361,7 @@ export async function saveFile(
 ): Promise<SavedFile> {
   const normalized = normalizedMime(mime);
   if (!normalized || !extensionForFileMime(normalized)) {
-    throw statusError(400, "content-type must be a supported document type");
+    throw statusError(400, "content-type must be a supported document or audio type");
   }
   const name = sanitizeSharedFileName(originalName, normalized);
   const extension = extensionForFileMime(normalized)!;
@@ -342,6 +408,7 @@ export async function saveFile(
     let file: Awaited<ReturnType<typeof open>> | undefined;
     let bytes = 0;
     let closed = false;
+    let partialCleanupFailed = false;
 
     try {
       file = await open(partialPath, "wx", 0o600);
@@ -366,7 +433,9 @@ export async function saveFile(
       await file.close();
       closed = true;
       try {
+        const accountingVersion = attachmentAccountingVersion;
         await link(partialPath, path);
+        addCommittedBytes(bytes, accountingVersion);
         await unlink(partialPath);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
@@ -378,18 +447,60 @@ export async function saveFile(
       return { path, name, mime: normalized, bytes };
     } catch (error) {
       if (file && !closed) await file.close().catch(() => undefined);
-      await unlink(partialPath).catch(() => undefined);
+      await unlink(partialPath).catch(() => { partialCleanupFailed = true; });
       throw error;
     } finally {
       activePartials.delete(partialPath);
+      // Rescan after releasing a leftover partial, so a retry cannot subtract bytes never counted.
+      if (partialCleanupFailed) invalidateAttachmentAccounting();
       reservation.release();
     }
   });
 }
 
-/** Persist one image and return its path. The UUID filename means the name
- * is never attacker-controlled and never collides; the extension preserves
- * the format the sender claimed. */
+/** An attachment another computer's chats name, kept under that name: counted against the store's limit like any
+ * upload (507 when it is full), written under a partial name cleanup knows, never over a file already here, and never
+ * leaving a partial file behind. `stored`: false when the same file was here already. */
+export async function saveNamedAttachment(name: string, chunks: AsyncIterable<Uint8Array>, expectedBytes?: number): Promise<{ stored: boolean }> {
+  if (expectedBytes !== undefined && expectedBytes > FILE_MAX_BYTES) throw statusError(413, `attachments are limited to ${FILE_MAX_BYTES} bytes`);
+  ensureAttachmentsDir();
+  const path = join(ATTACHMENTS_DIR, name);
+  const partialPath = join(ATTACHMENTS_DIR, `.openmaus-upload-${randomUUID()}-${randomUUID()}.partial`);
+  const reservation = new AttachmentReservation();
+  activePartials.add(partialPath);
+  let file: Awaited<ReturnType<typeof open>> | undefined;
+  let partialCleanupFailed = false;
+  try {
+    if (expectedBytes) reservation.reserve(expectedBytes);
+    file = await open(partialPath, "wx", 0o600);
+    let bytes = 0;
+    for await (const value of chunks) {
+      const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+      if (bytes + chunk.byteLength > FILE_MAX_BYTES) throw statusError(413, `attachments are limited to ${FILE_MAX_BYTES} bytes`);
+      reservation.ensure(bytes + chunk.byteLength);
+      await file.write(chunk);
+      bytes += chunk.byteLength;
+    }
+    await file.close();
+    file = undefined;
+    const accountingVersion = attachmentAccountingVersion;
+    try { await link(partialPath, path); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return { stored: false };
+      throw error;
+    }
+    addCommittedBytes(bytes, accountingVersion);
+    return { stored: true };
+  } finally {
+    if (file) await file.close().catch(() => undefined);
+    await unlink(partialPath).catch(() => { partialCleanupFailed = true; });
+    activePartials.delete(partialPath);
+    if (partialCleanupFailed) invalidateAttachmentAccounting();
+    reservation.release();
+  }
+}
+
+/** The UUID filename is never attacker-controlled and never collides. */
 export function saveImage(bytes: Buffer, mime: string, requestedUploadId?: string): SavedAttachment {
   const ext = extensionForMime(mime);
   if (!ext) throw Object.assign(new Error("unsupported image type"), { status: 400 });
@@ -415,10 +526,12 @@ export function saveImage(bytes: Buffer, mime: string, requestedUploadId?: strin
   const path = join(ATTACHMENTS_DIR, name);
   const partialPath = join(ATTACHMENTS_DIR, `.openmaus-upload-${id}-${randomUUID()}.partial`);
   activePartials.add(partialPath);
+  let partialCleanupFailed = false;
   try {
     writeFileSync(partialPath, bytes, { mode: 0o600, flag: "wx" });
     try {
       linkSync(partialPath, path);
+      addCommittedBytes(bytes.byteLength);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       const saved = readFileSync(path);
@@ -432,19 +545,71 @@ export function saveImage(bytes: Buffer, mime: string, requestedUploadId?: strin
     try {
       unlinkSync(partialPath);
     } catch {
-      // The successful path already removed it, or the write never created it.
+      partialCleanupFailed = true;
     }
     throw error;
   } finally {
     activePartials.delete(partialPath);
+    if (partialCleanupFailed) invalidateAttachmentAccounting();
     reservation.release();
   }
 }
 
-/** HTTP uploads take the same per-ID lock as streamed files. saveImage stays
- * synchronous for generated avatars, while this wrapper prevents an image
- * and a document using the same caller-supplied UUID from committing with
- * different extensions at the same time. */
+/** Cloud voices answer in MP3; the built-in Mac voices (`say`) and Chatterbox answer in WAV. */
+const AUDIO_MIMES: Readonly<Record<string, { mime: string; ext: string }>> = {
+  "audio/mpeg": { mime: "audio/mpeg", ext: ".mp3" },
+  "audio/wav": { mime: "audio/wav", ext: ".wav" },
+  "audio/x-wav": { mime: "audio/wav", ext: ".wav" },
+  "audio/wave": { mime: "audio/wav", ext: ".wav" },
+};
+
+export function saveAudio(bytes: Buffer, mime: string): SavedAttachment {
+  const format = AUDIO_MIMES[mime.split(";")[0]!.trim().toLowerCase()];
+  if (!format) {
+    throw Object.assign(new Error("unsupported audio type"), { status: 400 });
+  }
+  if (bytes.byteLength === 0) throw Object.assign(new Error("empty audio"), { status: 400 });
+  if (bytes.byteLength > FILE_MAX_BYTES) {
+    throw Object.assign(new Error(`audio exceeds ${FILE_MAX_BYTES} bytes`), { status: 413 });
+  }
+  ensureAttachmentsDir();
+  const reservation = new AttachmentReservation();
+  reservation.reserve(bytes.byteLength);
+  const id = randomUUID();
+  const name = `${id}${format.ext}`;
+  const path = join(ATTACHMENTS_DIR, name);
+  const partialPath = join(ATTACHMENTS_DIR, `.openmaus-upload-${id}-${randomUUID()}.partial`);
+  activePartials.add(partialPath);
+  let partialCleanupFailed = false;
+  try {
+    writeFileSync(partialPath, bytes, { mode: 0o600, flag: "wx" });
+    try {
+      linkSync(partialPath, path);
+      addCommittedBytes(bytes.byteLength);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const saved = readFileSync(path);
+      if (!saved.equals(bytes)) {
+        throw Object.assign(new Error("audio destination already exists with different bytes"), { status: 409 });
+      }
+    }
+    unlinkSync(partialPath);
+    return { path, mime: format.mime, bytes: bytes.byteLength };
+  } catch (error) {
+    try {
+      unlinkSync(partialPath);
+    } catch {
+      partialCleanupFailed = true;
+    }
+    throw error;
+  } finally {
+    activePartials.delete(partialPath);
+    if (partialCleanupFailed) invalidateAttachmentAccounting();
+    reservation.release();
+  }
+}
+
+/** Takes the per-id lock, so an image and a document with one caller-supplied UUID cannot commit with different extensions. */
 export async function saveImageUpload(
   bytes: Buffer,
   mime: string,
@@ -457,8 +622,6 @@ export async function saveImageUpload(
   });
 }
 
-/** Existence check with the same name discipline as readAttachment, without
- * reading up to 10MB of pixels just to learn the file is there. */
 export function attachmentExists(name: string): boolean {
   if (!/^[A-Za-z0-9-]+\.(png|jpg|gif|webp)$/.test(name)) return false;
   try {
@@ -468,13 +631,11 @@ export function attachmentExists(name: string): boolean {
   }
 }
 
-/** Read an attachment back for serving. Only names that are exactly a bare
- * filename (no separators, no dotfiles) inside ATTACHMENTS_DIR resolve —
- * the route must never become a general file server for the data dir. */
+/** Only a bare filename inside ATTACHMENTS_DIR resolves: the route must never become a file server for the data dir. */
 export function readAttachment(name: string): { bytes: Buffer; mime: string } | null {
-  if (!/^[A-Za-z0-9-]+\.(png|jpg|jpeg|gif|webp)$/.test(name)) return null;
+  if (!/^[A-Za-z0-9-]+\.(png|jpg|jpeg|gif|webp|mp3|wav)$/.test(name)) return null;
   const path = join(ATTACHMENTS_DIR, name);
-  if (extname(path) === ".jpeg") return null; // saved as .jpg; .jpeg is not a name we write
+  if (extname(path) === ".jpeg") return null;
   try {
     return { bytes: readFileSync(path), mime: mimeForExt(extname(path)) };
   } catch {
@@ -492,7 +653,40 @@ function mimeForExt(ext: string): string {
       return "image/gif";
     case ".webp":
       return "image/webp";
+    case ".mp3":
+      return "audio/mpeg";
+    case ".wav":
+      return "audio/wav";
     default:
       return "application/octet-stream";
   }
+}
+
+/** `none`: answer as if no Range header (absent, malformed, non-bytes, multi-range); `unsatisfiable`: a start at or past EOF, answered 416. */
+export type AudioRange =
+  | { kind: "none" }
+  | { kind: "unsatisfiable" }
+  | { kind: "range"; start: number; end: number };
+
+/** Honours only `a-b`, `a-` and `-n`; anything else gets the whole file, always a correct answer to a GET. */
+export function parseAudioRange(header: string | undefined, size: number): AudioRange {
+  const raw = header?.trim();
+  if (!raw) return { kind: "none" };
+  const m = raw.match(/^bytes=(\d*)-(\d*)$/);
+  if (!m) return { kind: "none" };
+  const [, rawStart, rawEnd] = m;
+  if (rawStart === "") {
+    // `bytes=-` is malformed, not a suffix range; `bytes=-0` is unsatisfiable per RFC 9110.
+    if (rawEnd === "") return { kind: "none" };
+    const suffix = Number(rawEnd);
+    if (!suffix) return { kind: "unsatisfiable" };
+    if (size === 0) return { kind: "unsatisfiable" };
+    return { kind: "range", start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(rawStart);
+  if (start >= size) return { kind: "unsatisfiable" };
+  if (rawEnd === "") return { kind: "range", start, end: size - 1 };
+  const end = Number(rawEnd);
+  if (end < start) return { kind: "none" };
+  return { kind: "range", start, end: Math.min(end, size - 1) };
 }

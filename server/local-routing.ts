@@ -1,3 +1,6 @@
+const HOSTS_WITH_LOCAL_CONTROL = new Set<NodeJS.Platform>(["darwin", "win32", "linux"]);
+const HOSTS_WITH_AUTO_LOCAL = new Set<NodeJS.Platform>(["darwin", "win32"]);
+
 export function shouldMountLocalComputer({
   requested,
   hostPlatform = process.platform,
@@ -8,8 +11,6 @@ export function shouldMountLocalComputer({
   providerSupportsLocal: boolean;
 }): boolean {
   if (!providerSupportsLocal) return false;
-  if (requested === "local") return hostPlatform === "darwin" || hostPlatform === "linux";
-  // Preserve the established macOS Auto behavior. Linux local control is a
-  // beta and can only be selected explicitly per bot.
-  return requested === undefined && hostPlatform === "darwin";
+  if (requested === "local") return HOSTS_WITH_LOCAL_CONTROL.has(hostPlatform);
+  return requested === undefined && HOSTS_WITH_AUTO_LOCAL.has(hostPlatform);
 }
