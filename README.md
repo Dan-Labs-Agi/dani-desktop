@@ -23,11 +23,14 @@ Talk to them like contacts. Watch them work. Approve what matters.
 
 ### ⬇️ Download Dani Bot
 
-**macOS** — [Apple Silicon](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg) · [Intel](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg)<br>
-**Windows** — [Installer (.exe)](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe) · [Portable (.zip)](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip)<br>
-**Linux** — [AppImage](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage) · [Ubuntu/Debian (.deb)](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb)
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><img src="https://img.shields.io/badge/Download-macOS_Apple_Silicon-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Apple Silicon)"></a>
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg"><img src="https://img.shields.io/badge/Download-macOS_Intel-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Intel)"></a>
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe"><img src="https://img.shields.io/badge/Download-Windows_Installer-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (installer)"></a>
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip"><img src="https://img.shields.io/badge/Download-Windows_Portable-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (portable zip)"></a>
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage"><img src="https://img.shields.io/badge/Download-Linux_AppImage-b85c00?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux (AppImage)"></a>
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb"><img src="https://img.shields.io/badge/Download-Linux_.deb-b85c00?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Download for Linux (deb)"></a>
 
-<sub>These links always fetch the newest release. [All downloads and release notes →](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
+<sub>These buttons always fetch the newest release. [All downloads and release notes →](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
 
 <br>
 
