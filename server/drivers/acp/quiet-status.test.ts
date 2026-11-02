@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { removeTempDir } from "../../testing/cleanup.ts";
 import {
-  classifyQuiet, describeQuiet, LogTail, parseOpenCodeLogLine, parseQwenLogLine, quietKey, sampleLinuxProc, sampleProcessTree, startedSince, treePids,
+  classifyQuiet, clearsLoggedBeforeNotice, describeQuiet, LogTail, parseOpenCodeLogLine, parseQwenLogLine, quietKey, sampleLinuxProc, sampleProcessTree, startedSince, treePids,
   quietVerdict, waitingOutLimit, type ProcReader,
 } from "./quiet-status.ts";
 import { qwenDebugLogPath } from "./qwen.ts";
@@ -273,6 +273,24 @@ describe("an engine waiting out a limit", () => {
     expect(waitingOutLimit({ kind: "retry", status: 429, delayMs: 600_000, attempt: 1 })).toBe(true);
     expect(waitingOutLimit({ kind: "retry", status: 503, delayMs: 600_000, attempt: 1 })).toBe(false);
     expect(waitingOutLimit(null)).toBe(false);
+  });
+});
+
+describe("clearing a logged signal before the notice window", () => {
+  // A shared OpenCode log writes one "stream error" row per failed request; read once, it is gone. Ordinary
+  // session traffic after it must not drop it, or a quota-denied turn waits out the generic five-minute
+  // watchdog instead of surfacing the provider's own error.
+  const quota = { signal: { kind: "provider-error" as const, message: "Free usage limit reached" }, at: 100 };
+  const retry = { signal: { kind: "retry" as const, status: 429, delayMs: 20_000, attempt: 1 }, at: 100 };
+  it("keeps a one-shot terminal provider error even when session traffic arrived after it", () => {
+    expect(clearsLoggedBeforeNotice(quota, true, 200)).toBe(false);
+    expect(clearsLoggedBeforeNotice(quota, false, 200)).toBe(false);
+  });
+  it("still clears transient signals under the old rule", () => {
+    expect(clearsLoggedBeforeNotice(retry, true, 200), "newer inbound traffic clears a stale shared-log retry").toBe(true);
+    expect(clearsLoggedBeforeNotice(retry, true, 50), "a shared-log retry with no newer traffic stays").toBe(false);
+    expect(clearsLoggedBeforeNotice(retry, false, 50), "a non-shared log re-logs while it applies").toBe(true);
+    expect(clearsLoggedBeforeNotice(null, true, 200)).toBe(false);
   });
 });
 
