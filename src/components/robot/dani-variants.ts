@@ -241,3 +241,29 @@ export function createDaniVariant(variantId: DaniVariantId = "danny"): THREE.Gro
   poseRobotModel(root, { motion: "idle", time: 0 });
   return root;
 }
+
+/** Chief of Staff is always Danny; other bots take the variant nearest their color. */
+export function daniVariantForBot(name: string | undefined, color: string): DaniVariantId {
+  if (!name || /\b(chief|chief of staff|cos|coordinator|director|danny|dani)\b/i.test(name)) return "danny";
+  switch (color) {
+    case "purple":
+      return "danny";
+    case "cyan":
+    case "teal":
+      return "sprout";
+    case "blue":
+      return "tuft";
+    case "green":
+      return "sweep";
+    case "orange":
+    case "yellow":
+      return "cap";
+    case "red":
+    case "coral":
+      return "shades";
+    case "pink":
+      return "bow";
+    default:
+      return "sprout";
+  }
+}

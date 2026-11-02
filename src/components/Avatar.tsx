@@ -17,7 +17,7 @@ import { isHalloweenBody, type BotBodyId } from "../../shared/bot-body";
 
 import { CarvedAvatar } from "./CarvedAvatar";
 import { RobotAvatar } from "./robot/RobotAvatar";
-import { inferRobotRole } from "./robot/robot-avatar-engine";
+import { daniVariantForBot } from "./robot/dani-variants";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
@@ -265,8 +265,7 @@ export function BotAvatar({ bot, size = 44, label, readable: _readable = false, 
       <RobotAvatar
         size={size}
         label={label ?? bot.name}
-        role={inferRobotRole(bot.name)}
-        color={MAUS_COLORS[bot.color] ?? MAUS_COLORS.chrome}
+        variant={daniVariantForBot(bot.name, bot.color)}
         state={mascotProps.state}
         animated={mascotProps.animated}
       />
