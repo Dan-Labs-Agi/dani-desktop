@@ -37,9 +37,8 @@ const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
   );
 
 describe("MausAvatar body", () => {
-  it("maps every mascot body onto a Bloub silhouette, cursor keeping the default", () => {
+  it("maps every mascot body onto a Bloub silhouette", () => {
     for (const id of Object.keys(MASCOT_BODIES)) expect(id in BLOUB_SHAPE).toBe(true);
-    expect(BLOUB_SHAPE.cursor).toBeNull();
     expect(BLOUB_SHAPE.squircle).toBe("squircle");
     expect(BLOUB_SHAPE.hexagon).toBe("hexagone");
   });
@@ -62,7 +61,7 @@ describe("MausAvatar body", () => {
 describe("mascot facial feature colors", () => {
   it.each(["white", "black"] as const)("uses %s eyes on every Dani body type", (mascotFaceColor) => {
     const ink = mascotFaceColor === "white" ? "#ffffff" : "#000000";
-    for (const mascotBody of ["cursor", "star"] as const) {
+    for (const mascotBody of ["circle", "star"] as const) {
       for (const color of ["green", "chrome"] as const) {
         const { host, root } = mount(createElement(BotAvatar, { bot: { color, mascotBody, mascotFaceColor }, animated: false }));
         const eyes = [...host.querySelectorAll("svg g path")].filter((p) => p.getAttribute("fill") === ink);

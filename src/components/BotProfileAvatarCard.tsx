@@ -204,7 +204,7 @@ function BodyButton({ id, name, bot, busy, onPatch }: {
   busy: boolean;
   onPatch: (patch: AvatarPatch) => void;
 }) {
-  const selected = (bot.mascotBody ?? "cursor") === id;
+  const selected = (bot.mascotBody ?? "blob") === id;
   return (
     <button
       type="button"
