@@ -8,14 +8,14 @@
 
 <sub>Bring-your-own-agent, local-first, on the models you already have.</sub>
 
-Every bot in the sidebar is a real agent — Claude or Codex running locally under the hood — with its own
-personality, its own model, its own cloud computer, and its own connected apps.
-Talk to them like contacts. Watch them work. Approve what matters.
+Every bot in the sidebar is a real agent — powered by the agent CLIs and models you already have,
+or the built-in free model route — with its own personality, its own model, its own computer, and its
+own connected apps. Talk to them like contacts. Watch them work. Approve what matters.
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Electron](https://img.shields.io/badge/Electron-macOS%20%C2%B7%20Windows%20%C2%B7%20Ubuntu-2B2E3A?logo=electron&logoColor=9FEAF9)
-![Agents](https://img.shields.io/badge/agents-Claude%20·%20Codex-d97757)
+![Agents](https://img.shields.io/badge/agents-your%20CLIs%20·%20local%20models-d97757)
 ![Release pipeline](https://img.shields.io/badge/releases-version%20tags-1084fe)
 ![PRs](https://img.shields.io/badge/PRs-welcome-38d591)
 
