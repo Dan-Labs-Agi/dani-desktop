@@ -181,6 +181,10 @@ export interface AcpSupport {
      * driver that only knows the argv slug cannot form a valid set_model
      * without this. Empty when the agent advertised none. */
     sessionModels: Array<{ modelId?: string; name?: string }>;
+    /** `session/new` (or `session/load`) advertised config options, verbatim. A
+     * driver must not set an option the agent did not advertise. Empty when the
+     * agent advertised none. */
+    configOptions: Array<{ id?: unknown; currentValue?: unknown }>;
   }): Promise<void>;
 }
 
@@ -929,6 +933,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
                   sessionModels: Array.isArray(sessionResult?.models?.availableModels)
                     ? sessionResult.models.availableModels
                     : [],
+                  configOptions: Array.isArray(sessionResult?.configOptions) ? sessionResult.configOptions : [],
                 });
                 // initialize's currentModelId is the CLI default (grok-4.6),
                 // not the model this turn asked for. After a successful pin,
