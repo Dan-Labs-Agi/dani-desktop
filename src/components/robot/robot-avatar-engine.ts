@@ -36,6 +36,8 @@ export type AvatarInstance = {
   size: number;
   role: RobotRole;
   variant?: DaniVariantId;
+  /** Camera zoom for this instance only; 1 keeps the shared framing. */
+  zoom?: number;
   color: string;
   motion: RobotMotion;
   animated: boolean;
@@ -235,7 +237,7 @@ function draw(instance: AvatarInstance, now: number, reduced: boolean) {
   const oneShot = canMove && duration > 0 && !instance.motionCompleted;
   const motion = waving ? "wave" : instance.motionCompleted ? "idle" : instance.motion;
   const still = !canMove || (instance.size < LIVE_AVATAR_SIZE && !waving && !oneShot);
-  const cacheKey = `${instance.variant ?? instance.role}:${instance.color}:${pixels}:${motion}`;
+  const cacheKey = `${instance.variant ?? instance.role}:${instance.color}:${pixels}:${motion}:${instance.zoom ?? 1}`;
   const cached = still ? thumbnails.get(cacheKey) : undefined;
   if (cached) {
     thumbnails.delete(cacheKey);
@@ -259,6 +261,11 @@ function draw(instance: AvatarInstance, now: number, reduced: boolean) {
   // Stills use an open-eyed neutral phase, shared by equivalent role thumbnails.
   poseRobotModel(model, { motion, time, seed: still ? 0 : instance.seed });
   current.scene.add(model);
+  const zoom = instance.zoom ?? 1;
+  if (zoom !== 1) {
+    current.camera.zoom = zoom;
+    current.camera.updateProjectionMatrix();
+  }
   try {
     current.renderer.setSize(pixels, pixels, false);
     current.renderer.render(current.scene, current.camera);
@@ -266,6 +273,10 @@ function draw(instance: AvatarInstance, now: number, reduced: boolean) {
     context.clearRect(0, 0, pixels, pixels);
     context.drawImage(current.renderer.domElement, 0, 0);
   } finally {
+    if (zoom !== 1) {
+      current.camera.zoom = 1;
+      current.camera.updateProjectionMatrix();
+    }
     current.scene.remove(model);
   }
   if (still) rememberThumbnail(cacheKey, instance.canvas);

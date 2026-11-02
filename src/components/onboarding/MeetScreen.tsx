@@ -13,7 +13,7 @@ import { ConnectAiDialog } from "./ConnectAi";
 import { PILL, SignInPill, useSignInPill } from "./SignInPill";
 import { useWelcomeAi } from "./welcome-ai";
 
-const MASCOT_SIZE = 72;
+const MASCOT_SIZE = 132;
 const PLACEHOLDER_MS = 700;
 const GRAPHEME_MS = 35;
 
@@ -81,11 +81,11 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
       <h1 id="welcome-title" className="absolute left-1/2 top-[calc(50%-264px)] w-max max-w-[min(560px,calc(100%-32px))] -translate-x-1/2 text-[28px] font-normal leading-[34px] tracking-[-0.02em] text-ink">
         {t("onboarding.meet.title", { app: productName() })}
       </h1>
-      <span className="absolute left-1/2 top-[calc(50%-75px)] flex -translate-x-1/2 -translate-y-1/2" style={{ width: MASCOT_SIZE, height: MASCOT_SIZE }}>
+      <span className="absolute left-1/2 top-[calc(50%-98px)] flex -translate-x-1/2 -translate-y-1/2" style={{ width: MASCOT_SIZE, height: MASCOT_SIZE }}>
         {logo ? (
           <img src={logo} alt="" width={MASCOT_SIZE} height={MASCOT_SIZE} className="size-full object-contain" />
         ) : maus ? (
-          <BotAvatar bot={maus} size={MASCOT_SIZE} state={face} animated={!reduced} />
+          <BotAvatar bot={maus} size={MASCOT_SIZE} state={face} animated={!reduced} robotZoom={1.35} />
         ) : (
           <MausAvatar color="chrome" size={MASCOT_SIZE} state={face} animated={!reduced} label={DEFAULT_BOT_NAME} />
         )}
