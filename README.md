@@ -66,20 +66,22 @@ already have:
 
 ### 🧠 Pick a brain per bot
 
-A model picker with a provider rail — Claude and Codex models side by side, defaults marked, unavailable
-providers dimmed with the reason. Switch a bot's model mid-conversation.
+Each bot's model picker shows the models its engine can actually run - local models through Hermes out
+of the box, cloud providers once their keys are in Settings - with the default marked. Switch a bot's model
+mid-conversation.
 
-<img src="docs/screenshots/model-picker.png" alt="Model picker with provider rail" width="100%">
+<img src="docs/screenshots/model-picker.png" alt="Model picker showing a bot's available models" width="100%">
 
 </td>
 <td width="50%" valign="top">
 
 ### 🖥️ Every bot gets a computer
 
-Open the Computer panel and the bot's cloud desktop spins up on its own — live screen preview while it
-works, "Open desktop" to take over in your browser, or point the bot at *this Mac* instead.
+Open the Computer panel to see which computer a bot is assigned to, start a private view-only
+preview of this machine, or enable local control after explicit opt-in - every local action still asks
+first.
 
-<img src="docs/screenshots/computer-panel.png" alt="Computer panel with live screen preview" width="100%">
+<img src="docs/screenshots/computer-panel.png" alt="Computer panel with assignment, preview and local-control options" width="100%">
 
 </td>
 </tr>
