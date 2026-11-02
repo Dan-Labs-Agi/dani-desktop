@@ -1,6 +1,10 @@
 /**
- * Flattening, bounds and the fit transform into the mascot's face box. Loaded
- * by `node --experimental-strip-types`, so only erasable type syntax.
+ * Flattening, bounds measurement and the fit transform that maps a shape's
+ * drawn extent into the mascot's face box.
+ *
+ * Plain TypeScript only: this module is loaded by a Node script via
+ * `node --experimental-strip-types`, so no JSX and nothing beyond type
+ * annotations that the type-stripper can erase.
  */
 
 import { FACE_BOX } from "../../src/components/cursor-face-data.ts"
@@ -14,9 +18,14 @@ export interface Bounds {
 
 type Point = [number, number]
 
+/* -------------------------------------------------------------- tokeniser */
 
-/** Scans numbers exactly like the iOS parser: an optional `-`, digits, an
- * optional `.` and digits. No exponent: a stray `e` would read as a command. */
+/**
+ * Scans a path's numbers exactly like the iOS parser: an optional leading
+ * `-`, digits, an optional `.` and more digits, and nothing else — no
+ * exponent notation, because a stray `e` would otherwise be read as a
+ * command letter by a scanner this dumb.
+ */
 function tokenizeNumbers(s: string): number[] {
   const re = /-?\d+(?:\.\d+)?/g
   const out: number[] = []
@@ -38,6 +47,7 @@ function tokenizeCommands(d: string): { command: string; args: number[] }[] {
   return commands
 }
 
+/* ---------------------------------------------------------------- flatten */
 
 /** Perpendicular distance from `p` to the line through `a`/`b`. */
 function pointLineDistance(p: Point, a: Point, b: Point): number {
@@ -115,7 +125,9 @@ export function flatten(d: string, tolerance = 0.05): Point[][] {
   return polylines
 }
 
+/* ------------------------------------------------------------------ bounds */
 
+/** Min/max over every point of every polyline. */
 export function boundsOf(polylines: Point[][]): Bounds {
   let minX = Infinity
   let minY = Infinity
@@ -132,6 +144,7 @@ export function boundsOf(polylines: Point[][]): Bounds {
   return { minX, minY, maxX, maxY }
 }
 
+/* ------------------------------------------------------------- fit transform */
 
 /** Rounds to `digits` decimal places (not fixed-point string formatting). */
 function round(n: number, digits: number): number {
@@ -140,9 +153,12 @@ function round(n: number, digits: number): number {
 }
 
 /**
- * Fills FACE_BOX on the tighter axis and centres the other, as Blob Studio's
- * `measureFit`. Returns the transform string the renderer parses and its rounded
- * components.
+ * Scales the drawn bounds to fill `FACE_BOX` on their tighter axis, then
+ * centres the shape on the other axis — the same mapping as Blob Studio's
+ * `measureFit`. Returns both the emitted transform string (in the format the
+ * renderer already parses, `translate(<tx> <ty>) scale(<scale>)`) and the
+ * rounded numeric components, so a caller can reproduce exactly what the
+ * string encodes.
  */
 export function fitTransform(bounds: Bounds): { transform: string; scale: number; tx: number; ty: number } {
   const width = bounds.maxX - bounds.minX
