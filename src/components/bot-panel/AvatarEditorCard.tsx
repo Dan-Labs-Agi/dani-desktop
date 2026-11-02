@@ -65,7 +65,7 @@ export function AvatarEditorCard({ bot, activeState, onPatch, onClose }: {
     tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
   }, []);
   const pickMascot = (patch: AvatarPatch) => onPatch(crop === "mascot" ? patch : { ...patch, avatarCrop: "mascot" });
-  const body = bot.mascotBody ?? "cursor";
+  const body = bot.mascotBody ?? "blob";
   const dressed = useHalloweenDressed();
   const costume = wornBody(bot.mascotBody, bot.color, dressed);
   const [moreLooks, setMoreLooks] = useState(() => dressed || isHalloweenBody(body) || Boolean(bot.mascotExpression && bot.mascotExpression !== "idle"));

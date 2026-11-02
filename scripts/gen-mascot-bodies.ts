@@ -17,7 +17,14 @@ import { maskFromPolylines } from "./mascot-bodies/raster.ts"
 import { fieldFromMask, largestInscribedCircle, type Sdf } from "./mascot-bodies/sdf.ts"
 import { buildClouds, maxScaleAt, report } from "./mascot-bodies/solve.ts"
 
-const DEFAULT_ID = "cursor"
+const DEFAULT_ID = "blob"
+
+/**
+ * The shared face scale shipped with the original catalog, anchored on its largest
+ * silhouette. Every body must still hold it, so no existing face shrinks when the
+ * catalog changes.
+ */
+const FACE_SCALE_FLOOR = 0.791
 
 /** The avatar renders every expression facing forward, which zeroes the authored gaze. */
 const LOOK_AROUND = 0
@@ -324,7 +331,7 @@ enum MausBodies {
     static let order: [String] = [${order}]
 
     /// The shipped mascot, and the fallback for any unrecognised value.
-    static let defaultID = "cursor"
+    static let defaultID = "blob"
 
     static let all: [String: Body] = [
 ${entries}
@@ -412,7 +419,7 @@ internal object MausBodies {
     val order: List<String> = listOf(${order})
 
     /** The shipped mascot, and the fallback for any unrecognised value. */
-    const val DEFAULT_ID: String = "cursor"
+    const val DEFAULT_ID: String = "blob"
 
     val all: Map<String, Body> = mapOf(
 ${entries}
@@ -431,8 +438,8 @@ ${entries}
 function main(): void {
   const solved = BODY_DEFS.map(solveBody)
 
-  const cursor = solved.find(s => s.def.id === DEFAULT_ID)
-  if (!cursor) throw new Error(`the catalog has no ${DEFAULT_ID} body to anchor its face size to`)
+  const anchor = solved.find(s => s.def.id === DEFAULT_ID)
+  if (!anchor) throw new Error(`the catalog has no ${DEFAULT_ID} body to use as its default`)
 
   const width = Math.max(...solved.map(s => s.def.id.length))
   console.log("largest face each body can hold, worst of the four pointer aims:")
@@ -441,18 +448,22 @@ function main(): void {
   }
   console.log("")
 
-  const shared = solved.reduce((min, s) => Math.min(min, s.scale), Infinity)
-  if (shared < cursor.scale) {
+  const minScale = solved.reduce((min, s) => Math.min(min, s.scale), Infinity)
+  if (minScale < FACE_SCALE_FLOOR) {
     const tighter = solved
-      .filter(s => s.scale < cursor.scale)
+      .filter(s => s.scale < FACE_SCALE_FLOOR)
       .map(s => `${s.def.id} (${s.scale})`)
       .join(", ")
     throw new Error(
-      `the shared face scale ${shared} is below ${DEFAULT_ID}'s own ${cursor.scale}: ` +
+      `the shared face scale ${minScale} is below the shipped floor ${FACE_SCALE_FLOOR}: ` +
         `${tighter} cannot hold the shipped face, so clamping the catalog would shrink ` +
         `the mascot everyone already has. Widen those outlines rather than lowering the floor.`
     )
   }
+
+  // Every catalog change keeps the shipped face size: clamp at the historical floor so
+  // removing the old anchor body never resizes an existing mascot.
+  const shared = Math.min(minScale, FACE_SCALE_FLOOR)
 
   const baked: Baked[] = []
   const clipped: string[] = []
@@ -481,7 +492,7 @@ function main(): void {
     })
   }
 
-  console.log(`shared face scale ${shared} (${DEFAULT_ID}'s own floor is ${cursor.scale})`)
+  console.log(`shared face scale ${shared} (shipped floor ${FACE_SCALE_FLOOR})`)
   console.log(`${"body".padEnd(width)}  ${"scale".padStart(6)}  ${"clearance".padStart(9)}`)
   for (const body of baked) {
     const scale = body.anchor.scale.toFixed(3).padStart(6)

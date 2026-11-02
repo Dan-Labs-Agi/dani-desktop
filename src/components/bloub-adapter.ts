@@ -58,7 +58,6 @@ export const BLOUB_STATE: Record<CursorState, BloubPose> = {
 
 /** App body shapes onto Bloub silhouettes; null keeps Bloub's default body. */
 export const BLOUB_SHAPE: Record<MascotBodyId, string | null> = {
-  cursor: null,
   blob: "galet",
   circle: "cercle",
   squircle: "squircle",
