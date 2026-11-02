@@ -8,7 +8,7 @@ import { launchVerificationServer } from "../scripts/control-omb.ts";
 import { startFakeConnectedApps, type FakeConnectedApps } from "./testing/fake-connected-apps.ts";
 
 // The proactive main agent end to end on a real server (temporary home, the fake Claude CLI) against a stand-in for the
-// connected-apps service: Danny's default watch, its checks, the one batched run, the brief, Dismiss, presence and
+// connected-apps service: Dani's default watch, its checks, the one batched run, the brief, Dismiss, presence and
 // the read-and-draft fence. Nothing here reaches a real Google account or a model.
 const MINUTE = 60_000;
 // The brief lists only the person's meetings today. Their zone is one where it is midday when the suite starts, so the
@@ -47,7 +47,7 @@ function inbox(apps: FakeConnectedApps, now: number) {
   }];
 }
 
-describe("Danny keeps an eye on the day, hidden from the sidebar", () => {
+describe("Dani keeps an eye on the day, hidden from the sidebar", () => {
   let apps: FakeConnectedApps;
   let fixture: Fixture;
   let api: ReturnType<typeof client>;

@@ -79,9 +79,9 @@ describe("mascot facial feature colors", () => {
     expect(eyes.length).toBeGreaterThan(0);
   });
 
-  it("renders Danny for the Chief of Staff, a color variant for any other bot", () => {
+  it("renders Dani for the Chief of Staff, a color variant for any other bot", () => {
     const { host } = mount(createElement(BotAvatar, { bot: { color: "green", name: "Chief of Staff" }, animated: false }));
-    expect(host.querySelector("[data-robot-role]")!.getAttribute("data-robot-role")).toBe("danny");
+    expect(host.querySelector("[data-robot-role]")!.getAttribute("data-robot-role")).toBe("dani");
     expect(host.querySelector("canvas")).not.toBeNull();
     const { host: other } = mount(createElement(BotAvatar, { bot: { color: "blue", name: "Scout" }, animated: false }));
     expect(other.querySelector("[data-robot-role]")!.getAttribute("data-robot-role")).toBe("tuft");

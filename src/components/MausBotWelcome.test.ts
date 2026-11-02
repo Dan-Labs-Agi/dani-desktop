@@ -6,10 +6,10 @@ import { t } from "@/lib/i18n";
 import { StoreProvider, type Bot } from "@/state/store";
 import { draftOf, MausBotWelcomeCard, mausBotWelcomeDue, welcomeName, welcomePatch } from "./MausBotWelcome";
 
-const maus = { id: "maus", threadId: "t1", name: "Danny", title: "", description: "", notifications: true, color: "chrome", mascotBody: null,
+const maus = { id: "maus", threadId: "t1", name: "Dani", title: "", description: "", notifications: true, color: "chrome", mascotBody: null,
   avatarUrl: null, unread: false, modelSelection: { instanceId: "claude", model: "sonnet" }, createdAt: 1, defaultBot: {} } as unknown as Bot;
 
-describe("Danny's first-launch welcome", () => {
+describe("Dani's first-launch welcome", () => {
   it("shows once, after onboarding and its tour, and never again after either choice", () => {
     const due = (bot: Pick<Bot, "welcomed" | "hidden"> | undefined, more: Partial<Parameters<typeof mausBotWelcomeDue>[0]> = {}) =>
       mausBotWelcomeDue({ bot, onboardingDue: false, welcomeOpen: false, tourOpen: false, ...more });
@@ -22,7 +22,7 @@ describe("Danny's first-launch welcome", () => {
     expect(due({ hidden: true })).toBe(false);
   });
 
-  it("Add saves the person's changes, pins Danny and keeps it in the sidebar", () => {
+  it("Add saves the person's changes, pins Dani and keeps it in the sidebar", () => {
     expect(welcomePatch(maus, { ...draftOf(maus), name: " Jarvis ", color: "blue", mascotBody: "capsule" }, true))
       .toEqual({ name: "Jarvis", color: "blue", mascotBody: "capsule", welcomed: true, sidebarHidden: false, pinned: true });
   });
@@ -38,7 +38,7 @@ describe("Danny's first-launch welcome", () => {
 
   it("saves an empty name as Dani and caps a long one at the bot-name limit", () => {
     const jarvis = { ...maus, name: "Jarvis" };
-    expect(welcomePatch(jarvis, { ...draftOf(jarvis), name: "   " }, true).name).toBe("Danny");
+    expect(welcomePatch(jarvis, { ...draftOf(jarvis), name: "   " }, true).name).toBe("Dani");
     expect(welcomeName("x".repeat(300))).toHaveLength(100);
     expect(welcomeName("  Ada ")).toBe("Ada");
   });
@@ -53,13 +53,13 @@ describe("Danny's first-launch welcome", () => {
       .toEqual({ avatarUrl: null, avatarCrop: "mascot", welcomed: true, sidebarHidden: false, pinned: true });
   });
 
-  it("opens on Danny's picture alone: the customise panel stays closed until the picture is clicked", () => {
+  it("opens on Dani's picture alone: the customise panel stays closed until the picture is clicked", () => {
     const html = renderToStaticMarkup(createElement(StoreProvider, null, createElement(MausBotWelcomeCard, { bot: maus, onClose: () => {} })));
-    expect(html).toContain(`aria-label="${t("mausbotWelcome.customize", { name: "Danny" })}"`);
+    expect(html).toContain(`aria-label="${t("mausbotWelcome.customize", { name: "Dani" })}"`);
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('data-mausbot-welcome-panel="closed"');
     expect(html).toMatch(/data-mausbot-welcome-panel="closed"[^>]*|inert=""[^>]*data-mausbot-welcome-panel="closed"/);
-    expect(html).toContain(t("mausbotWelcome.title", { name: "Danny" }));
-    expect(html).toContain(t("mausbotWelcome.add", { name: "Danny" }));
+    expect(html).toContain(t("mausbotWelcome.title", { name: "Dani" }));
+    expect(html).toContain(t("mausbotWelcome.add", { name: "Dani" }));
   });
 });
