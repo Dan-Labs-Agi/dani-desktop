@@ -138,7 +138,9 @@ export function welcomeFinishedThisLaunch(): boolean {
   }
 }
 
-export const DEFAULT_ADMIN_ORIGIN = "https://admin.openmausbot.com";
+/** Dani runs no organisation portal: empty unless a build configures one, so onboarding never
+ * routes a sign-in to the upstream admin. Settings still accepts an explicit portal address. */
+export const DEFAULT_ADMIN_ORIGIN = "";
 
 export function organisationSignIn<Bridge>(
   ogb: { organization?: Bridge; remoteClient?: { active?: boolean } } | undefined,

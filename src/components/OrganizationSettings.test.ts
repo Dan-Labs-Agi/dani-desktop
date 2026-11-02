@@ -99,24 +99,28 @@ describe("optional desktop Organisation settings", () => {
   it("keeps the panel usable if its native destination acknowledgment fails", async () => {
     vi.mocked(bridge.settingsOpened!).mockRejectedValueOnce(new Error("fixture write failure"));
     await ready();
-    expect(render().html).toContain("Sign in with your organization");
+    expect(render().html).toContain("Use your work email to sign in securely in your browser.");
     expect(bridge.begin).not.toHaveBeenCalled();
   });
 
-  it("uses the default portal from one sign-in action and keeps custom setup advanced", async () => {
+  it("offers no default portal: sign-in starts from the organization's own address, typed once", async () => {
     await ready();
     let view = render();
-    expect(view.html).toContain("https://admin.openmausbot.com");
-    expect(view.html).toContain("Sign in with your organization");
-    expect(view.html).toContain("<summary");
-    expect(view.html).toContain("Advanced");
-    expect(view.html).not.toMatch(/<details[^>]*\bopen/);
+    expect(view.html).not.toContain("https://admin.openmausbot.com");
+    expect(view.nodes.find(node => node.type === "button" && node.props.children === "Sign in with your organization")).toBeUndefined();
+    expect(view.html).toContain("Use your work email to sign in securely in your browser.");
+    expect(view.html).toContain("Custom Admin portal URL");
+    expect(view.html).toMatch(/<details[^>]*\bopen/);
     expect(view.html).toContain("personal and local models");
     expect(view.html).toContain("does not upload your chat history");
     expect(bridge.begin).not.toHaveBeenCalled();
-    const signIn = () => view.nodes.find(node => node.type === "button" && node.props.children === "Sign in with your organization")!.props.onClick!();
-    signIn(); signIn(); await flush();
-    expect(bridge.begin).toHaveBeenCalledExactlyOnceWith({ portalOrigin: "https://admin.openmausbot.com" });
+    const typeAndSubmit = () => {
+      view.nodes.find(node => node.type === "input")!.props.onChange!({ target: { value: "https://admin.example.test" } });
+      view = render();
+      view.nodes.find(node => node.type === "form")!.props.onSubmit!({ preventDefault: vi.fn() });
+    };
+    typeAndSubmit(); await flush();
+    expect(bridge.begin).toHaveBeenCalledExactlyOnceWith({ portalOrigin: "https://admin.example.test" });
     expect(fetch).not.toHaveBeenCalled();
     const progress = render().html;
     expect(progress).toContain("Finish signing in through your browser");
@@ -146,7 +150,7 @@ describe("optional desktop Organisation settings", () => {
     button("Disconnect…").props.onClick!();
     button("Disconnect from organization").props.onClick!(); await flush();
     expect(bridge.disconnect).toHaveBeenCalledOnce();
-    expect(render().html).toContain("Sign in with your organization");
+    expect(render().html).toContain("Use your work email to sign in securely in your browser.");
   });
 
   it("requires disconnect before reconnecting revoked access and does not promise cloud backups", async () => {
@@ -158,7 +162,7 @@ describe("optional desktop Organisation settings", () => {
     expect(html).not.toContain("backup");
     expect(button("Refresh")).toBeUndefined();
     button("Disconnect…").props.onClick!(); button("Disconnect from organization").props.onClick!(); await flush();
-    expect(render().html).toContain("Sign in with your organization");
+    expect(render().html).toContain("Use your work email to sign in securely in your browser.");
   });
 
   it("reopens only the pending sign-in page, with nothing supplied by the panel", async () => {
@@ -208,7 +212,7 @@ describe("optional desktop Organisation settings", () => {
     await ready({ status: "signed-out", notice: "license-expired" });
     const html = render().html;
     expect(html).toContain("license has expired. Contact your admin.");
-    expect(html).toContain("Sign in with your organization");
+    expect(html).toContain("Use your work email to sign in securely in your browser.");
   });
 
   it("keeps newer broadcast state when an initial snapshot or action resolves late", async () => {
@@ -228,7 +232,10 @@ describe("optional desktop Organisation settings", () => {
     const cleanup = await ready();
     let resolveBegin!: (state: ManagedDesktopState) => void;
     vi.mocked(bridge.begin).mockImplementation(() => new Promise(resolve => { resolveBegin = resolve; }));
-    button("Sign in with your organization").props.onClick!();
+    let view = render();
+    view.nodes.find(node => node.type === "input")!.props.onChange!({ target: { value: "https://admin.example.test" } });
+    view = render();
+    view.nodes.find(node => node.type === "form")!.props.onSubmit!({ preventDefault: vi.fn() });
     if (typeof cleanup === "function") cleanup();
     push(connected); resolveBegin(connecting); await flush();
     expect(unsubscribe).toHaveBeenCalledOnce();
@@ -274,7 +281,7 @@ describe("optional desktop Organisation settings", () => {
     expect(button("Refresh")).toBeDefined();
     button("Disconnect…").props.onClick!(); button("Disconnect from organization").props.onClick!(); await flush();
     expect(bridge.disconnect).toHaveBeenCalledOnce();
-    expect(render().html).toContain("Sign in with your organization");
+    expect(render().html).toContain("Use your work email to sign in securely in your browser.");
   });
 
   it.each([{}, { ogb: { remoteClient: { active: true } } }])("has no sign-in controls without the local desktop bridge", (windowState) => {

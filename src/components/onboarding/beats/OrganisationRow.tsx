@@ -95,7 +95,7 @@ export function OrganisationRow({
         </button>
       </>
     );
-    action = (
+    action = DEFAULT_ADMIN_ORIGIN ? (
       <button
         type="button"
         disabled={busy}
@@ -104,7 +104,7 @@ export function OrganisationRow({
       >
         {busy ? t("organization.working") : t("onboarding.org.signIn")}
       </button>
-    );
+    ) : null;
   } else if (connection.status === "connecting") {
     body = (
       <>
