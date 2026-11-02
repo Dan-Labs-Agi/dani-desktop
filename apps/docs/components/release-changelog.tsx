@@ -89,12 +89,12 @@ async function fetchPublishedReleases(repository: string): Promise<GitHubRelease
 }
 
 async function publishedReleases(): Promise<GitHubRelease[]> {
-  const [canonical, legacy] = await Promise.all(
+  const releaseLists = await Promise.all(
     RELEASE_REPOSITORIES.map((repository) => fetchPublishedReleases(repository)),
   );
   const byTag = new Map<string, GitHubRelease>();
 
-  for (const release of [...canonical, ...legacy]) {
+  for (const release of releaseLists.flat()) {
     const tag = release.tag_name.trim().toLowerCase();
     if (!byTag.has(tag)) byTag.set(tag, release);
   }
