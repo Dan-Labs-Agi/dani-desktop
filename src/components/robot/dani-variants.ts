@@ -104,7 +104,7 @@ function addSweepHair(sprout: THREE.Group, hair: THREE.Material): void {
 }
 
 /** A backwards ball cap; pure decoration. */
-function addCap(sprout: THREE.Group, head: THREE.Group, shell: THREE.Material): void {
+function addCap(head: THREE.Group, shell: THREE.Material): void {
   const cap = group(head, "cap", [0, 0.55, -0.08]);
   const dome = ellipsoid(cap, "cap-dome", [0.78, 0.4, 0.72], shell, [0, 0.16, 0]);
   dome.rotation.x = 0.12;
@@ -215,7 +215,7 @@ export function createDaniVariant(variantId: DaniVariantId = "dani"): THREE.Grou
     sprout.position.set(0, 0.72, 0.05);
     addSweepHair(sprout, hair);
   } else if (variant.id === "cap") {
-    addCap(sprout, head, shell);
+    addCap(head, shell);
   } else if (variant.id === "shades") {
     addShades(head);
     ellipsoid(head, "helmet-cap", [0.34, 0.17, 0.3], shell, [-0.22, 0.71, -0.08]);

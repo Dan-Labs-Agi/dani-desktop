@@ -574,7 +574,7 @@ describe("Apps pop-up", () => {
     fixture.instances = [claude];
     fixture.bots = [
       bot("scout"),
-      bot("arrow", { mascotBody: "cursor" }),
+      bot("arrow", { mascotBody: "blob" }),
       bot("photo", { avatarUrl: "/api/attachments/photo.webp", avatarCrop: "square" }),
     ];
     const { nodes: tree } = render();
