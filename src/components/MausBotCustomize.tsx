@@ -6,13 +6,25 @@ import { t } from "@/lib/i18n";
 import { colorSwatch, MAUS_COLOR_LABEL, MAUS_COLOR_NAMES } from "@/lib/mascot";
 import type { Bot } from "@/state/store";
 import { BOT_PROFILE_LIMITS } from "../../shared/bot-profile";
-import { MASCOT_BODIES, MASCOT_BODY_IDS } from "../../shared/mascot-bodies";
-import { MausAvatar } from "./Avatar";
+import { daniVariantForBot, type DaniVariantId } from "./robot/dani-variants";
+import { RobotAvatar } from "./robot/RobotAvatar";
+import type { MausColor } from "@/lib/mascot";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import type { AvatarPatch, useAvatarImage } from "./avatar-editing";
 
 export const AVATAR_FILE_TYPES = "image/png,image/jpeg,image/gif,image/webp";
 const LABEL = "text-[12px] font-medium uppercase tracking-wide text-ink-secondary";
+
+/** The seven Dani characters offered in the welcome, each standing on its signature colour. */
+const DANI_VARIANT_PICKS: Array<{ variant: DaniVariantId; color: MausColor; label: string }> = [
+  { variant: "dani", color: "purple", label: "Dani" },
+  { variant: "sprout", color: "teal", label: "Sprout" },
+  { variant: "tuft", color: "blue", label: "Tuft" },
+  { variant: "sweep", color: "green", label: "Sweep" },
+  { variant: "cap", color: "orange", label: "Cap" },
+  { variant: "shades", color: "coral", label: "Shades" },
+  { variant: "bow", color: "pink", label: "Bow" },
+];
 
 /** The welcome's own profile edit: name, colour, look, then a picture of the person's own or one made with AI. */
 export function MausBotCustomize({ preview, name, nameRef, image, onName, onPatch }: {
@@ -61,19 +73,19 @@ export function MausBotCustomize({ preview, name, nameRef, image, onName, onPatc
       </div>
       <div>
         <span className={LABEL}>{t("mausbotWelcome.look")}</span>
-        <div className="mt-1.5 grid grid-cols-5 gap-1">
-          {MASCOT_BODY_IDS.map((id) => (
+        <div className="mt-1.5 grid grid-cols-7 gap-1">
+          {DANI_VARIANT_PICKS.map(({ variant, color, label }) => (
             <button
-              key={id}
+              key={variant}
               type="button"
-              aria-pressed={!picture && (preview.mascotBody ?? "blob") === id}
-              aria-label={MASCOT_BODIES[id].name}
-              title={MASCOT_BODIES[id].name}
-              data-mausbot-welcome-body={id}
-              onClick={() => shape({ mascotBody: id })}
-              className={cn("flex h-11 items-center justify-center rounded-xl", !picture && (preview.mascotBody ?? "blob") === id ? "bg-ink/[0.08] ring-[1.5px] ring-inset ring-ink/25" : "hover:bg-ink/[0.05]")}
+              aria-pressed={!picture && daniVariantForBot(preview.name, preview.color) === variant}
+              aria-label={label}
+              title={label}
+              data-mausbot-welcome-variant={variant}
+              onClick={() => shape({ color })}
+              className={cn("flex h-11 items-center justify-center rounded-xl", !picture && daniVariantForBot(preview.name, preview.color) === variant ? "bg-ink/[0.08] ring-[1.5px] ring-inset ring-ink/25" : "hover:bg-ink/[0.05]")}
             >
-              <MausAvatar color={preview.color} bodyId={id} size={30} animated={false} trackPointer={false} />
+              <RobotAvatar variant={variant} label={label} size={34} animated={false} />
             </button>
           ))}
         </div>

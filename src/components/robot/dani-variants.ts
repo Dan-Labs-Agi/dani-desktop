@@ -2,7 +2,7 @@
  * The Dani character variants: the original Manzanilla two-legged rig, refined
  * for Dani Desktop. Seven looks told apart by shell color, hairstyle and a
  * decorative accessory - nobody carries anything, and no accessory implies a
- * job. Danny (purple, crown) is the main agent.
+ * job. Dani (purple, crown) is the main agent.
  *
  * Built with the same primitives as robot-model.ts so body, face, proportions,
  * posing and materials stay identical to the original character.
@@ -25,7 +25,7 @@ import {
 } from "./robot-model";
 
 export const DANI_VARIANTS = [
-  { id: "danny", label: "Danny", color: "#9561ED" },
+  { id: "dani", label: "Dani", color: "#9561ED" },
   { id: "sprout", label: "Sprout", color: "#17B4BD" },
   { id: "tuft", label: "Tuft", color: "#3299F4" },
   { id: "sweep", label: "Sweep", color: "#20BA78" },
@@ -154,7 +154,7 @@ function addBow(sprout: THREE.Group, ribbon: THREE.Material): void {
   ellipsoid(sprout, "bow-knot", [0.11, 0.11, 0.09], ribbon, [0, 0.08, 0.02]);
 }
 
-export function createDaniVariant(variantId: DaniVariantId = "danny"): THREE.Group {
+export function createDaniVariant(variantId: DaniVariantId = "dani"): THREE.Group {
   const variant = DANI_VARIANTS.find((item) => item.id === variantId) ?? DANI_VARIANTS[0];
   const root = new THREE.Group();
   root.name = `dani-${variant.id}`;
@@ -203,7 +203,7 @@ export function createDaniVariant(variantId: DaniVariantId = "danny"): THREE.Gro
   // Hair lives on the sprout group so posing sways it exactly like the original leaf.
   const sprout = group(head, "sprout", [0.42, 0.7, 0.035]);
   const hair = material(new THREE.Color(variant.color).multiplyScalar(0.5), 0.42);
-  if (variant.id === "danny") {
+  if (variant.id === "dani") {
     addCrown(head, shell);
   } else if (variant.id === "sprout") {
     addSproutHair(sprout);
@@ -242,12 +242,12 @@ export function createDaniVariant(variantId: DaniVariantId = "danny"): THREE.Gro
   return root;
 }
 
-/** Chief of Staff is always Danny; other bots take the variant nearest their color. */
+/** Chief of Staff is always Dani; other bots take the variant nearest their color. */
 export function daniVariantForBot(name: string | undefined, color: string): DaniVariantId {
-  if (!name || /\b(chief|chief of staff|cos|coordinator|director|danny|dani)\b/i.test(name)) return "danny";
+  if (!name || /\b(chief|chief of staff|cos|coordinator|director|dani)\b/i.test(name)) return "dani";
   switch (color) {
     case "purple":
-      return "danny";
+      return "dani";
     case "cyan":
     case "teal":
       return "sprout";
