@@ -10,6 +10,7 @@ import {
   HERMES_OPENMAUS_SCREENSHOT_COMPAT_MODEL,
   bindHermesScreenshotCompat,
   hermesAcpModelId,
+  hermesSpawnEnv,
   hermesConfiguredModel,
   hermesSpawnArgs,
   HERMES_PINNED_VERSION,
@@ -236,3 +237,18 @@ describe("hermesSpawnArgs", () => {
 });
 
 describe("Hermes release pin",()=>{it("pins a traceable upstream release",()=>{expect(HERMES_PINNED_VERSION).toBe("0.21.4");expect(HERMES_PINNED_RELEASE).toBe("https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.21");expect(HermesAgentDriver.install?.docsUrl).toContain("hermes-agent.nousresearch.com")})});
+
+describe("hermesSpawnEnv", () => {
+  it("suppresses Python bytecode writes so the verified managed tree stays pristine", () => {
+    const env = hermesSpawnEnv({ PATH: "/usr/bin", HOME: "/home/u" });
+    expect(env.PYTHONDONTWRITEBYTECODE).toBe("1");
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.HOME).toBe("/home/u");
+  });
+
+  it("does not mutate the caller's environment object", () => {
+    const source: Record<string, string | undefined> = { PATH: "/usr/bin" };
+    hermesSpawnEnv(source);
+    expect(source.PYTHONDONTWRITEBYTECODE).toBeUndefined();
+  });
+});
