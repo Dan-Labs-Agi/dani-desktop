@@ -1055,8 +1055,15 @@ async function startServerOn(port) {
     OMB_DESKTOP_PARENT: "1",
     DANI_STATIC_DIR: path.join(process.resourcesPath, "ui"),
     OMB_STATIC_DIR: path.join(process.resourcesPath, "ui"),
-    DANI_RESOURCES_PATH: process.resourcesPath,
-    OMB_RESOURCES_PATH: process.resourcesPath,
+    // Packaged builds carry managed runtimes inside process.resourcesPath;
+    // in development that points at Electron's own resources dir, so prefer
+    // an explicit override and then the repo's staged dist-native tree.
+    DANI_RESOURCES_PATH: app.isPackaged
+      ? process.resourcesPath
+      : (process.env.DANI_RESOURCES_PATH ?? path.join(app.getAppPath(), "dist-native")),
+    OMB_RESOURCES_PATH: app.isPackaged
+      ? process.resourcesPath
+      : (process.env.OMB_RESOURCES_PATH ?? path.join(app.getAppPath(), "dist-native")),
     DANI_SKILLS_DIR: path.join(process.resourcesPath, "skills"),
     OMB_SKILLS_DIR: path.join(process.resourcesPath, "skills"),
     DANI_PORT: String(port),
