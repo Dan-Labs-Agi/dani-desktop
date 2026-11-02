@@ -7,10 +7,12 @@ export const HIGHLEVEL_RELAY_ENV = "OMB_HIGHLEVEL_RELAY_URL";
 const RELAY_TIMEOUT_MS = 20_000;
 const MAX_RELAY_BYTES = 64_000;
 
-/** The relay URL, or null when the integration is switched off (`OMB_HIGHLEVEL_RELAY_URL=off`) or misconfigured. */
+/** The relay URL, or null when the integration is switched off (`OMB_HIGHLEVEL_RELAY_URL=off`) or misconfigured.
+ * Dani runs no HighLevel relay and must not route sign-ins through the upstream OpenMausBot one (it holds the
+ * client secret), so the DEFAULT is off; an explicit DANI_HIGHLEVEL_RELAY_URL or OMB_HIGHLEVEL_RELAY_URL turns it on. */
 export function highlevelRelayUrl(env: NodeJS.ProcessEnv = process.env): string | null {
-  const raw = env[HIGHLEVEL_RELAY_ENV]?.trim();
-  if (raw === undefined || raw === "") return HIGHLEVEL_RELAY_URL_DEFAULT;
+  const raw = (env.DANI_HIGHLEVEL_RELAY_URL ?? env[HIGHLEVEL_RELAY_ENV])?.trim();
+  if (raw === undefined || raw === "") return null;
   if (/^(off|none|0|false)$/iu.test(raw)) return null;
   try {
     const url = new URL(raw);
