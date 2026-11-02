@@ -1683,7 +1683,7 @@
   "updatesConsent.yes": "Yes, send me updates",
   "updatesConsent.no": "No thanks",
   "updatesConsent.email": "Your email",
-  "updatesConsent.emailHint": "Optional. Leave it empty and we'll use your Cloud email once you sign in.",
+  "updatesConsent.emailHint": "Optional. Leave it empty and we'll use the email on your Cloud account once you sign in.",
   "updatesConsent.badEmail": "Enter a valid email address.",
   "updatesConsent.failed": "That didn't save. Try again.",
   "simpleModePrompt.title": "Try the new Simple mode",
