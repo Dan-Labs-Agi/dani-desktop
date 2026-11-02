@@ -175,15 +175,12 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
       : whatsNewDue === null || whatsNewState === "loading" || !viewer || afterWelcome === null || mausBotFirst || moving === null || whatsNewBlocked ? null : true,
     [UPDATES_CONSENT_NOTICE]: consentNow,
     [TWO_PLACES_NOTICE]: twoFact,
-    [PRODUCT_HUNT_NOTICE]: !cards || moving || firstChat === true || brandStatus().source === "file" || now() >= PRODUCT_HUNT_UNTIL ? false
-      : organization === null || moving === null || firstChat === null ? null : !organization,
-    [CLOUD_INTRO]: moving ? false : moving === null ? null : introDue(),
-    [CLOUD_TRIAL_NOTICE]: planBridge && plan === null ? null : Boolean(key && (trialDue || trialOpen === key)),
-    [CLOUD_NOTICE]: !view ? false : view.kind === "unknown" ? null
-      : Boolean(kind && !noticeSeen(record, CLOUD_NOTICE_CARD[kind].dismissed)),
-    [BOAT_OFFER_NOTICE]: !boatHere || moving || afterWelcome === true || !usedBefore(state.bots) || desktopState?.seen.includes(BOAT_OFFER_NOTICE) ? false
-      : organization === null || moving === null || afterWelcome === null || mausBotFirst || (desktop && !desktopState) ? null : !organization,
-    [STAR_NOTICE]: !bridge || moving || brandStatus().source === "file" || !usedBefore(state.bots) ? false : moving === null ? null : true,
+    [PRODUCT_HUNT_NOTICE]: false, // Dani: no upstream ProductHunt launch promotion
+    [CLOUD_INTRO]: false, // Dani: no hosted cloud trial to introduce
+    [CLOUD_TRIAL_NOTICE]: false, // Dani: no hosted cloud trial
+    [CLOUD_NOTICE]: false, // Dani: no hosted cloud account notices
+    [BOAT_OFFER_NOTICE]: false, // Dani: no Boat referral offer
+    [STAR_NOTICE]: false, // Dani: no GitHub-star ask for the upstream repo
   }, id => id === CLOUD_INTRO ? stage === "done" && !introOpen
     : id === STAR_NOTICE || id === PRODUCT_HUNT_NOTICE || id === BOAT_OFFER_NOTICE ? noticeSeen(record, id) : false, launchNotice()) : null;
 

@@ -7,12 +7,17 @@ import { cleanCode, cleanEmail, parseSignInStart, SIGN_IN_START, SIGN_IN_TRIES, 
 export const CLOUD_ORIGIN = "https://cloud.openmausbot.com";
 /** The staging Admin (Dodo test mode, real test Clouds): a fixed address, on only with OMB_CLOUD_STAGING=1. */
 export const STAGING_CLOUD_ORIGIN = "https://omb-cloud-staging.fly.dev";
-/** Which Admin this app signs in to, and the files that depend on it (the sign-in, saved servers with the Cloud's
- * entry, Files' state, the Cloud's chosen name): staging never reads or writes production's. */
+/** Dani runs no hosted cloud service, and a Dani build must not sign its users in to the upstream OpenMausBot one:
+ * no default origin. An explicit DANI_CLOUD_ORIGIN (legacy OMB_CLOUD_ORIGIN) names a future Dani service; until one
+ * exists the origin is "", the desktop never creates the account client, and the renderer never sees the bridges. */
+export function cloudConfiguredOrigin(env = process.env) {
+  if (env?.OMB_CLOUD_STAGING === "1") return STAGING_CLOUD_ORIGIN;
+  return (env?.DANI_CLOUD_ORIGIN ?? env?.OMB_CLOUD_ORIGIN)?.trim() || "";
+}
 export function cloudTarget(env = process.env) {
   return env?.OMB_CLOUD_STAGING === "1"
     ? { origin: STAGING_CLOUD_ORIGIN, staging: true, file: "cloud-account-staging.bin", environments: "environments-staging.json", sync: "cloud-sync-staging", look: "cloud-home-look-staging.json" }
-    : { origin: CLOUD_ORIGIN, staging: false, file: "cloud-account.bin", environments: "environments.json", sync: "cloud-sync", look: "cloud-home-look.json" };
+    : { origin: cloudConfiguredOrigin(env), staging: false, file: "cloud-account.bin", environments: "environments.json", sync: "cloud-sync", look: "cloud-home-look.json" };
 }
 const TOKEN = /^omc_[A-Za-z0-9_-]{43}$/;
 const CODE = /^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/;
@@ -66,11 +71,14 @@ export function checkoutDestination(value, { fixture = false, staging = false } 
   if (!allowed.includes(url.origin) || url.username || url.password || url.hash || value.includes("#")) return null;
   return url.href;
 }
-// Never accept an address from the renderer.
-export function cloudOrigin(value = CLOUD_ORIGIN, fixture = false) {
+// Never accept an address from the renderer. An explicit DANI_CLOUD_ORIGIN is trusted (it names a service the
+// build's operator chose); without any configured origin there is no valid address at all.
+export function cloudOrigin(value = cloudConfiguredOrigin(), fixture = false) {
+  if (!value) throw new Error("This build has no hosted cloud service to sign in to.");
   const url = new URL(value);
-  if (value !== url.origin || (![CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN].includes(value) && !(fixture && url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)))) {
-    throw new Error("Invalid MausBot Cloud address.");
+  const configured = [cloudConfiguredOrigin(), CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN].filter(Boolean);
+  if (value !== url.origin || (!configured.includes(value) && !(fixture && url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname)))) {
+    throw new Error("Invalid cloud address.");
   }
   return value;
 }
