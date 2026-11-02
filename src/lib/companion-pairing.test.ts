@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { phonePairingLink } from "../../shared/pairing-link";
 import {
-  companionPairingLink,
+  companionPairingAddressText,
   companionPairingRoute,
   companionPairingRoutePin,
   companionPairingRoutePinAvailable,
 } from "./companion-pairing";
 
-describe("companionPairingLink", () => {
-  const token = `dani_pair_${"a".repeat(43)}`;
-  const legacyToken = `omb_pair_${"a".repeat(43)}`;
-  const secretPublicKey = "BIPBQ12_dWnF1DZLsTZO3Vg0NGjds5-jp9h3jhjr2To7bJelczS0LM82rfXV68PmSJhz2ePosj3fL974XckCpDU";
+describe("companionPairingRoute", () => {
+  const token = `omb_pair_${"a".repeat(43)}`;
 
   const decodedEndpoints = (link: string) => {
     const encoded = new URL(link).searchParams.get("endpoints");
@@ -17,123 +16,6 @@ describe("companionPairingLink", () => {
     const padded = encoded.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(encoded.length / 4) * 4, "=");
     return JSON.parse(Buffer.from(padded, "base64").toString("utf8"));
   };
-
-  it("carries the dialable address, one-time token, fallback code, and display name", () => {
-    const link = companionPairingLink({
-      address: "macbook.tail1234.ts.net",
-      port: 8810,
-      code: "004209",
-      token,
-      name: "Ada's Mac",
-      secretPublicKey,
-    });
-
-    const url = new URL(link!);
-    expect(url.protocol).toBe("danibot:");
-    expect(url.host).toBe("pair");
-    expect(url.searchParams.get("address")).toBe("macbook.tail1234.ts.net:8810");
-    expect(url.searchParams.get("token")).toBe(token);
-    expect(url.searchParams.get("code")).toBe("004209");
-    expect(url.searchParams.get("name")).toBe("Ada's Mac");
-    expect(url.searchParams.get("secretKey")).toBe(secretPublicKey);
-  });
-
-  it("omits malformed secure-entry keys instead of advertising an unusable key", () => {
-    const base = { address: "mac.local", port: 8810, code: "123456", token };
-    expect(new URL(companionPairingLink({ ...base, secretPublicKey: secretPublicKey.slice(1) })!)
-      .searchParams.get("secretKey")).toBeNull();
-    expect(new URL(companionPairingLink({ ...base, secretPublicKey: `A${secretPublicKey.slice(1)}` })!)
-      .searchParams.get("secretKey")).toBeNull();
-  });
-
-  it("refuses to make a link from an invalid pairing window", () => {
-    expect(companionPairingLink({ address: "", port: 8810, code: "123456", token })).toBeNull();
-    expect(companionPairingLink({ address: "mac.local", port: 0, code: "123456", token })).toBeNull();
-    expect(companionPairingLink({ address: "mac.local", port: 8810, code: "12345", token })).toBeNull();
-    expect(companionPairingLink({ address: "mac.local", port: 8810, code: "123456", token: "weak" })).toBeNull();
-    expect(companionPairingLink({ address: "mac.local", port: 8810, code: "123456", token: legacyToken })).not.toBeNull();
-  });
-
-  it("makes an IPv6 address unambiguous", () => {
-    const link = companionPairingLink({ address: "2001:db8::1", port: 8810, code: "123456", token });
-    expect(new URL(link!).searchParams.get("address")).toBe("[2001:db8::1]:8810");
-  });
-
-  it("carries the ordered fallback hosts, comma-joined", () => {
-    const link = companionPairingLink({
-      address: "macbook.tail1234.ts.net",
-      port: 8810,
-      code: "004209",
-      token,
-      hosts: ["macbook.tail1234.ts.net", "192.168.1.42", "danibot-abcd1234.local"],
-    });
-    expect(new URL(link!).searchParams.get("hosts")).toBe(
-      "macbook.tail1234.ts.net,192.168.1.42,danibot-abcd1234.local",
-    );
-  });
-
-  it("carries sorted typed endpoints as URL-safe base64 JSON while preserving legacy fields", () => {
-    const link = companionPairingLink({
-      address: "192.168.1.42",
-      port: 8810,
-      code: "004209",
-      token,
-      hosts: ["192.168.1.42", "danibot-abcd1234.local"],
-      endpoints: [
-        { url: "http://192.168.1.42:8810", kind: "lan", priority: 200 },
-        { url: "https://Device-123.Companion.Example/", kind: "hosted", priority: 0 },
-        { url: "http://danibot-abcd1234.local:8810", kind: "bonjour", priority: 300 },
-      ],
-    });
-
-    const url = new URL(link!);
-    expect(url.searchParams.get("address")).toBe("192.168.1.42:8810");
-    expect(url.searchParams.get("hosts")).toBe("192.168.1.42,danibot-abcd1234.local");
-    expect(url.searchParams.get("endpoints")).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(decodedEndpoints(link!)).toEqual([
-      { url: "https://device-123.companion.example", kind: "hosted", priority: 0 },
-      { url: "http://192.168.1.42:8810", kind: "lan", priority: 200 },
-      { url: "http://danibot-abcd1234.local:8810", kind: "bonjour", priority: 300 },
-    ]);
-  });
-
-  it("filters malformed or transport-mismatched typed endpoints", () => {
-    const link = companionPairingLink({
-      address: "mac.local",
-      port: 8810,
-      code: "004209",
-      token,
-      endpoints: [
-        { url: "http://hosted.example", kind: "hosted", priority: 0 },
-        { url: "https://192.168.1.42:8810", kind: "lan", priority: 200 },
-        { url: "http://mac.local:8810/path", kind: "bonjour", priority: 300 },
-        { url: "http://mac.local:0", kind: "bonjour", priority: 300 },
-        { url: "http://mac.local:65536", kind: "bonjour", priority: 300 },
-        { url: "http://mac.local:8810", kind: "bonjour", priority: 300 },
-      ],
-    });
-    expect(decodedEndpoints(link!)).toEqual([
-      { url: "http://mac.local:8810", kind: "bonjour", priority: 300 },
-    ]);
-  });
-
-  it("drops unusable fallback hosts without breaking the link", () => {
-    // A bad candidate costs the phone one failed dial at most, and an empty
-    // list is a link that simply carries no fallbacks — pairing still works.
-    const link = companionPairingLink({
-      address: "mac.local",
-      port: 8810,
-      code: "004209",
-      token,
-      hosts: ["  192.168.1.42  ", "", "has space", "has/slash", "a,b"],
-    });
-    const url = new URL(link!);
-    expect(url.searchParams.get("hosts")).toBe("192.168.1.42");
-    expect(url.searchParams.get("address")).toBe("mac.local:8810");
-
-    const none = companionPairingLink({ address: "mac.local", port: 8810, code: "004209", token, hosts: [] });
-    expect(new URL(none!).searchParams.get("hosts")).toBeNull();
-  });
 
   it("makes the automatic QR hosted-only even when Tailscale and LAN are advertised", () => {
     const endpoints = [
@@ -155,7 +37,7 @@ describe("companionPairingLink", () => {
       hosts: ["device.openmausbot.com"],
       endpoints: [endpoints[0]],
     });
-    const link = companionPairingLink({ ...route!, code: "004209", token });
+    const link = phonePairingLink({ ...route!, code: "004209", token });
     const url = new URL(link!);
     expect(url.searchParams.get("address")).toBe("device.openmausbot.com:443");
     expect(url.searchParams.get("hosts")).toBe("device.openmausbot.com");
@@ -176,7 +58,7 @@ describe("companionPairingLink", () => {
       port: 8810,
       tailnetName: "mac.tail1234.ts.net",
       lan: "192.168.1.42",
-      hosts: ["mac.tail1234.ts.net", "192.168.1.42", "danibot-aa.local"],
+      hosts: ["mac.tail1234.ts.net", "192.168.1.42", "openmausbot-aa.local"],
       endpoints: [
         { url: "http://mac.tail1234.ts.net:8810", kind: "tailnet" as const, priority: 0 },
         { url: "http://192.168.1.42:8810", kind: "lan" as const, priority: 100 },
@@ -257,12 +139,12 @@ describe("companionPairingLink", () => {
       port: 8810,
       tailnetName: "mac.tail1234.ts.net",
       lan: "192.168.1.42",
-      hosts: ["mac.tail1234.ts.net", "192.168.1.42", "danibot-aa.local"],
+      hosts: ["mac.tail1234.ts.net", "192.168.1.42", "openmausbot-aa.local"],
       endpoints: [
         { url: "https://device.openmausbot.com", kind: "hosted", priority: 0 },
         { url: "http://mac.tail1234.ts.net:8810", kind: "tailnet", priority: 100 },
         { url: "http://192.168.1.42:8810", kind: "lan", priority: 200 },
-        { url: "http://danibot-aa.local:8810", kind: "bonjour", priority: 300 },
+        { url: "http://openmausbot-aa.local:8810", kind: "bonjour", priority: 300 },
       ],
     }, "local");
 
@@ -270,14 +152,14 @@ describe("companionPairingLink", () => {
     expect(route?.port).toBe(8810);
     expect(route?.hosts).toEqual([
       "192.168.1.42",
-      "danibot-aa.local",
+      "openmausbot-aa.local",
     ]);
-    const link = companionPairingLink({ ...route!, code: "004209", token });
+    const link = phonePairingLink({ ...route!, code: "004209", token });
     expect(new URL(link!).searchParams.get("address")).toBe("192.168.1.42:8810");
     expect(decodedEndpoints(link!)).toEqual([
       { url: "http://192.168.1.42:8810", kind: "lan", priority: 0 },
       { url: "https://device.openmausbot.com", kind: "hosted", priority: 100 },
-      { url: "http://danibot-aa.local:8810", kind: "bonjour", priority: 200 },
+      { url: "http://openmausbot-aa.local:8810", kind: "bonjour", priority: 200 },
     ]);
   });
 
@@ -286,12 +168,12 @@ describe("companionPairingLink", () => {
       port: 8810,
       tailnetName: "mac.tail1234.ts.net",
       lan: "192.168.1.42",
-      hosts: ["mac.tail1234.ts.net", "192.168.1.42", "danibot-aa.local"],
+      hosts: ["mac.tail1234.ts.net", "192.168.1.42", "openmausbot-aa.local"],
       endpoints: [
         { url: "https://device.openmausbot.com", kind: "hosted", priority: 0 },
         { url: "http://mac.tail1234.ts.net:8810", kind: "tailnet", priority: 100 },
         { url: "http://192.168.1.42:8810", kind: "lan", priority: 200 },
-        { url: "http://danibot-aa.local:8810", kind: "bonjour", priority: 300 },
+        { url: "http://openmausbot-aa.local:8810", kind: "bonjour", priority: 300 },
       ],
     }, "tailscale");
 
@@ -300,7 +182,7 @@ describe("companionPairingLink", () => {
       port: 8810,
       hosts: ["mac.tail1234.ts.net"],
     });
-    const link = companionPairingLink({ ...route!, code: "004209", token });
+    const link = phonePairingLink({ ...route!, code: "004209", token });
     expect(decodedEndpoints(link!)).toEqual([
       { url: "http://mac.tail1234.ts.net:8810", kind: "tailnet", priority: 0 },
       { url: "https://device.openmausbot.com", kind: "hosted", priority: 100 },
@@ -333,28 +215,56 @@ describe("companionPairingLink", () => {
   it("uses an advertised Bonjour route when no LAN address is available", () => {
     const route = companionPairingRoute({
       port: 8810,
-      hosts: ["mac.tail1234.ts.net", "danibot-aa.local"],
-      discovery: { advertising: true, name: "danibot-aa.local" },
+      hosts: ["mac.tail1234.ts.net", "openmausbot-aa.local"],
+      discovery: { advertising: true, name: "openmausbot-aa.local" },
       endpoints: [
         { url: "https://device.openmausbot.com", kind: "hosted", priority: 0 },
-        { url: "http://danibot-aa.local:8810", kind: "bonjour", priority: 300 },
+        { url: "http://openmausbot-aa.local:8810", kind: "bonjour", priority: 300 },
       ],
     }, "local");
 
-    expect(route?.address).toBe("danibot-aa.local");
-    expect(route?.hosts?.[0]).toBe("danibot-aa.local");
+    expect(route?.address).toBe("openmausbot-aa.local");
+    expect(route?.hosts?.[0]).toBe("openmausbot-aa.local");
     expect(route?.endpoints?.map((endpoint) => endpoint.kind)).toEqual(["bonjour", "hosted"]);
   });
 
   it("does not treat an inactive synthetic Bonjour name as a reachable local route", () => {
     expect(companionPairingRoute({
       port: 8810,
-      hosts: ["mac.tail1234.ts.net", "danibot-aa.local"],
-      discovery: { advertising: false, name: "danibot-aa.local" },
+      hosts: ["mac.tail1234.ts.net", "openmausbot-aa.local"],
+      discovery: { advertising: false, name: "openmausbot-aa.local" },
       endpoints: [
         { url: "https://device.openmausbot.com", kind: "hosted", priority: 0 },
-        { url: "http://danibot-aa.local:8810", kind: "bonjour", priority: 300 },
+        { url: "http://openmausbot-aa.local:8810", kind: "bonjour", priority: 300 },
       ],
     }, "local")).toBeNull();
+  });
+});
+
+describe("companionPairingAddressText", () => {
+  it("writes a hosted route with its scheme, so a phone does not send the code as HTTP to port 443", () => {
+    const hosted = { url: "https://device.openmausbot.com", kind: "hosted" as const, priority: 0 };
+    const route = companionPairingRoute({ port: 8810, endpoints: [hosted] }, "automatic");
+
+    expect(companionPairingAddressText(route!)).toBe("https://device.openmausbot.com");
+  });
+
+  it("keeps a hosted route's non-default port", () => {
+    expect(companionPairingAddressText({
+      address: "box.example.com",
+      port: 8443,
+      endpoints: [{ url: "https://box.example.com:8443", kind: "hosted", priority: 0 }],
+    })).toBe("https://box.example.com:8443");
+  });
+
+  it("leaves direct routes as host:port", () => {
+    const route = companionPairingRoute({
+      port: 8810,
+      tailnetName: "mac.tail1234.ts.net",
+      endpoints: [{ url: "http://mac.tail1234.ts.net:8810", kind: "tailnet", priority: 100 }],
+    }, "tailscale");
+
+    expect(companionPairingAddressText(route!)).toBe("mac.tail1234.ts.net:8810");
+    expect(companionPairingAddressText({ address: "192.168.1.42", port: 8810 })).toBe("192.168.1.42:8810");
   });
 });

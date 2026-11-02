@@ -1,5 +1,3 @@
-// Contract test for the dweb MCP proxy: launch the real stdio entrypoint
-// against a scripted daemon and exercise its HTTP-to-MCP translation.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { dirname, join } from "node:path";
@@ -39,7 +37,7 @@ beforeAll(async () => {
     if (req.method === "GET" && req.url === "/api/repo/status") {
       res.statusCode = repoStatus;
       return res.end(
-        JSON.stringify(repoStatus === 200 ? { repo: "dani-desktop", branch: "main", commit: "abc123" } : { error: "offline" }),
+        JSON.stringify(repoStatus === 200 ? { repo: "OpenMausBot", branch: "main", commit: "abc123" } : { error: "offline" }),
       );
     }
     if (req.method === "GET" && req.url === "/api/opencode/models") {

@@ -1,21 +1,43 @@
-// Split engines into Cloud (first-party catalog + Custom) and Local
-// (no catalog — inject a model). A missing `access` is Cloud so older
-// payloads stay in the top group. VibeCoder would join Local later.
 import type { InstanceInfo } from "@/state/store";
+
+export function configuredModelInstances(instances: readonly InstanceInfo[], selectedInstanceId?: string): InstanceInfo[] {
+  return instances.filter((instance) =>
+    instance.instanceId === selectedInstanceId
+      || (instance.snapshot.state === "available" && (instance.models.options.length > 0 || instance.snapshot.chatgptPlan === true)));
+}
 
 export function isCustomOnly(instance: { access?: InstanceInfo["access"] } | undefined): boolean {
   return instance?.access === "custom";
 }
 
+export type SignInFamily = "claude" | "openai";
+
+export function signInFamily(instance: { driverKind: string; access?: InstanceInfo["access"] } | undefined): SignInFamily | undefined {
+  if (!instance || instance.access === "api") return undefined;
+  if (instance.driverKind === "claudeAgent") return "claude";
+  if (instance.driverKind === "codex") return "openai";
+  return undefined;
+}
+
+export const SIGN_IN_FAMILY_LABEL: Record<SignInFamily, string> = { claude: "Claude", openai: "OpenAI" };
+
+export function isClaudeAccount(instance: { driverKind: string; access?: InstanceInfo["access"] } | undefined): boolean {
+  return signInFamily(instance) === "claude";
+}
+
 export function splitEngineRail<T>(instances: readonly T[]): {
   subscription: T[];
+  api: T[];
   custom: T[];
 } {
   const subscription: T[] = [];
+  const api: T[] = [];
   const custom: T[] = [];
   for (const instance of instances) {
-    if (isCustomOnly(instance as { access?: InstanceInfo["access"] })) custom.push(instance);
+    const access = (instance as { access?: InstanceInfo["access"] }).access;
+    if (access === "custom") custom.push(instance);
+    else if (access === "api") api.push(instance);
     else subscription.push(instance);
   }
-  return { subscription, custom };
+  return { subscription, api, custom };
 }

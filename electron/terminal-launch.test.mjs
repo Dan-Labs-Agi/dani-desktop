@@ -35,7 +35,14 @@ describe("blank terminal launcher", () => {
   it("opens a blank PowerShell window on Windows", async () => {
     const fake = launcher(["spawn"]);
     await expect(openBlankTerminal("win32", fake.run)).resolves.toBe(true);
-    expect(fake.calls[0]).toMatchObject({ executable: "powershell.exe", args: ["-NoExit"] });
+    // Not the launcher's own child: that child's stdio is piped to the app and never gets a window.
+    expect(fake.calls).toEqual([
+      {
+        executable: "powershell.exe",
+        args: ["-NoProfile", "-NonInteractive", "-Command", "Start-Process powershell.exe"],
+        options: { windowsHide: true },
+      },
+    ]);
   });
 
   it("tries the next Linux terminal after an asynchronous launch error", async () => {

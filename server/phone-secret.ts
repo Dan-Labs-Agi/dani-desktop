@@ -1,14 +1,10 @@
 import { createECDH, createHash, type webcrypto } from "node:crypto";
 
-import {
-  Aes256Gcm,
-  CipherSuite,
-  DhkemP256HkdfSha256,
-  HkdfSha256,
-} from "@hpke/core";
+import { desktopCredentialSlot, isCredentialTargetId } from "../shared/credential-request.ts";
+import type { CipherSuite } from "@hpke/core";
 
 export const PHONE_SECRET_PROTOCOL_VERSION = 1 as const;
-export const PHONE_SECRET_INFO = "Dani Bot phone credential v1";
+export const PHONE_SECRET_INFO = "OpenMausBot phone credential v1";
 export const PHONE_SECRET_MAX_BYTES = 4_096;
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
@@ -59,11 +55,12 @@ export class PhoneSecretError extends Error {
   }
 }
 
-const suite = new CipherSuite({
+let hpkeSuite: Promise<CipherSuite> | undefined;
+const suite = () => hpkeSuite ??= import("@hpke/core").then(({ Aes256Gcm, CipherSuite, DhkemP256HkdfSha256, HkdfSha256 }) => new CipherSuite({
   kem: new DhkemP256HkdfSha256(),
   kdf: new HkdfSha256(),
   aead: new Aes256Gcm(),
-});
+}));
 const INFO = new TextEncoder().encode(PHONE_SECRET_INFO);
 
 const decodeBase64URL = (value: unknown, expectedBytes?: number): Uint8Array | null => {
@@ -93,16 +90,13 @@ export function phoneSecretKeyIdFromJwk(jwk: webcrypto.JsonWebKey): string | nul
     .toString("base64url");
 }
 
-/** A single canonical string is used by Swift and TypeScript. Every dynamic
- * field is route-safe ASCII and therefore cannot contain the newline
- * separator. Authenticating this metadata prevents a relay from moving one
- * ciphertext to another bot, conversation, card, device, or credential. */
+/** One canonical string shared with Swift. Authenticating it stops a relay moving a ciphertext to another bot, conversation, card, device or credential. */
 export function phoneSecretAAD(context: Pick<
   PhoneSecretContext,
   "keyId" | "deviceId" | "botId" | "threadId" | "messageId" | "target" | "requestKey"
 >): Uint8Array {
   const fields = [
-    "danibot-phone-credential-v1",
+    "openmausbot-phone-credential-v1",
     context.keyId,
     context.deviceId,
     context.botId,
@@ -122,12 +116,6 @@ export function phoneSecretAAD(context: Pick<
   return new TextEncoder().encode(fields.join("\n"));
 }
 
-/**
- * A stable, non-secret operation id for one exact HPKE envelope. Electron
- * uses it to join a retry whose HTTP response was lost instead of validating
- * and writing the same credential twice. A freshly encrypted submission has
- * a different encapsulated key/ciphertext and therefore a different id.
- */
 export function phoneSecretOperationId(context: PhoneSecretContext): string {
   const aad = phoneSecretAAD(context);
   return createHash("sha256")
@@ -146,6 +134,14 @@ export function assertPhoneSecretRequestMatches(
   authenticatedDeviceId: string,
   expected: { target: string; requestKey: string },
 ): void {
+  // Phone entry hands a key to the desktop's settings; the 1Password token goes to Logins, which a phone cannot reach.
+  if (expected.target === "onePasswordToken") {
+    throw new PhoneSecretError("Paste the 1Password token in OpenMausBot on your computer, or in My Cloud: a phone cannot save it yet.", 409);
+  }
+  // An AI provider key lives in the server's settings, which only the computer's own app writes.
+  if (isCredentialTargetId(expected.target) && !desktopCredentialSlot(expected.target)) {
+    throw new PhoneSecretError("Paste this key in OpenMausBot on your computer, or in My Cloud: a phone cannot save it yet.", 409);
+  }
   if (
     context.deviceId !== authenticatedDeviceId ||
     context.target !== expected.target ||
@@ -155,10 +151,6 @@ export function assertPhoneSecretRequestMatches(
   }
 }
 
-/** Serializes the state transition for one pending credential card. Exact
- * retransmissions join the original operation; a separately encrypted value
- * cannot be mistaken for that retry, and callers can block dismiss/resume
- * while the operating-system store is committing. */
 export class PhoneSecretSubmissionRegistry {
   private readonly active = new Map<
     string,
@@ -204,9 +196,7 @@ export class PhoneSecretSubmissionRegistry {
     return this.hasActiveResource(this.resources({ groupId }));
   }
 
-  /** Claim a structural mutation before its first await. A submission and a
-   * destructive/rewind mutation can then never both pass their preflight
-   * checks and invalidate each other while the OS credential store is slow. */
+  /** Claim before the first await, so a submission and a destructive mutation never both pass preflight while the OS store is slow. */
   claimMutation(scope: {
     botId?: string;
     threadId?: string;
@@ -248,9 +238,7 @@ export class PhoneSecretSubmissionRegistry {
       throw new PhoneSecretError("This credential request is being changed. Try again.", 409);
     }
 
-    // Deferring work by one microtask lets the registry publish the active
-    // entry before decrypt/save begins, so no synchronous callback can slip a
-    // competing state transition through the gap.
+    // One microtask of deferral lets the registry publish the entry before decrypt/save, so no callback slips a competing transition in.
     const promise = Promise.resolve().then(work);
     const entry = { operationId, promise, resources };
     this.active.set(scope.cardKey, entry);
@@ -296,7 +284,7 @@ async function importIdentity(message: Record<string, unknown>): Promise<PhoneSe
   } catch {
     throw new PhoneSecretError("The desktop credential key is invalid", 503);
   }
-  const imported = await suite.kem.importKey("jwk", {
+  const imported = await (await suite()).kem.importKey("jwk", {
     kty: "EC",
     crv: "P-256",
     x: privateKey.x,
@@ -308,23 +296,11 @@ async function importIdentity(message: Record<string, unknown>): Promise<PhoneSe
   return { keyId, privateKey: imported };
 }
 
-// Dual-listed with the legacy prefix: the desktop shell's rebranded senders
-// and these receivers must pair in every shipped combination (see
-// scripts/desktop-channel-contract.test.mjs).
-const PHONE_SECRET_KEY_MESSAGE_TYPES: ReadonlySet<string> = new Set([
-  "danibot:phone-secret-key",
-  "openmausbot:phone-secret-key",
-]);
-const PHONE_SECRET_SAVE_RESULT_MESSAGE_TYPES: ReadonlySet<string> = new Set([
-  "danibot:phone-secret-save-result",
-  "openmausbot:phone-secret-save-result",
-]);
-
 function decodeSaveResult(raw: unknown): { requestId: string; ok: boolean; error?: string } | null {
   const message = (raw as { data?: unknown } | null)?.data ?? raw;
   if (!message || typeof message !== "object" || Array.isArray(message)) return null;
   const value = message as Record<string, unknown>;
-  if (typeof value.type !== "string" || !PHONE_SECRET_SAVE_RESULT_MESSAGE_TYPES.has(value.type)) return null;
+  if (value.type !== "openmausbot:phone-secret-save-result") return null;
   if (typeof value.requestId !== "string" || !ROUTE_ID.test(value.requestId) || typeof value.ok !== "boolean") {
     return null;
   }
@@ -335,13 +311,7 @@ function decodeSaveResult(raw: unknown): { requestId: string; ok: boolean; error
   };
 }
 
-/**
- * Owns the narrow private bridge between the embedded server and Electron's
- * OS-encrypted credential document. The phone-facing HTTP route gives this
- * class ciphertext only. Plaintext exists only after HPKE opens it on the
- * desktop and is immediately handed to the already-existing credential save
- * path; it is never returned to HTTP, chat, SQLite, SSE, or logs.
- */
+/** The HTTP route hands this ciphertext only; plaintext exists only after HPKE opens it on the desktop and never reaches HTTP, chat, SQLite, SSE or logs. */
 export class PhoneSecretBridge {
   private identity: Promise<PhoneSecretIdentity> | null = null;
   private readonly pending = new Map<string, PendingSave>();
@@ -352,14 +322,7 @@ export class PhoneSecretBridge {
 
   constructor(
     send: SendPrivateMessage,
-    // Provider validation is part of the encrypted-store transaction and can
-    // legitimately take tens of seconds. This remains bounded, but outlives
-    // every provider's own deadline so a late successful save is not reported
-    // as a failure and then repeated underneath the user.
-    // Stay materially below the outer HTTPS proxy and phone deadlines. This
-    // leaves enough time for their JSON response to travel after a slow
-    // provider validation instead of turning a committed save into a client
-    // timeout at Cloudflare's boundary.
+    // Outlives every provider's validation deadline but stays below the HTTPS proxy and phone deadlines (Cloudflare's boundary).
     timeoutMs = 90_000,
     maximumPending = 8,
   ) {
@@ -372,9 +335,7 @@ export class PhoneSecretBridge {
     const message = (raw as { data?: unknown } | null)?.data ?? raw;
     if (!message || typeof message !== "object" || Array.isArray(message)) return false;
     const record = message as Record<string, unknown>;
-    if (typeof record.type === "string" && PHONE_SECRET_KEY_MESSAGE_TYPES.has(record.type)) {
-      // Keep the rejection inside the promise. A request receives a bounded
-      // 503; an invalid parent message must never become an unhandled reject.
+    if (record.type === "openmausbot:phone-secret-key") {
       this.identity = importIdentity(record);
       void this.identity.catch(() => {});
       return true;
@@ -391,27 +352,36 @@ export class PhoneSecretBridge {
   }
 
   async provide(context: PhoneSecretContext): Promise<void> {
+    await this.withinLimit(async () => this.save(context, await this.openWithinLimit(context)));
+  }
+
+  /** The value a paired phone sealed for this computer, for a secret this server keeps itself and never sends on. */
+  async open(context: PhoneSecretContext): Promise<string> {
+    return this.withinLimit(() => this.openWithinLimit(context));
+  }
+
+  private async withinLimit<T>(work: () => Promise<T>): Promise<T> {
     if (this.active >= this.maximumPending) {
       throw new PhoneSecretError("Another secure credential is still being saved. Try again.", 429);
     }
     this.active += 1;
     try {
-      await this.provideWithinLimit(context);
+      return await work();
     } finally {
       this.active -= 1;
     }
   }
 
-  private async provideWithinLimit(context: PhoneSecretContext): Promise<void> {
+  private async openWithinLimit(context: PhoneSecretContext): Promise<string> {
     if (!this.identity) {
       throw new PhoneSecretError(
-        "Secure phone entry is not ready on this computer. Reopen Dani Bot and try again.",
+        "Secure phone entry is not ready on this computer. Reopen OpenMausBot and try again.",
         503,
       );
     }
     const identity = await this.identity.catch(() => {
       throw new PhoneSecretError(
-        "Secure phone entry is not ready on this computer. Reopen Dani Bot and try again.",
+        "Secure phone entry is not ready on this computer. Reopen OpenMausBot and try again.",
         503,
       );
     });
@@ -432,7 +402,7 @@ export class PhoneSecretBridge {
 
     let opened: ArrayBuffer;
     try {
-      opened = await suite.open(
+      opened = await (await suite()).open(
         { recipientKey: identity.privateKey, enc: encapsulatedKey, info: INFO },
         ciphertext,
         phoneSecretAAD(context),
@@ -453,7 +423,10 @@ export class PhoneSecretBridge {
     if (!value || Buffer.byteLength(value) > PHONE_SECRET_MAX_BYTES) {
       throw new PhoneSecretError("The credential must be between 1 and 4096 bytes");
     }
+    return value;
+  }
 
+  private async save(context: PhoneSecretContext, value: string): Promise<void> {
     const requestId = phoneSecretOperationId(context);
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {

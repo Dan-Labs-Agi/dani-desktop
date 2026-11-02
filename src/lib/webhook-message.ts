@@ -3,10 +3,11 @@ export interface WebhookMessageView {
   payload?: string;
 }
 
-/** Convert the model-safe webhook prompt into the smaller view shown in chat.
- * The stored message stays untouched, preserving the trust boundary for model
- * context and follow-up turns. */
+/** A view only: the stored model-safe prompt stays untouched, preserving the trust boundary. */
 export function webhookMessageView(text: string): WebhookMessageView | null {
+  const eventStart = text.indexOf("[UNTRUSTED WEBHOOK EVENT DATA]\n");
+  if (eventStart < 0) return null;
+  const trustedPrefix = text.slice(0, eventStart);
   const markers = [
     "AUTHENTICATED WEBHOOK TASK",
     "USER-CONFIGURED WEBHOOK INSTRUCTIONS",
@@ -14,9 +15,10 @@ export function webhookMessageView(text: string): WebhookMessageView | null {
   ];
   let task = "";
   for (const marker of markers) {
-    const match = text.match(new RegExp(`\\[${marker}\\]\\n([\\s\\S]*?)\\n\\[\\/${marker}\\]`));
-    if (match?.[1]) {
-      task = match[1].trim();
+    const match = trustedPrefix.match(new RegExp(`\\[${marker}\\]\\n([\\s\\S]*?)\\n\\[\\/${marker}\\]`));
+    const candidate = match?.[1]?.trim();
+    if (candidate) {
+      task = candidate;
       break;
     }
   }

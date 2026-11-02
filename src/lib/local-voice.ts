@@ -1,6 +1,3 @@
-// Voice output selected on a paired desktop belongs to that device, not the
-// remote host. A Mac client can therefore use its installed voices while a
-// Windows host independently uses ElevenLabs for its own playback.
 export type RemoteVoiceProvider = "host" | "system";
 
 type Preferences = {
@@ -8,8 +5,7 @@ type Preferences = {
   voices?: Record<string, string>;
 };
 
-const STORAGE_KEY = "danibot.remote-voice.v1";
-const LEGACY_STORAGE_KEY = "openmausbot.remote-voice.v1";
+const STORAGE_KEY = "openmausbot.remote-voice.v1";
 
 function storage(): Storage | null {
   try {
@@ -21,7 +17,7 @@ function storage(): Storage | null {
 
 function read(): Preferences {
   try {
-    const value = storage()?.getItem(STORAGE_KEY) ?? storage()?.getItem(LEGACY_STORAGE_KEY);
+    const value = storage()?.getItem(STORAGE_KEY);
     if (!value) return {};
     const parsed = JSON.parse(value) as Preferences;
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -34,16 +30,14 @@ function write(next: Preferences): void {
   try {
     storage()?.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
-    // A locked-down renderer may reject storage. Voice still works for the
-    // current default; persistence is a convenience, not a prerequisite.
   }
 }
 
 export function localSystemVoicesAvailable(): boolean {
   return (
     typeof window !== "undefined" &&
-    window.dani?.remoteClient?.active === true &&
-    window.dani?.platform === "darwin" &&
+    window.ogb?.remoteClient?.active === true &&
+    window.ogb?.platform === "darwin" &&
     typeof window.speechSynthesis !== "undefined" &&
     typeof window.SpeechSynthesisUtterance !== "undefined"
   );
@@ -51,8 +45,6 @@ export function localSystemVoicesAvailable(): boolean {
 
 export function remoteVoiceProvider(): RemoteVoiceProvider {
   const provider = read().provider;
-  // A paired Mac defaults to its private, installed voices. Choosing Host
-  // voice is explicit and remains independent from the host's own setting.
   return provider === "host" ? "host" : "system";
 }
 

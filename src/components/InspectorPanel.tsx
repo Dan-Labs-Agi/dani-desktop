@@ -1,68 +1,51 @@
-// The raw event inspector: what a thread's turns actually looked like on
-// the wire, for the moment a bot misbehaves and the chat view can't say
-// why. Two lenses over the same thread:
-//
-//   Events — the harness's normalized RuntimeEvent stream: turns, tool
-//            items, requests, token usage, errors. Follows live over SSE.
-//   Raw    — the provider's own protocol messages, verbatim (the native
-//            tee). Read from disk; refreshed when a turn settles.
-//
-// Nothing here is captured for the panel's sake — both logs already exist
-// under ~/.danibot (server/harness/bus.ts, server/drivers/native.ts).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bug, ChevronDown, ChevronRight, RefreshCw, X } from "lucide-react";
-import { useStore, type Bot } from "@/state/store";
+import { useStore, visibleMessages, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
+import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { formatTime, toRows, type InspectorEntry, type InspectorPage, type InspectorRow } from "@/lib/inspector";
-import { openLiveEvents } from "@/lib/live-events";
-import type { RuntimeEvent } from "../../server/contracts.ts";
+import { listenLiveFrames } from "@/lib/live-events";
+import type { RuntimeEvent } from "../../shared/runtime-events";
+import { RunLog } from "./RunLog";
+import { timelineEvents } from "@/lib/taskTimeline";
+import { t } from "@/lib/i18n";
 
-type Lens = "events" | "raw" | "evidence";
-type KernelDiagnostic = {
-  job: { id: string; status: string; attempt: number; generation: number; provider: string; turnId: string; cancellationReason: string | null };
-  effects: Array<{ id: string; adapter: string; riskClass: string; resource: string; audience: string | null; state: string; externalReference: string | null; error: string | null; evidence: Array<{ sourceTimestamp: string; sourceReference: string; inspection: unknown }> }>;
-};
+type Lens = "run" | "events" | "raw";
 
 export function InspectorPanel({ bot }: { bot: Bot }) {
   const { dispatch } = useStore();
+  const { dragProps } = useCaptionChrome();
   const threadId = bot.threadId;
-  const [lens, setLens] = useState<Lens>("events");
+  const [lens, setLens] = useState<Lens>("run");
+  const activity = useMemo(() => timelineEvents(visibleMessages(bot), bot), [bot]);
   const [page, setPage] = useState<InspectorPage | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [kernel, setKernel] = useState<KernelDiagnostic | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const loadAbort = useRef<AbortController | null>(null);
   const managedRefresh = useRef<() => void>(() => {});
 
-  const load = useCallback(async (): Promise<boolean> => {
+  const load = useCallback(async () => {
     loadAbort.current?.abort();
     const controller = new AbortController();
     loadAbort.current = controller;
     try {
       const res = await fetch(`/api/threads/${threadId}/events?limit=400`, { signal: controller.signal });
       if (!res.ok) throw new Error(`${res.status}`);
-      // SAFETY: this same-version renderer calls the harness's typed
-      // inspector endpoint; malformed transport data is handled by catch.
+      // SAFETY: the same-version harness's typed inspector endpoint; malformed transport data is handled by catch.
       const next = (await res.json()) as InspectorPage;
-      const kernelRes = await fetch(`/api/kernel/threads/${encodeURIComponent(threadId)}/diagnostic`, { signal: controller.signal });
-      const kernelBody = kernelRes.ok ? await kernelRes.json() as { diagnostic?: KernelDiagnostic | null } : {};
-      if (controller.signal.aborted) return false;
+      if (controller.signal.aborted) return;
       setPage(next);
-      setKernel(kernelBody.diagnostic ?? null);
       setError(null);
-      return true;
     } catch (e) {
-      if (controller.signal.aborted) return false;
+      if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : String(e));
-      return false;
     } finally {
       if (loadAbort.current === controller) loadAbort.current = null;
     }
   }, [threadId]);
 
-  // history from disk on open / thread change
   useEffect(() => {
     setPage(null);
     setExpanded(new Set());
@@ -71,10 +54,6 @@ export function InspectorPanel({ bot }: { bot: Bot }) {
     return () => loadAbort.current?.abort();
   }, [load]);
 
-  // live: append this thread's runtime events as they stream, and re-read
-  // the disk when a turn settles so the native tee (not on the SSE) catches
-  // up. Own EventSource on purpose: the store folds runtime events into
-  // chat state and does not re-emit them.
   useEffect(() => {
     let alive = true;
     let settle: ReturnType<typeof setTimeout> | null = null;
@@ -84,8 +63,7 @@ export function InspectorPanel({ bot }: { bot: Bot }) {
 
     const appendRuntime = (runtime: RuntimeEvent) => {
       setPage((prev) => {
-        // A disk refresh and replay can overlap. eventId is canonical, so a
-        // replayed entry already present in the snapshot is an exact no-op.
+        // eventId is canonical, so a replayed entry already in the snapshot is a no-op.
         if (
           prev?.entries.some(
             (entry) => entry.kind === "runtime" && entry.data.eventId === runtime.eventId,
@@ -103,46 +81,23 @@ export function InspectorPanel({ bot }: { bot: Bot }) {
       for (const runtime of pendingRuntime.splice(0)) appendRuntime(runtime);
     };
 
-    const refresh = async (flushLiveOnFailure: boolean): Promise<boolean> => {
+    const refresh = async () => {
       const generation = ++refreshGeneration;
       refreshing = true;
-      const loaded = await load();
-      // A later refresh aborts the earlier fetch. Only its completion owns
-      // the buffered live tail, otherwise the earlier finally can flush
-      // frames immediately before the newer snapshot overwrites them.
-      if (!alive || generation !== refreshGeneration) return false;
+      await load();
+      // A later refresh aborts the earlier fetch, and only its completion owns the buffered live tail.
+      if (!alive || generation !== refreshGeneration) return;
       refreshing = false;
-      // An ordinary Reload keeps the previous page when its fetch fails, so
-      // live frames buffered during that request still belong on that page.
-      // A replacement snapshot must not expose them: its caller will close
-      // and replay the stream from the last acknowledged cursor instead.
-      if (!loaded) {
-        if (flushLiveOnFailure) flushPendingRuntime();
-        return false;
-      }
       flushPendingRuntime();
-      return true;
     };
-    const requestRefresh = () => void refresh(true);
-    const refreshFromSnapshot = (): Promise<boolean> => {
-      // A refused resume starts a new stream generation. Frames retained by
-      // an earlier failed refresh will be present in the new disk snapshot or
-      // replayed again, so do not carry them across the generation boundary.
-      pendingRuntime.splice(0);
-      return refresh(false);
-    };
+    const requestRefresh = () => void refresh();
     managedRefresh.current = requestRefresh;
 
-    const stopLive = openLiveEvents({
-      screens: false,
-      onSnapshotRequired: refreshFromSnapshot,
+    const stopLive = listenLiveFrames({
+      onMissedFrames: requestRefresh,
       onFrame: (frame) => {
         if (frame.kind !== "runtime") return;
-        const event = frame.event;
-        if (!event || Array.isArray(event) || Object(event) !== event) return;
-        // SAFETY: runtime stream frames are produced from the typed harness
-        // bus; this guard rejects non-object transport corruption.
-        const runtime = event as RuntimeEvent;
+        const runtime = frame.event;
         if (runtime.threadId !== threadId) return;
         if (refreshing) pendingRuntime.push(runtime);
         else appendRuntime(runtime);
@@ -166,7 +121,6 @@ export function InspectorPanel({ bot }: { bot: Bot }) {
   );
   const rows = useMemo(() => toRows(entries), [entries]);
 
-  // follow the tail unless the user has scrolled up to read
   useEffect(() => {
     const el = listRef.current;
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
@@ -185,12 +139,12 @@ export function InspectorPanel({ bot }: { bot: Bot }) {
       return next;
     });
 
-  const shown = lens === "evidence" ? (kernel?.effects.length ?? 0) : entries.length;
-  const total = lens === "evidence" ? shown : lens === "raw" ? (page?.total.native ?? 0) : (page?.total.runtime ?? 0);
+  const shown = entries.length;
+  const total = lens === "raw" ? (page?.total.native ?? 0) : (page?.total.runtime ?? 0);
 
   return (
-    <aside className="animate-panel-in flex h-full w-[460px] shrink-0 flex-col border-l border-hairline/40 bg-panel">
-      <div className="flex items-center justify-between px-4 py-3">
+    <aside aria-label="Inspector" className="animate-panel-in absolute inset-0 z-40 flex h-full min-w-0 flex-col border-l border-hairline/40 bg-panel md:static md:z-auto md:w-[min(460px,45vw)] md:shrink-0">
+      <div {...dragProps} className="flex items-center justify-between px-4 py-3">
         <span className="flex items-center gap-2 text-[15px] font-semibold text-ink">
           <Bug size={16} className="text-ink-secondary" /> Inspector
         </span>
@@ -205,56 +159,56 @@ export function InspectorPanel({ bot }: { bot: Bot }) {
       </div>
 
       <div className="flex items-center gap-2 border-b border-hairline/40 px-4 pb-3">
-        <div className="flex rounded-lg bg-inset p-0.5">
-          {(["events", "raw", "evidence"] as const).map((l) => (
+        <div role="tablist" aria-label={t("inspector.views")} className="flex rounded-lg bg-inset p-0.5" onKeyDown={(event) => {
+          const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+          const current = tabs.indexOf(document.activeElement as HTMLButtonElement);
+          const next = event.key === "ArrowRight" ? (current + 1) % tabs.length
+            : event.key === "ArrowLeft" ? (current + tabs.length - 1) % tabs.length
+              : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+          if (next < 0) return;
+          event.preventDefault();
+          tabs[next].focus();
+          tabs[next].click();
+        }}>
+          {(["run", "events", "raw"] as const).map((l) => (
             <button
               key={l}
+              type="button"
+              role="tab"
+              id={`inspector-tab-${l}`}
+              aria-selected={lens === l}
+              aria-controls={`inspector-panel-${l}`}
+              tabIndex={lens === l ? 0 : -1}
               onClick={() => setLens(l)}
               className={cn(
                 "rounded-md px-2.5 py-1 text-[12px] font-medium capitalize",
                 lens === l ? "bg-raised text-ink" : "text-ink-secondary hover:text-ink",
               )}
             >
-              {l}
+              {l === "run" ? t("inspector.run.title") : l}
             </button>
           ))}
         </div>
-        <span className="ml-auto text-[11px] text-ink-secondary">
+        {lens !== "run" && <span className="ml-auto text-[11px] text-ink-secondary">
           {page ? (shown < total ? `last ${shown} of ${total}` : `${shown} entries`) : "loading…"}
-        </span>
-        <button onClick={() => managedRefresh.current()} className="rounded-md p-1 text-ink-secondary hover:bg-raised hover:text-ink" title="Reload from disk">
+        </span>}
+        {lens !== "run" && <button onClick={() => managedRefresh.current()} className="rounded-md p-1 text-ink-secondary hover:bg-raised hover:text-ink" title="Reload from disk">
           <RefreshCw size={14} />
-        </button>
+        </button>}
       </div>
 
-      <div ref={listRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto font-mono text-[11.5px]">
+      <div role="tabpanel" id={`inspector-panel-${lens}`} aria-labelledby={`inspector-tab-${lens}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60">
+      {lens === "run" ? <RunLog key={threadId} events={activity} /> : <div ref={listRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto font-mono text-[12px]">
         {error && <div className="px-4 py-3 text-danger">couldn't load: {error}</div>}
-        {lens === "evidence" && kernel && (
-          <div className="space-y-3 px-4 py-4 text-ink-secondary">
-            <div className="rounded-lg border border-hairline/40 bg-inset/40 p-3">
-              <div className="text-[12px] font-semibold text-ink">{kernel.job.status}</div>
-              <div className="mt-1">job {kernel.job.id.slice(0, 8)} · attempt {kernel.job.attempt} · generation {kernel.job.generation}</div>
-            </div>
-            {kernel.effects.map((effect) => (
-              <div key={effect.id} className="rounded-lg border border-hairline/40 p-3">
-                <div className="flex justify-between gap-3"><span className="text-ink">{effect.adapter} · {effect.state}</span><span>{effect.riskClass}</span></div>
-                <div className="mt-1 break-all">{effect.resource}{effect.audience ? ` → ${effect.audience}` : ""}</div>
-                {effect.externalReference && <div className="mt-1 break-all">reference: {effect.externalReference}</div>}
-                {effect.error && <div className="mt-1 text-danger">{effect.error}</div>}
-                {effect.evidence.map((evidence) => <div key={`${evidence.sourceTimestamp}:${evidence.sourceReference}`} className="mt-2 border-t border-hairline/30 pt-2 break-all">evidence: {evidence.sourceReference}<br />{evidence.sourceTimestamp}</div>)}
-              </div>
-            ))}
-          </div>
-        )}
-        {lens === "evidence" && !kernel && !error && <div className="px-4 py-6 text-ink-secondary">No kernel job recorded for this thread yet.</div>}
-        {lens !== "evidence" && page && rows.length === 0 && !error && (
+        {page && rows.length === 0 && !error && (
           <div className="px-4 py-6 text-ink-secondary">
             {lens === "raw" ? "No native protocol messages recorded for this thread yet." : "No runtime events for this thread yet."}
           </div>
         )}
-        {lens !== "evidence" && rows.map((row) => (
+        {rows.map((row) => (
           <Row key={row.key} row={row} open={expanded.has(row.key)} onToggle={() => toggle(row.key)} />
         ))}
+      </div>}
       </div>
     </aside>
   );
@@ -274,7 +228,7 @@ function Row({ row, open, onToggle }: { row: InspectorRow; open: boolean; onTogg
         <span className="shrink-0 tabular-nums text-ink-secondary">{formatTime(row.at)}</span>
         <span
           className={cn(
-            "shrink-0 rounded px-1 text-[10.5px]",
+            "shrink-0 rounded px-1 text-[11px]",
             row.kind === "native" ? "bg-accent/15 text-accent" : row.tone === "error" ? "bg-danger/20 text-danger" : "bg-inset text-ink-secondary",
           )}
         >

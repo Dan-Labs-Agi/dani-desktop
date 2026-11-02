@@ -1,6 +1,5 @@
-// Double-click a title to rename it in place. Settings still exists for
-// the rest of the profile — this is just the fast path for the name.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { t } from "@/lib/i18n";
 import { Pencil } from "lucide-react";
 
 import { nextRename } from "@/lib/rename";
@@ -13,21 +12,26 @@ export function RenameTitle({
   onEditingChange,
   onActivate,
   showEditButton = false,
+  editRequest = 0,
+  title,
   className,
+  editButtonClassName,
   inputClassName,
 }: {
   value: string;
   onCommit: (next: string) => void;
   onEditingChange?: (editing: boolean) => void;
-  /** Optional single-click action for locations where the title opens a profile. */
   onActivate?: () => void;
-  /** Preserve deliberate inline rename beside an onActivate title. */
   showEditButton?: boolean;
+  editRequest?: number;
+  title?: string;
   className?: string;
+  editButtonClassName?: string;
   inputClassName?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const handledRequest = useRef(editRequest);
 
   useEffect(() => {
     if (!editing) setDraft(value);
@@ -37,6 +41,13 @@ export function RenameTitle({
     setEditing(next);
     onEditingChange?.(next);
   };
+
+  useEffect(() => {
+    if (editRequest === handledRequest.current) return;
+    handledRequest.current = editRequest;
+    setDraft(value);
+    setMode(true);
+  }, [editRequest]);
 
   const finish = (save: boolean) => {
     const next = save ? nextRename(value, draft) : null;
@@ -51,7 +62,7 @@ export function RenameTitle({
         autoFocus
         value={draft}
         maxLength={BOT_PROFILE_LIMITS.name}
-        aria-label="Rename"
+        aria-label={t("rename.aria")}
         onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={() => finish(true)}
@@ -87,9 +98,9 @@ export function RenameTitle({
           <button
             type="button"
             onClick={onActivate}
-            aria-label={`Open ${value}'s profile`}
+            aria-label={t("chat.openProfileAria", { name: value })}
             className={cn("min-w-0 truncate text-left", className)}
-            title="Open agent profile"
+            title={t("chat.openProfile")}
           >
             {value}
           </button>
@@ -99,9 +110,9 @@ export function RenameTitle({
         <button
           type="button"
           onClick={startRename}
-          aria-label={`Rename ${value}`}
-          title="Rename agent"
-          className="flex size-10 shrink-0 items-center justify-center rounded text-ink-secondary opacity-70 hover:bg-raised hover:text-ink hover:opacity-100"
+          aria-label={t("rename.named", { name: value })}
+          title={t("rename.agent")}
+          className={cn("flex size-10 shrink-0 items-center justify-center rounded text-ink-secondary opacity-70 hover:bg-raised hover:text-ink hover:opacity-100", editButtonClassName)}
         >
           <Pencil size={12} />
         </button>
@@ -112,10 +123,10 @@ export function RenameTitle({
   return (
     <span
       className={cn("cursor-text", className)}
-      title="Double-click to rename"
+      title={title ?? t("rename.doubleClick")}
       tabIndex={0}
       role="button"
-      aria-label={`Rename ${value}`}
+      aria-label={t("rename.named", { name: value })}
       onDoubleClick={startRename}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {

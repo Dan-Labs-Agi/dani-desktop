@@ -14,10 +14,20 @@ interface ViewerSession {
   origin: string;
   expiresAt: number;
   sockets: Set<{ destroy(): void }>;
+  /** A Local VM viewer lives only as long as its control lease holds. */
+  watch?: ReturnType<typeof setInterval>;
 }
 
+/** Whether `controlLeaseId` still holds `botId`'s computer, asked on behalf of
+ * the paired device. Any failure must answer false. */
+export type ControlCheck = (deviceId: string, botId: string, controlLeaseId: string) => Promise<boolean>;
+
 const VIEWER_PATH = /^\/vps-viewer\/([A-Za-z0-9_-]{32})(\/.*)?$/;
-const BOT_JOIN_PATH = /^\/api\/bots\/([\w-]+)\/computer\/join$/;
+/** Both joins hand back a loopback noVNC address: a VPS through its SSH
+ * tunnel, and the Local VM's own published port. */
+const BOT_JOIN_PATH = /^\/api\/bots\/([\w-]+)\/(computer|local-computer)\/join$/;
+const CONTROL_LEASE = /^[A-Za-z0-9_-]{16,120}$/;
+const CONTROL_CHECK_MS = 3_000;
 const SESSION_TTL_MS = 8 * 60 * 60_000;
 const MAX_SESSIONS = 64;
 
@@ -44,6 +54,15 @@ function safeLoopbackViewer(raw: unknown): URL | null {
     return null;
   }
   return url;
+}
+
+/** Null for a target the WHATWG parser rejects, such as `//[`. */
+export function requestTarget(rawUrl: string | undefined): URL | null {
+  try {
+    return new URL(rawUrl ?? "/", "http://companion.invalid");
+  } catch {
+    return null;
+  }
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -102,6 +121,14 @@ function acceptUpgrade(socket: Duplex, response: IncomingMessage): void {
 
 export class CompanionViewerRelay {
   readonly #sessions = new Map<string, ViewerSession>();
+  readonly #upgrades = new Set<Duplex>();
+  readonly #checkControl?: ControlCheck;
+  readonly #checkMs: number;
+
+  constructor(options: { checkControl?: ControlCheck; checkIntervalMs?: number } = {}) {
+    this.#checkControl = options.checkControl;
+    this.#checkMs = options.checkIntervalMs ?? CONTROL_CHECK_MS;
+  }
 
   #prune(): void {
     const now = Date.now();
@@ -116,6 +143,7 @@ export class CompanionViewerRelay {
   }
 
   #remove(session: ViewerSession): void {
+    if (session.watch) clearInterval(session.watch);
     this.#sessions.delete(session.id);
     for (const socket of session.sockets) socket.destroy();
     session.sockets.clear();
@@ -137,25 +165,58 @@ export class CompanionViewerRelay {
     }
   }
 
-  rewriteJoinResponse(path: string, value: unknown, deviceId?: string): unknown {
-    const botId = BOT_JOIN_PATH.exec(path)?.[1];
+  /** `server.close()` never resolves while an upgraded socket is open, and
+   * `closeAllConnections()` does not reach one. */
+  closeAll(): void {
+    for (const session of this.#sessions.values()) this.#remove(session);
+    for (const socket of this.#upgrades) socket.destroy();
+    this.#upgrades.clear();
+  }
+
+  rewriteJoinResponse(path: string, value: unknown, deviceId?: string, controlLeaseId?: string | null): unknown {
+    const join = BOT_JOIN_PATH.exec(path);
+    const botId = join?.[1];
     if (!botId || !value || typeof value !== "object" || Array.isArray(value)) return value;
     const body = value as Record<string, unknown>;
     const viewer = safeLoopbackViewer(body.joinUrl);
     if (!viewer) return value;
     if (!deviceId) throw new Error("the paired device has no viewer identity");
+    // A Local VM viewer is bound to the control lease that asked for it, and
+    // is closed the moment that lease stops holding the computer. Without a
+    // lease, or nothing to check it with, it is never handed out at all.
+    const localVm = join[2] === "local-computer";
+    if (localVm && (!controlLeaseId || !CONTROL_LEASE.test(controlLeaseId) || !this.#checkControl)) {
+      throw new Error("a Local VM viewer needs a control lease");
+    }
 
     this.#prune();
     this.close(deviceId, botId);
     const id = randomBytes(24).toString("base64url");
-    this.#sessions.set(id, {
+    const session: ViewerSession = {
       id,
       botId,
       deviceId,
       origin: viewer.origin,
       expiresAt: Date.now() + SESSION_TTL_MS,
       sockets: new Set(),
-    });
+    };
+    this.#sessions.set(id, session);
+    if (localVm) {
+      const check = this.#checkControl!;
+      const lease = controlLeaseId!;
+      let checking = false;
+      session.watch = setInterval(() => {
+        if (checking) return;
+        checking = true;
+        check(deviceId, botId, lease)
+          .catch(() => false)
+          .then((owned) => {
+            checking = false;
+            if (!owned && this.#isActive(session)) this.#remove(session);
+          });
+      }, this.#checkMs);
+      session.watch.unref?.();
+    }
 
     const settings = new URLSearchParams(viewer.hash.slice(1));
     settings.set("path", `vps-viewer/${id}/websockify`);
@@ -168,21 +229,25 @@ export class CompanionViewerRelay {
   #target(rawUrl: string | undefined, device: ViewerDevice | null): { session: ViewerSession; target: URL } | null {
     this.#prune();
     if (!device?.id || !device.cloudDesktopAccess) return null;
-    const incoming = new URL(rawUrl ?? "/", "http://companion.invalid");
-    const match = VIEWER_PATH.exec(incoming.pathname);
+    const incoming = requestTarget(rawUrl);
+    const match = incoming && VIEWER_PATH.exec(incoming.pathname);
     if (!match) return null;
     const session = this.#sessions.get(match[1]);
     if (!session || session.deviceId !== device.id || session.expiresAt <= Date.now()) return null;
     const suffix = match[2] || "/";
-    const target = new URL(`${suffix}${incoming.search}`, session.origin);
+    let target: URL;
+    try {
+      target = new URL(`${suffix}${incoming.search}`, session.origin);
+    } catch {
+      return null;
+    }
     if (target.origin !== session.origin) return null;
     session.expiresAt = Date.now() + SESSION_TTL_MS;
     return { session, target };
   }
 
   isViewerPath(rawUrl: string | undefined): boolean {
-    const pathname = new URL(rawUrl ?? "/", "http://companion.invalid").pathname;
-    return pathname.startsWith("/vps-viewer/");
+    return requestTarget(rawUrl)?.pathname.startsWith("/vps-viewer/") ?? false;
   }
 
   handleHttp(req: IncomingMessage, res: ServerResponse, device: ViewerDevice | null): void {
@@ -227,6 +292,10 @@ export class CompanionViewerRelay {
   }
 
   handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, device: ViewerDevice | null): void {
+    // Node removes its own error listener from a socket it hands to `upgrade`.
+    socket.on("error", () => socket.destroy());
+    this.#upgrades.add(socket);
+    socket.once("close", () => this.#upgrades.delete(socket));
     if (!device) return socketError(socket, 401, "pair this device first");
     if (!device.cloudDesktopAccess) return socketError(socket, 403, "cloud desktop access is off for this device");
     const resolved = this.#target(req.url, device);
@@ -254,6 +323,13 @@ export class CompanionViewerRelay {
         resolved.session.sockets.delete(socket);
         resolved.session.sockets.delete(remote);
       };
+      // `pipe` forwards no error, so a reset on one end must end the other.
+      const teardown = () => {
+        socket.destroy();
+        remote.destroy();
+      };
+      socket.on("error", teardown);
+      remote.on("error", teardown);
       socket.once("close", release);
       remote.once("close", release);
       if (head.length) remote.write(head);

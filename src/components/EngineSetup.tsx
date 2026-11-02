@@ -1,132 +1,69 @@
-// A focused setup card shared by onboarding, the model picker, and runtime
-// errors. The command has one inline copy action and one primary next step;
-// unusable model lists stay out of the way until the engine is ready.
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, Copy, Download, ExternalLink, Loader2, LogIn, TerminalSquare } from "lucide-react";
-import { api, type EngineInstall, type InstanceInfo, useStore } from "@/state/store";
+import { AlertTriangle, Check, Copy, Download, ExternalLink, KeyRound, Loader2, LogIn, TerminalSquare, X } from "lucide-react";
+import { api, type InstanceInfo, useStore } from "@/state/store";
 import { cn } from "@/lib/cn";
+import { t } from "@/lib/i18n";
+import { copyText } from "@/lib/copy-text";
+import { DEVICE_SIGN_IN_COPY, DeviceSignIn, deviceSignInProvider } from "./DeviceSignIn";
+import { ClaudeSignIn } from "./ClaudeSignIn";
+import { RefreshEngines } from "./EngineLibrary";
+import { AppCopyNotice, AppCopySetup } from "./EngineAppCopy";
+import { installCommandFor, noteAppCopySwitch } from "@/state/engine-install";
 
-type Platform = "darwin" | "win32" | "linux";
+export { installCommandFor };
+import { keyEntry, keyForInstance, type KeyId } from "./keys/key-catalog";
+import { openKeySettings } from "./keys/key-focus";
+import { KeyRow, SavedKeyLine } from "./keys/KeyRow";
 
-function hostPlatform(): Platform {
-  const platform = window.dani?.platform;
-  if (platform === "darwin" || platform === "win32" || platform === "linux") return platform;
-  const userAgent = navigator.userAgent;
-  if (userAgent.includes("Mac")) return "darwin";
-  if (userAgent.includes("Win")) return "win32";
-  return "linux";
-}
-
-/** The install command for this machine, or null when the engine has none
- * here (a GUI download, or a POSIX-only installer viewed on Windows). */
-export function installCommandFor(install: EngineInstall | undefined): string | null {
-  return install?.command?.[hostPlatform()] ?? null;
-}
-
-/** Installed but missing the cloud account session. */
 export function needsSignIn(instance: InstanceInfo | undefined): boolean {
   return instance?.snapshot.state === "available" && instance.snapshot.authenticated === false;
 }
 
-/** The agent CLI itself is absent. Local-model injection needs the CLI but
- * does not need its cloud account to be signed in. */
+export function offersSignIn(instance: InstanceInfo | undefined): boolean {
+  return Boolean(instance && needsSignIn(instance) && instance.install
+    && !instance.snapshot.authenticationUnavailableReason && !apiKeySetup(instance));
+}
+
 export function needsCli(instance: InstanceInfo | undefined): boolean {
   return instance?.snapshot.state !== "available";
 }
 
-/** A key is saved but has not passed a live probe yet (spec 040 R2): this
- * is its own state, not "install" and not "sign in". */
-export function needsVerification(instance: InstanceInfo | undefined): boolean {
-  const verification = instance?.snapshot.verification;
-  return instance?.snapshot.state === "available" && Boolean(verification) && verification!.status !== "verified";
+export function serverTerminal(cloudHome: boolean): boolean {
+  return Boolean(window.ogb?.openInstallTerminal) && window.ogb?.remoteClient?.active !== true && !cloudHome;
 }
 
-/** The saved-key path: run the live probe, show the truthful outcome. */
-function VerifyCard({ instance }: { instance: InstanceInfo }) {
-  const { refreshInstances } = useStore();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const verification = instance.snapshot.verification!;
-
-  const verify = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api(`/api/instances/${encodeURIComponent(instance.instanceId)}/verify`, { method: "POST" });
-      await refreshInstances();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const title =
-    verification.status === "failed"
-      ? verification.errorClass === "auth"
-        ? "Saved key was rejected"
-        : verification.errorClass === "quota"
-          ? "Account credit or rate limit"
-          : verification.errorClass === "network"
-            ? "Can't reach the provider"
-            : "Verification failed"
-      : "Key saved - not verified yet";
-
-  return (
-    <div className="mt-3">
-      <div className="text-[13px] font-semibold text-ink">{title}</div>
-      <p className="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">
-        {verification.status === "failed"
-          ? (verification.reason ?? "The saved key could not be verified. Try again.")
-          : `A key is saved for ${instance.displayName}, but keys only count once they pass a live check.`}
-      </p>
-      <button
-        type="button"
-        disabled={busy || verification.status === "verifying"}
-        onClick={() => void verify()}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[12.5px] font-semibold text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
-      >
-        {busy || verification.status === "verifying" ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-        {busy || verification.status === "verifying" ? "Checking the saved key…" : verification.status === "failed" ? "Try again" : "Verify connection"}
-      </button>
-      {verification.checkedAt && (
-        <p className="mt-1.5 text-center text-[11px] text-ink-secondary/70">
-          Last checked {new Date(verification.checkedAt).toLocaleString()}
-        </p>
-      )}
-      {error && <p className="mt-2 text-[11.5px] text-danger">{error}</p>}
-    </div>
-  );
+export function grokKeyInstead(instance: InstanceInfo, cloudHome: boolean): boolean {
+  return instance.driverKind === "grokAgent" && needsCli(instance) && !serverTerminal(cloudHome);
 }
 
 export function CommandRow({
   command,
   actionLabel,
   compact = false,
+  allowTerminal = true,
 }: {
   command: string;
   actionLabel: string;
   compact?: boolean;
+  allowTerminal?: boolean;
 }) {
-  const [status, setStatus] = useState<"copied" | "opened" | null>(null);
-  const canOpen = typeof window !== "undefined" && Boolean(window.dani?.openInstallTerminal);
+  const [status, setStatus] = useState<"copied" | "failed" | "opened" | null>(null);
+  const canOpen = typeof window !== "undefined" && allowTerminal && serverTerminal(false);
 
-  const settle = (next: "copied" | "opened") => {
+  const settle = (next: "copied" | "failed" | "opened") => {
     setStatus(next);
     window.setTimeout(() => setStatus(null), 2200);
   };
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(command);
-      settle("copied");
-    } catch {
-      // The command remains selectable when clipboard access is blocked.
-    }
+    const result = await copyText(command);
+    if (result !== "empty") settle(result);
   };
+  const copyIcon = (size: number) => status === "copied" ? <Check size={size} className="text-success" />
+    : status === "failed" ? <X size={size} className="text-danger" /> : <Copy size={size} />;
 
   const openTerminal = async () => {
-    const opened = await window.dani!.openInstallTerminal!(command);
+    const opened = await window.ogb!.openInstallTerminal!(command);
     settle(opened ? "opened" : "copied");
   };
 
@@ -139,12 +76,12 @@ export function CommandRow({
         <button
           type="button"
           onClick={() => void copy()}
-          aria-label="Copy command"
-          title="Copy command"
+          aria-label={t("engineSetup.copyCommand")}
+          title={t("engineSetup.copyCommand")}
           className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-ink-secondary hover:bg-control hover:text-ink"
         >
-          {status === "copied" ? <Check size={12} className="text-success" /> : <Copy size={12} />}
-          {status === "copied" ? "Copied" : "Copy"}
+          {copyIcon(12)}
+          {t(status === "copied" ? "engineSetup.copied" : status === "failed" ? "common.copyFailed" : "engineSetup.copy")}
         </button>
         {canOpen && (
           <button
@@ -155,11 +92,11 @@ export function CommandRow({
             className="flex shrink-0 items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-white hover:brightness-110"
           >
             {status === "opened" ? <Check size={12} /> : <TerminalSquare size={12} />}
-            {status === "opened" ? "Opened" : "Terminal"}
+            {status === "opened" ? t("engineSetup.opened") : t("engineSetup.terminal")}
           </button>
         )}
         <span aria-live="polite" className="sr-only">
-          {status === "opened" ? "Terminal opened. Paste the command and press Enter." : ""}
+          {status === "opened" ? t("engineSetup.openedHint") : ""}
         </span>
       </div>
     );
@@ -175,12 +112,12 @@ export function CommandRow({
           <button
             type="button"
             onClick={() => void copy()}
-            aria-label="Copy command"
-            title="Copy command"
-            className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-ink-secondary hover:bg-control hover:text-ink"
+            aria-label={t("engineSetup.copyCommand")}
+            title={t("engineSetup.copyCommand")}
+            className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[12px] font-medium text-ink-secondary hover:bg-control hover:text-ink"
           >
-            {status === "copied" ? <Check size={12} className="text-success" /> : <Copy size={12} />}
-            {status === "copied" ? "Copied" : "Copy"}
+            {copyIcon(12)}
+            {t(status === "copied" ? "engineSetup.copied" : status === "failed" ? "common.copyFailed" : "engineSetup.copy")}
           </button>
         )}
       </div>
@@ -190,35 +127,104 @@ export function CommandRow({
           <button
             type="button"
             onClick={() => void openTerminal()}
-            className="mt-2 flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-accent px-3 py-2 text-[12.5px] font-semibold text-white hover:brightness-110"
+            className="mt-2 flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:brightness-110"
           >
             {status === "opened" ? <Check size={14} /> : <TerminalSquare size={14} />}
-            {status === "opened" ? "Terminal opened" : actionLabel}
+            {status === "opened" ? t("engineSetup.terminalOpened") : actionLabel}
           </button>
-          <p aria-live="polite" className="mt-1.5 text-center text-[11px] text-ink-secondary/70">
-            {status === "opened" ? "Paste the command and press Enter." : "The command is copied when Terminal opens."}
+          <p aria-live="polite" className="mt-1.5 text-center text-[11px] text-ink-tertiary">
+            {status === "opened" ? t("engineSetup.pasteHint") : t("engineSetup.copyOnOpenHint")}
           </p>
         </>
       ) : (
         <button
           type="button"
           onClick={() => void copy()}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-control px-3 py-2 text-[12.5px] font-semibold text-ink hover:bg-raised-hover"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-control px-3 py-2 text-[13px] font-semibold text-ink hover:bg-raised-hover"
         >
-          {status === "copied" ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-          {status === "copied" ? "Command copied" : "Copy command"}
+          {copyIcon(14)}
+          {t(status === "copied" ? "engineSetup.commandCopied" : status === "failed" ? "common.copyFailed" : "engineSetup.copyCommand")}
         </button>
       )}
     </div>
   );
 }
 
+function ServerEngineInstall({ instance, mode, command, quiet = false }: { instance: InstanceInfo; mode: "install" | "update"; command: string | null; quiet?: boolean }) {
+  const { state, dispatch, refreshModels } = useStore();
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const standalone = instance.install?.server?.standalone;
+  // The app installs its own build without npm; the npm command only helps when the server has npm.
+  const terminalCommand = standalone && !instance.install?.server?.package ? null : command;
+
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    setDone(false);
+    setError(null);
+    try {
+      const { instances, usingAppCopy } = await api(`/api/instances/${encodeURIComponent(instance.instanceId)}/install`, { method: "POST" });
+      noteAppCopySwitch(instance.instanceId, usingAppCopy === true);
+      const installed = (instances as InstanceInfo[] | undefined)?.find((candidate) => candidate.instanceId === instance.instanceId);
+      if (instances) dispatch({ type: "instances", instances });
+      if (installed?.snapshot.state !== "available") {
+        throw new Error(t("engineSetup.installNotVerified", { reason: installed?.snapshot.reason ?? t("engineSetup.noReason") }));
+      }
+      setDone(true);
+      await refreshModels(instance.instanceId).catch(() => {});
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void run()}
+        className={cn("flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold disabled:cursor-wait disabled:opacity-70",
+          quiet ? "bg-control text-ink hover:bg-raised-hover" : "ui-button-primary bg-accent text-white hover:brightness-110")}
+      >
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+        {busy
+          ? t("engineSetup.serverInstalling")
+          : t(mode === "update" ? "engineSetup.serverUpdate" : "engineSetup.serverInstall", { name: instance.displayName })}
+      </button>
+      {standalone && mode === "install" && !busy && !done && (
+        <p className="text-center text-[11px] text-ink-tertiary">
+          {/* Decimal megabytes, as macOS and Windows show file sizes. */}
+          {t("engineSetup.standaloneDownloadNote", { mb: Math.max(1, Math.round(standalone.downloadBytes / 1_000_000)) })}
+        </p>
+      )}
+      {done && !busy && <p role="status" className="text-center text-[11px] text-success">{t("engineSetup.installVerified")}</p>}
+      {!busy && <AppCopyNotice instance={instance} />}
+      {error && <p role="alert" className="whitespace-pre-wrap text-[12px] leading-relaxed text-danger">{error}</p>}
+      {terminalCommand && (
+        <details className="rounded-lg border border-hairline/50 bg-app px-2.5 py-2 text-[12px] text-ink-secondary">
+          <summary className="cursor-pointer select-none">{t("engineSetup.preferTerminal")}</summary>
+          <CommandRow command={terminalCommand} actionLabel={t(mode === "update" ? "engineSetup.openUpdate" : "engineSetup.openInstall")} compact allowTerminal={state.config?.cloudHome !== true} />
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** `quiet` keeps an optional update from competing with a card's main action (Sign in). */
 export function EngineUpdateNotice({
   update,
+  instance,
   className,
+  quiet = false,
 }: {
   update: NonNullable<InstanceInfo["snapshot"]["update"]>;
+  instance?: InstanceInfo;
   className?: string;
+  quiet?: boolean;
 }) {
   return (
     <div
@@ -228,11 +234,36 @@ export function EngineUpdateNotice({
       <div className="flex items-start gap-2">
         <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
         <div className="min-w-0">
-          <div className="text-[12.5px] font-semibold text-ink">{update.title}</div>
-          <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-secondary">{update.message}</p>
+          <div className="text-[13px] font-semibold text-ink">{update.title}</div>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">{update.message}</p>
         </div>
       </div>
-      <CommandRow command={update.command} actionLabel="Open update in Terminal" compact />
+      {instance?.install?.server
+        ? <ServerEngineInstall instance={instance} mode="update" command={update.command} quiet={quiet} />
+        : <CommandRow command={update.command} actionLabel={t("engineSetup.openUpdate")} compact />}
+    </div>
+  );
+}
+
+export function EngineWarningNotice({
+  warning,
+  className,
+}: {
+  warning: NonNullable<InstanceInfo["snapshot"]["warning"]>;
+  className?: string;
+}) {
+  return (
+    <div
+      data-engine-warning-notice
+      className={cn("rounded-xl border border-warning/25 bg-warning/5 p-2.5", className)}
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-ink">{warning.title}</div>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">{warning.message}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -260,8 +291,11 @@ function ManagedEngineSetup({ instance, signInOnly }: { instance: InstanceInfo; 
   };
 
   const install = () => run("install", async () => {
-    await api(`/api/instances/${encodeURIComponent(instance.instanceId)}/install`, { method: "POST" });
-    await refreshInstances();
+    try {
+      await api(`/api/instances/${encodeURIComponent(instance.instanceId)}/install`, { method: "POST" });
+    } finally {
+      await refreshInstances().catch(() => {});
+    }
   });
 
   const signIn = () => run("signin", async () => {
@@ -271,9 +305,9 @@ function ManagedEngineSetup({ instance, signInOnly }: { instance: InstanceInfo; 
       await refreshModels(instance.instanceId);
       return;
     }
-    if (!auth.flowId || !auth.authorizationUrl) throw new Error("Google sign-in did not return a link.");
+    if (!auth.flowId || !auth.authorizationUrl) throw new Error(t("engineSetup.googleNoLink"));
     setFlow({ flowId: auth.flowId, authorizationUrl: auth.authorizationUrl });
-    if (window.dani?.openExternal) await window.dani.openExternal(auth.authorizationUrl);
+    if (window.ogb?.openExternal) await window.ogb.openExternal(auth.authorizationUrl);
     else window.open(auth.authorizationUrl, "_blank", "noopener,noreferrer");
   });
 
@@ -300,15 +334,15 @@ function ManagedEngineSetup({ instance, signInOnly }: { instance: InstanceInfo; 
           type="button"
           disabled={busy !== null}
           onClick={() => void install()}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[12.5px] font-semibold text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
         >
           {busy === "install" ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          {busy === "install" ? "Downloading and verifying…" : managed.label}
+          {busy === "install" ? t("engineSetup.installing") : managed.label}
         </button>
-        <p className="mt-1.5 text-center text-[11px] text-ink-secondary/70">
-          {Math.ceil(managed.downloadBytes / 1024 / 1024)} MB download from Google. Dani Bot verifies it before use.
+        <p className="mt-1.5 text-center text-[11px] text-ink-tertiary">
+          {t("engineSetup.downloadNote", { mb: Math.ceil(managed.downloadBytes / 1024 / 1024) })}
         </p>
-        {error && <p className="mt-2 text-[11.5px] text-danger">{error}</p>}
+        {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
       </div>
     );
   }
@@ -319,23 +353,28 @@ function ManagedEngineSetup({ instance, signInOnly }: { instance: InstanceInfo; 
         type="button"
         disabled={busy !== null}
         onClick={() => void signIn()}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[12.5px] font-semibold text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-70"
       >
         {busy === "signin" ? <Loader2 size={14} className="animate-spin" /> : <LogIn size={14} />}
-        {busy === "signin" ? "Starting Google sign-in…" : flow ? "Open Google sign-in again" : "Sign in with Google"}
+        {busy === "signin"
+          ? t("engineSetup.startingGoogle")
+          : flow
+            ? t("engineSetup.openGoogleAgain")
+            : t("engineSetup.signInGoogle")}
       </button>
-      {busy === "signin" && <p role="status" className="text-[11.5px] text-ink-secondary">Starting Antigravity can take up to 90 seconds. Your browser will open when it’s ready.</p>}
+      {busy === "signin" && <p role="status" className="text-[12px] text-ink-secondary">{t("engineSetup.antigravitySlow")}</p>}
       {flow && (
         <>
           <button type="button" onClick={() => void check()} className="w-full rounded-lg bg-control px-3 py-2 text-[12px] font-semibold text-ink hover:bg-raised-hover">
-            {busy === "check" ? "Checking…" : "I finished signing in"}
+            {busy === "check" ? t("common.checking") : t("engineSetup.finishedSignIn")}
           </button>
-          <details className="rounded-lg border border-hairline/50 bg-app px-2.5 py-2 text-[11.5px] text-ink-secondary">
-            <summary className="cursor-pointer select-none">Signing in from another computer?</summary>
-            <p className="mt-2 leading-relaxed">After Google redirects to a page that cannot load, paste that page’s complete URL here.</p>
+          <details className="rounded-lg border border-hairline/50 bg-app px-2.5 py-2 text-[12px] text-ink-secondary">
+            <summary className="cursor-pointer select-none">{t("engineSetup.otherComputer")}</summary>
+            <p className="mt-2 leading-relaxed">{t("engineSetup.otherComputerHint")}</p>
             <input
               value={callbackUrl}
               onChange={(event) => setCallbackUrl(event.target.value)}
+              aria-label={t("engineSetup.otherComputerUrl")}
               placeholder="http://127.0.0.1:…/?code=…"
               className="mt-2 w-full rounded-md border border-hairline bg-inset px-2 py-1.5 text-[11px] text-ink outline-none focus:border-accent"
             />
@@ -345,78 +384,182 @@ function ManagedEngineSetup({ instance, signInOnly }: { instance: InstanceInfo; 
               onClick={() => void complete()}
               className="mt-2 w-full rounded-md bg-control px-2 py-1.5 font-medium text-ink disabled:opacity-50"
             >
-              {busy === "complete" ? "Sending…" : "Send redirect to server"}
+              {busy === "complete" ? t("engineSetup.sending") : t("engineSetup.sendRedirect")}
             </button>
           </details>
         </>
       )}
-      {error && <p className="text-[11.5px] text-danger">{error}</p>}
+      {error && <p className="text-[12px] text-danger">{error}</p>}
     </div>
   );
+}
+
+export function isApiKeyEngine(instance: InstanceInfo | undefined): boolean {
+  if (!instance || instance.access !== "api" || instance.managed) return false;
+  return instance.driverKind !== "claudeAgent" || Boolean(instance.snapshot.version);
+}
+
+export function hasSavedApiKey(instance: InstanceInfo): boolean {
+  return isApiKeyEngine(instance) && instance.snapshot.authenticated === true;
+}
+
+function apiKeySetup(instance: InstanceInfo): boolean {
+  if (!(isApiKeyEngine(instance) || instance.install?.settings === "connections") || instance.snapshot.authenticationUnavailableReason) return false;
+  // A key engine with its own CLI (DeepSeek Harness) is installed first, then given the key.
+  if (instance.snapshot.state !== "available") return !installCommandFor(instance.install);
+  return instance.snapshot.authenticated === false;
+}
+
+function inlineKey(instance: InstanceInfo): KeyId | undefined {
+  const key = keyForInstance(instance.instanceId);
+  return key && keyEntry(key).kind === "key" && key !== "openaiCompat" ? key : undefined;
+}
+
+export const openKeysFor = (instance?: InstanceInfo) =>
+  openKeySettings(instance ? keyForInstance(instance.instanceId) ?? (instance.driverKind === "openai-compat" ? "openaiCompat" : undefined) : undefined);
+
+export function ApiKeyHint({ instance }: { instance: InstanceInfo }) {
+  const key = window.ogb?.remoteClient?.active === true ? undefined : inlineKey(instance);
+  return (
+    <>
+      <div className="mt-0.5 text-[12px] leading-4 text-ink-tertiary">{t("model.apiKeyHint")}</div>
+      {key && <SavedKeyLine id={key} />}
+    </>
+  );
+}
+
+function GrokKeyInstead({ className, unframed }: { className?: string; unframed: boolean }) {
+  const remote = window.ogb?.remoteClient?.active === true;
+  return (
+    <div data-engine-setup-key-instead className={cn(!unframed && "rounded-xl border border-hairline/40 bg-control/30 p-3", className)}>
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-inset text-ink-secondary">
+          <KeyRound size={14} />
+        </span>
+        <p className="min-w-0 text-[13px] leading-relaxed text-ink">{t("engineSetup.grok.notInstalled")}</p>
+      </div>
+      {!remote && <KeyRow id="xai" bare via="model_picker" className="mt-2 px-0 pb-0" />}
+    </div>
+  );
+}
+
+function ApiKeyEngineSetup({ instance, className, unframed, configured = false }: { instance: InstanceInfo; className?: string; unframed: boolean; configured?: boolean }) {
+  const { dispatch } = useStore();
+  const remote = window.ogb?.remoteClient?.active === true;
+  const inline = remote ? undefined : inlineKey(instance);
+  const copy = configured
+    ? { title: "engineSetup.apiKey.configuredTitle", description: remote ? "engineSetup.apiKey.configuredRemote" : inline ? null : "engineSetup.apiKey.configuredDescription", action: "engineSetup.apiKey.change" } as const
+    : { title: "engineSetup.apiKey.title", description: remote ? "engineSetup.apiKey.remote" : inline ? "engineSetup.apiKey.inline" : "engineSetup.apiKey.description", action: "engineSetup.apiKey.open" } as const;
+  return (
+    <div data-engine-setup-api-key={configured ? "configured" : ""} className={cn(!unframed && "rounded-xl border border-hairline/40 bg-control/30 p-3", className)}>
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-inset text-ink-secondary">
+          <KeyRound size={14} />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-ink">{t(copy.title, { name: instance.displayName })}</div>
+          {copy.description && <p className="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">{t(copy.description)}</p>}
+        </div>
+      </div>
+      {/* An API-only engine is available only with a saved key, so unauthenticated means rejected.
+          A key engine with its own CLI (DeepSeek Harness) is unauthenticated simply when no key is saved yet. */}
+      {!inline && isApiKeyEngine(instance) && needsSignIn(instance) && (
+        <p role="alert" className="mt-2 text-[12px] leading-relaxed text-danger">{t("engineSetup.apiKey.rejected")}</p>
+      )}
+      {inline ? <KeyRow id={inline} bare via="model_picker" rejected={isApiKeyEngine(instance) && needsSignIn(instance)} className="mt-2 px-0 pb-0" /> : !remote && (
+        <button
+          type="button"
+          onClick={() => dispatch(openKeysFor(instance))}
+          className="mt-3 flex items-center gap-1.5 rounded-lg bg-raised px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-raised-hover"
+        >
+          <KeyRound size={13} aria-hidden="true" />
+          {t(copy.action)}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function ApiKeyEngineManage({ instance, className }: { instance: InstanceInfo; className?: string }) {
+  if (!hasSavedApiKey(instance)) return null;
+  return <ApiKeyEngineSetup instance={instance} className={className} unframed={false} configured />;
 }
 
 export function EngineSetup({
   instance,
   className,
   intent = "cloud",
+  unframed = false,
+  description: descriptionOverride,
+  quiet = false,
 }: {
   instance: InstanceInfo;
   className?: string;
-  /** `inject` installs the CLI but deliberately skips cloud sign-in. */
   intent?: "cloud" | "inject";
+  unframed?: boolean;
+  description?: string;
+  quiet?: boolean;
 }) {
+  const { state } = useStore();
+  const cloudHome = state.config?.cloudHome === true;
   const install = instance.install;
   const installCommand = installCommandFor(install);
   const signInCommand = install?.signInCommand;
   const signInOnly = intent === "cloud" && needsSignIn(instance);
+  const deviceSignIn = signInOnly && instance.authentication?.method === "device-code";
+  const browserSignIn = signInOnly && instance.authentication?.method === "browser-pkce";
+  const pasteSignIn = signInOnly && instance.authentication?.method === "paste-code";
+  const provider = deviceSignInProvider(instance.driverKind);
   const command = signInOnly ? signInCommand : installCommand;
-  const title = signInOnly ? `Sign in to ${instance.displayName}` : `Install ${instance.displayName}`;
-  const description = signInOnly
-    ? install?.managed
-      ? "Each Antigravity engine has its own Google account. Your browser completes the secure sign-in."
-      : "Finish the account sign-in in Terminal. Reopen this menu afterward and we’ll check again."
-    : intent === "inject"
-      ? "Install the agent once, then you can run it with local models—no cloud sign-in required."
+  const title = signInOnly
+    ? t("engineSetup.signInTitle", { name: instance.displayName })
+    : t("engineSetup.setupTitle", { name: instance.displayName });
+  const description = descriptionOverride ?? (signInOnly
+    ? browserSignIn
+      ? t("engineSetup.chatgpt.description")
+      : deviceSignIn
+      ? t(DEVICE_SIGN_IN_COPY[provider].description)
+      : pasteSignIn
+      ? t("engineSetup.claude.description")
       : install?.managed
-        ? "Dani Bot installs its own verified Antigravity runtime. It is separate from the Antigravity app and agy CLI; install it here, sign in with Google, and this model list will refresh from your account."
-      : `Install the command-line app once. Models will appear here as soon as it’s ready${signInCommand ? "; sign-in may follow" : ""}.`;
+      ? t("engineSetup.managedSignIn")
+      : t("engineSetup.terminalSignInCheck")
+    : intent === "inject"
+      ? t("engineSetup.injectDesc")
+      : install?.server
+        ? t("engineSetup.serverInstallDesc")
+      : install?.managed
+        ? t("engineSetup.managedDesc")
+      : signInCommand
+        ? t("engineSetup.installDescSignIn")
+        : t("engineSetup.installDesc"));
 
-  // Key saved but not live-verified: its own card, independent of whether
-  // the engine also carries an install descriptor (grok has none).
-  if (needsVerification(instance)) {
-    return (
-      <div className={cn("rounded-xl border border-hairline/40 bg-control/30 p-3", className)}>
-        <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-inset text-ink-secondary">
-            <Check size={14} />
-          </span>
-          <div className="min-w-0">
-            <div className="text-[13px] font-semibold text-ink">Verify {instance.displayName}</div>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">
-              The saved key has not passed a live check, so this engine is not connected yet.
-            </p>
-          </div>
-        </div>
-        <VerifyCard instance={instance} />
-      </div>
-    );
+  if (apiKeySetup(instance)) {
+    return <ApiKeyEngineSetup instance={instance} className={className} unframed={unframed} />;
   }
 
-  // Some engines are configured elsewhere (for example, a cloud computer
-  // token) and intentionally have no install descriptor.
-  if (!install) {
+  if (intent === "cloud" && grokKeyInstead(instance, cloudHome)) {
+    return <GrokKeyInstead className={className} unframed={unframed} />;
+  }
+
+  if (!install || instance.snapshot.authenticationUnavailableReason) {
     return (
-      <div className={cn("rounded-xl border border-hairline/40 bg-control/30 p-3", className)}>
-        <div className="text-[13px] font-semibold text-ink">{instance.displayName} isn’t ready</div>
+      <div className={cn(!unframed && "rounded-xl border border-hairline/40 bg-control/30 p-3", className)}>
+        <div className="text-[13px] font-semibold text-ink">{t("engineSetup.notReady", { name: instance.displayName })}</div>
         <p className="mt-1 text-[12px] leading-relaxed text-ink-secondary">
-          {instance.snapshot.reason ?? "This engine is not available on this machine."}
+          {instance.snapshot.authenticationUnavailableReason ?? instance.snapshot.reason ?? t("engineSetup.noReason")}
         </p>
       </div>
     );
   }
 
+  // The app's own copy is out of reach of the person's terminal, so its sign-in is finished here.
+  if (signInOnly && install.appCopy && !deviceSignIn && !browserSignIn && !pasteSignIn) {
+    return <AppCopySetup instance={instance} className={className} unframed={unframed} />;
+  }
+
   return (
-    <div className={cn("rounded-xl border border-hairline/40 bg-control/30 p-3", className)}>
+    <div className={cn(!unframed && "rounded-xl border border-hairline/40 bg-control/30 p-3", className)}>
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-inset text-ink-secondary">
           {signInOnly ? <LogIn size={14} /> : <Download size={14} />}
@@ -427,20 +570,61 @@ export function EngineSetup({
         </div>
       </div>
 
-      {install.managed ? (
+      {instance.snapshot.state === "unavailable" && instance.snapshot.reason && (quiet ? (
+        <details data-engine-setup-reason className="mt-2 text-[12px] leading-4 text-ink-tertiary">
+          <summary className="cursor-pointer select-none hover:text-ink-secondary">{t("engineSetup.details")}</summary>
+          <p className="mt-1 whitespace-pre-wrap">{instance.snapshot.reason}</p>
+        </details>
+      ) : (
+        <p role="alert" className="mt-2 text-[12px] leading-relaxed text-danger">
+          {instance.snapshot.reason}
+        </p>
+      ))}
+
+      {deviceSignIn || browserSignIn ? (
+        <>
+          <DeviceSignIn key={instance.instanceId} instanceId={instance.instanceId} browserPkce={browserSignIn} provider={provider} />
+          {deviceSignIn && provider !== "codex" && signInCommand && serverTerminal(cloudHome) && (
+            <details className="mt-2 rounded-lg border border-hairline/50 bg-app px-2.5 py-2 text-[12px] text-ink-secondary">
+              <summary className="cursor-pointer select-none">{t("engineSetup.preferTerminal")}</summary>
+              <CommandRow command={signInCommand} actionLabel={t("engineSetup.openSignIn")} compact />
+            </details>
+          )}
+        </>
+      ) : pasteSignIn ? (
+        <ClaudeSignIn key={instance.instanceId} instanceId={instance.instanceId} />
+      ) : install.server && !signInOnly ? (
+        <ServerEngineInstall instance={instance} mode="install" command={installCommand} />
+      ) : install.managed ? (
         <ManagedEngineSetup instance={instance} signInOnly={signInOnly} />
       ) : command ? (
-        <CommandRow command={command} actionLabel={signInOnly ? "Open sign-in in Terminal" : "Open install in Terminal"} />
+        <CommandRow
+          command={command}
+          actionLabel={signInOnly ? t("engineSetup.openSignIn") : t("engineSetup.openInstall")}
+          allowTerminal={!cloudHome}
+        />
       ) : (
         <p className="mt-3 rounded-lg bg-inset px-2.5 py-2 text-[12px] leading-relaxed text-ink-secondary">
-          There isn’t a one-line installer for this platform. Use the setup guide below.
+          {t("engineSetup.noInstaller")}
         </p>
       )}
 
-      {!signInOnly && install.needsNode && (
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-secondary/70">
-          Requires Node.js and <code className="font-mono">npm</code>.
+      {!signInOnly && install.needsNode && !install.server && (
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-tertiary">
+          {t("engineSetup.needsNode").split("{npm}").flatMap((part, index) =>
+            index === 0
+              ? [part]
+              : [<code key="npm" className="font-mono">npm</code>, part],
+          )}
         </p>
+      )}
+
+      {(install.command || signInCommand) && !deviceSignIn && !browserSignIn && !pasteSignIn && !install.managed && (
+        <div className="mt-3 border-t border-hairline/40 pt-2">
+          <p className="mb-1 text-[12px] leading-relaxed text-ink-secondary">{t("engineSetup.sameMachine")}</p>
+          {needsCli(instance) && <p className="mb-1 text-[12px] leading-relaxed text-ink-secondary">{t("engineSetup.pathHint")}</p>}
+          <RefreshEngines key={instance.instanceId} />
+        </div>
       )}
 
       {install.docsUrl && (
@@ -450,7 +634,7 @@ export function EngineSetup({
           rel="noreferrer"
           className="mt-2.5 inline-flex items-center gap-1.5 text-[12px] font-medium text-accent hover:underline"
         >
-          <ExternalLink size={12} /> View setup guide
+          <ExternalLink size={12} /> {t("engineSetup.viewGuide")}
         </a>
       )}
     </div>

@@ -1,14 +1,12 @@
 import type { z } from "zod";
 
-export type JsonPrimitive = string | number | boolean | null;
-export interface JsonObject {
-  [key: string]: JsonValue;
-}
-export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+import type { JsonValue } from "../shared/json.ts";
 
-/** JSON.parse without a reviver can only produce JSON-compatible values. */
+export type { JsonObject, JsonPrimitive, JsonValue } from "../shared/json.ts";
+
+/** Drops a leading BOM first: PowerShell's Set-Content -Encoding UTF8 and Notepad write one, and JSON.parse rejects it. */
 export function parseJson(text: string): JsonValue {
-  return JSON.parse(text);
+  return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 }
 
 export function schemaIssue(error: z.ZodError, fallback: string): string {

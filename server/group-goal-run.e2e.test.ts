@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,12 +7,8 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
+import { hostTimeout } from "./testing/host-timeout.ts";
 import { freePortBlock } from "./testing/ports.ts";
-
-// 43 base64url chars satisfying OWNER_CAPABILITY_PATTERN (server/config.ts);
-// adopted by the child server as DANI_OWNER_TOKEN (security/epic-9-B).
-const OWNER_TOKEN = `e2e-owner-capability-${"0".repeat(22)}`;
-
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(SERVER_DIR, "..");
@@ -22,31 +18,32 @@ let child: ChildProcess;
 let home = "";
 let stopScopedWorkerFinishGate = "";
 let busyWorkerFinishGate = "";
+let busyGoalFinishGate = "";
+let routineGoalFinishGate = "";
+let queueFinishGate = "";
+let stopScopedLeadFinishGate = "";
 let base = "";
 let stderr = "";
 
 const completeReplies = [
   [
-    "Scout should verify the draft.\n<dani-goal>{\"status\":\"continue\",",
-    "\"next\":\"Scout\",\"instruction\":\"Verify the draft and report evidence\",\"detail\":\"Draft prepared\"}</dani-goal>",
+    "Scout should verify the draft.\n<openmaus-goal>{\"status\":\"continue\",",
+    "\"next\":\"Scout\",\"instruction\":\"Verify the draft and report evidence\",\"detail\":\"Draft prepared\"}</openmaus-goal>",
   ],
   "The draft is accurate and the cited evidence checks out.",
-  "The verified draft is ready to ship.\n<dani-goal>{\"status\":\"completed\",\"detail\":\"Draft produced and independently verified.\"}</dani-goal>",
+  "The verified draft is ready to ship.\n<openmaus-goal>{\"status\":\"completed\",\"detail\":\"Draft produced and independently verified.\"}</openmaus-goal>",
 ];
 
 const loopReplies = Array.from({ length: 13 }, (_, index) =>
   index % 2 === 0
-    ? `More work is needed.\n<dani-goal>{"status":"continue","next":"Looper","instruction":"Try approach ${index / 2 + 1}","detail":"Still working"}</dani-goal>`
+    ? `More work is needed.\n<openmaus-goal>{"status":"continue","next":"Looper","instruction":"Try approach ${index / 2 + 1}","detail":"Still working"}</openmaus-goal>`
     : `Approach ${Math.ceil(index / 2)} did not finish the task.`,
 );
 
 const api = async (method: string, path: string, body?: unknown): Promise<{ status: number; body: any }> => {
   const response = await fetch(`${base}${path}`, {
     method,
-    headers: {
-      "x-danibot-desktop-owner": OWNER_TOKEN,
-      ...(body ? { "content-type": "application/json" } : {}),
-    },
+    headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   return { status: response.status, body: await response.json() };
@@ -56,7 +53,12 @@ beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-goal-run-"));
   stopScopedWorkerFinishGate = join(home, "stop-scoped-worker-finish");
   busyWorkerFinishGate = join(home, "busy-worker-finish");
-  const data = join(home, ".danibot");
+  busyGoalFinishGate = join(home, "busy-goal-finish");
+  routineGoalFinishGate = join(home, "routine-goal-finish");
+  queueFinishGate = join(home, "queue-finish");
+  stopScopedLeadFinishGate = join(home, "stop-scoped-lead-finish");
+  writeFileSync(stopScopedLeadFinishGate, "allow initial goal delegation");
+  const data = join(home, ".openmausbot");
   const staticDir = join(home, "static");
   mkdirSync(data, { recursive: true });
   mkdirSync(join(staticDir, "assets"), { recursive: true });
@@ -95,6 +97,7 @@ beforeAll(async () => {
         displayName: "Queue fixture",
         environment: {
           FAKE_CLAUDE_MODE: "slow",
+          FAKE_CLAUDE_SLOW_FINISH_GATE: queueFinishGate,
           FAKE_CLAUDE_REPLIES: JSON.stringify(["first response", "second response"]),
           FAKE_CLAUDE_REPLY_STATE: join(home, "slow-replies.txt"),
         },
@@ -105,9 +108,10 @@ beforeAll(async () => {
         displayName: "Busy goal fixture",
         environment: {
           FAKE_CLAUDE_MODE: "slow",
+          FAKE_CLAUDE_SLOW_FINISH_GATE: busyGoalFinishGate,
           FAKE_CLAUDE_REPLIES: JSON.stringify([
             "The unrelated direct task is complete.",
-            "The queued team goal is complete.\n<dani-goal>{\"status\":\"completed\",\"detail\":\"Waited for the lead, then completed normally.\"}</dani-goal>",
+            "The queued team goal is complete.\n<openmaus-goal>{\"status\":\"completed\",\"detail\":\"Waited for the lead, then completed normally.\"}</openmaus-goal>",
           ]),
           FAKE_CLAUDE_REPLY_STATE: join(home, "busy-goal-replies.txt"),
         },
@@ -119,8 +123,8 @@ beforeAll(async () => {
         environment: {
           FAKE_CLAUDE_MODE: "happy",
           FAKE_CLAUDE_REPLIES: JSON.stringify([
-            "I am delegating the research.\n<dani-goal>{\"status\":\"continue\",\"next\":\"Busy specialist\",\"instruction\":\"Research the answer and report evidence\",\"detail\":\"Waiting for specialist research.\"}</dani-goal>",
-            "The specialist's evidence resolves the goal.\n<dani-goal>{\"status\":\"completed\",\"detail\":\"Specialist research incorporated after their direct task finished.\"}</dani-goal>",
+            "I am delegating the research.\n<openmaus-goal>{\"status\":\"continue\",\"next\":\"Busy specialist\",\"instruction\":\"Research the answer and report evidence\",\"detail\":\"Waiting for specialist research.\"}</openmaus-goal>",
+            "The specialist's evidence resolves the goal.\n<openmaus-goal>{\"status\":\"completed\",\"detail\":\"Specialist research incorporated after their direct task finished.\"}</openmaus-goal>",
           ]),
           FAKE_CLAUDE_REPLY_STATE: join(home, "busy-worker-lead-replies.txt"),
         },
@@ -145,10 +149,11 @@ beforeAll(async () => {
         displayName: "Stop-scoped lead fixture",
         environment: {
           FAKE_CLAUDE_MODE: "slow",
+          FAKE_CLAUDE_SLOW_FINISH_GATE: stopScopedLeadFinishGate,
           FAKE_CLAUDE_REPLIES: JSON.stringify([
-            "I am delegating this scheduled goal.\n<dani-goal>{\"status\":\"continue\",\"next\":\"Delayed worker\",\"instruction\":\"Finish the scheduled analysis\",\"detail\":\"Waiting for the delayed worker.\"}</dani-goal>",
+            "I am delegating this scheduled goal.\n<openmaus-goal>{\"status\":\"continue\",\"next\":\"Delayed worker\",\"instruction\":\"Finish the scheduled analysis\",\"detail\":\"Waiting for the delayed worker.\"}</openmaus-goal>",
             "This is unrelated direct work and should be stopped.",
-            "The scheduled analysis is now complete.\n<dani-goal>{\"status\":\"completed\",\"detail\":\"Scheduled goal survived the coordinator's direct Stop.\"}</dani-goal>",
+            "The scheduled analysis is now complete.\n<openmaus-goal>{\"status\":\"completed\",\"detail\":\"Scheduled goal survived the coordinator's direct Stop.\"}</openmaus-goal>",
           ]),
           FAKE_CLAUDE_REPLY_STATE: join(home, "stop-scoped-lead-replies.txt"),
         },
@@ -181,8 +186,9 @@ beforeAll(async () => {
         displayName: "Routine goal fixture",
         environment: {
           FAKE_CLAUDE_MODE: "slow",
+          FAKE_CLAUDE_SLOW_FINISH_GATE: routineGoalFinishGate,
           FAKE_CLAUDE_REPLIES: JSON.stringify([
-            "The scheduled review is complete.\n<dani-goal>{\"status\":\"completed\",\"detail\":\"Scheduled team review completed.\"}</dani-goal>",
+            "The scheduled review is complete.\n<openmaus-goal>{\"status\":\"completed\",\"detail\":\"Scheduled team review completed.\"}</openmaus-goal>",
           ]),
           FAKE_CLAUDE_REPLY_STATE: join(home, "routine-goal-replies.txt"),
         },
@@ -200,7 +206,6 @@ beforeAll(async () => {
       HOME: home,
       USERPROFILE: home,
       OMB_PORT: String(port),
-      DANI_OWNER_TOKEN: OWNER_TOKEN,
       OMB_WEBHOOK_PORT: String(port + 1),
       OMB_STATIC_DIR: staticDir,
     },
@@ -214,7 +219,6 @@ beforeAll(async () => {
     try {
       if ((await fetch(`${base}/api/health`)).status === 200) break;
     } catch {
-      // Still starting.
     }
     if (Date.now() >= deadline) throw new Error(`server never became healthy: ${stderr}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -256,7 +260,7 @@ describe("goal-driven channel runs", () => {
       const state = (await api("GET", "/api/bots?messages=30")).body;
       const current = state.groups.find((candidate: { id: string }) => candidate.id === room.id);
       return current?.messages.find((message: { kind: string }) => message.kind === "goal.run")?.goalRun;
-    }, { timeout: 10_000 }).toMatchObject({
+    }, { timeout: hostTimeout(10_000) }).toMatchObject({
       status: "completed",
       coordinatorBotId: lead.id,
       turnCount: 3,
@@ -270,7 +274,7 @@ describe("goal-driven channel runs", () => {
     expect(current.working).toBe(false);
     expect(current.messages.filter((message: { kind: string; role?: string }) => message.kind === "text" && message.role === "bot")
       .map((message: { from?: { name?: string } }) => message.from?.name)).toEqual(["Lead", "Scout", "Lead"]);
-    expect(JSON.stringify(current.messages)).not.toContain("<dani-goal>");
+    expect(JSON.stringify(current.messages)).not.toContain("<openmaus-goal>");
   });
 
   it("waits for a busy coordinator without spending a goal turn, then completes on the same card", async () => {
@@ -320,6 +324,8 @@ describe("goal-driven channel runs", () => {
       const waitingState = (await api("GET", "/api/bots?messages=30")).body;
       const waitingRoom = waitingState.groups.find((group: { id: string }) => group.id === room.id);
       const cardId = waitingRoom.messages.find((message: { kind: string }) => message.kind === "goal.run").id;
+      // Release only after the wait card is observed, so slow startup cannot use up the fake's completion window.
+      writeFileSync(busyGoalFinishGate, "observed the waiting goal");
 
       await expect.poll(async () => {
         const state = (await api("GET", "/api/bots?messages=30")).body;
@@ -333,7 +339,7 @@ describe("goal-driven channel runs", () => {
           detail: cards[0]?.goalRun?.detail,
           turnCount: cards[0]?.goalRun?.turnCount,
         };
-      }, { timeout: 10_000 }).toEqual({
+      }, { timeout: hostTimeout(10_000) }).toEqual({
         working: false,
         count: 1,
         id: cardId,
@@ -399,8 +405,7 @@ describe("goal-driven channel runs", () => {
         workerDirectBusy: true,
       });
 
-      // Keep the worker occupied until the waiting state is observed, even
-      // when CI takes longer than the fake driver's default 800 ms turn.
+      // Hold the worker until the waiting state is observed, even past the fake's default 800 ms turn.
       writeFileSync(busyWorkerFinishGate, "release");
 
       await expect.poll(async () => {
@@ -425,7 +430,7 @@ describe("goal-driven channel runs", () => {
             message.text?.includes("reply to:")
           ),
         };
-      }, { timeout: 10_000 }).toEqual({
+      }, { timeout: hostTimeout(10_000) }).toEqual({
         roomWorking: false,
         cards: 1,
         status: "completed",
@@ -474,8 +479,6 @@ describe("goal-driven channel runs", () => {
         return state.bots.find((bot: { id: string }) => bot.id === lead.id)?.busy;
       }).toBe(true);
 
-      // ordinary chat: the round parks on the busy lead — visibly working,
-      // nobody named as speaker, one neutral note, and no skip
       expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "Ordinary room chat" })).status).toBe(202);
       await expect.poll(async () => {
         const state = (await api("GET", "/api/bots?messages=30")).body;
@@ -483,8 +486,6 @@ describe("goal-driven channel runs", () => {
         return { working: current?.working, busyBotId: current?.busyBotId, ...chips(current?.messages ?? []) };
       }).toEqual({ working: true, busyBotId: null, waiting: true, skipped: false, replies: 0 });
 
-      // Stop releases the parked chat round quietly: no reply, no skip chip,
-      // and the lead's unrelated direct turn is untouched
       expect((await api("POST", `/api/groups/${room.id}/interrupt`, { threadId: room.threadId })).status).toBe(200);
       await expect.poll(async () => {
         const state = (await api("GET", "/api/bots?messages=30")).body;
@@ -570,7 +571,7 @@ describe("goal-driven channel runs", () => {
         target: "room-goal",
         groupId: room.id,
         botId: lead.id,
-        runOn: "dani",
+        runOn: "maus",
         schedule: { type: "once", at: Date.now() + 60_000 },
         durationMinutes: 30,
       });
@@ -596,7 +597,7 @@ describe("goal-driven channel runs", () => {
           roomWorking: current?.working,
           leadBusy: state.bots.find((bot: { id: string }) => bot.id === lead.id)?.busy,
         };
-      }, { timeout: 10_000 }).toEqual({
+      }, { timeout: hostTimeout(10_000) }).toEqual({
         runStatus: "running",
         detached: true,
         activeThreadId: originalThreadId,
@@ -605,8 +606,6 @@ describe("goal-driven channel runs", () => {
         leadBusy: true,
       });
 
-      // No task switch and no explicit thread: the ordinary room Stop must
-      // discover the detached operation rather than targeting the visible task.
       expect((await api("POST", `/api/groups/${room.id}/interrupt`)).status).toBe(200);
 
       await expect.poll(async () => {
@@ -621,7 +620,7 @@ describe("goal-driven channel runs", () => {
           roomWorking: current?.working,
           leadBusy: state.bots.find((bot: { id: string }) => bot.id === lead.id)?.busy,
         };
-      }, { timeout: 10_000 }).toEqual({
+      }, { timeout: hostTimeout(10_000) }).toEqual({
         runStatus: "cancelled",
         runThreadId: backgroundThreadId,
         activeThreadId: originalThreadId,
@@ -665,7 +664,7 @@ describe("goal-driven channel runs", () => {
         target: "room-goal",
         groupId: room.id,
         botId: lead.id,
-        runOn: "dani",
+        runOn: "maus",
         schedule: { type: "once", at: Date.now() + 60_000 },
         durationMinutes: 30,
       });
@@ -688,7 +687,7 @@ describe("goal-driven channel runs", () => {
           roomWorking: current?.working,
           leadBusy: state.bots.find((bot: { id: string }) => bot.id === lead.id)?.busy,
         };
-      }, { timeout: 10_000 }).toEqual({
+      }, { timeout: hostTimeout(10_000) }).toEqual({
         runStatus: "running",
         detached: true,
         activeThreadId: originalThreadId,
@@ -696,8 +695,6 @@ describe("goal-driven channel runs", () => {
         leadBusy: true,
       });
 
-      // The visible room still points at originalThreadId. Bot Stop must use
-      // the detached operation's exact speaker thread, not that visible task.
       expect((await api("POST", `/api/bots/${lead.id}/interrupt`)).status).toBe(200);
 
       await expect.poll(async () => {
@@ -712,7 +709,7 @@ describe("goal-driven channel runs", () => {
           roomWorking: current?.working,
           leadBusy: state.bots.find((bot: { id: string }) => bot.id === lead.id)?.busy,
         };
-      }, { timeout: 10_000 }).toEqual({
+      }, { timeout: hostTimeout(10_000) }).toEqual({
         runStatus: "cancelled",
         runThreadId: backgroundThreadId,
         activeThreadId: originalThreadId,
@@ -768,7 +765,7 @@ describe("goal-driven channel runs", () => {
         target: "room-goal",
         groupId: room.id,
         botId: lead.id,
-        runOn: "dani",
+        runOn: "maus",
         schedule: { type: "once", at: Date.now() + 60_000 },
         durationMinutes: 30,
       });
@@ -783,7 +780,7 @@ describe("goal-driven channel runs", () => {
         const running = calendar.runs.find((run: { id: string }) => run.id === runId);
         backgroundThreadId = running?.threadId ?? "";
         return { status: running?.status, threadId: running?.threadId };
-      }, { timeout: 10_000 }).toMatchObject({ status: "running", threadId: expect.any(String) });
+      }, { timeout: hostTimeout(10_000) }).toMatchObject({ status: "running", threadId: expect.any(String) });
 
       const opened = await api("POST", `/api/groups/${room.id}/tasks/${backgroundThreadId}`);
       expect(opened.status).toBe(200);
@@ -800,7 +797,7 @@ describe("goal-driven channel runs", () => {
           leadBusy: state.bots.find((bot: { id: string }) => bot.id === lead.id)?.busy,
           workerBusy: state.bots.find((bot: { id: string }) => bot.id === worker.id)?.busy,
         };
-      }, { timeout: 10_000 }).toMatchObject({
+      }, { timeout: hostTimeout(10_000) }).toMatchObject({
         activeThreadId: backgroundThreadId,
         roomWorking: true,
         status: "working",
@@ -810,6 +807,8 @@ describe("goal-driven channel runs", () => {
         workerBusy: true,
       });
 
+      // Hold just this unrelated direct turn until Stop is observed.
+      rmSync(stopScopedLeadFinishGate, { force: true });
       expect((await api("POST", `/api/bots/${lead.id}/messages`, {
         text: "Start unrelated coordinator work",
       })).status).toBe(202);
@@ -824,18 +823,14 @@ describe("goal-driven channel runs", () => {
         };
       }).toEqual({ busy: true, directReplyStarted: true });
 
-      // The ordinary bot Stop belongs to the direct claim made above. The
-      // coordinator is no longer an active participant in the waiting room
-      // operation, so this must not cancel the scheduled team goal.
       expect((await api("POST", `/api/bots/${lead.id}/interrupt`)).status).toBe(200);
       await expect.poll(async () => {
         const state = (await api("GET", "/api/bots?messages=30")).body;
         return state.bots.find((bot: { id: string }) => bot.id === lead.id)?.busy;
       }, { timeout: 5_000 }).toBe(false);
 
-      // The worker may settle and advance the room while Stop is in flight.
-      // Either in-progress or already-completed is valid; cancellation/stopped
-      // is the regression this snapshot must exclude.
+      writeFileSync(stopScopedLeadFinishGate, "allow the later goal continuation");
+      // The worker may settle and advance the room while Stop is in flight: only cancellation is wrong.
       const afterStopCalendar = (await api("GET", "/api/routines")).body;
       const afterStopRun = afterStopCalendar.runs.find((run: { id: string }) => run.id === runId);
       const afterStopState = (await api("GET", "/api/bots?messages=30")).body;
@@ -901,7 +896,7 @@ describe("goal-driven channel runs", () => {
         target: "room-goal",
         groupId: room.id,
         botId: lead.id,
-        runOn: "dani",
+        runOn: "maus",
         schedule: { type: "once", at: Date.now() + 60_000 },
         durationMinutes: 30,
       });
@@ -946,11 +941,12 @@ describe("goal-driven channel runs", () => {
         threadId: running.threadId,
         working: true,
       });
+      writeFileSync(routineGoalFinishGate, "opened the running background task");
 
       await expect.poll(async () => {
         const calendar = (await api("GET", "/api/routines")).body;
         return calendar.runs.find((run: { id: string }) => run.id === runId);
-      }, { timeout: 10_000 }).toMatchObject({
+      }, { timeout: hostTimeout(10_000) }).toMatchObject({
         id: runId,
         status: "completed",
         target: "room-goal",
@@ -967,7 +963,7 @@ describe("goal-driven channel runs", () => {
       expect(backgroundRoom.threadId).toBe(completedRun.threadId);
       expect(backgroundRoom.tasks).toContainEqual(expect.objectContaining({
         threadId: completedRun.threadId,
-        title: "Daily team review",
+        title: expect.stringMatching(/^Daily team review · [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M$/),
       }));
 
       const switched = await api("POST", `/api/groups/${room.id}/tasks/${completedRun.threadId}`);
@@ -1002,15 +998,19 @@ describe("goal-driven channel runs", () => {
       memberIds: [looper.id],
       setup: { bulletin: "", defaultResponder: { kind: "member", botId: looper.id } },
     })).body.group;
-    expect((await api("POST", `/api/groups/${room.id}/messages`, {
+    const started = await api("POST", `/api/groups/${room.id}/messages`, {
       text: "Keep trying forever",
       mode: "goal",
-    })).status).toBe(202);
+    });
+    expect(started.status).toBe(202);
+    // Per-turn digests can push the card out of a tail page, so read around the accepted message.
+    const initial = await api("GET", `/api/threads/${started.body.threadId}/messages?around=${started.body.message.id}&limit=3`);
+    const card = initial.body.messages.find((message: { kind: string }) => message.kind === "goal.run");
+    expect(card).toMatchObject({ id: expect.any(String) });
 
     await expect.poll(async () => {
-      const state = (await api("GET", "/api/bots?messages=40")).body;
-      const current = state.groups.find((candidate: { id: string }) => candidate.id === room.id);
-      return current?.messages.find((message: { kind: string }) => message.kind === "goal.run")?.goalRun;
+      const page = await api("GET", `/api/threads/${started.body.threadId}/messages?around=${card.id}&limit=1`);
+      return page.body.messages[0]?.goalRun;
     }, { timeout: 15_000 }).toMatchObject({ status: "limit-reached", turnCount: 13, maxTurns: 13 });
   });
 
@@ -1035,9 +1035,8 @@ describe("goal-driven channel runs", () => {
       const state = (await api("GET", "/api/bots?messages=20")).body;
       const current = state.groups.find((candidate: { id: string }) => candidate.id === room.id);
       return current?.messages.find((message: { kind: string }) => message.kind === "goal.run")?.goalRun;
-    // the failed attempt is retried once, and a retry is a model call that
-    // costs a turn like any other — so the honest count is two, still failed
-    }, { timeout: 10_000 }).toMatchObject({ status: "failed", turnCount: 2 });
+      // the failed attempt is retried once, and a retry costs a turn, so the count is two
+    }, { timeout: hostTimeout(10_000) }).toMatchObject({ status: "failed", turnCount: 2 });
   });
 
   it("validates mode and binds it to the send id", async () => {
@@ -1091,6 +1090,7 @@ describe("goal-driven channel runs", () => {
 
     const retryWhileQueued = await api("POST", `/api/groups/${room.id}/messages`, queuedBody);
     expect(retryWhileQueued.body).toMatchObject({ queued: true, queueId: queued.body.queueId });
+    writeFileSync(queueFinishGate, "observed the queued message and idempotent retry");
 
     await expect.poll(async () => {
       const state = (await api("GET", "/api/bots?messages=30")).body;
@@ -1100,7 +1100,7 @@ describe("goal-driven channel runs", () => {
         working: current?.working,
         sends: userLines.map((message: { sendId?: string }) => message.sendId),
       };
-    }, { timeout: 10_000 }).toEqual({ working: false, sends: [firstSendId, secondSendId] });
+    }, { timeout: hostTimeout(10_000) }).toEqual({ working: false, sends: [firstSendId, secondSendId] });
 
     const state = (await api("GET", "/api/bots?messages=30")).body;
     const current = state.groups.find((candidate: { id: string }) => candidate.id === room.id);

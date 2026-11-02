@@ -1,10 +1,6 @@
-// "You have not set this up" and "I could not read your key" produce the same
-// empty screen today. They are opposite situations: the first is the truth,
-// the second is ignorance the UI must be told about so it can keep showing
-// what it already knew.
 import { describe, expect, it } from "vitest";
 
-import { connectorAvailability } from "./composio.ts";
+import { connectorAvailability, connectorSetup } from "./composio.ts";
 import type { AppConfig } from "./config.ts";
 
 const cfg = (over: Partial<AppConfig> = {}): AppConfig => ({ ...over }) as AppConfig;
@@ -27,5 +23,21 @@ describe("connectorAvailability", () => {
     // the key arrived some other way (env, self-hosted config): what the user
     // can actually do matters more than how the shell felt about it
     expect(connectorAvailability(cfg({ composio: { apiKey: "ak_live" } }), "unavailable")).toBe("configured");
+  });
+});
+
+describe("connectorSetup", () => {
+  it("is ready when a connection service is configured", () => {
+    expect(connectorSetup(cfg({ composio: { apiKey: "ak_live" } }), false)).toBe("ready");
+    expect(connectorSetup(cfg({ composio: { apiKey: "ak_live" } }), true)).toBe("ready");
+  });
+
+  it("needs setup on a fresh server that has no managed service to wait for", () => {
+    expect(connectorSetup(cfg(), false)).toBe("needs-setup");
+    expect(connectorSetup(cfg({ composio: { apiKey: "" } }), false)).toBe("needs-setup");
+  });
+
+  it("reports the managed service as unavailable only on a host it comes with (the installed desktop app, a Cloud home)", () => {
+    expect(connectorSetup(cfg(), true)).toBe("service-unavailable");
   });
 });

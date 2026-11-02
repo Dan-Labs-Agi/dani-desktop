@@ -1,71 +1,20 @@
-import type { RoutineRunOn } from "@/lib/routines";
+import type { WebhookTrigger, WebhookTriggerInput } from "../../shared/webhooks";
 
-export interface WebhookTrigger {
-  id: string;
-  endpointId: string;
-  name: string;
-  prompt: string;
-  botId: string;
-  runOn: RoutineRunOn;
-  enabled: boolean;
-  createdAt: number;
-  updatedAt: number;
-  lastReceivedAt?: number;
-  lastRunId?: string;
-  deliveryCount: number;
-  verificationPending?: boolean;
-  verifiedAt?: number;
-  verificationSample?: WebhookVerificationSample;
-  eventTypes?: string[];
-}
-
-export interface WebhookTriggerInput {
-  name: string;
-  prompt: string;
-  botId: string;
-  runOn?: RoutineRunOn;
-  enabled?: boolean;
-  verificationPending?: boolean;
-  eventTypes?: string[];
-}
-
-export interface WebhookVerificationSample {
-  receivedAt: number;
-  eventName?: string;
-  contentType?: string;
-  preview: string;
-}
-
-export type WebhookAttemptOutcome = "accepted" | "captured" | "duplicate" | "ignored" | "rejected";
-
-export interface WebhookAttempt {
-  id: string;
-  webhookId: string;
-  receivedAt: number;
-  outcome: WebhookAttemptOutcome;
-  statusCode: number;
-  eventName?: string;
-  preview?: string;
-  deliveryId?: string;
-  runId?: string;
-  reason?: string;
-}
-
-export interface WebhookIngressStatus {
-  available: boolean;
-  baseUrl: string;
-  error?: string;
-}
+export type {
+  WebhookTrigger,
+  WebhookTriggerInput,
+  WebhookVerificationSample,
+  WebhookAttemptOutcome,
+  WebhookAttempt,
+  WebhookIngressStatus,
+} from "../../shared/webhooks";
 
 export interface WebhookCredential {
   endpointUrl: string;
   secret: string;
-  /** Capability URL for senders that cannot configure an Authorization header. */
   url: string;
 }
 
-/** New local webhooks are ready to execute immediately. Editing an existing
- * webhook must preserve its current pause/verification state. */
 export function webhookActivationDefaults(
   webhook?: Pick<WebhookTrigger, "enabled" | "verificationPending">,
 ): Pick<WebhookTriggerInput, "enabled" | "verificationPending"> {
@@ -73,4 +22,16 @@ export function webhookActivationDefaults(
     enabled: webhook?.enabled ?? true,
     verificationPending: webhook?.verificationPending ?? false,
   };
+}
+
+/** Must match the server's DEFAULT_MAX_PENDING_RUNS. */
+export const WEBHOOK_DEFAULT_MAX_PENDING_RUNS = 3;
+export const WEBHOOK_MAX_PENDING_RUNS_LIMIT = 50;
+
+export function webhookMaxPendingRunsInput(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const value = Number(trimmed);
+  return value >= 1 && value <= WEBHOOK_MAX_PENDING_RUNS_LIMIT ? value : undefined;
 }

@@ -1,7 +1,7 @@
-# Dani Bot MCP server
+# OpenMausBot MCP server
 
-The Dani Bot desktop app includes a local stdio MCP server. It lets another MCP client coordinate your
-Dani Bot team while the desktop app and its harness are running.
+The OpenMausBot desktop app includes a local stdio MCP server. It lets another MCP client coordinate your
+OpenMausBot team while the desktop app and its harness are running.
 
 ## What it can do
 
@@ -14,16 +14,32 @@ Dani Bot team while the desktop app and its harness are running.
 The v1 server intentionally cannot approve requests, remember permission grants, delete data, import teams,
 change credentials, or control computer/VM lifecycle. Those actions stay in the human-facing app.
 
-## From a source checkout
+## From the openmausbot command
 
-Start Dani Bot, then configure the MCP client to run:
+With the `openmausbot` npm package installed, the MCP client can run it
+directly; it serves the same tools:
 
 ```json
 {
   "mcpServers": {
-    "danibot": {
+    "openmausbot": { "command": "openmausbot", "args": ["mcp"], "env": { "OMB_PORT": "8799" } }
+  }
+}
+```
+
+The same operations are also commands of their own, for scripts and CI:
+[docs/headless-cli.md](headless-cli.md).
+
+## From a source checkout
+
+Start OpenMausBot, then configure the MCP client to run:
+
+```json
+{
+  "mcpServers": {
+    "openmausbot": {
       "command": "pnpm",
-      "args": ["--dir", "/absolute/path/to/dani-desktop", "mcp"]
+      "args": ["--dir", "/absolute/path/to/OpenMausBot", "mcp"]
     }
   }
 }
@@ -31,9 +47,12 @@ Start Dani Bot, then configure the MCP client to run:
 
 Packaged desktop builds require a paired session for tools that create,
 change, send, switch, interrupt, or run anything. Read-only tools work on
-loopback without one. To authorize an external MCP client:
+loopback without one. A hosted or shared server with service loopback trust
+([self-hosting](self-hosting.md#loopback-trust-owner-or-service)) needs a
+session for almost every tool, reads included. To authorize an external MCP
+client:
 
-1. In Dani Bot, open **Settings → Phone → Set up a phone** and reveal the
+1. In OpenMausBot, open **Settings → Phone → Set up a phone** and reveal the
    one-time pairing code.
 2. Exchange it locally (remove spaces from the displayed code):
 
@@ -51,7 +70,7 @@ loopback without one. To authorize an external MCP client:
    "env": {
      "ELECTRON_RUN_AS_NODE": "1",
      "OMB_PORT": "8799",
-     "DANIBOT_TOKEN": "omb_sess_..."
+     "OPENMAUSBOT_TOKEN": "omb_sess_..."
    }
    ```
 
@@ -68,34 +87,34 @@ macOS example:
 ```json
 {
   "mcpServers": {
-    "danibot": {
-      "command": "/Applications/Dani Bot.app/Contents/MacOS/Dani Bot",
-      "args": ["/Applications/Dani Bot.app/Contents/Resources/server/mcp-server.js"],
+    "openmausbot": {
+      "command": "/Applications/OpenMausBot.app/Contents/MacOS/OpenMausBot",
+      "args": ["/Applications/OpenMausBot.app/Contents/Resources/server/mcp-server.js"],
       "env": { "ELECTRON_RUN_AS_NODE": "1" }
     }
   }
 }
 ```
 
-On Windows, use the installed `Dani Bot.exe` as `command`, the adjacent
+On Windows, use the installed `OpenMausBot.exe` as `command`, the adjacent
 `resources\\server\\mcp-server.js` as the argument, and the same `ELECTRON_RUN_AS_NODE=1` environment value.
-The usual per-user install is under `%LOCALAPPDATA%\\Programs\\Dani Bot`.
+The usual per-user install is under `%LOCALAPPDATA%\\Programs\\OpenMausBot`.
 
-On Ubuntu `.deb` installs, the executable is normally `/opt/Dani Bot/danibot` and the script is
-`/opt/Dani Bot/resources/server/mcp-server.js`. Use the same environment value.
+On Ubuntu `.deb` installs, the executable is normally `/opt/OpenMausBot/openmausbot` and the script is
+`/opt/OpenMausBot/resources/server/mcp-server.js`. Use the same environment value.
 
 ## Connection discovery
 
-With no configuration, the MCP process probes Dani Bot's three desktop ports (`8799`, `18799`, and `28799`)
-and accepts only a health response that identifies itself as danibot. This handles the desktop's normal
+With no configuration, the MCP process probes OpenMausBot's three desktop ports (`8799`, `18799`, and `28799`)
+and accepts only a health response that identifies itself as OpenMausBot. This handles the desktop's normal
 fallback when another local process already owns port 8799.
 
-Set `OMB_PORT` to force one local port, or `DANIBOT_URL` to use an explicit HTTP(S) origin. Cleartext remote
+Set `OMB_PORT` to force one local port, or `OPENMAUSBOT_URL` to use an explicit HTTP(S) origin. Cleartext remote
 HTTP is rejected unless `ALLOW_INSECURE_HTTP=true`; HTTPS should be used outside loopback. An optional
-`DANIBOT_TOKEN` is sent as a bearer token for authenticated reverse proxies. When a token is set, an
-explicit `DANIBOT_URL` or `OMB_PORT` is required so the credential is never sent while probing unrelated
-local ports. `DANIBOT_MCP_TIMEOUT_MS` can set an HTTP timeout between 1,000 and 120,000 milliseconds.
-In packaged builds, `DANIBOT_TOKEN` is required for mutating tools as
+`OPENMAUSBOT_TOKEN` is sent as a bearer token for authenticated reverse proxies. When a token is set, an
+explicit `OPENMAUSBOT_URL` or `OMB_PORT` is required so the credential is never sent while probing unrelated
+local ports. `OPENMAUSBOT_MCP_TIMEOUT_MS` can set an HTTP timeout between 1,000 and 120,000 milliseconds.
+In packaged builds, `OPENMAUSBOT_TOKEN` is required for mutating tools as
 described above; it is not a generic reverse-proxy secret.
 
 ## Tools
@@ -107,7 +126,24 @@ described above; it is not a generic reverse-proxy secret.
 | Run work | `send_bot_message`, `send_channel_message`, `wait_for_conversation`, `interrupt_conversation`, `set_bot_model` |
 
 `wait_for_conversation` returns `settled`, `needs-user`, `failed`, `stalled`, or `timed-out`, along with a
-small redacted transcript tail. MCP cancellation is honored while a tool is waiting.
+small redacted transcript tail. That `status` keeps its earlier meaning: `settled` says the conversation is
+no longer working (`failed` and `stalled` say its engine died or went silent, or its dispatch failed). The
+result also carries `state`, the job's own verdict (`completed`, `idle`, `needs-input`, `failed`, `stalled`
+or `timed-out`: a lead whose work failed or was stopped is `failed` here even when `status` is `settled`),
+and `job`: the conversation's job as the server computes it (`GET /api/threads/:id/job`), with
+every piece of work it handed to a teammate (`coordinate_bots`, an assignment on the job runtime:
+docs/runtime-contract.md §9), who is doing it, how it ended, and anyone it is waiting on. A conversation is
+not settled while that work is outstanding; it settles once their results have resumed it and that turn has
+ended. A teammate parked on a question or an approval card makes the wait end with `needs-user` at once.
+Optional inputs: `scope` (`job`, the default, or `turn` for the conversation's own turn only), and
+`since_ms` and `after_version` from an earlier result's `job`, to keep watching the same job past a state
+already seen. The server holds each request until the job changes, so a wait is not a poll loop. MCP
+cancellation is honored while a tool is waiting.
+
+`send_bot_message` and `send_channel_message` take an optional `send_id` (16-80 letters, digits, `-` or
+`_`): sending again with the same id returns the first send's receipt instead of a second message. They
+return the stored message's `messageId` and `at`, or `queued: true` when the message waits behind the turn
+running there.
 
 ## Safety and data scope
 

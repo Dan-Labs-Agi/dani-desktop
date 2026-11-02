@@ -1,7 +1,4 @@
-// A user upgrading from a previous home folder must find everything in
-// ~/.danibot after the first boot. Anything that touches the new dir before
-// ensureDirs() runs would make that rename a no-op and boot the user into an
-// empty workspace — this test pins the order.
+// Anything touching the new dir before ensureDirs() runs would make the ~/.opengrokbot rename a no-op: this pins the order.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,9 +21,7 @@ beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-legacy-test-"));
   const legacy = join(home, ".opengrokbot");
   mkdirSync(legacy, { recursive: true });
-  // A non-product shadow keeps startup deterministic: an empty map selects
-  // the user's full default engine fleet, whose installed CLI probes are not
-  // part of this migration test.
+  // A non-product shadow: an empty map would select the full default fleet, whose CLI probes are not part of this test.
   writeFileSync(join(legacy, "config.json"), JSON.stringify({
     instances: { fixture: { driver: "migration-test-shadow" } },
   }));
@@ -51,7 +46,6 @@ beforeAll(async () => {
       const res = await fetch(`http://127.0.0.1:${PORT}/api/health`);
       if (res.ok) return;
     } catch {
-      /* not up yet */
     }
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -65,7 +59,7 @@ afterAll(async () => {
 
 describe("legacy data dir", () => {
   it("is renamed to the new name on first boot, with its contents and a fresh environment id", () => {
-    const fresh = join(home, ".danibot");
+    const fresh = join(home, ".openmausbot");
     expect(existsSync(join(home, ".opengrokbot"))).toBe(false);
     expect(readFileSync(join(fresh, "keep-me.txt"), "utf8")).toBe("carried over");
     expect(readFileSync(join(fresh, "environment-id"), "utf8").trim()).toMatch(/^[0-9a-f-]{36}$/);

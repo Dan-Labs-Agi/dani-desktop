@@ -1,7 +1,4 @@
-// Grok driver contract tests — the API-backed driver rides fetch, so the
-// fake is a stubbed globalThis.fetch that scripts HTTP failures and SSE
-// bodies. Covers the auto-retry policy: transient (429/5xx) retried with
-// backoff, terminal (401/400) never, partial streamed output never.
+// The API driver rides fetch, so the fake is a stubbed globalThis.fetch scripting HTTP failures and SSE bodies.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -29,6 +26,7 @@ describe("GrokDriver turns (fake fetch)", () => {
   /** Script of responses/errors consumed in order; empty = succeed with text. */
   let script: Array<{ status?: number; sse?: string }> = [];
   let calls = 0;
+  let requestedModels: string[] = [];
 
   const create = async () => {
     instance = await GrokDriver.create({
@@ -46,9 +44,9 @@ describe("GrokDriver turns (fake fetch)", () => {
     process.env.FAKE_GROK_RETRY_SCALE = "0.001";
     previousFetch = globalThis.fetch;
     calls = 0;
-    // SAFETY: the stub only returns real Response objects, the sole member
-    // of fetch's return type this driver consumes.
-    globalThis.fetch = (async () => {
+    requestedModels = [];
+    globalThis.fetch = (async (_url, init) => {
+      requestedModels.push((JSON.parse(String(init?.body)) as { model: string }).model);
       const step = script.shift();
       calls++;
       if (!step || step.sse !== undefined) return sseResponse(step?.sse ?? SSE_BODY("done from fake grok"));
@@ -73,7 +71,7 @@ describe("GrokDriver turns (fake fetch)", () => {
       "turn.started",
       "session.started",
       "content.delta",
-      "item.completed", // assistant_text
+      "item.completed",
       "turn.completed",
     ]);
     expect(recorder.events.every((e) => e.turnId === turnId && e.provider === "grok")).toBe(true);
@@ -94,8 +92,34 @@ describe("GrokDriver turns (fake fetch)", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as { dir: string; msg: { model?: string } });
-    expect(entries.find((entry) => entry.dir === "out")?.msg.model).toBe("grok-4");
+    expect(entries.find((entry) => entry.dir === "out")?.msg.model).toBe("grok-4.7");
+    expect(requestedModels).toEqual(["grok-4.7"]);
+    expect(instance.models.options).toContainEqual({ id: "grok-4.7", label: "Grok 4.7", contextWindow: 500_000 });
   });
+
+  it("smoke: offers ask_user and returns the person's reply verbatim", async () => {
+    const askBody = 'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"ask1","type":"function","function":{"name":"ask_user","arguments":'
+      + JSON.stringify(JSON.stringify({ questions: [{ question: "Ship the fixture?", options: [{ label: "Yes" }, { label: "No" }] }] }))
+      + '}}]}}]}\n\n'
+      + 'data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}\n\n';
+    const bodies: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("/models")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      calls++;
+      bodies.push(String(init?.body));
+      return sseResponse(bodies.length === 1 ? askBody : SSE_BODY("done from fake grok"));
+    }) as typeof fetch;
+    await create();
+    await instance.adapter.sendTurn({ threadId: "t-ask", text: "go" });
+    const opened = await recorder.until((event) => event.type === "request.opened");
+    expect(opened).toMatchObject({ requestType: "question", tool: "ask_user", choices: ["Yes", "No"] });
+    const reply = "The user answered your questions.\n\nQ: Ship the fixture?\nA: Yes";
+    expect(await instance.adapter.respondToRequest("t-ask", opened.requestId!, { behavior: "answer", message: reply })).toBe("answered");
+    const completed = await recorder.until((event) => event.type === "turn.completed");
+    expect(completed).toMatchObject({ ok: true });
+    expect(bodies[0]).toContain('"ask_user"');
+    expect(JSON.parse(JSON.parse(bodies[1]!).messages.at(-1).content).result).toBe(reply);
+  }, 20_000);
 
   it("auto-retries transient 429/5xx responses, then completes once", async () => {
     script = [{ status: 429 }, { status: 503 }];
@@ -107,7 +131,6 @@ describe("GrokDriver turns (fake fetch)", () => {
     expect(retries.map((e) => e.attempt)).toEqual([1, 2]);
     expect(retries.every((e) => e.delayMs > 0)).toBe(true);
     expect(retries.map((e) => e.reason)).toEqual(["rate_limited", "server_error"]);
-    // exactly one settled reply across all three attempts
     expect(recorder.events.filter((e) => e.type === "item.completed" && e.itemType === "assistant_text")).toHaveLength(1);
     expect(calls).toBe(3);
     expect(recorder.events.at(-1)).toMatchObject({ type: "turn.completed", ok: true, turnId });
@@ -121,7 +144,6 @@ describe("GrokDriver turns (fake fetch)", () => {
 
     const retries = recorder.events.filter((e) => e.type === "turn.retrying");
     expect(retries.map((e) => e.attempt)).toEqual([1, 2]);
-    // original + two retries; the third failure is past the cap and fails
     expect(calls).toBe(3);
     expect(recorder.events.some((e) => e.type === "runtime.error")).toBe(true);
   }, 20_000);
@@ -142,15 +164,12 @@ describe("GrokDriver turns (fake fetch)", () => {
   }, 20_000);
 
   it("never retries after assistant text already streamed (duplicate-text hazard)", async () => {
-    // an SSE body whose stream ERRORS after delivering a delta — the
-    // partial-output guard must forbid the retry that would duplicate it
     const failingStream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: "half an answer" } }] })}\n\n`));
         setTimeout(() => controller.error(new Error("connection reset by peer")), 10);
       },
     });
-    // SAFETY: a real Response built from a live stream, same as above.
     globalThis.fetch = (async () => {
       calls++;
       return new Response(failingStream, { status: 200, headers: { "content-type": "text/event-stream" } });
@@ -187,4 +206,11 @@ describe("GrokDriver turns (fake fetch)", () => {
     await create();
     await expect(instance.adapter.respondToRequest("t-x", "r", { behavior: "allow" })).resolves.toBe("unavailable");
   });
+});
+
+it("grok preserves an explicit tools-off connection and rejects ambiguous flags", () => {
+  expect(GrokDriver.decodeConfig({})).not.toHaveProperty("tools");
+  expect(GrokDriver.decodeConfig({ tools: false })).toMatchObject({ tools: false });
+  expect(GrokDriver.decodeConfig({ tools: true })).toMatchObject({ tools: true });
+  expect(() => GrokDriver.decodeConfig({ tools: "false" })).toThrow("tools must be a boolean");
 });

@@ -3,6 +3,13 @@ import { describe, expect, it } from "vitest";
 import { BACKOFF_BASE_MS, RETRY_MAX_ATTEMPTS, classifyError, computeBackoff } from "./retry.ts";
 
 describe("classifyError", () => {
+  it("does not retry a provider safety block even inside a 503 or rate-limit error", () => {
+    for (const text of ["HTTP 503: blocked by our safety systems", "429: safety monitoring paused this task"]) {
+      expect(classifyError({ text })).toEqual({ transient: false, reason: "provider_safety" });
+      expect(classifyError({ exitCode: 1, stderr: text })).toEqual({ transient: false, reason: "provider_safety" });
+    }
+    expect(classifyError({ text: "503: checking deployment safety" }).reason).toBe("server_error");
+  });
   it("calls provider rate limits transient", () => {
     expect(classifyError(new Error("xAI HTTP 429: Too Many Requests"))).toEqual({
       transient: true,
@@ -28,6 +35,13 @@ describe("classifyError", () => {
       transient: true,
       reason: "overloaded",
     });
+  });
+
+  it("calls Codex's failed workspace routing discovery transient, but not a refused sign-in", () => {
+    expect(classifyError({ text: "stream error: workspace routing discovery failed: error sending request" })).toEqual({ transient: true, reason: "server_error" });
+    expect(classifyError(new Error("workspace routing discovery timed out"))).toEqual({ transient: true, reason: "server_error" });
+    expect(classifyError({ exitCode: 1, stderr: "Error: workspace routing discovery failed" })).toEqual({ transient: true, reason: "server_error" });
+    expect(classifyError({ text: "workspace routing discovery unauthorized (401)" })).toEqual({ transient: false, reason: "auth" });
   });
 
   it("calls connection failures and timeouts transient", () => {
@@ -67,7 +81,6 @@ describe("classifyError", () => {
   });
 
   it("prefers the transient reading when stderr carries both shapes", () => {
-    // a crash whose stderr mentions throttling is worth one more try
     expect(classifyError({ exitCode: 1, stderr: "error: 429 too many requests" })).toEqual({
       transient: true,
       reason: "rate_limited",
@@ -96,6 +109,40 @@ describe("computeBackoff", () => {
       const base = BACKOFF_BASE_MS[Math.min(attempt, BACKOFF_BASE_MS.length - 1)];
       expect(low).toBeGreaterThanOrEqual(base * 0.75);
       expect(high).toBeLessThanOrEqual(base * 1.25 + 1);
+    }
+  });
+});
+
+describe("classifyError — usage limits", () => {
+  it("keeps a generic short-lived 429 transient in both transport shapes", () => {
+    const text = "HTTP 429: rate limit reached; retry after 1s";
+    expect(classifyError({ text })).toEqual({ transient: true, reason: "rate_limited" });
+    expect(classifyError({ exitCode: 1, stderr: text })).toEqual({ transient: true, reason: "rate_limited" });
+    expect(classifyError({ exitCode: 1, stderr: "API Error: 429 Rate limit reached: weekly limit reached" })).toEqual({ transient: false, reason: "quota" });
+  });
+  it("calls a subscription usage limit a quota problem, not a retry", () => {
+    for (const text of [
+      "You've hit your usage limit for this session. Try again at 7pm.",
+      "Usage limit reached for Claude Max",
+      "Rate limit reached: weekly limit reached",
+      "You are out of credits",
+      // Claude Code 2.1.295 names what ran out; the first matched no pattern
+      "You've hit your weekly limit \u00b7 resets Oct 12 at 2:30pm (Asia/Calcutta)",
+      "You've hit your session limit \u00b7 resets 3pm",
+      "You've hit your Opus limit",
+      "You've hit your org's monthly spend limit.",
+      "You've hit your team's shared budget. /model to switch models.",
+      "You're out of usage credits. Contact your admin to add more.",
+      "You're out of extra usage",
+    ]) {
+      expect(classifyError({ text }), text).toEqual({ transient: false, reason: "quota" });
+      expect(classifyError({ exitCode: 1, stderr: text }), text).toEqual({ transient: false, reason: "quota" });
+    }
+  });
+
+  it("keeps a per-minute rate limit transient, however it is worded", () => {
+    for (const text of ["You've hit your rate limit, retry in 5s", "You hit your API rate limit"]) {
+      expect(classifyError({ text }), text).toEqual({ transient: true, reason: "rate_limited" });
     }
   });
 });

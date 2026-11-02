@@ -47,9 +47,20 @@ describe("readThreadEvents", () => {
       ["native", "2026-08-17T10:00:01.000Z"],
       ["runtime", "2026-08-17T10:00:02.000Z"],
     ]);
-    // each entry keeps its original record whole under `data`
     expect(page.entries[1]).toMatchObject({ kind: "native", data: { dir: "out", msg: { type: "user" } } });
     expect(page.entries[0]).toMatchObject({ kind: "runtime", data: { eventId: "e1" } });
+  });
+
+  it("keeps a runtime notice, which reports without failing the turn", () => {
+    const eventsDir = tmp();
+    const nativeDir = tmp();
+    writeFileSync(
+      join(eventsDir, "t1.ndjson"),
+      line(runtime({ eventId: "e1", type: "runtime.notice", createdAt: "2026-08-17T10:00:00.000Z", message: "OpenCode no longer offers x" })) +
+        line(runtime({ eventId: "e2", type: "runtime.notice", createdAt: "2026-08-17T10:00:01.000Z" })),
+    );
+    const page = readThreadEvents({ eventsDir, nativeDir, threadId: "t1" });
+    expect(page.entries.map((entry) => (entry.data as { eventId: string }).eventId)).toEqual(["e1"]);
   });
 
   it("caps each log to its most recent `limit` lines and reports what it skipped", () => {
@@ -76,8 +87,6 @@ describe("readThreadEvents", () => {
     );
     const page = readThreadEvents({ eventsDir, nativeDir, threadId: "t1" });
     expect(page.entries).toHaveLength(2);
-    // `total` is the number of non-empty log lines; malformed records are
-    // counted but deliberately absent from the returned entries.
     expect(page.total.runtime).toBe(3);
   });
 
@@ -97,6 +106,57 @@ describe("readThreadEvents", () => {
       ["native", undefined],
     ]);
     expect(page.total).toEqual({ runtime: 3, native: 2 });
+  });
+
+  it("keeps a structured ask's questions and drops a malformed one", () => {
+    const eventsDir = tmp();
+    const nativeDir = tmp();
+    const base = {
+      provider: "claude",
+      threadId: "t1",
+      type: "request.opened",
+      requestType: "question",
+      tool: "AskUserQuestion",
+      summary: "Which framework?",
+    };
+    const question = { question: "Which framework?", header: "Stack", options: [{ label: "React" }] };
+    writeFileSync(
+      join(eventsDir, "t1.ndjson"),
+      line({ ...base, eventId: "rich", createdAt: "1", questions: [question] }) +
+        line({ ...base, eventId: "bad-option", createdAt: "2", questions: [{ question: "q", options: [{ hint: "x" }] }] }) +
+        line({ ...base, eventId: "bad-question", createdAt: "3", questions: ["Which framework?"] }),
+    );
+    writeFileSync(join(nativeDir, "t1.ndjson"), "");
+    const page = readThreadEvents({ eventsDir, nativeDir, threadId: "t1" });
+    expect(page.entries.map((entry) => (entry.data as { eventId?: string }).eventId)).toEqual(["rich"]);
+    expect(page.entries[0]!.data).toMatchObject({ questions: [question] });
+  });
+
+  it("replays an ask's origin and keeps events recorded before it existed", () => {
+    const eventsDir = tmp();
+    const nativeDir = tmp();
+    const base = {
+      provider: "boatagent",
+      threadId: "t1",
+      type: "request.opened",
+      requestType: "question",
+      tool: "omb-ask",
+      summary: "Which framework?",
+    };
+    writeFileSync(
+      join(eventsDir, "t1.ndjson"),
+      line({ ...base, eventId: "from-tool", createdAt: "1", origin: "tool" }) +
+        line({ ...base, eventId: "from-output", createdAt: "2", origin: "output" }) +
+        line({ ...base, eventId: "pre-origin", createdAt: "3" }) +
+        line({ ...base, eventId: "bad-origin", createdAt: "4", origin: "elsewhere" }),
+    );
+    writeFileSync(join(nativeDir, "t1.ndjson"), "");
+    const page = readThreadEvents({ eventsDir, nativeDir, threadId: "t1" });
+    expect(page.entries.map((entry) => (entry.data as { eventId?: string }).eventId)).toEqual([
+      "from-tool",
+      "from-output",
+      "pre-origin",
+    ]);
   });
 
   it("rejects malformed retry telemetry while retaining a valid retry event", () => {

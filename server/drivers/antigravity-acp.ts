@@ -10,22 +10,35 @@ import { killCliTree, spawnCli } from "../procs.ts";
 import type { ModelCatalog } from "../contracts.ts";
 import type { ChildProcess } from "node:child_process";
 import type { AntigravityRuntime } from "./antigravity-runtime.ts";
+import { acpVariantOption } from "./acp/config-options.ts";
+import {
+  VERIFICATION_TEMP_KEY,
+  antigravityTempDir,
+  folderBytes,
+  setAntigravityTempEnvironment,
+  sweepAntigravityTemp,
+} from "./antigravity-temp.ts";
 
 // Printed on stderr by Google's server, not stdout.
 export const ANTIGRAVITY_AUTH_PREFIX = "Open the following link to authenticate the ACP server: ";
 const AUTH_TIMEOUT_MS = 5 * 60_000;
-// Google's packaged server can take tens of seconds to cold-start, especially
-// on Windows. Match T3 Code's bounded setup allowance, not a fast CLI probe.
+// Google's packaged server can take tens of seconds to cold-start, especially on Windows.
 const STARTUP_TIMEOUT_MS = 90_000;
+// The Windows runtime is silent while it unpacks ~1 GB into TEMP, which antivirus scanning can stretch past one window:
+// startup gets another window while that folder grows, up to this cap.
+const STARTUP_CAP_MS = 5 * 60_000;
+const UNPACK_COUNT_BUDGET_MS = 5_000;
 const MAX_PROTOCOL_LINE_BYTES = 16 * 1024 * 1024;
-// Past the 16 KiB ceiling parseAntigravityAuthorizationUrl accepts, so a
-// partial stderr line is never dropped while it could still become a link.
+// Past the 16 KiB ceiling parseAntigravityAuthorizationUrl accepts, so no partial link is dropped.
 const MAX_DIAGNOSTIC_LINE_CHARS = 64 * 1024;
+// A forced stop on Windows skips the runtime's cleanup of what it unpacked; exiting on its own removes it.
+const GRACEFUL_EXIT_MS = 5_000;
 
 export interface AntigravityProfile {
   directory: string;
   tokenPath: string;
   environment: NodeJS.ProcessEnv;
+  tempDirectory?: string;
 }
 
 const REMOVED_ENVIRONMENT_KEYS = new Set([
@@ -40,6 +53,7 @@ const REMOVED_ENVIRONMENT_KEYS = new Set([
   "CLOUDSDK_CORE_PROJECT",
   "AGY_ACP_CCPA_PROJECT",
   "AGY_ACP_ENABLE_OAUTH",
+  "AGY_ACP_DEFAULT_MODEL",
   "GEMINI_HOME",
   "AGY_ACP_FORCE_FILE_STORAGE",
   "ANTIGRAVITY_HARNESS_PATH",
@@ -58,18 +72,31 @@ function quoteBrowserArgument(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-/** Complete lines in a stream buffer, plus the unterminated tail to keep. */
 function takeLines(buffer: string): { lines: string[]; rest: string } {
   const parts = buffer.split("\n");
   const rest = parts.pop() ?? "";
   return { lines: parts.map((line) => line.replace(/\r$/u, "")), rest };
 }
 
-/** The sign-in link in a server output line, or null for anything else.
- * Google announces it two ways and both land on stderr: it hands the link to
- * $BROWSER — our helper re-emits it JSON-encoded behind a private marker — and
- * it also prints the link in plain text for terminal users. Either is enough;
- * the marker form is preferred because JSON delimits the URL exactly. */
+/** Only fixed, allowlisted hints leave stderr: native output can carry OAuth codes in any format. */
+function startupHint(line: string): string | undefined {
+  if (/no space left|not enough (?:space|disk)|disk (?:is )?full|winerror\s*112/iu.test(line)) {
+    return "The runtime reported insufficient disk space while starting.";
+  }
+  if (/failed to (?:extract|load (?:python|embedded python))|could not load python/iu.test(line)) {
+    return "The runtime reported a problem unpacking or loading its bundled Python runtime.";
+  }
+  if (/permission denied|access is denied|winerror\s*5\b/iu.test(line)) {
+    return "The runtime reported a file or process permission failure.";
+  }
+  if (/address family not supported|failed to create.*(?:socket|listener)|failed to bind/iu.test(line)) {
+    return "The runtime reported a local network listener failure.";
+  }
+  return undefined;
+}
+
+/** Google announces the link two ways, both on stderr: through $BROWSER (our helper re-emits it
+ * JSON-encoded behind a private marker, preferred) and in plain text for terminal users. */
 export function authorizationUrlFromLine(line: string): string | null {
   if (line.startsWith(ANTIGRAVITY_AUTH_PREFIX)) return line.slice(ANTIGRAVITY_AUTH_PREFIX.length).trim();
   if (!line.startsWith(BROWSER_MARKER)) return null;
@@ -85,15 +112,25 @@ export function antigravityProfileDirectory(instanceId: string, baseDir = DATA_D
   return join(baseDir, "providers", "antigravity", createHash("sha256").update(instanceId).digest("hex"));
 }
 
-/** Every configured Antigravity instance gets an isolated Google profile.
- * Foreign Google credentials are deliberately stripped so selecting this
- * provider can never silently change the account or billing path. */
+/** A removed account's Google sign-in goes with its profile, so no refresh token outlives the account. Best effort:
+ * the account is already gone from the config, and Windows refuses while a retiring process still holds a file. */
+export async function removeAntigravityProfile(instanceId: string, baseDir = DATA_DIR): Promise<void> {
+  await rm(antigravityProfileDirectory(instanceId, baseDir), { recursive: true, force: true, maxRetries: 4, retryDelay: 250 })
+    .catch((error) => {
+      console.warn(`antigravity: could not remove a removed account's profile: ${error instanceof Error ? error.message : String(error)}`);
+    });
+}
+
+/** An isolated Google profile per instance; foreign Google credentials are stripped so the account
+ * and billing never change silently. */
 export async function prepareAntigravityProfile(input: {
   instanceId: string;
   runtime: AntigravityRuntime;
   baseEnv?: NodeJS.ProcessEnv;
   baseDir?: string;
   profileDirectory?: string;
+  tempDirectory?: string;
+  platform?: NodeJS.Platform;
 }): Promise<AntigravityProfile> {
   const directory = resolve(input.profileDirectory ?? antigravityProfileDirectory(input.instanceId, input.baseDir));
   const acpDirectory = join(directory, "antigravity-acp");
@@ -111,7 +148,7 @@ export async function prepareAntigravityProfile(input: {
 
   const executable = process.platform === "win32" ? process.execPath.replaceAll("\\", "/") : process.execPath;
   if (/\r|\n|\0|%s/u.test(executable) || executable.includes(delimiter)) {
-    throw new Error("The Dani Bot runtime path cannot safely suppress Antigravity browser launches.");
+    throw new Error("The OpenMausBot runtime path cannot safely suppress Antigravity browser launches.");
   }
   const browserCommand = [executable, "-e", browserHelperSource, "--", "%s"]
     .map(quoteBrowserArgument)
@@ -129,7 +166,20 @@ export async function prepareAntigravityProfile(input: {
     PYTHONUNBUFFERED: "1",
     ELECTRON_RUN_AS_NODE: "1",
   });
-  return { directory, tokenPath: join(acpDirectory, "acp_token.json"), environment };
+  // On Windows the runtime unpacks 0.34-1.26 GB into TEMP per launch: one OMB folder per instance,
+  // stable so the pooled spawn contract (which hashes this env) holds.
+  let tempDirectory: string | undefined;
+  if ((input.platform ?? process.platform) === "win32") {
+    tempDirectory = resolve(input.tempDirectory ?? antigravityTempDir(input.baseDir ?? DATA_DIR, input.instanceId));
+    await mkdir(tempDirectory, { recursive: true });
+    setAntigravityTempEnvironment(environment, tempDirectory, "win32");
+  }
+  return {
+    directory,
+    tokenPath: join(acpDirectory, "acp_token.json"),
+    environment,
+    ...(tempDirectory ? { tempDirectory } : {}),
+  };
 }
 
 export async function antigravityProfileAuthenticated(profile: AntigravityProfile): Promise<boolean> {
@@ -149,16 +199,22 @@ interface PendingRpc {
   timer?: ReturnType<typeof setTimeout>;
 }
 
-/** Tiny dependency-free ACP client for setup/model probes. Actual chat turns
- * continue to use the shared provider-neutral ACP runtime. */
 export class AntigravityAcpClient {
   readonly child: ChildProcess;
   private nextId = 1;
   private pending = new Map<number, PendingRpc>();
   private buffer = "";
   private diagnosticBuffer = "";
+  private initializationComplete = false;
+  private startupOutputBytes = 0;
+  private startupDiagnosticBytes = 0;
+  private nativeStartupHint?: string;
   private closed = false;
+  private stopping?: Promise<boolean>;
   private readonly onAuthorizationUrl?: (url: string) => void;
+  private readonly tempDirectory?: string;
+  /** On Windows a running executable pins its file and directory: do not rename or delete before this settles. */
+  readonly exited: Promise<void>;
 
   constructor(
     runtime: AntigravityRuntime,
@@ -167,25 +223,35 @@ export class AntigravityAcpClient {
     onAuthorizationUrl?: (url: string) => void,
   ) {
     this.onAuthorizationUrl = onAuthorizationUrl;
+    this.tempDirectory = profile.tempDirectory;
     this.child = spawnCli(
       runtime.executablePath,
       process.platform === "linux" ? ["--uid="] : [],
       { cwd, env: profile.environment, stdio: ["pipe", "pipe", "pipe"] },
+      "bot",
     );
     this.child.stdout!.setEncoding("utf8");
     this.child.stdout!.on("data", (chunk: string) => this.consume(chunk));
-    // Google announces the sign-in link on stderr, not stdout. Scan for that
-    // one line and drop every other byte: stderr also carries authorization
-    // codes, so nothing else is retained or surfaced.
+    // Never surface raw stderr: it can contain authorization codes.
     this.child.stderr!.setEncoding("utf8");
     this.child.stderr!.on("data", (chunk: string) => this.consumeDiagnostics(chunk));
     this.child.once("error", (error) => this.failAll(error));
-    this.child.once("close", (code) => {
-      if (!this.closed) this.failAll(new Error(`Antigravity ACP exited ${code ?? "unexpectedly"}.`));
+    this.exited = new Promise((resolve) => {
+      this.child.once("close", (code, signal) => {
+        this.noteStartupDiagnostic(this.diagnosticBuffer);
+        this.diagnosticBuffer = "";
+        if (!this.closed) this.failAll(new Error(
+          `Antigravity ACP exited ${code ?? signal ?? "unexpectedly"}.${this.nativeStartupHint ? ` ${this.nativeStartupHint}` : ""}`,
+        ));
+        resolve();
+      });
+      // Failed spawns also emit `close`; an `error` alone can mean a failed kill.
     });
   }
 
   private consume(chunk: string) {
+    if (this.closed) return;
+    if (!this.initializationComplete) this.startupOutputBytes += Buffer.byteLength(chunk);
     this.buffer += chunk;
     if (Buffer.byteLength(this.buffer) > MAX_PROTOCOL_LINE_BYTES) {
       this.failAll(new Error("Antigravity sent a protocol line that is too large."));
@@ -215,8 +281,6 @@ export class AntigravityAcpClient {
     }
   }
 
-  /** Report a sign-in link if this line carries one. Returns whether the line
-   * was an announcement, so callers can skip protocol parsing for it. */
   private announceAuthorizationUrl(line: string): boolean {
     const raw = authorizationUrlFromLine(line);
     if (raw === null) return false;
@@ -228,14 +292,18 @@ export class AntigravityAcpClient {
     return true;
   }
 
-  /** Read stderr only far enough to spot the sign-in link. Lines are matched
-   * and released immediately and the tail is capped, so no authorization code
-   * is ever held. Draining also keeps the pipe from stalling the server. */
+  /** Lines are matched and released at once and the tail is capped, so no authorization code is held. */
   private consumeDiagnostics(chunk: string) {
+    if (!this.initializationComplete) this.startupDiagnosticBytes += Buffer.byteLength(chunk);
     const { lines, rest } = takeLines(this.diagnosticBuffer + chunk);
-    // A partial line already longer than any legal link cannot become one.
     this.diagnosticBuffer = rest.length > MAX_DIAGNOSTIC_LINE_CHARS ? "" : rest;
-    for (const line of lines) this.announceAuthorizationUrl(line);
+    for (const line of lines) {
+      if (!this.announceAuthorizationUrl(line)) this.noteStartupDiagnostic(line);
+    }
+  }
+
+  private noteStartupDiagnostic(line: string) {
+    if (!this.initializationComplete) this.nativeStartupHint ??= startupHint(line);
   }
 
   private failAll(error: Error) {
@@ -246,33 +314,111 @@ export class AntigravityAcpClient {
     this.pending.clear();
   }
 
-  request(method: string, params: unknown, timeoutMs = 30_000): Promise<any> {
+  /** When `timeoutMs` passes, `expired` decides: a number waits that many milliseconds more, an Error fails the request. */
+  request(
+    method: string,
+    params: unknown,
+    timeoutMs = 30_000,
+    expired: () => Promise<number | Error> = async () => new Error(`${method} timed out.`),
+  ): Promise<any> {
     if (this.closed) return Promise.reject(new Error("Antigravity ACP is closed."));
     const id = this.nextId++;
     return new Promise((resolveRequest, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`${method} timed out.`));
-      }, timeoutMs);
-      timer.unref?.();
-      this.pending.set(id, { resolve: resolveRequest, reject, timer });
+      const arm = (milliseconds: number) => {
+        const timer = setTimeout(async () => {
+          const outcome = await expired();
+          const pending = this.pending.get(id);
+          if (!pending) return;
+          if (typeof outcome === "number") {
+            pending.timer = arm(outcome);
+            return;
+          }
+          this.pending.delete(id);
+          reject(outcome);
+        }, milliseconds);
+        timer.unref?.();
+        return timer;
+      };
+      this.pending.set(id, { resolve: resolveRequest, reject, timer: arm(timeoutMs) });
       this.child.stdin!.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
     });
   }
 
-  async initialize(timeoutMs = STARTUP_TIMEOUT_MS): Promise<any> {
-    return this.request("initialize", {
-      protocolVersion: 1,
-      clientInfo: { name: "danibot", version: "0.0.0" },
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
-    }, timeoutMs);
+  /** `complete` is false when the count ran out of time: `bytes` is then only a lower bound. */
+  private async unpackedBytes(): Promise<{ bytes: number; complete: boolean }> {
+    if (!this.tempDirectory) return { bytes: 0, complete: true };
+    return folderBytes(this.tempDirectory, Date.now() + UNPACK_COUNT_BUDGET_MS);
   }
 
+  async initialize(windowMs = STARTUP_TIMEOUT_MS, deadline = Date.now() + STARTUP_CAP_MS): Promise<any> {
+    const started = Date.now();
+    const counting = this.unpackedBytes();
+    let unpacked: number | undefined;
+    const expired = async (): Promise<number | Error> => {
+      const before = (await counting).bytes;
+      const count = await this.unpackedBytes();
+      const now = count.bytes;
+      const progressing = !count.complete || now > (unpacked ?? before);
+      if (count.complete) unpacked = now;
+      const left = deadline - Date.now();
+      if (progressing && left > 0) return Math.min(windowMs, left);
+      this.noteStartupDiagnostic(this.diagnosticBuffer);
+      return new Error(
+        `Antigravity initialization timed out after ${Math.ceil((Date.now() - started) / 1_000)} seconds (${process.platform}-${process.arch}). ` +
+        "The executable was found, but did not finish starting. " +
+        (this.nativeStartupHint ? `${this.nativeStartupHint} ` : "") +
+        `Startup output: ${this.startupOutputBytes} bytes; diagnostic output: ${this.startupDiagnosticBytes} bytes. ` +
+        (this.tempDirectory ? `Unpacked into temp: ${Math.round(Math.max(0, now - before) / 1_000_000)} MB. ` : "") +
+        "Retry setup. If it still fails, share this error and your OpenMausBot version; do not paste Google sign-in links or tokens.",
+      );
+    };
+    const initialized = await this.request("initialize", {
+      protocolVersion: 1,
+      clientInfo: { name: "openmausbot", version: "0.0.0" },
+      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+    }, Math.min(windowMs, Math.max(0, deadline - Date.now())), expired);
+    this.initializationComplete = true;
+    this.nativeStartupHint = undefined;
+    return initialized;
+  }
+
+  /** End input so the runtime exits by itself and removes what it unpacked; force-stop after
+   * GRACEFUL_EXIT_MS. On Windows killCliTree does nothing once the runtime exited. */
   close() {
     if (this.closed) return;
     this.closed = true;
     this.failAll(new Error("Antigravity ACP was closed."));
-    killCliTree(this.child);
+    this.stopping = this.stopGracefully();
+  }
+
+  private async stopGracefully(): Promise<boolean> {
+    try {
+      this.child.stdin?.end();
+    } catch {}
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([
+      this.exited,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, GRACEFUL_EXIT_MS);
+        timer.unref?.();
+      }),
+    ]);
+    clearTimeout(timer);
+    return killCliTree(this.child);
+  }
+
+  async closeAndWait(timeoutMs = 12_000): Promise<boolean> {
+    this.close();
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+      timer.unref?.();
+    });
+    try {
+      return await Promise.race([this.stopping!, timedOut]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -380,7 +526,13 @@ export function catalogFromAntigravityConfigOptions(
   const options = modelOptions(model?.options);
   if (!options.length) return null;
   const current = typeof model?.currentValue === "string" ? model.currentValue : "";
-  return { default: options.some((option) => option.id === fallbackDefault) ? fallbackDefault : current || options[0]!.id, options };
+  const defaultModel = options.some((option) => option.id === fallbackDefault) ? fallbackDefault : current || options[0]!.id;
+  const selectedModel = current || defaultModel;
+  const variants = acpVariantOption({ configOptions })?.options;
+  return {
+    default: defaultModel,
+    options: options.map((option) => option.id === selectedModel && variants?.length ? { ...option, variants } : option),
+  };
 }
 
 export async function probeAntigravityModels(input: {
@@ -390,15 +542,15 @@ export async function probeAntigravityModels(input: {
   fallbackDefault: string;
   timeoutMs?: number;
 }): Promise<ModelCatalog> {
-  const deadline = Date.now() + (input.timeoutMs ?? STARTUP_TIMEOUT_MS);
+  const deadline = Date.now() + (input.timeoutMs ?? STARTUP_CAP_MS);
   const remaining = () => {
     const milliseconds = deadline - Date.now();
     if (milliseconds <= 0) throw new Error("Antigravity model discovery timed out.");
-    return milliseconds;
+    return Math.min(milliseconds, STARTUP_TIMEOUT_MS);
   };
   const client = new AntigravityAcpClient(input.runtime, input.profile, input.cwd ?? input.profile.directory);
   try {
-    await client.initialize(remaining());
+    await client.initialize(remaining(), deadline);
     await client.request("authenticate", { methodId: "oauth-personal" }, remaining());
     const session = await client.request(
       "session/new",
@@ -413,13 +565,6 @@ export async function probeAntigravityModels(input: {
   }
 }
 
-/**
- * Validates whether an ACP initialization response matches an official Google Antigravity release.
- *
- * @param initialized - The raw initialization response payload returned by the ACP client.
- * @param expectedVersion - The expected release version tag or semver string.
- * @returns `true` if the initialize result satisfies protocol, agent identity, capability, and auth requirements.
- */
 export function isValidAntigravityInitializeResult(
   initialized: any,
   expectedVersion: string,
@@ -432,8 +577,7 @@ export function isValidAntigravityInitializeResult(
   const normalizedActual = actualVersion.replace(/^agy_acp_server_/u, "").trim();
   const normalizedExpected = expectedVersion.replace(/^agy_acp_server_/u, "").trim();
   if (actualVersion !== expectedVersion && normalizedActual !== normalizedExpected) return false;
-  // ACP advertises these optional operations as capability objects (including
-  // empty objects). Keep accepting the boolean form used by older runtimes.
+  // ACP advertises optional operations as capability objects (even empty); older runtimes send booleans.
   const advertised = (value: unknown) => value === true
     || (typeof value === "object" && value !== null && !Array.isArray(value));
   if (
@@ -449,34 +593,54 @@ export function isValidAntigravityInitializeResult(
   return true;
 }
 
-/**
- * Starts a transient Antigravity ACP client against a temporary profile to verify
- * that the downloaded runtime binary starts properly and identifies as the expected release.
- *
- * @param runtime - The resolved Antigravity executable and harness paths.
- * @param expectedVersion - The expected version string or tag.
- * @returns A promise that resolves when verification succeeds, or rejects if initialization fails.
- */
 export async function validateAntigravityRuntime(runtime: AntigravityRuntime, expectedVersion: string): Promise<void> {
   const profileDirectory = await mkdtemp(join(tmpdir(), "openmaus-antigravity-verify-"));
+  let client: AntigravityAcpClient | undefined;
+  let tempDirectory: string | undefined;
+  let failed = false;
+  let failure: unknown;
   try {
     const profile = await prepareAntigravityProfile({
       instanceId: `verify-${randomUUID()}`,
       runtime,
       profileDirectory,
+      tempDirectory: antigravityTempDir(DATA_DIR, VERIFICATION_TEMP_KEY),
     });
-    const client = new AntigravityAcpClient(runtime, profile, profileDirectory);
-    try {
-      const initialized = await client.initialize();
-      if (!isValidAntigravityInitializeResult(initialized, expectedVersion)) {
-        throw new Error("The download did not identify as the expected Google Antigravity ACP release.");
-      }
-    } finally {
-      client.close();
+    tempDirectory = profile.tempDirectory;
+    client = new AntigravityAcpClient(runtime, profile, profileDirectory);
+    const initialized = await client.initialize();
+    if (!isValidAntigravityInitializeResult(initialized, expectedVersion)) {
+      throw new Error("The download did not identify as the expected Google Antigravity ACP release.");
     }
-  } finally {
-    await rm(profileDirectory, { recursive: true, force: true });
+  } catch (error) {
+    failed = true;
+    failure = error;
   }
+  // The caller is about to rename this executable's directory: touch nothing before a confirmed close.
+  let stopped = !client;
+  try {
+    if (client) {
+      stopped = await client.closeAndWait();
+      if (!stopped) throw new Error("Antigravity did not shut down after runtime verification.");
+    }
+  } catch (error) {
+    if (!failed) {
+      failed = true;
+      failure = error;
+    }
+  }
+  if (stopped) {
+    await rm(profileDirectory, { recursive: true, force: true, maxRetries: 4, retryDelay: 250 })
+      .catch((error) => {
+        console.warn(`antigravity: could not remove verification files ${profileDirectory}: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    if (tempDirectory) {
+      await sweepAntigravityTemp(VERIFICATION_TEMP_KEY).catch((error) => {
+        console.warn(`antigravity: could not clear verification files: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  }
+  if (failed) throw failure;
 }
 
 export interface AntigravityAuthStart {
@@ -494,7 +658,6 @@ interface AuthFlow {
   expiresAt: number;
 }
 
-/** One in-flight personal Google login per provider instance. */
 export class AntigravityAuthController {
   private flow: AuthFlow | null = null;
 

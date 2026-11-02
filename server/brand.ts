@@ -1,8 +1,5 @@
-// White-label as config: a brand.json next to the data dir renames and recolours
-// the product for one deployment. The file is customer data (it never lives in
-// this repo); applying it is the `whitelabel` entitlement, so an unlicensed
-// server reads the file, reports what it found, and keeps the default brand.
-// Read on every request so an edit shows up on the next reload, no restart.
+// White-label: a brand.json next to the data dir, applied only with the `whitelabel` entitlement (an unlicensed server
+// reports what it found and keeps the default). Read on every request, so an edit shows on the next reload.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -12,6 +9,7 @@ import { entitled } from "./enterprise.ts";
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 const MAX_LOGO_CHARS = 300_000;
+const MAX_FAVICON_CHARS = 120_000;
 
 export const brandSchema = z
   .object({
@@ -29,12 +27,18 @@ export const brandSchema = z
       .optional(),
     /** Where "get help" points for this deployment. */
     supportUrl: z.string().url().startsWith("https://", "supportUrl must be an https:// URL").optional(),
+    /** Tab and home-screen icon: an inline data:image/... URI (PNG or SVG, small) or an https:// URL. */
+    favicon: z
+      .string()
+      .max(MAX_FAVICON_CHARS, `favicon must be under ${MAX_FAVICON_CHARS} characters (a 64px PNG or a small SVG)`)
+      .refine((v) => v.startsWith("data:image/") || v.startsWith("https://"), "favicon must be a data:image/... URI or an https:// URL")
+      .optional(),
   })
   .strict();
 
 export type Brand = z.infer<typeof brandSchema>;
 
-export const DEFAULT_BRAND: Brand = { name: "Dani Bot" };
+export const DEFAULT_BRAND: Brand = { name: "OpenMausBot" };
 
 export interface BrandStatus {
   brand: Brand;
@@ -47,10 +51,10 @@ export interface BrandStatus {
 }
 
 export function brandFile(): string {
-  return (process.env.DANI_BRAND_FILE ?? process.env.OMB_BRAND_FILE) || join(DATA_DIR, "brand.json");
+  return process.env.OMB_BRAND_FILE || join(DATA_DIR, "brand.json");
 }
 
-/** Resolve the brand for this server right now. Never throws. */
+/** Never throws. */
 export function loadBrand(options: { file?: string; isEntitled?: (feature: string) => boolean } = {}): BrandStatus {
   const file = options.file ?? brandFile();
   const isEntitled = options.isEntitled ?? entitled;
@@ -75,7 +79,6 @@ export function loadBrand(options: { file?: string; isEntitled?: (feature: strin
   return { brand: parsed.data, source: "file", file };
 }
 
-/** One line for the startup log. */
 export function describeBrand(status: BrandStatus): string {
   if (status.source === "file") return `brand: ${status.brand.name} (from ${status.file})`;
   return `brand: default${status.notice ? ` (${status.notice})` : ""}`;

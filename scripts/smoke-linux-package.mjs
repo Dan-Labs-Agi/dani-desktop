@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { linuxDisablesGpu } from "../electron/linux-gpu.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const wayland = process.env.OMB_SMOKE_WAYLAND === "1";
@@ -26,7 +27,7 @@ if (signalShutdown && !bundled) {
   throw new Error("signal-shutdown smoke requires the bundled runtime mode");
 }
 const executable = path.resolve(
-  process.env.OMB_SMOKE_EXECUTABLE ?? path.join(root, "release", "linux-unpacked", "danibot"),
+  process.env.OMB_SMOKE_EXECUTABLE ?? path.join(root, "release", "linux-unpacked", "openmausbot"),
 );
 if (!existsSync(executable)) throw new Error(`[smoke-linux-package] missing executable: ${executable}`);
 
@@ -37,15 +38,15 @@ const xdgRuntime = path.join(sandbox, "runtime");
 const marker = path.join(sandbox, "cua-invocations.ndjson");
 const fakeState = path.join(sandbox, "cua-serve-count");
 const sentinel = path.join(sandbox, "cua-driver");
-mkdirSync(path.join(home, ".danibot"), { recursive: true });
+mkdirSync(path.join(home, ".openmausbot"), { recursive: true });
 mkdirSync(xdgConfig, { recursive: true });
 mkdirSync(xdgRuntime, { recursive: true, mode: 0o700 });
 chmodSync(xdgRuntime, 0o700);
 writeFileSync(
-  path.join(home, ".danibot", "config.json"),
+  path.join(home, ".openmausbot", "config.json"),
   JSON.stringify({ instances: { ghost: { driver: "not-a-real-driver", displayName: "Ghost" } } }),
 );
-for (const appName of ["danibot", "Dani Bot", "DaniBot"]) {
+for (const appName of ["openmausbot", "OpenMausBot"]) {
   const userData = path.join(xdgConfig, appName);
   mkdirSync(userData, { recursive: true, mode: 0o700 });
   chmodSync(userData, 0o700);
@@ -117,7 +118,7 @@ const metadata = {
   mcp_protocol_version: "2025-06-18",
   pid: process.pid,
   embedded: true,
-  host_bundle_id: "com.danibot.app",
+  host_bundle_id: "com.openmausbot.app",
 };
 const tools = ["click", "get_window_state", "list_apps", "type_text"].map((name) => ({ name }));
 const toolManifest = { schema_version: "1", capability_version: "1", tools };
@@ -194,11 +195,11 @@ const desktopEnv = {
   XDG_CURRENT_DESKTOP: "GNOME",
   CUA_DRIVER_PATH: sentinel,
   OMB_COMPOSIO_BROKER_URL: `http://127.0.0.1:${brokerAddress.port}`,
-  DANI_SMOKE_TEST: "1",
-  DANI_SMOKE_CUA: hardDeath || bundled || sessionBlocked ? "0" : "1",
-  DANI_SMOKE_BUNDLED_CUA: bundled ? "1" : "0",
+  OMB_SMOKE_TEST: "1",
+  OMB_SMOKE_CUA: hardDeath || bundled || sessionBlocked ? "0" : "1",
+  OMB_SMOKE_BUNDLED_CUA: bundled ? "1" : "0",
 };
-if (hardDeath || signalShutdown) desktopEnv.DANI_SMOKE_KEEP_OPEN = "1";
+if (hardDeath || signalShutdown) desktopEnv.OMB_SMOKE_KEEP_OPEN = "1";
 if (bundled) delete desktopEnv.CUA_DRIVER_PATH;
 if (wayland) desktopEnv.WAYLAND_DISPLAY = "wayland-smoke";
 else delete desktopEnv.WAYLAND_DISPLAY;
@@ -282,10 +283,10 @@ try {
     location,
     title,
   } = result;
-  if (health?.app !== "danibot" || health.static !== true) {
+  if (health?.app !== "openmausbot" || health.static !== true) {
     throw new Error(`unexpected embedded health response: ${JSON.stringify(health)}`);
   }
-  if (!String(title).includes("Dani Bot")) throw new Error(`unexpected renderer title: ${title}`);
+  if (!/\bMausBot\b/.test(String(title))) throw new Error(`unexpected renderer title: ${title}`);
   if (capabilities.host.platform !== "linux") throw new Error("renderer did not report Linux");
   if (capabilities.host.session !== (wayland ? "wayland" : "x11")) {
     throw new Error(`renderer did not report the ${wayland ? "Wayland" : "X11"} contract`);
@@ -327,15 +328,15 @@ try {
       }
     }
   }
-  if (result.hardwareAccelerationEnabled !== false) {
-    throw new Error("Linux package did not disable hardware acceleration before startup");
+  if (result.hardwareAccelerationEnabled !== !linuxDisablesGpu({ env: desktopEnv })) {
+    throw new Error("Linux package did not apply the GPU rule (off on NVIDIA or OMB_LINUX_GPU=off) before startup");
   }
   if (displayMediaRequests !== 0) throw new Error("launch triggered display capture without user intent");
   await until(async () => brokerRequests > 0, "the optional slow-broker request");
   if (sessionBlocked) {
     await waitForExit();
     if (existsSync(marker)) throw new Error("release safety block still invoked a CUA executable");
-    const activeUserData = ["danibot", "Dani Bot", "DaniBot"]
+    const activeUserData = ["openmausbot", "OpenMausBot"]
       .map((name) => path.join(xdgConfig, name))
       .find((directory) => existsSync(path.join(directory, "cua-connection.json")));
     if (!activeUserData) throw new Error("release safety smoke could not locate the CUA descriptor");
@@ -382,7 +383,7 @@ try {
     if (existsSync(marker)) {
       throw new Error(`packaged app invoked the ambient driver:\n${readFileSync(marker, "utf8")}`);
     }
-    const userData = ["danibot", "Dani Bot", "DaniBot"]
+    const userData = ["openmausbot", "OpenMausBot"]
       .map((name) => path.join(xdgConfig, name))
       .find((directory) => existsSync(path.join(directory, "cua-connection.json")));
     if (!userData) throw new Error("bundled smoke could not locate the CUA descriptor");
@@ -478,7 +479,7 @@ try {
       await delay(50);
     }
     if (staleHealth?.ok) throw new Error("embedded harness survived hard Electron death");
-    const userData = ["danibot", "Dani Bot", "DaniBot"]
+    const userData = ["openmausbot", "OpenMausBot"]
       .map((name) => path.join(xdgConfig, name))
       .find((directory) => existsSync(path.join(directory, "cua-connection.json")));
     if (!userData) throw new Error("hard-death smoke could not locate the CUA descriptor");
@@ -494,7 +495,7 @@ try {
     const restart = spawn(executable, wayland ? ["--ozone-platform=x11"] : [], {
       cwd: root,
       detached: true,
-      env: { ...desktopEnv, DANI_SMOKE_KEEP_OPEN: "0" },
+      env: { ...desktopEnv, OMB_SMOKE_KEEP_OPEN: "0" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     try {

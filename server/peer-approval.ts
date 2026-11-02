@@ -1,52 +1,48 @@
-// Harness-native peer-comm approval gate.
-//
-// A bot with `approvePeerComms = true` may not call ask_bot or
-// delegate_bot without a human approving the specific contact. The
-// approval rides on the same options-card flow provider permissions
-// already use: a card pushed into the SOURCE bot's thread with a
-// `requestId`, answered by the user via /api/bots/:id/respond (or
-// /api/threads/:id/respond) which the harness intercepts via
-// `resolvePeerComms` BEFORE forwarding to the provider adapter. That
-// way nothing front-end has to learn about peer comms.
-//
-// "Always allow" rides on the existing per-bot `alwaysAllow` list. The
-// card carries an ID-based `allowKey` and
-// the user-facing Always-allow flow already mirrors that key back into
-// `alwaysAllow`, so the two sides never disagree about what was granted.
+// Harness-native approval cards for peer comms (approvePeerComms), resolved before an answer reaches the provider adapter.
 
 import { newId } from "./contracts.ts";
+import { optionCardsForTools } from "./message-db.ts";
+import { buildNotification, type Notification } from "./notify.ts";
 import { peerAllowKey, type PeerAction } from "./peer-approval-key.ts";
 import type { BotRecord, Message, Store } from "./store.ts";
 
 export { peerAllowKey } from "./peer-approval-key.ts";
 
-/** What a peer-approval helper needs from the outside world: the store
- * for thread append + persist, and the SSE broadcaster so the chat
- * updates without waiting for a refresh. */
+/** Only allow authorizes work; absence of an answer is not a user decision. */
+export type PeerApprovalOutcome = "allow" | "deny" | "cancelled";
+export type PeerApprovalFailure = Exclude<PeerApprovalOutcome, "allow">;
+
+export function peerApprovalFailure(outcome: PeerApprovalFailure): {
+  error: string;
+  approvalOutcome: PeerApprovalFailure;
+  approvalSource: "user" | "system";
+} {
+  return {
+    error: outcome === "deny" ? "denied by user"
+      : "the approval was cancelled before a decision",
+    approvalOutcome: outcome,
+    approvalSource: outcome === "deny" ? "user" : "system",
+  };
+}
+
 export interface ApprovalBus {
   store: Store;
-  /** SSE broadcast (kind: "message" envelope). */
   broadcast: (payload: Record<string, unknown>) => void;
+  notify?: (notification: Notification | null) => void;
+  autoApply?: (botId: string, threadId: string) => boolean;
+  onPeerApprovalPending?: (from: BotRecord, target: PeerApprovalTarget, action: PeerAction, sourceThreadId: string, message: string) => void;
 }
 
 interface Pending {
-  resolve: (result: "allow" | "deny") => void;
-  /** Frees the requestId if the user never answers. */
-  timer: ReturnType<typeof setTimeout>;
+  resolve: (result: PeerApprovalOutcome) => void;
   fromBotId: string;
   toBotId: string;
   message: string;
-  /** Where the card lives, so answering it can settle it. A card that is
-   * never settled keeps matching the client's "unanswered" filter, and the
-   * composer stays disabled behind it — the thread is unusable from then on. */
   threadId: string;
   messageId: string;
   bus: ApprovalBus;
 }
 
-/** Mark the card answered so the UI stops treating it as pending. Mirrors
- * what the `request.resolved` fold does for provider cards; a harness-native
- * card never emits that event, so it has to settle itself. */
 function settleCard(pending: Pending, behavior: string, source: "user" | "system"): void {
   const existing = pending.bus.store
     .messagesFor(pending.threadId)
@@ -55,29 +51,27 @@ function settleCard(pending: Pending, behavior: string, source: "user" | "system
   pending.bus.store.patchMessage(pending.threadId, pending.messageId, {
     card: { ...existing.card, answered: behavior, dismissed: source !== "user" },
   });
+  const store = pending.bus.store;
+  const task = store.projectBotForTask(pending.fromBotId, pending.threadId);
+  if (task) {
+    if (task.activity === "waiting-on-you") store.setTaskActivity(task.id, pending.threadId, "working");
+  } else if (store.groupByThread(pending.threadId)) {
+    const waiting = store.bot(pending.fromBotId);
+    if (waiting?.activity === "waiting-on-you") store.setActivity(waiting.id, "working");
+  }
 }
 
-/** requestId → pending ask. Lives only in memory — restarting the
- * server cancels every in-flight approval, like provider permissions do. */
 const pendingComms = new Map<string, Pending>();
 
-const APPROVAL_TIMEOUT_MS = 15 * 60_000;
-
-/** The narrow grant "always allow" remembers for a peer comm. Mirrored
- * back into `bot.alwaysAllow` when the user picks "Always allow" on the
- * card. */
 function allowKeyAllowed(from: BotRecord, allowKey: string): boolean {
   return from.alwaysAllow?.includes(allowKey) ?? false;
 }
 
-/** Who a peer action is aimed at. A bot for ask_bot and delegate_bot, a
- * room for post_to_room — the gate only ever needs its id and its name. */
 export interface PeerApprovalTarget {
   id: string;
   name: string;
 }
 
-/** How the card names what is about to happen. */
 const ACTION_VERB: Record<PeerAction, string> = {
   ask_bot: "contact",
   delegate_bot: "delegate to",
@@ -98,7 +92,6 @@ function pushApprovalCard(
     role: "bot",
     kind: "options",
     card: {
-      // a room is named as a room; only a bot gets an @
       title: `@${from.name} wants to ${ACTION_VERB[action]} ${action === "post_to_room" ? `“${target.name}”` : `@${target.name}`}`,
       subtitle,
       options: ["Allow", "Deny", "Always allow"],
@@ -110,10 +103,20 @@ function pushApprovalCard(
   return note;
 }
 
-/** Ask the user (in the source task thread) whether `from` may `action` `target`.
- * Resolves with `"allow"` or `"deny"`. If `from.alwaysAllow` already
- * covers the (action, target) pair, returns `"allow"` immediately
- * without a card. */
+function announceCard(bus: ApprovalBus, from: BotRecord, card: Message, sourceThreadId: string): void {
+  const task = bus.store.projectBotForTask(from.id, sourceThreadId);
+  const room = bus.store.groupByThread(sourceThreadId);
+  if (task) {
+    if (task.busy) bus.store.setTaskActivity(from.id, sourceThreadId, "waiting-on-you");
+  } else if (room && bus.store.bot(from.id)?.busy) {
+    bus.store.setActivity(from.id, "waiting-on-you");
+  }
+  const group = room && !room.dm ? { id: room.id, name: room.name } : undefined;
+  const title = card.card?.title ?? "";
+  const detail = card.card?.subtitle ? `${title} — ${card.card.subtitle}` : title;
+  bus.notify?.(buildNotification("approval", from, sourceThreadId, detail, { avatarUrl: from.avatarUrl, group }));
+}
+
 export function requestPeerApproval(
   bus: ApprovalBus,
   from: BotRecord,
@@ -121,28 +124,17 @@ export function requestPeerApproval(
   message: string,
   action: PeerAction,
   sourceThreadId = from.threadId,
-): Promise<"allow" | "deny"> {
-  if (allowKeyAllowed(from, peerAllowKey(action, target.id))) {
+): Promise<PeerApprovalOutcome> {
+  if (bus.autoApply?.(from.id, sourceThreadId) || allowKeyAllowed(from, peerAllowKey(action, target.id))) {
     return Promise.resolve("allow");
   }
   return new Promise((resolve) => {
     const requestId = newId();
-    // the card has to exist before the entry, so a timeout or an answer can
-    // always find it to settle
+    // The card must exist before the entry, so an answer or a cancellation can always settle it.
     const card = pushApprovalCard(bus, from, target, message, action, requestId, sourceThreadId);
-    const timer = setTimeout(() => {
-      // 15 minutes without an answer → deny. Keeps an unattended bot from
-      // stalling its own turn forever (matches the Claude broker timeout).
-      const pending = pendingComms.get(requestId);
-      if (!pending) return;
-      pendingComms.delete(requestId);
-      settleCard(pending, "deny", "system");
-      resolve("deny");
-    }, APPROVAL_TIMEOUT_MS);
-    timer.unref?.(); // a waiting card must never hold the process open
+    announceCard(bus, from, card, sourceThreadId);
     pendingComms.set(requestId, {
       resolve,
-      timer,
       fromBotId: from.id,
       toBotId: target.id,
       message,
@@ -150,13 +142,15 @@ export function requestPeerApproval(
       messageId: card.id,
       bus,
     });
+    try {
+      bus.onPeerApprovalPending?.(from, target, action, sourceThreadId, message);
+    } catch (error) {
+      console.warn(`peer approval ${requestId}: pending hook failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 }
 
-/** Called by the respond endpoints BEFORE forwarding to the provider
- * adapter. Returns true if the requestId belonged to a pending peer
- * approval (and resolves it); false if it was a provider request and
- * the endpoint should keep going. */
+/** Call before forwarding an answer to the provider adapter; true when it settled a peer approval. */
 export function resolvePeerComms(
   _bus: ApprovalBus,
   requestId: string,
@@ -165,43 +159,30 @@ export function resolvePeerComms(
   const pending = pendingComms.get(requestId);
   if (!pending) return false;
   pendingComms.delete(requestId);
-  clearTimeout(pending.timer);
   const allow = behavior === "allow";
   settleCard(pending, allow ? "allow" : "deny", "user");
   pending.resolve(allow ? "allow" : "deny");
   return true;
 }
 
-/** Drop every approval waiting on a bot that no longer exists (or is being
- * deleted), denying it so the caller's turn doesn't wait out the timeout. */
 export function cancelPeerApprovalsFor(botId: string): void {
-  for (const [requestId, pending] of [...pendingComms]) {
+  for (const [requestId, pending] of Array.from(pendingComms)) {
     if (pending.fromBotId !== botId && pending.toBotId !== botId) continue;
     pendingComms.delete(requestId);
-    clearTimeout(pending.timer);
-    settleCard(pending, "deny", "system");
-    pending.resolve("deny");
+      settleCard(pending, "deny", "system");
+    pending.resolve("cancelled");
   }
 }
 
-/** Deny every peer-communication approval owned by a thread whose turn was
- * interrupted. Patching the card alone is not enough: the in-memory promise
- * must resolve too, or the delegation queue waits until its 15-minute timer. */
 export function cancelPeerApprovalsForThread(threadId: string): void {
   for (const [requestId, pending] of pendingComms) {
     if (pending.threadId !== threadId) continue;
     pendingComms.delete(requestId);
-    clearTimeout(pending.timer);
-    settleCard(pending, "deny", "system");
-    pending.resolve("deny");
+      settleCard(pending, "deny", "system");
+    pending.resolve("cancelled");
   }
 }
 
-/** Every thread a peer card can be raised in. A card lands in the thread
- * the CALLER is speaking from, and since a bot's turn can now run in a room
- * — ask_bot and post_to_room are both callable from there — that thread is
- * as often a room's as a bot's. A walk that knew only about bot threads
- * would leave a room's composer blocked behind a card nothing can answer. */
 function peerCardThreads(bus: ApprovalBus): Set<string> {
   const threadIds = new Set<string>();
   for (const bot of bus.store.bots) {
@@ -215,22 +196,18 @@ function peerCardThreads(bus: ApprovalBus): Set<string> {
   return threadIds;
 }
 
-/** Cards left on disk by a previous run can never be answered — their
- * in-memory approval died with the process. Settle them at boot so a
- * crashed run doesn't leave a thread with a permanently blocked composer. */
 export function dismissStalePeerCards(bus: ApprovalBus): number {
   let dismissed = 0;
-  for (const threadId of peerCardThreads(bus)) {
-    for (const message of bus.store.messagesFor(threadId)) {
-      const card = message.card;
-      if (!card?.requestId || card.answered || card.dismissed) continue;
-      if (card.tool !== "ask_bot" && card.tool !== "delegate_bot" && card.tool !== "post_to_room") continue;
-      if (pendingComms.has(card.requestId)) continue;
-      const patched = bus.store.patchMessage(threadId, message.id, {
-        card: { ...card, answered: "deny", dismissed: true },
-      });
-      if (patched) dismissed += 1;
-    }
+  const threads = peerCardThreads(bus);
+  for (const { threadId, messageId } of optionCardsForTools(Object.keys(ACTION_VERB))) {
+    if (!threads.has(threadId)) continue;
+    const card = bus.store.messagesFor(threadId).find((message) => message.id === messageId)?.card;
+    if (!card?.requestId || card.answered || card.dismissed) continue;
+    if (pendingComms.has(card.requestId)) continue;
+    const patched = bus.store.patchMessage(threadId, messageId, {
+      card: { ...card, answered: "deny", dismissed: true },
+    });
+    if (patched) dismissed += 1;
   }
   return dismissed;
 }

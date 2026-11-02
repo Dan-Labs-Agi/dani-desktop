@@ -24,7 +24,6 @@ export interface MiniMonthProps {
   onSelect: (at: number) => void;
 }
 
-/** A compact, Monday-first month picker for the calendar sidebar. */
 export function MiniMonth({ anchor, onSelect }: MiniMonthProps) {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(anchor));
 
@@ -55,7 +54,7 @@ export function MiniMonth({ anchor, onSelect }: MiniMonthProps) {
   return (
     <section aria-label="Mini calendar" className="select-none px-3 py-3">
       <div className="mb-2 flex items-center justify-between px-1">
-        <div className="text-[12.5px] font-semibold text-ink">{monthLabel}</div>
+        <div className="text-[13px] font-semibold text-ink">{monthLabel}</div>
         <div className="flex items-center gap-0.5">
           <button
             type="button"
@@ -80,7 +79,7 @@ export function MiniMonth({ anchor, onSelect }: MiniMonthProps) {
         {WEEKDAY_LABELS.map((label, index) => (
           <div
             key={`${label}-${index}`}
-            className="flex h-6 items-center justify-center text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-secondary/75"
+            className="flex h-6 items-center justify-center text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-tertiary"
           >
             {label}
           </div>
@@ -110,14 +109,14 @@ export function MiniMonth({ anchor, onSelect }: MiniMonthProps) {
               className="group flex h-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
               <span
-                className={`flex size-6 items-center justify-center rounded-full text-[10.5px] transition-colors ${
+                className={`flex size-6 items-center justify-center rounded-full text-[11px] transition-colors ${
                   isSelected
                     ? "bg-accent font-semibold text-white shadow-sm"
                     : isToday
                       ? "font-semibold text-accent group-hover:bg-accent/12"
                       : isOutsideMonth
-                        ? "text-ink-secondary/35 group-hover:bg-raised group-hover:text-ink-secondary"
-                        : "text-ink-secondary group-hover:bg-raised group-hover:text-ink"
+                        ? "text-ink-tertiary group-hover:bg-raised group-hover:text-ink"
+                        : "text-ink group-hover:bg-raised"
                 }`}
               >
                 {date.getDate()}

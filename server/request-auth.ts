@@ -1,41 +1,111 @@
-// Who is asking, and are they allowed to?
-//
-// Two ways in. A **loopback** request (Host and Origin both loopback) may read
-// local state; every state-changing route additionally requires the
-// per-launch owner capability (x-danibot-desktop-owner), which the desktop
-// app injects below renderer JavaScript, the dev/CLI server prints on boot,
-// and a paired device never needs. A **session** request carries
-// a credential minted by pairing
-// (server/sessions.ts): a bearer token, the session cookie the served web UI
-// uses, or, for the event stream only, a short-lived ticket. With a session
-// the loopback rule is replaced by a same-origin rule, so a browser on
-// another site still cannot ride the cookie (CSRF), and by a scope check.
-//
-// Rationale for keeping reads open: the threat the owner capability stops is
-// a separate local process *doing* things — spawning binaries (/api/cli-test),
-// changing config, starting work, answering approvals, triggering effects.
-// Read-only routes (/api/health, /api/edition, config reads) carry no secrets
-// and cause no effects, while launchers, supervisors and the CLI's own
-// `serve` readiness probe need them before the capability is provisioned.
-// Anything that mutates, spawns, or answers for the user is gated.
+// Loopback requests (Host and Origin both loopback) or paired sessions (bearer, cookie, stream ticket); a session swaps the loopback rule for same-origin (CSRF) and a scope check.
+// Browsers never get loopback trust: a page a bot opens is a browser on this machine too.
 import type { IncomingMessage } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 
+import { BOT_PROFILE_PATCH_FIELDS } from "./bot-profile.ts";
 import type { Scope, SessionRecord, SessionRegistry } from "./sessions.ts";
+import { denyReason as companionDenial, isCompanionNotice } from "../companion/src/routes.ts";
+
+/** `owner`: the machine's owner. `service`: a shared server where every bot's shell is a loopback caller too,
+ * so loopback without a session may reach only SERVICE_ALLOW. */
+export type LoopbackTrust = "owner" | "service";
 
 export type RequestAuth =
-  | { kind: "loopback"; scopes: readonly Scope[] }
+  | {
+    kind: "loopback"; scopes: readonly Scope[]; trust?: "service";
+    /** Set only on the verified companion-token path: the sidecar's id for the phone that authenticated. */
+    companionDevice?: string;
+  }
   | { kind: "session"; session: SessionRecord; via: "bearer" | "cookie" | "ticket"; scopes: readonly Scope[] };
 
 export interface RequestAuthResult {
   auth: RequestAuth | null;
-  /** HTTP status and the reason to send when auth is null. */
   status: 401 | 403;
   error: string;
 }
 
 const LOOPBACK_SCOPES: readonly Scope[] = ["admin", "client"];
+const SERVICE_SCOPES: readonly Scope[] = ["client"];
+
+/** What a `service`-trust loopback caller may reach: health and identity, the cloud Slack worker's routes (it
+ * shares the workspace's network namespace), and the turn-scoped capability routes, whose bearer the handler checks.
+ *
+ * Open risk: a bot's shell is a loopback caller too, so it can do everything the Slack worker does: post into any
+ * bot's thread through the guarded route, including an existing Full-access thread, open new Full-access threads
+ * while the operator's shared Full access is on, stop a request and decline a card. Planned fix: a relay token only
+ * the Slack worker holds, so these routes stop answering session-less loopback. */
+export const SERVICE_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: RegExp }> = [
+  { methods: ["GET"], path: /^\/api\/health$/ },
+  { methods: ["GET"], path: /^\/api\/auth\/session$/ },
+  { methods: ["GET"], path: /^\/api\/edition$/ },
+  { methods: ["GET"], path: /^\/api\/brand$/ },
+  { methods: ["GET"], path: /^\/api\/bots$/ },
+  { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages$/ },
+  { methods: ["GET"], path: /^\/api\/attachments\/[\w.-]+$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/tasks$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/messages\/guarded$/ },
+  { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/requests\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/requests\/[\w-]+\/interrupt$/ },
+  { methods: ["DELETE"], path: /^\/api\/bots\/[\w-]+\/queue\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/threads\/[\w-]+\/respond$/ }, // decline only: see the handler
+  { methods: ["GET", "POST", "PUT", "PATCH", "DELETE"], path: /^\/api\/internal\// }, // capability bearer checked in the handler
+  { methods: ["POST"], path: /^\/api\/testing\/internal-capability$/ }, // exists only with its private key
+];
+
+export function serviceAllowed(method: string, path: string): boolean {
+  const upper = method.toUpperCase();
+  return SERVICE_ALLOW.some((rule) => rule.methods.includes(upper) && rule.path.test(path));
+}
+
+/** Owner-trust loopback (the desktop app) or an admin-scoped session (a paired owner device, the owner's Cloud session);
+ * never service-trust loopback (a shared server's bot shells) or a guest. */
+export function ownerOrAdmin(auth: RequestAuth): boolean {
+  return auth.kind === "loopback" ? auth.trust !== "service" : auth.scopes.includes("admin");
+}
+
+/** Packaged desktop: `owner`. Else OMB_LOOPBACK_TRUST=owner|service; unset, a hosted workspace (any OMB_ADMIN_*)
+ * gets `service` and a headless server `owner`. Any other value fails closed. `localBrowsers`: see localBrowserTrust. */
+export function resolveLoopbackTrust(input: {
+  env?: NodeJS.ProcessEnv;
+  desktopManaged: boolean;
+  hostedWorkspace: boolean;
+  /** A Cloud home's network traffic arrives through its edge proxy, so bare loopback is a bot's shell: always `service`. */
+  cloudHome?: boolean;
+  /** This server runs from TypeScript source rather than a build. */
+  fromSource?: boolean;
+}): { trust: LoopbackTrust; reason: string; warning?: string; localBrowsers: boolean } {
+  const resolved = loopbackTrust(input);
+  const browsers = localBrowserTrust(input.env ?? process.env, input.fromSource === true && !input.desktopManaged, resolved.trust);
+  const warning = [resolved.warning, browsers.warning].filter(Boolean).join("; ");
+  return { trust: resolved.trust, reason: resolved.reason, ...(warning ? { warning } : {}), localBrowsers: browsers.trusted };
+}
+
+function loopbackTrust(input: Parameters<typeof resolveLoopbackTrust>[0]): { trust: LoopbackTrust; reason: string; warning?: string } {
+  const raw = (input.env ?? process.env).OMB_LOOPBACK_TRUST;
+  const requested = raw?.trim().toLowerCase();
+  if (input.cloudHome) {
+    return { trust: "service", reason: "MausBot Cloud home", ...(raw !== undefined && requested !== "service" ? { warning: "OMB_LOOPBACK_TRUST is ignored on a MausBot Cloud home: a local request is always a service" } : {}) };
+  }
+  if (input.desktopManaged) {
+    return { trust: "owner", reason: "desktop app", ...(raw !== undefined ? { warning: "OMB_LOOPBACK_TRUST is ignored in the desktop app" } : {}) };
+  }
+  if (requested === "owner" || requested === "service") {
+    return {
+      trust: requested,
+      reason: "OMB_LOOPBACK_TRUST",
+      ...(requested === "owner" && input.hostedWorkspace
+        ? { warning: "OMB_LOOPBACK_TRUST=owner on a shared workspace: every bot's shell can change settings and approve cards as the owner" }
+        : {}),
+    };
+  }
+  if (raw !== undefined && requested !== "") {
+    return { trust: "service", reason: "OMB_LOOPBACK_TRUST", warning: `OMB_LOOPBACK_TRUST="${raw.replace(/[^\w.-]/g, "").slice(0, 40)}" is not owner or service; using service` };
+  }
+  if (input.hostedWorkspace) return { trust: "service", reason: "hosted workspace" };
+  return { trust: "owner", reason: "self-hosted default" };
+}
 
 export function isLoopbackHost(host: string | undefined): boolean {
   if (!host) return false;
@@ -61,6 +131,29 @@ export function isLoopbackHost(host: string | undefined): boolean {
   return hostname === "::1" || hostname === "0:0:0:0:0:0:0:1";
 }
 
+/** Browsers send Sec-Fetch-Site and Sec-Fetch-Dest on every request to a loopback address and Origin on every WebSocket
+ * handshake (Chrome 155 sends no Sec-Fetch-* there); a page can remove none of them. Node's fetch (undici) sends
+ * Sec-Fetch-Mode alone, so it does not count; curl, the companion and the desktop app's main process send none. */
+export function fromBrowser(req: IncomingMessage): boolean {
+  const headers = req.headers;
+  if (headers["sec-fetch-site"] !== undefined || headers["sec-fetch-dest"] !== undefined) return true;
+  return headerValue(headers.upgrade)?.toLowerCase() === "websocket" && headers.origin !== undefined;
+}
+
+const LOCAL_BROWSER_TRUST = "OMB_DEV_TRUST_LOCAL_BROWSER";
+
+/** Development only: a server run from a source checkout (`pnpm dev:server`, test fixtures) lets this machine's browsers in
+ * as before, because Vite's dev proxy forwards them; a packaged, bundled, hosted or service-trust server ignores it. */
+function localBrowserTrust(env: NodeJS.ProcessEnv, fromSource: boolean, trust: LoopbackTrust): { trusted: boolean; warning?: string } {
+  if (env[LOCAL_BROWSER_TRUST] !== "1") return { trusted: false };
+  if (!fromSource || trust !== "owner") {
+    return { trusted: false, warning: `${LOCAL_BROWSER_TRUST} is ignored: it applies only to a development server run from source with owner trust` };
+  }
+  return { trusted: true, warning: `${LOCAL_BROWSER_TRUST}=1: browsers on this machine act as the owner (development only)` };
+}
+
+export const BROWSER_SIGN_IN = "unauthorized: this browser is not signed in. Open the sign-in link that openmausbot serve or openmausbot pair prints on this computer, or pair it with a code from Settings → Remote access";
+
 export function isAllowedOrigin(origin: string | undefined | null): boolean {
   if (!origin) return true; // non-browser clients (CLIs, curl, tests) send none
   try {
@@ -75,8 +168,6 @@ function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** The origin a browser would send for this request: the proxy's scheme
- * when one says so (x-forwarded-proto), else plain http, plus the Host. */
 export function requestOrigin(req: IncomingMessage): string | null {
   const host = headerValue(req.headers.host)?.trim();
   if (!host) return null;
@@ -85,16 +176,18 @@ export function requestOrigin(req: IncomingMessage): string | null {
   return `${proto}://${host.toLowerCase()}`;
 }
 
-/** A proxy on the way in sets forwarded headers; a client on this machine
- * does not. Loopback trust is for the latter only: a proxy that hands the
- * server a loopback Host (or forwards `Host: localhost` from a stranger)
- * must not turn a remote client into the owner. */
+/** A proxy that hands the server a loopback Host must not turn a remote client into the owner. */
 export function isProxied(req: IncomingMessage): boolean {
   const h = req.headers;
-  return Boolean(h["x-forwarded-for"] || h["x-forwarded-proto"] || h["x-forwarded-host"] || h["forwarded"]);
+  return ipcPeer(req) || Boolean(h["x-forwarded-for"] || h["x-forwarded-proto"] || h["x-forwarded-host"] || h["forwarded"]);
 }
 
-/** Origin absent (non-browser) or equal to this request's own origin. */
+/** An IPC listener's only peer is a forwarding gateway, so its requests are remote: never loopback trust. */
+export function ipcPeer(req: IncomingMessage): boolean {
+  const socket = req.socket;
+  return Boolean(socket) && socket.remoteAddress === undefined && socket.remoteFamily === undefined;
+}
+
 export function isSameOrigin(req: IncomingMessage): boolean {
   const origin = headerValue(req.headers.origin);
   if (!origin) return true;
@@ -102,29 +195,37 @@ export function isSameOrigin(req: IncomingMessage): boolean {
   return own !== null && origin.trim().toLowerCase() === own;
 }
 
-/** Who to count a pairing attempt against. The server binds loopback, so a
- * remote client always arrives through a proxy or tunnel on this machine;
- * that proxy's X-Forwarded-For (Caddy overwrites any the client sent) names
- * the real source. A connection whose peer is not loopback (a future bind to
- * an interface) is the source itself, and its forwarded header is ignored. */
+/** The desktop window's session adds the owner header to every request for this server, whichever page in it asks, and
+ * a saved server can be opened in that window at another loopback origin. So a browser's header counts only on a
+ * same-origin request or the window's own navigation; any other page there is a different site. */
+export function fromOwnPage(req: IncomingMessage): boolean {
+  if (!fromBrowser(req)) return true;
+  const site = headerValue(req.headers["sec-fetch-site"])?.trim().toLowerCase();
+  return isSameOrigin(req) && (site === undefined || site === "same-origin" || site === "none");
+}
+
+/** Unlike isSameOrigin, a request with neither Origin nor Sec-Fetch-Site fails. */
+export function provesSameOrigin(req: IncomingMessage): boolean {
+  if (headerValue(req.headers.origin)) return isSameOrigin(req);
+  return headerValue(req.headers["sec-fetch-site"])?.trim().toLowerCase() === "same-origin";
+}
+
+/** Remote clients arrive through a local proxy whose X-Forwarded-For names the source (Caddy overwrites the client's). */
 export function requestSource(req: IncomingMessage): string {
   const peer = req.socket?.remoteAddress || "unknown";
-  const viaLocalProxy = peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1";
-  // The LAST hop is the one the adjacent (trusted, same-machine) proxy wrote;
-  // earlier hops are whatever the client or an outer proxy put there.
+  const viaLocalProxy = ipcPeer(req) || peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1";
+  // Only the LAST hop was written by the trusted same-machine proxy.
   const hops = viaLocalProxy ? (headerValue(req.headers["x-forwarded-for"]) ?? "").split(",").map((h) => h.trim()).filter(Boolean) : [];
   const forwarded = hops.length ? hops[hops.length - 1] : undefined;
   return sanitizeSource(forwarded || peer);
 }
 
-/** Only what an address can contain, bounded, so a hostile header cannot
- * carry control characters into logs or grow the lockout map without limit. */
+/** Bounded and address-shaped, so a hostile header cannot put control characters in logs or grow the lockout map. */
 export function sanitizeSource(value: string): string {
   const clean = value.replace(/[^\w.:%[\]-]/g, "");
   return (clean || "unknown").slice(0, 64);
 }
 
-/** "Safari on iPhone" beats "Unnamed device" in the sessions list. */
 export function labelFromUserAgent(userAgent: string | undefined): string {
   const ua = userAgent ?? "";
   if (!ua) return "Unnamed device";
@@ -153,11 +254,9 @@ export function bearerToken(header: string | string[] | undefined): string | und
   return m?.[1];
 }
 
-/** Cookies are scoped by host, not port: two servers on one machine would
- * otherwise clobber each other's session. The environment id keeps a
- * reinstalled server from reading a cookie signed by its predecessor. */
+/** Cookies are scoped by host, not port; the environment id stops a reinstalled server reading its predecessor's cookie. */
 export function sessionCookieName(port: number, environmentId: string): string {
-  return `dani_session_${port}_${environmentId.replace(/[^a-z0-9]/gi, "").slice(0, 12)}`;
+  return `omb_session_${port}_${environmentId.replace(/[^a-z0-9]/gi, "").slice(0, 12)}`;
 }
 
 export function serializeSessionCookie(
@@ -174,98 +273,219 @@ export function clearSessionCookie(name: string): string {
   return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
-/** What a `client` session may do: chat, rooms, approvals, attachments,
- * routines, its own session, and reads that carry no secrets. Everything
- * else needs `admin`: default deny, so a new route is admin-only until it is
- * deliberately listed here. Two client-allowed PATCH routes carry a body
- * filter in the handler (bot and room edits: display fields only). Loopback
- * holds both scopes. */
-export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: RegExp }> = [
-  // own session
+/** What a `client` session may do. Default deny: a new route is admin-only until listed here. */
+export const CLIENT_ALLOW: ReadonlyArray<{ methods: readonly string[]; path: RegExp; feature?: "sharedComputers" }> = [
   { methods: ["GET"], path: /^\/api\/auth\/session$/ },
+  { methods: ["GET"], path: /^\/api\/notifications$/ },
+  { methods: ["POST"], path: /^\/api\/notifications\/read-all$/ },
+  { methods: ["POST"], path: /^\/api\/notifications\/[\w-]+\/read$/ },
+  // the update check only reads a version
+  { methods: ["GET"], path: /^\/api\/updates\/check$/ },
   { methods: ["POST"], path: /^\/api\/auth\/stream-ticket$/ },
   { methods: ["POST"], path: /^\/api\/auth\/logout$/ },
-  // liveness, identity, the stream
+  // A Team Cloud member's own phone: the code carries their address and role, never more (routes/team-phone.ts).
+  { methods: ["POST"], path: /^\/api\/team\/phone-pairing$/ },
+  // The phones those codes opened: a member lists and removes their own only (routes/team-phone.ts visiblePhones).
+  { methods: ["GET"], path: /^\/api\/team\/phones$/ },
+  { methods: ["DELETE"], path: /^\/api\/team\/phones\/[\w-]+$/ },
+  // Own desktop connector, bound to a private secret; listed only while features.sharedComputers is on.
+  { methods: ["POST"], path: /^\/api\/shared-computers\/(?:connect|[\w-]+\/(?:poll|lease|result|disconnect))$/, feature: "sharedComputers" },
+  { methods: ["GET"], path: /^\/api\/shared-computers$/, feature: "sharedComputers" },
+  // The same desktop's device link: a WebSocket bound to that secret too.
+  { methods: ["GET"], path: /^\/api\/shared-computers\/[\w-]+\/link$/, feature: "sharedComputers" },
+  // This phone's own apps, keyed by its session (routes/phones.ts): register, poll, lease, answer.
+  { methods: ["GET", "PUT", "DELETE"], path: /^\/api\/phones\/self$/ },
+  { methods: ["GET"], path: /^\/api\/phones\/self\/jobs$/ },
+  { methods: ["POST"], path: /^\/api\/phones\/self\/jobs\/[\w-]+\/(?:lease|result)$/ },
   { methods: ["GET"], path: /^\/api\/health$/ },
   { methods: ["GET"], path: /^\/api\/edition$/ },
   { methods: ["GET"], path: /^\/api\/brand$/ },
   { methods: ["GET"], path: /^\/api\/events$/ },
-  // reads: fleet, transcripts, search (no secrets in any of these)
+  // reads that carry no secrets
   { methods: ["GET"], path: /^\/api\/bots$/ },
   { methods: ["GET"], path: /^\/api\/team-map$/ },
+  // a link into the organisation's Admin: identifiers only, and Admin authorizes its own visitor
+  { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/slack-management$/ },
   { methods: ["GET"], path: /^\/api\/search$/ },
   { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages$/ },
   { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/image$/ },
+  { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/tool$/ },
+  // an app row's document is transcript data, read under the transcript's rules
+  { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/app$/ },
   { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/export$/ },
-  { methods: ["POST"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/file$/ },
-  // chat, one to one
+  { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/evidence(?:\.tar|\/[A-Za-z0-9-]{8,64}\/step-\d{6,12}\.jpg)?$/ },
+  { methods: ["GET", "POST"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/file$/ },
+  { methods: ["GET"], path: /^\/api\/threads\/[\w-]+\/job$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/messages$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/messages\/[\w-]+\/edit$/ },
+  { methods: ["POST", "DELETE"], path: /^\/api\/bots\/[\w-]+\/setup-request$/ }, // Set me up: what a typed /setup could do
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/active-branch$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/compact$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/helper-followup$/ }, // MausBot's own person only: see mayFollowUp
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/interrupt$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/read$/ },
   { methods: ["DELETE"], path: /^\/api\/bots\/[\w-]+\/queue\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/queue\/[\w-]+\/steer$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/tasks$/ },
   { methods: ["POST", "PATCH", "DELETE"], path: /^\/api\/bots\/[\w-]+\/tasks\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/tasks\/[\w-]+\/title$/ },
   { methods: ["PATCH"], path: /^\/api\/bots\/[\w-]+\/profile$/ },
   { methods: ["PATCH"], path: /^\/api\/bots\/[\w-]+$/ }, // display fields only: see clientBotPatchViolation
-  // approvals and cards
+  { methods: ["PUT"], path: /^\/api\/bots\/order$/ }, // the fleet's display order; the handler accepts only bots the caller sees
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/respond$/ },
   { methods: ["POST"], path: /^\/api\/threads\/[\w-]+\/respond$/ },
+  { methods: ["POST"], path: /^\/api\/threads\/[\w-]+\/undo$/ }, // whoever may answer the card: see the handler
   { methods: ["PATCH"], path: /^\/api\/bots\/[\w-]+\/cards\/[\w-]+$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/secret-cards\/[\w-]+\/(?:resume|dismiss)$/ },
+  // A secret only the conversation's own person may type in: kept behind the card, never in Settings (routes/secret-cards.ts).
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/secret-cards\/[\w-]+\/save$/ },
+  // Save a login: the password goes to the encrypted store, and no client route reads one back.
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/sign-in-cards\/[\w-]+\/(?:done|cancel|save-login)$/ },
+  // Where a login saved from the card would fill: the host of the bot's open page, which its live view shows anyway.
+  { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/sign-in-cards\/[\w-]+\/save-login$/ },
+  // A member reaches only the bots shown to them.
+  { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/browser\/live$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/browser\/action$/ },
+  { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/browser\/(?:stream|download\/[\w-]+)$/ },
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/browser\/upload$/ },
   { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/connector-cards\/[\w-]+\/status$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/connector-cards\/[\w-]+\/(?:resume|dismiss)$/ },
+  // A member signs in to their own MCP server from its card; the handler keeps an app's card and a shared server's an admin's.
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/connector-cards\/[\w-]+\/authorize$/ },
   { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/always-allow$/ }, // must match a pending card
-  // rooms
+  // an app reaches only its own MCP server, under the bot's rules; its context is bounded text
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/apps\/[\w-]+\/(?:rpc|context)$/ },
   { methods: ["POST"], path: /^\/api\/groups$/ },
   { methods: ["POST"], path: /^\/api\/groups\/[\w-]+\/messages$/ },
   { methods: ["POST"], path: /^\/api\/groups\/[\w-]+\/interrupt$/ },
+  { methods: ["POST"], path: /^\/api\/groups\/[\w-]+\/members\/[\w-]+\/compact$/ },
   { methods: ["POST"], path: /^\/api\/groups\/[\w-]+\/read$/ },
   { methods: ["DELETE"], path: /^\/api\/groups\/[\w-]+\/queue\/[\w-]+$/ },
+  { methods: ["POST"], path: /^\/api\/groups\/[\w-]+\/queue\/[\w-]+\/steer$/ },
   { methods: ["POST"], path: /^\/api\/groups\/[\w-]+\/tasks$/ },
   { methods: ["POST", "PATCH", "DELETE"], path: /^\/api\/groups\/[\w-]+\/tasks\/[\w-]+$/ },
   { methods: ["PATCH"], path: /^\/api\/groups\/[\w-]+$/ }, // display fields only: see clientGroupPatchViolation
   { methods: ["POST"], path: /^\/api\/threads\/[\w-]+\/messages\/[\w-]+\/reactions$/ },
-  // attachments
   { methods: ["POST"], path: /^\/api\/attachments$/ },
   { methods: ["GET"], path: /^\/api\/attachments\/[\w.-]+$/ },
+  { methods: ["DELETE"], path: /^\/api\/attachments\/[\w.-]+$/ }, // only the uploader's, only while nothing uses it
   { methods: ["POST"], path: /^\/api\/files$/ },
   // voice: labels and audio, never the key
   { methods: ["GET"], path: /^\/api\/tts\/voices$/ },
   { methods: ["POST"], path: /^\/api\/tts\/prepare$/ },
   { methods: ["POST"], path: /^\/api\/tts\/speak$/ },
-  // routines: a scheduled message; the input carries no cwd or permission field
+  // routines: the input carries no cwd or permission field
   { methods: ["GET"], path: /^\/api\/routines$/ },
   { methods: ["POST"], path: /^\/api\/routines$/ },
   { methods: ["PATCH", "DELETE"], path: /^\/api\/routines\/[\w-]+$/ },
   { methods: ["POST"], path: /^\/api\/routines\/[\w-]+\/run$/ },
   { methods: ["POST"], path: /^\/api\/routine-runs\/[\w-]+\/(?:cancel|seen)$/ },
+  { methods: ["POST"], path: /^\/api\/routine-runs\/seen-all$/ },
   // webhook list is secret-free; creating or rotating one is not
   { methods: ["GET"], path: /^\/api\/webhooks$/ },
+  // app-event automations: the list carries no credential; creating or changing one is the owner's
+  { methods: ["GET"], path: /^\/api\/app-triggers$/ },
+  // counts and lines from the threads this viewer can see; engine and app fixes only for an admin
+  { methods: ["GET"], path: /^\/api\/today$/ },
   // configured-or-not booleans; the handler strips the few identifying fields for clients
   { methods: ["GET"], path: /^\/api\/config$/ },
+  // a person's own "About you" on a Team Cloud
+  { methods: ["GET", "PUT"], path: /^\/api\/me$/ },
+  // what a bot remembers about the signed-in person on a Team Cloud: their own layer only (routes/bot-memory.ts ownLayer)
+  { methods: ["GET"], path: /^\/api\/bots\/[\w-]+\/memory\/mine$/ },
+  { methods: ["GET", "PUT", "DELETE"], path: /^\/api\/bots\/[\w-]+\/memory\/mine\/file$/ },
+  // a Team Cloud's member moving a bot of their own in: it answers with a sign-in for that one bot
+  { methods: ["POST"], path: /^\/api\/team-move-in$/ },
+  // a Team Cloud member's own connections: only the session's own person, never a value back
+  { methods: ["GET"], path: /^\/api\/team\/my-connections$/ },
+  { methods: ["POST"], path: /^\/api\/team\/my-connections\/(?:apps\/[\w-]{1,64}\/connect|mcp\/[a-z][a-z0-9_-]{0,31}\/sign-in)$/ },
+  { methods: ["PUT"], path: /^\/api\/team\/my-connections\/mcp\/[a-z][a-z0-9_-]{0,31}\/key$/ },
+  { methods: ["DELETE"], path: /^\/api\/team\/my-connections\/(?:apps\/[\w-]{1,64}|mcp\/[a-z][a-z0-9_-]{0,31})$/ },
+  // the person opened the app: their own brief on a Team Cloud, nothing recorded for anyone else
+  { methods: ["POST"], path: /^\/api\/presence\/active$/ },
+  // what a bot asks of this person: their own questions and approvals only
+  { methods: ["GET"], path: /^\/api\/needs-you$/ },
+  // a Team Cloud person's own inbox: its lines, and one of them read or done; the handler serves the session's own alone
+  { methods: ["GET"], path: /^\/api\/inbox$/ },
+  { methods: ["POST"], path: /^\/api\/inbox\/[\w-]+\/(?:read|done)$/ },
+  // who a Team Cloud bot can report to, and handing over a bot the member owns: the handler checks who may
+  { methods: ["GET"], path: /^\/api\/team\/people$/ },
+  // the workspace's banner picture: everyone signed in here sees it; changing it (PUT, DELETE) is an admin's
+  { methods: ["GET"], path: /^\/api\/workspace\/banner$/ },
+  // a teammate's picture: the handler serves it to the team's own members only
+  { methods: ["GET"], path: /^\/api\/team\/people\/p_[\w-]{22}\/picture$/ },
+  { methods: ["PUT"], path: /^\/api\/bots\/[\w-]+\/reports-to$/ },
+  // a Team Cloud bot's sharing: the handler lets only someone who can edit the bot change it
+  { methods: ["PUT"], path: /^\/api\/bots\/[\w-]+\/access$/ },
+  // asking to chat with a team bot one can view: the handler puts a card in the inbox of whoever can let them in
+  { methods: ["POST"], path: /^\/api\/bots\/[\w-]+\/access-request$/ },
 ];
 
-export function requiredScope(method: string, path: string): Scope {
+export function requiredScope(method: string, path: string, features: { sharedComputers?: boolean } = {}): Scope {
   const upper = method.toUpperCase();
   for (const rule of CLIENT_ALLOW) {
+    if (rule.feature && features[rule.feature] !== true) continue;
     if (rule.path.test(path) && rule.methods.includes(upper)) return "client";
   }
   return "admin";
 }
 
-/** Fields a client session may change on a bot: how it looks in the list,
- * never what it may do. Returns the first offending field, or null. */
-const CLIENT_BOT_PATCH_FIELDS = new Set(["unread", "pinned", "pinnedMessageId", "color", "mascotExpression", "mascotBody"]);
-export function clientBotPatchViolation(body: unknown): string | null {
+/** A client may change how a bot looks, never what it may do. */
+const CLIENT_BOT_PATCH_FIELDS = new Set([
+  "unread", "pinned", "pinnedMessageId", "color", "mascotExpression", "mascotBody", "mascotFaceColor",
+  "avatarUrl", "avatarCrop", "avatarZoom", "avatarFocusX", "avatarFocusY", "sidebarHidden", "welcomed",
+]);
+/** How a bot looks to everyone who sees it. */
+const SHARED_LOOK_FIELDS = new Set([
+  "color", "mascotExpression", "mascotBody", "mascotFaceColor", "avatarUrl", "avatarCrop", "avatarZoom", "avatarFocusX", "avatarFocusY",
+]);
+/** `ownMausBot`: the session's own MausBot on a Team Cloud, which its member may also rename. `teamMember`: a Team Cloud
+ * member's session, which changes no other bot's look. */
+export function clientBotPatchViolation(body: unknown, ownMausBot = false, teamMember = false): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body";
-  for (const key of Object.keys(body)) if (!CLIENT_BOT_PATCH_FIELDS.has(key)) return key;
+  for (const key of Object.keys(body)) {
+    if (ownMausBot && key === "name") continue;
+    if (!CLIENT_BOT_PATCH_FIELDS.has(key) || (teamMember && !ownMausBot && SHARED_LOOK_FIELDS.has(key))) return key;
+  }
   return null;
 }
 
+/** All a paired device or a Team Cloud move-in may give a bot it makes or brings in: who the bot is, how it looks, its
+ * own playbooks, projects and library skills, and which of this place's models it runs on. Everything else (what it may
+ * do and reach, where it runs, its department, whom it answers to or directs, whether it is the MausBot or a package's
+ * bot) only an admin on the host sets. */
+const BOT_PROFILE_SETTINGS: ReadonlySet<string> = new Set([
+  ...CLIENT_BOT_PATCH_FIELDS, ...BOT_PROFILE_PATCH_FIELDS, "hidden",
+  "modelSelection", "requireAvailableModel", "fallback", "projects", "playbooks", "assignedSkills",
+]);
+
+/** The first field of `fields` beyond a bot's profile; null when there is none. */
+export function adminOnlyBotSetting(fields: Record<string, unknown>): string | null {
+  return Object.keys(fields).find((key) => !BOT_PROFILE_SETTINGS.has(key)) ?? null;
+}
+
+export function botProfileSettings(fields: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(fields).filter(([key]) => BOT_PROFILE_SETTINGS.has(key)));
+}
+
+/** What a Team Cloud member who can edit a bot may change: its profile and model (as a bot they bring in), and which of
+ * the team's connected apps and MCP servers it uses. Never what it may do on its computer, where it runs, its department
+ * or whom it answers to or directs: those stay an admin's. */
+const EDITOR_BOT_PATCH_FIELDS: ReadonlySet<string> = new Set([
+  ...BOT_PROFILE_SETTINGS, "threadId", "composio", "connectorTools", "connectorScopes", "mcpServers",
+]);
+/** A member who can only view a bot marks it read, nothing else. */
+const VIEWER_BOT_PATCH_FIELDS: ReadonlySet<string> = new Set(["unread"]);
+
+export function memberBotPatchViolation(body: unknown, level: "view" | "chat" | "edit", ownMausBot = false, teamMember = false): string | null {
+  if (level === "chat") return clientBotPatchViolation(body, ownMausBot, teamMember);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "body";
+  const allowed = level === "edit" ? EDITOR_BOT_PATCH_FIELDS : VIEWER_BOT_PATCH_FIELDS;
+  return Object.keys(body).find((key) => !allowed.has(key)) ?? null;
+}
+
 /** Same for a room: name and reading state, never its folder or who answers. */
-const CLIENT_GROUP_PATCH_FIELDS = new Set(["name", "bulletin", "unread", "pinnedMessageId", "section"]);
+const CLIENT_GROUP_PATCH_FIELDS = new Set(["name", "bulletin", "unread", "pinnedMessageId", "section", "turnTimeoutMinutes"]);
 export function clientGroupPatchViolation(body: unknown): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return "body";
   for (const key of Object.keys(body)) if (!CLIENT_GROUP_PATCH_FIELDS.has(key)) return key;
@@ -275,36 +495,46 @@ export function clientGroupPatchViolation(body: unknown): string | null {
 export interface ResolveOptions {
   sessions: SessionRegistry;
   cookieName: string;
-  /** Path that may authenticate with a stream ticket in its query string. */
   streamPath: string;
   url: URL;
-  /** Per-launch owner capability. Loopback callers may read without it, but
-   * every public mutation must present it in the x-danibot-desktop-owner
-   * header. The server mints one at boot in every mode (server/index.ts), so
-   * production callers always supply it; an undefined value denies mutations
-   * rather than skipping the check. */
+  /** Desktop capability over Electron's private child port: with it, every public loopback mutation must come through the desktop's web session. */
   loopbackMutationToken?: string;
+  companionMutationToken?: string;
+  features?: { sharedComputers?: boolean };
+  /** Absent is `owner`; ignored while loopbackMutationToken is in force. */
+  loopbackTrust?: LoopbackTrust;
+  /** Under `service`: a per-launch secret from `openmausbot serve` over stdin (never env, which other children read); it opens only pairing codes. */
+  cliOwnerToken?: string;
+  /** resolveLoopbackTrust's `localBrowsers`: a development server lets this machine's browsers use loopback trust. */
+  trustLocalBrowser?: boolean;
+  /** Why a session made for one task may not make this request (a Team Cloud's sign-in that moves one bot in), else null. */
+  restricted?(session: SessionRecord, method: string, path: string, url: URL): string | null;
 }
 
-const DESKTOP_OWNER_HEADER = "x-danibot-desktop-owner";
-const LEGACY_DESKTOP_OWNER_HEADER = "x-openmausbot-desktop-owner";
+const CLI_OWNER_HEADER = "x-openmausbot-cli-owner";
+const CLI_OWNER_ROUTE = /^\/api\/auth\/pairing$/;
+
+const DESKTOP_OWNER_HEADER = "x-openmausbot-desktop-owner";
 
 function mutatingPublicRoute(method: string, path: string): boolean {
   const upper = method.toUpperCase();
-  // This legacy polling endpoint is spelled GET but synchronizes upstream
-  // state into the transcript and can resume a paused turn. Classify by
-  // effect, not verb, until clients migrate to a POST refresh route.
+  // A legacy GET that syncs upstream state and can resume a paused turn: classify by effect, not verb.
   if (
     upper === "GET" &&
     /^\/api\/bots\/[\w-]+\/connector-cards\/[\w-]+\/status$/.test(path)
   ) return true;
+  // Hands out a desktop's VNC password and control.
+  if (path.startsWith("/api/desktop-viewer/")) return true;
+  // Hand out a stored secret to a loopback reader: a webhook's address, a Local VM's viewer password.
+  if (upper === "GET" && (/^\/api\/webhooks\/[\w-]+\/address$/.test(path) || /^\/api\/(?:bots\/[\w-]+\/)?local-computer$/.test(path))) return true;
+  // Drives a bot's browser: a WebSocket upgrade is a GET, but what it carries is input.
+  if (/^\/api\/bots\/[\w-]+\/browser\/stream$/.test(path)) return true;
   if (["GET", "HEAD", "OPTIONS"].includes(upper)) return false;
-  // Agent integrations have their own high-entropy, per-boot authorization
-  // and narrower route semantics. Pairing-code exchange is intentionally
-  // public; possession of the one-time code is its authorization.
+  // Internal routes carry their own per-boot authorization; pairing-code exchange is public (the one-time code is its authorization).
   return !path.startsWith("/api/internal/") &&
     path !== "/api/testing/internal-capability" &&
-    path !== "/api/auth/pair";
+    path !== "/api/auth/pair" &&
+    path !== "/api/pair";
 }
 
 function secureTokenMatch(actual: string | undefined, expected: string): boolean {
@@ -314,20 +544,18 @@ function secureTokenMatch(actual: string | undefined, expected: string): boolean
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** Decide how this request is authenticated. Never throws. */
 export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions): RequestAuthResult {
   const method = req.method ?? "GET";
   const path = options.url.pathname;
   const deny = (status: 401 | 403, error: string): RequestAuthResult => ({ auth: null, status, error });
 
-  // A presented session credential wins over the loopback rule so the served
-  // web UI behaves the same on 127.0.0.1 and on a public domain.
+  // A presented session credential wins over the loopback rule.
   const bearer = bearerToken(req.headers.authorization);
   const cookie = parseCookies(headerValue(req.headers.cookie)).get(options.cookieName);
   const ticket = path === options.streamPath ? options.url.searchParams.get("ticket") : null;
   let session: SessionRecord | null = null;
   let via: "bearer" | "cookie" | "ticket" | null = null;
-  if (bearer?.startsWith("dani_sess_") || bearer?.startsWith("omb_sess_")) {
+  if (bearer?.startsWith("omb_sess_")) {
     session = options.sessions.authenticate(bearer);
     via = "bearer";
   } else if (ticket) {
@@ -340,30 +568,63 @@ export function resolveRequestAuth(req: IncomingMessage, options: ResolveOptions
 
   if (session && via) {
     if (via === "cookie" && !isSameOrigin(req)) return deny(403, "forbidden: cross-origin request");
-    const needed = requiredScope(method, path);
+    // A browser sign-in's session is its cookie, never a bearer token.
+    if (via === "bearer" && session.cookieOnly) return deny(401, "unauthorized: this session belongs to a browser; sign in with a pairing code");
+    if (via === "cookie" && session.cookieOnly && (!["GET", "HEAD", "OPTIONS"].includes(method) || mutatingPublicRoute(method, path)) &&
+      !provesSameOrigin(req)) {
+      return deny(403, "forbidden: this browser's session makes changes only from its own page");
+    }
+    const narrowed = options.restricted?.(session, method, path, options.url) ?? null;
+    if (narrowed) return deny(403, narrowed);
+    const needed = requiredScope(method, path, options.features ?? {});
     if (!session.scopes.includes(needed)) {
       return deny(403, `forbidden: this session lacks the ${needed} scope`);
     }
+    // Redeeming a stream ticket does not renew: an unattended open stream must not keep a session alive.
+    if (via !== "ticket") options.sessions.renew(session.id);
     return { auth: { kind: "session", session, via, scopes: session.scopes }, status: 401, error: "" };
+  }
+
+  // A removed member's invalid credential must not fall back to loopback owner.
+  if (via) {
+    return deny(401, "unauthorized: this session has expired or was revoked; pair this device again");
   }
 
   const proxied = isProxied(req);
   const loopback = !proxied && isLoopbackHost(headerValue(req.headers.host)) && isAllowedOrigin(headerValue(req.headers.origin));
   if (loopback) {
-    // Deny by default: a missing or unknown token (including an
-    // unconfigured server) rejects the mutation. Reads stay open.
-    if (
-      mutatingPublicRoute(method, path) &&
-      !secureTokenMatch(headerValue(req.headers[DESKTOP_OWNER_HEADER]) ?? headerValue(req.headers[LEGACY_DESKTOP_OWNER_HEADER]), options.loopbackMutationToken ?? "")
-    ) {
+    const companionToken = headerValue(req.headers["x-openmausbot-companion-auth"]);
+    if (companionToken && options.loopbackMutationToken !== undefined) {
+      if (
+        !secureTokenMatch(companionToken, options.companionMutationToken ?? "") ||
+        req.headers["x-openmausbot-companion"] !== "1" ||
+        !/^[\w-]{1,128}$/.test(headerValue(req.headers["x-openmausbot-companion-device"]) ?? "") ||
+        (companionDenial({ path, method, authenticated: true }) && !isCompanionNotice(method, path))
+      ) return deny(403, "forbidden: invalid companion request");
+      return { auth: { kind: "loopback", scopes: LOOPBACK_SCOPES, companionDevice: headerValue(req.headers["x-openmausbot-companion-device"]) }, status: 401, error: "" };
+    }
+    const desktopOwner = options.loopbackMutationToken !== undefined &&
+      secureTokenMatch(headerValue(req.headers[DESKTOP_OWNER_HEADER]), options.loopbackMutationToken) && fromOwnPage(req);
+    if (fromBrowser(req) && !desktopOwner && !options.trustLocalBrowser) return deny(401, BROWSER_SIGN_IN);
+    if (options.loopbackMutationToken !== undefined && mutatingPublicRoute(method, path) && !desktopOwner) {
       return deny(403, "forbidden: this change must come from the desktop app or a paired device");
+    }
+    if (options.loopbackMutationToken === undefined && options.loopbackTrust === "service") {
+      if (
+        options.cliOwnerToken && CLI_OWNER_ROUTE.test(path) && ["GET", "POST"].includes(method.toUpperCase()) &&
+        secureTokenMatch(headerValue(req.headers[CLI_OWNER_HEADER]), options.cliOwnerToken)
+      ) {
+        return { auth: { kind: "loopback", scopes: LOOPBACK_SCOPES }, status: 401, error: "" };
+      }
+      // On a shared server "local" includes every bot's shell: default deny outside SERVICE_ALLOW.
+      if (!serviceAllowed(method, path)) {
+        return deny(403, "forbidden: on this shared server a local request without a session may only use the service routes; sign in to change settings, people or access");
+      }
+      return { auth: { kind: "loopback", scopes: SERVICE_SCOPES, trust: "service" }, status: 401, error: "" };
     }
     return { auth: { kind: "loopback", scopes: LOOPBACK_SCOPES }, status: 401, error: "" };
   }
 
-  if (via) {
-    return deny(401, "unauthorized: this session has expired or was revoked; pair this device again");
-  }
   if (proxied) {
     return deny(403, "forbidden: this request came through a proxy (pair this device to use the server remotely)");
   }

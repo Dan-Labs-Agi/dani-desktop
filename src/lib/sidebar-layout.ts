@@ -1,15 +1,21 @@
 import type { GroupGoalRunCardData } from "../../shared/group-goal-run";
+import type { ConnectorCardData } from "../../shared/connector-card";
+import type { DefaultBotFields } from "../../shared/default-bot";
+import { hiddenFromSidebar } from "./default-bot";
 
 export const PINNED_SECTION_ID = "builtin:pinned";
 export const CHANNELS_SECTION_ID = "builtin:channels";
 export const BOT_CHATS_SECTION_ID = "builtin:bot-chats";
 export const BOTS_SECTION_ID = "builtin:bots";
+export const ATTENTION_SECTION_ID = "builtin:attention";
+export const PINNED_THREADS_SECTION_ID = "builtin:pinned-threads";
+export const TOOLS_SECTION_ID = "builtin:tools";
 
 const USER_SECTION_PREFIX = "section:";
 
 export type SidebarSectionId = string;
 export type SectionDropPlace = "before" | "after";
-export type SidebarDensityMode = "comfortable" | "compact" | "icons";
+export type SidebarDensityMode = "comfortable" | "icons";
 
 const GOAL_RUN_PREVIEW_LABEL = {
   working: "Working",
@@ -22,7 +28,7 @@ const GOAL_RUN_PREVIEW_LABEL = {
   failed: "Failed",
 } satisfies Record<GroupGoalRunCardData["status"], string>;
 
-export type SidebarBot = {
+export type SidebarBot = DefaultBotFields & {
   id: string;
   chiefOfStaff?: boolean;
   section?: string;
@@ -51,8 +57,8 @@ export function userSectionName(id: SidebarSectionId): string | null {
 
 export function sidebarSectionLabel(id: SidebarSectionId): string {
   if (id === PINNED_SECTION_ID) return "Pinned";
-  if (id === CHANNELS_SECTION_ID) return "Channels";
-  if (id === BOT_CHATS_SECTION_ID) return "Bot Chats";
+  if (id === CHANNELS_SECTION_ID) return "Group chats";
+  if (id === BOT_CHATS_SECTION_ID) return "Bot threads";
   if (id === BOTS_SECTION_ID) return "Bots";
   return userSectionName(id) ?? id;
 }
@@ -63,6 +69,19 @@ export function sidebarGoalRunPreview(run: GroupGoalRunCardData): string {
   const summary = detail || goal;
   const label = GOAL_RUN_PREVIEW_LABEL[run.status];
   return summary ? `${label}: ${summary}` : label;
+}
+
+export type SidebarConnectorPreviewKey = "connectors.card.connected" | "connectors.card.waiting" | "connectors.card.connectSecurely";
+
+export function sidebarConnectorPreview(
+  connector: Pick<ConnectorCardData, "label" | "status" | "dismissed">,
+  say: (key: SidebarConnectorPreviewKey) => string,
+): string {
+  if (connector.dismissed) return connector.label;
+  const key: SidebarConnectorPreviewKey = connector.status === "connected"
+    ? "connectors.card.connected"
+    : connector.status === "authorizing" ? "connectors.card.waiting" : "connectors.card.connectSecurely";
+  return `${connector.label} · ${say(key)}`;
 }
 
 export function sidebarLayoutInteractive(density: SidebarDensityMode, query: string): boolean {
@@ -78,14 +97,26 @@ export function sidebarSectionCollapsed(
   return sidebarLayoutInteractive(density, query) && collapsedIds.includes(id);
 }
 
-/** Pinned bots are a virtual view. Their saved section is left untouched so
- * unpinning returns them to the context they came from. */
-export function partitionSidebarBots<T extends SidebarBot>(bots: T[]) {
-  const visible = bots.filter((bot) => !bot.hidden);
-  const unsectionedChief = visible.find((bot) => bot.chiefOfStaff && !bot.section) ?? null;
-  const pinnedBots = visible.filter((bot) => !bot.chiefOfStaff && Boolean(bot.pinned));
+export function pinnedCircleThreadListVisible(
+  circles: boolean,
+  density: SidebarDensityMode,
+  pinnedCount: number,
+): boolean {
+  return circles && density !== "icons" && pinnedCount > 0;
+}
+
+export function partitionSidebarBots<T extends SidebarBot>(
+  bots: T[],
+  options?: { universalPins?: boolean; viewerEmail?: string | null; welcoming?: string | null },
+) {
+  const universalPins = options?.universalPins === true;
+  const visible = bots.filter((bot) => !bot.hidden && !hiddenFromSidebar(bot, options?.viewerEmail) && bot.id !== options?.welcoming);
+  // The pin flag is the server's, the same on every client. Only the main Chief keeps its own top slot when pins are
+  // not universal (a device's layout choice); a pinned Chief of a group is listed with the other pinned bots.
+  const pinnedBots = visible.filter((bot) => Boolean(bot.pinned) && (universalPins || !bot.chiefOfStaff || Boolean(bot.section)));
   const pinnedIds = new Set(pinnedBots.map((bot) => bot.id));
-  const sectionChiefs = visible.filter((bot) => bot.chiefOfStaff && Boolean(bot.section));
+  const unsectionedChief = visible.find((bot) => bot.chiefOfStaff && !bot.section && !pinnedIds.has(bot.id)) ?? null;
+  const sectionChiefs = visible.filter((bot) => bot.chiefOfStaff && Boolean(bot.section) && !pinnedIds.has(bot.id));
   const sectionedBots = visible.filter(
     (bot) => !bot.chiefOfStaff && Boolean(bot.section) && !pinnedIds.has(bot.id),
   );
@@ -95,8 +126,16 @@ export function partitionSidebarBots<T extends SidebarBot>(bots: T[]) {
   return { unsectionedChief, pinnedBots, sectionChiefs, sectionedBots, unsectionedBots };
 }
 
-/** Bot-to-bot DMs are also a virtual view. We do not rewrite their persisted
- * context, because that context still participates in comms visibility. */
+export function withPrimaryTile<T extends SidebarBot>(parts: ReturnType<typeof partitionSidebarBots<T>>, defaultBotId: string | undefined) {
+  const primary = parts.unsectionedChief
+    ?? parts.pinnedBots.find((bot) => bot.chiefOfStaff && !bot.section)
+    ?? [...parts.pinnedBots, ...parts.unsectionedBots].find((bot) => bot.id === defaultBotId)
+    ?? null;
+  if (!primary) return { ...parts, primary };
+  const others = (bots: T[]) => bots.filter((bot) => bot.id !== primary.id);
+  return { ...parts, primary, unsectionedChief: null, pinnedBots: others(parts.pinnedBots), unsectionedBots: others(parts.unsectionedBots) };
+}
+
 export function partitionSidebarGroups<T extends SidebarGroup>(groups: T[]) {
   const botChats = groups.filter((group) => Boolean(group.dm));
   const rooms = groups.filter((group) => !group.dm);
@@ -105,8 +144,6 @@ export function partitionSidebarGroups<T extends SidebarGroup>(groups: T[]) {
   return { botChats, sectionedRooms, unsectionedRooms };
 }
 
-/** Restore saved positions while inserting newly visible buckets at their
- * natural position instead of always appending them. */
 export function orderedSidebarSections(
   present: SidebarSectionId[],
   savedOrder: SidebarSectionId[],
@@ -137,6 +174,19 @@ export function orderedSidebarSections(
   return result;
 }
 
+export const SIMPLE_FIRST_SECTION_IDS: readonly SidebarSectionId[] = [PINNED_SECTION_ID, BOTS_SECTION_ID, CHANNELS_SECTION_ID, BOT_CHATS_SECTION_ID];
+
+export function simpleSidebarSections(ids: SidebarSectionId[]): SidebarSectionId[] {
+  return [
+    ...SIMPLE_FIRST_SECTION_IDS.filter((id) => ids.includes(id)),
+    ...ids.filter((id) => !SIMPLE_FIRST_SECTION_IDS.includes(id)),
+  ];
+}
+
+export function simpleOrderedSections(ordered: SidebarSectionId[], simpleSaved: SidebarSectionId[]): SidebarSectionId[] {
+  return orderedSidebarSections(simpleSidebarSections(ordered), simpleSaved);
+}
+
 export function moveSection(
   ids: SidebarSectionId[],
   id: SidebarSectionId,
@@ -165,8 +215,6 @@ export function placeSection(
   return result;
 }
 
-/** Preserve temporarily empty sections in the saved order so their position
- * returns when a bot or channel is later assigned to them again. */
 export function mergeSectionOrder(
   savedOrder: SidebarSectionId[],
   visibleOrder: SidebarSectionId[],

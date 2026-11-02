@@ -1,41 +1,38 @@
-// Queue-and-steer for busy 1:1 bots, at two levels:
-//
-// Unit: the steer-queue module against a fake store — queue bookkeeping,
-// the drain-once property, and the joined single-prompt shape.
-//
-// e2e: the real harness server with the grokAgent driver on the fake ACP
-// CLI in echo-gated mode, whose turns stay open until a gate file exists —
-// a deterministic busy window. The echo reply carries the FULL prompt
-// (system + turn text), which pins both what a drained turn was sent (the
-// queued texts separated by a blank line, in ONE turn) and what it was not (the
-// webhook untrusted-data paragraph an attended turn must never get).
+// The e2e half runs the fake ACP CLI in echo-gated mode: turns stay open until a gate file exists, and the echo carries the full prompt.
 import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { saveChatFollowup } from "./message-db.ts";
+import { killCliTree } from "./procs.ts";
 import {
   cancelSteeredMessage,
   drainSteeredMessages,
+  hasQueuedSteeredMessages,
+  holdSteeredQueue,
+  isSteeredMessageQueued,
+  onSteeredQueueChange,
+  queuedThreadPosition,
+  queuedSteerSnapshot,
   queuedSteeredMessage,
   queueSteeredMessage,
+  restoreHeldSteeredQueue,
+  restoreSteeredMessages,
+  settleHeldSteeredQueue,
   _queuedCount,
   type SteerStore,
 } from "./steer-queue.ts";
 import type { BotRecord, Message } from "./store.ts";
+import { removeTempDir } from "./testing/cleanup.ts";
+import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const FAKE_CLI = join(SERVER_DIR, "testing", "fake-acp-cli.ts");
-const PORT = 18800 + Math.floor(Math.random() * 10_000);
-const BASE = `http://127.0.0.1:${PORT}`;
-// 43 base64url chars satisfying OWNER_CAPABILITY_PATTERN (server/config.ts);
-// adopted by the child server as DANI_OWNER_TOKEN (security/epic-9-B) and
-// presented on every API call below.
-const OWNER_TOKEN = `e2e-owner-capability-${"0".repeat(22)}`;
 
-// ── unit: the queue module against a fake store ────────────────────────
 function fakeBot(id: string, threadId: string, busy: boolean): BotRecord {
   return {
     id,
@@ -74,6 +71,417 @@ function fakeStore(bots: BotRecord[]): SteerStore & { messages: Message[] } {
 }
 
 describe("steer-queue module", () => {
+  it("keeps readable citation prompts byte-for-byte through queue, hold, and drain", () => {
+    const bot = fakeBot("bot-citation-queue", "thread-citation-queue", true);
+    const store = fakeStore([bot]);
+    const prompt = '<!--omb-citation-v1:fixture-->\n> Quoted message:\n> const café = "🐭";\n\nComment:\nExplain this';
+    const queued = queueSteeredMessage(bot.id, bot.threadId, prompt);
+    const held = holdSteeredQueue(bot.id, bot.threadId, queued.id)!;
+    expect(held.items[0]).toMatchObject({ text: prompt, prompt });
+    restoreHeldSteeredQueue(held);
+    bot.busy = false;
+    const run = vi.fn();
+    drainSteeredMessages(store, run);
+    expect(run.mock.calls[0][2]).toBe(prompt);
+    expect(store.messages[0].text).toBe(prompt);
+  });
+
+  // After a crash the first coordinator read opens the job runtime, whose restart changes drain the queue from inside it.
+  it("drains a send once when the block check re-enters the drain", () => {
+    const bot = fakeBot("bot-reentrant-drain", "thread-reentrant-drain", false);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    queueSteeredMessage(bot.id, bot.threadId, "Run me exactly once");
+    let nested = false;
+    const isBlocked = (): boolean => {
+      if (!nested) { nested = true; drainSteeredMessages(store, run, isBlocked); }
+      return false;
+    };
+    drainSteeredMessages(store, run, isBlocked);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(store.messages.filter((message) => message.role === "user")).toHaveLength(1);
+  });
+
+  it.each([undefined, "capacity", "group-turn"] as const)("detects an exact owner's queued correction with reason %s", (reason) => {
+    const botId = `correction-${reason ?? "busy"}`;
+    const threadId = `${botId}-thread`;
+    expect(hasQueuedSteeredMessages(botId, threadId)).toBe(false);
+    const queued = queueSteeredMessage(botId, threadId, "Use this new request", { reason });
+    expect(hasQueuedSteeredMessages(botId, threadId)).toBe(true);
+    expect(hasQueuedSteeredMessages("other-bot", threadId)).toBe(false);
+    expect(hasQueuedSteeredMessages(botId, "other-thread")).toBe(false);
+    expect(cancelSteeredMessage(botId, queued.id, threadId)).toBe(true);
+    expect(hasQueuedSteeredMessages(botId, threadId)).toBe(false);
+  });
+
+  it("places a thread in line whether it waits on a slot or a room turn, not on its own turn", () => {
+    const botId = "bot-position-reasons";
+    queueSteeredMessage(botId, "thread-slot", "waiting for a slot", { reason: "capacity" });
+    queueSteeredMessage(botId, "thread-room", "waiting for the room", { reason: "group-turn" });
+    expect(queuedThreadPosition(botId, "thread-slot")).toBe(1);
+    expect(queuedThreadPosition(botId, "thread-room")).toBe(2);
+    queueSteeredMessage(botId, "thread-own", "waiting on its own turn");
+    expect(queuedThreadPosition(botId, "thread-own")).toBeNull();
+    expect(queuedThreadPosition("other-bot", "thread-slot")).toBeNull();
+  });
+
+  it("preserves self-opened request provenance through persistence and a capacity wait", () => {
+    const bot = fakeBot("bot-self-provenance", "thread-self-provenance", true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    const peerAsk = { botId: bot.id, name: "Planner" };
+    queueSteeredMessage(bot.id, bot.threadId, "Review this independent job", { reason: "capacity", peerAsk });
+    restoreSteeredMessages();
+    drainSteeredMessages(store, run);
+    expect(run).not.toHaveBeenCalled();
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    expect(store.messages).toHaveLength(1);
+    expect(store.messages[0].peerAsk).toEqual(peerAsk);
+    expect(run.mock.calls[0][3].peerAsk).toEqual(peerAsk);
+  });
+
+  it("keeps where a self-opened thread's work started through persistence and a capacity wait", () => {
+    const bot = fakeBot("bot-self-origin", "thread-self-origin", true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    const peerAsk = { botId: bot.id, name: "Planner" };
+    const origin = { kind: "user", request: "Review each open PR" } as const;
+    queueSteeredMessage(bot.id, bot.threadId, "Review PR 12", { reason: "capacity", peerAsk, origin });
+    saveChatFollowup({ id: "forged-origin", kind: "bot", ownerId: bot.id, threadId: "thread-forged-origin",
+      payload: { text: "x", peerAsk, origin: { kind: "user", request: "" } as never } });
+    restoreSteeredMessages();
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    const turn = (threadId: string, at = 0) => run.mock.calls.filter((call) => call[1] === threadId)[at]!;
+    expect(turn(bot.threadId)[6].origin).toEqual(origin);
+    expect(turn("thread-forged-origin")[6].origin).toBeUndefined();
+    expect(store.messages.find((message) => message.text === "Review PR 12")?.peerAsk).toEqual(peerAsk);
+    queueSteeredMessage(bot.id, bot.threadId, "Review PR 13", { peerAsk, origin });
+    queueSteeredMessage(bot.id, bot.threadId, "Check the logs", { peerAsk });
+    drainSteeredMessages(store, run);
+    expect(turn(bot.threadId, 1)[2]).toBe("Review PR 13");
+    drainSteeredMessages(store, run);
+    expect(turn(bot.threadId, 2)[2]).toBe("Check the logs");
+    expect(turn(bot.threadId, 2)[6].origin).toBeUndefined();
+  });
+
+  it("answers Team incidents reports that waited as one turn, whichever bot broke, through a restart", () => {
+    const chief = fakeBot("bot-incidents-chief", "thread-incidents-reports", true);
+    const store = fakeStore([chief]);
+    const run = vi.fn();
+    const ada = { botId: "bot-ada", name: "Ada", unattended: true, incident: { threadId: "thread-ada" } };
+    const ben = { botId: "bot-ben", name: "Ben", unattended: true, incident: { threadId: "thread-ben", notified: true } };
+    queueSteeredMessage(chief.id, chief.threadId, "Ada's report", { unattended: true, peerAsk: ada });
+    queueSteeredMessage(chief.id, chief.threadId, "Ben's report", { unattended: true, peerAsk: ben });
+    queueSteeredMessage(chief.id, chief.threadId, "what happened?");
+    restoreSteeredMessages();
+    const heads: unknown[] = [];
+    chief.busy = false;
+    drainSteeredMessages(store, run, (_botId, _threadId, head) => { heads.push(head.peerAsk); return false; });
+    expect(heads).toEqual([ada]);
+    expect(store.messages.map((message) => [message.text, message.peerAsk])).toEqual([["Ada's report", ada], ["Ben's report", ben]]);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][2]).toBe("Ada's report\n\nBen's report");
+    expect(run.mock.calls[0][5]).toBe(true);
+    drainSteeredMessages(store, run);
+    expect(store.messages.at(-1)).toMatchObject({ text: "what happened?" });
+    expect(store.messages.at(-1)?.peerAsk).toBeUndefined();
+  });
+
+  it("keeps who sent each queued message, so a steer of the held queue can still name them", () => {
+    const botId = "bot-sender-held";
+    const threadId = "thread-sender-held";
+    const theirs = queueSteeredMessage(botId, threadId, "from the paired person", { sender: { name: "Priya" } });
+    queueSteeredMessage(botId, threadId, "from the owner");
+    restoreSteeredMessages();
+    const held = holdSteeredQueue(botId, threadId, theirs.id);
+    expect(held?.items.map((item) => item.sender)).toEqual([{ name: "Priya" }, undefined]);
+    settleHeldSteeredQueue(held!);
+  });
+
+  it("appends a drained message in the name of the person who queued it", () => {
+    const bot = fakeBot("bot-sender-drain", "thread-sender-drain", true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    queueSteeredMessage(bot.id, bot.threadId, "from the owner");
+    queueSteeredMessage(bot.id, bot.threadId, "from the paired person", { sender: { name: "Priya" } });
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    expect(store.messages.map((message) => [message.text, message.sender])).toEqual([
+      ["from the owner", undefined],
+    ]);
+    drainSteeredMessages(store, run);
+    expect(store.messages.map((message) => [message.text, message.sender])).toEqual([
+      ["from the owner", undefined],
+      ["from the paired person", { name: "Priya" }],
+    ]);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1][3].sender).toEqual({ name: "Priya" });
+    expect(run.mock.calls[0][3].sender).toBeUndefined();
+  });
+
+  it("keeps a call's via on the message it drains", () => {
+    const bot = fakeBot("bot-via-drain", "thread-via-drain", true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    queueSteeredMessage(bot.id, bot.threadId, "typed while the bot worked");
+    queueSteeredMessage(bot.id, bot.threadId, "what is on my calendar", { via: "call" });
+    restoreSteeredMessages();
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    drainSteeredMessages(store, run);
+    expect(store.messages.map((message) => [message.text, message.via])).toEqual([
+      ["typed while the bot worked", undefined],
+      ["what is on my calendar", "call"],
+    ]);
+    expect("via" in store.messages[0]).toBe(false);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1][3].via).toBe("call");
+  });
+
+  it("keeps a call's id on the line it drains, also after a restart", () => {
+    const bot = fakeBot("bot-call-id-drain", "thread-call-id-drain", true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    queueSteeredMessage(bot.id, bot.threadId, "typed while the bot worked");
+    queueSteeredMessage(bot.id, bot.threadId, "what is on my calendar", { via: "call", callId: "call-1" });
+    restoreSteeredMessages();
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    drainSteeredMessages(store, run);
+    expect(store.messages.map((message) => [message.text, message.via, message.callId])).toEqual([
+      ["typed while the bot worked", undefined, undefined],
+      ["what is on my calendar", "call", "call-1"],
+    ]);
+    expect("callId" in store.messages[0]!).toBe(false);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[0]![3].callId).toBeUndefined();
+    expect(run.mock.calls[1]![3].callId).toBe("call-1");
+  });
+
+  it.each([
+    ["a spoken line, then a typed one", "spoken-typed", { via: "call", callId: "call-1" }, {}],
+    ["a typed line, then a spoken one", "typed-spoken", {}, { via: "call", callId: "call-1" }],
+    ["a spoken line with no call id (an older build's row), then a typed one", "legacy-typed", { via: "call" }, {}],
+  ] as const)("drains %s as two turns", (_what, slug, first, second) => {
+    const bot = fakeBot(`bot-call-split-${slug}`, `thread-call-split-${slug}`, true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    queueSteeredMessage(bot.id, bot.threadId, "first words", first);
+    queueSteeredMessage(bot.id, bot.threadId, "second words", second);
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0]![2]).toBe("first words");
+    drainSteeredMessages(store, run);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1]![2]).toBe("second words");
+    expect(store.messages.map((message) => message.text)).toEqual(["first words", "second words"]);
+  });
+
+  it("drains one call's spoken lines as one turn, and the next call's as its own", () => {
+    const bot = fakeBot("bot-call-groups", "thread-call-groups", true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    queueSteeredMessage(bot.id, bot.threadId, "check the build", { via: "call", callId: "call-1" });
+    queueSteeredMessage(bot.id, bot.threadId, "and the tests", { via: "call", callId: "call-1" });
+    queueSteeredMessage(bot.id, bot.threadId, "then deploy", { via: "call", callId: "call-2" });
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    drainSteeredMessages(store, run);
+    expect(run.mock.calls.map((call) => call[2])).toEqual(["check the build\n\nand the tests", "then deploy"]);
+    expect(store.messages.map((message) => [message.text, message.callId])).toEqual([
+      ["check the build", "call-1"],
+      ["and the tests", "call-1"],
+      ["then deploy", "call-2"],
+    ]);
+  });
+
+  it("never puts a call id on a line that was not spoken", () => {
+    const bot = fakeBot("bot-call-id-stray", "thread-call-id-stray", true);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    queueSteeredMessage(bot.id, bot.threadId, "typed with a stray id", { callId: "call-stray" });
+    saveChatFollowup({
+      id: "followup-stray-call-id", kind: "bot", ownerId: bot.id, threadId: bot.threadId,
+      payload: { text: "typed by another build", prompt: "typed by another build", callId: "call-stray", queuedAt: Date.now() },
+    });
+    restoreSteeredMessages();
+    bot.busy = false;
+    drainSteeredMessages(store, run);
+    expect(store.messages.map((message) => [message.text, message.via, message.callId])).toEqual([
+      ["typed with a stray id", undefined, undefined],
+      ["typed by another build", undefined, undefined],
+    ]);
+  });
+
+  it("still loads and drains a durable row written before senders were kept", () => {
+    const bot = fakeBot("bot-sender-legacy", "thread-sender-legacy", false);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    saveChatFollowup({
+      id: "legacy-followup-without-sender", kind: "bot", ownerId: bot.id, threadId: bot.threadId,
+      payload: { text: "queued by an older build", prompt: "queued by an older build" },
+    });
+    expect(() => restoreSteeredMessages()).not.toThrow();
+    drainSteeredMessages(store, run);
+    expect(store.messages).toEqual([expect.objectContaining({
+      text: "queued by an older build", queueId: "legacy-followup-without-sender",
+    })]);
+    expect(store.messages[0].sender).toBeUndefined();
+  });
+
+  it("keeps queue operations and other listeners working when a listener throws", () => {
+    const bot = fakeBot("bot-listener-error", "thread-listener-error", false);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const unsubscribeBroken = onSteeredQueueChange(() => { throw new Error("notification failed"); });
+    const listener = vi.fn();
+    const unsubscribeHealthy = onSteeredQueueChange(listener);
+    try {
+      const keep = queueSteeredMessage(bot.id, bot.threadId, "still dispatch");
+      const cancel = queueSteeredMessage(bot.id, bot.threadId, "cancel me");
+      expect(cancelSteeredMessage(bot.id, cancel.id)).toBe(true);
+      expect(() => drainSteeredMessages(store, run)).not.toThrow();
+      expect(store.messages).toEqual([expect.objectContaining({ text: "still dispatch", queueId: keep.id })]);
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(_queuedCount(bot.threadId)).toBe(0);
+      expect(listener).toHaveBeenCalledTimes(4);
+      expect(warn).toHaveBeenCalledTimes(4);
+    } finally {
+      unsubscribeBroken(); unsubscribeHealthy(); warn.mockRestore();
+    }
+  });
+
+  it("exports owned public receipts without sharing internal queue state", () => {
+    const owned = queueSteeredMessage("bot-public", "thread-public", "public words", {
+      prompt: "private provider context", replyToId: "private-reply", sendId: "private-send", reason: "capacity",
+    });
+    const orphan = queueSteeredMessage("bot-orphan", "thread-orphan", "deleted task");
+    try {
+      const ownsThread = (botId: string, threadId: string) => botId === "bot-public" && threadId === "thread-public";
+      const snapshot = queuedSteerSnapshot(ownsThread);
+      expect(snapshot).toEqual({ "thread-public": [{ queueId: owned.id, text: "public words", reason: "capacity" }] });
+      snapshot["thread-public"][0].text = "client mutation";
+      snapshot["thread-public"].pop();
+      expect(queuedSteerSnapshot(ownsThread)["thread-public"]).toEqual([{ queueId: owned.id, text: "public words", reason: "capacity" }]);
+    } finally {
+      cancelSteeredMessage("bot-public", owned.id);
+      cancelSteeredMessage("bot-orphan", orphan.id);
+    }
+  });
+
+  it("holds only the owning bot's queue by one of its own ids, and a held queue cannot drain", () => {
+    const bot = fakeBot("bot-hold", "thread-hold", false);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    const queued = queueSteeredMessage(bot.id, bot.threadId, "steer me");
+    queueSteeredMessage("bot-hold", "thread-hold", "second");
+    try {
+      expect(holdSteeredQueue("other-bot", bot.threadId, queued.id)).toBeNull();
+      expect(holdSteeredQueue(bot.id, bot.threadId, "not-a-queue-id")).toBeNull();
+      expect(holdSteeredQueue(bot.id, "thread-elsewhere", queued.id)).toBeNull();
+      expect(_queuedCount(bot.threadId)).toBe(2);
+
+      const held = holdSteeredQueue(bot.id, bot.threadId, queued.id);
+      expect(held?.items.map((item) => item.text)).toEqual(["steer me", "second"]);
+      expect(_queuedCount(bot.threadId)).toBe(0);
+      drainSteeredMessages(store, run);
+      expect(run).not.toHaveBeenCalled();
+
+      restoreHeldSteeredQueue(held!);
+      expect(_queuedCount(bot.threadId)).toBe(2);
+      drainSteeredMessages(store, run);
+      expect(run).toHaveBeenCalledTimes(1);
+    } finally {
+      cancelSteeredMessage(bot.id, queued.id);
+    }
+  });
+
+  it("restores a held queue behind words queued while it was held", () => {
+    const queued = queueSteeredMessage("bot-hold-merge", "thread-hold-merge", "held words");
+    try {
+      const held = holdSteeredQueue("bot-hold-merge", "thread-hold-merge", queued.id)!;
+      const later = queueSteeredMessage("bot-hold-merge", "thread-hold-merge", "queued during the hold");
+      restoreHeldSteeredQueue(held);
+      const snapshot = queuedSteerSnapshot(() => true);
+      expect(snapshot["thread-hold-merge"].map((item) => item.text)).toEqual([
+        "held words",
+        "queued during the hold",
+      ]);
+      cancelSteeredMessage("bot-hold-merge", later.id);
+    } finally {
+      cancelSteeredMessage("bot-hold-merge", queued.id);
+    }
+  });
+
+  it("settling a held queue marks its durable rows delivered: a restart does not replay them", () => {
+    const bot = fakeBot("bot-hold-settle", "thread-hold-settle", true);
+    const first = queueSteeredMessage(bot.id, bot.threadId, "folded into the running turn");
+    const second = queueSteeredMessage(bot.id, bot.threadId, "also folded");
+    const held = holdSteeredQueue(bot.id, bot.threadId, first.id)!;
+    settleHeldSteeredQueue(held);
+    restoreSteeredMessages();
+    expect(_queuedCount(bot.threadId)).toBe(0);
+    expect(queuedSteerSnapshot(() => true)).toEqual({});
+    cancelSteeredMessage(bot.id, second.id);
+  });
+
+  it("publishes enqueue/cancel/drain snapshots before a failed dispatch can leave stale chips", () => {
+    const bot = fakeBot("bot-publish", "thread-publish", true);
+    const snapshots: unknown[] = [];
+    const unsubscribe = onSteeredQueueChange(() => snapshots.push(queuedSteerSnapshot((id) => id === bot.id)));
+    try {
+      const first = queueSteeredMessage(bot.id, bot.threadId, "keep");
+      const second = queueSteeredMessage(bot.id, bot.threadId, "cancel");
+      expect(cancelSteeredMessage("other-bot", second.id)).toBe(false);
+      drainSteeredMessages(fakeStore([bot]), vi.fn());
+      expect(snapshots).toHaveLength(2);
+      expect(cancelSteeredMessage(bot.id, second.id)).toBe(true);
+      bot.busy = false;
+      expect(() => drainSteeredMessages(fakeStore([bot]), () => { throw new Error("failed dispatch"); })).toThrow("failed dispatch");
+      expect(snapshots).toEqual([
+        { [bot.threadId]: [{ queueId: first.id, text: "keep" }] },
+        { [bot.threadId]: [{ queueId: first.id, text: "keep" }, { queueId: second.id, text: "cancel" }] },
+        { [bot.threadId]: [{ queueId: first.id, text: "keep" }] },
+        {},
+      ]);
+    } finally { unsubscribe(); }
+    const later = queueSteeredMessage(bot.id, bot.threadId, "unsubscribed");
+    cancelSteeredMessage(bot.id, later.id);
+    expect(snapshots).toHaveLength(4);
+  });
+
+  it("publishes removal when an orphaned queue is discarded", () => {
+    queueSteeredMessage("bot-publish-orphan", "thread-publish-orphan", "gone");
+    const listener = vi.fn();
+    const unsubscribe = onSteeredQueueChange(listener);
+    try {
+      drainSteeredMessages(fakeStore([]), vi.fn());
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(queuedSteerSnapshot(() => true)).toEqual({});
+    } finally { unsubscribe(); }
+  });
+
+  it("retains an idle task's queue until its runtime dispatch claim clears", () => {
+    const bot = fakeBot("bot-handshake", "thread-handshake", false);
+    const store = fakeStore([bot]);
+    const run = vi.fn();
+    const blocked = vi.fn(() => true);
+    queueSteeredMessage(bot.id, bot.threadId, "after handshake");
+    drainSteeredMessages(store, run, blocked);
+    expect(blocked).toHaveBeenCalledWith(bot.id, bot.threadId, expect.anything());
+    expect(run).not.toHaveBeenCalled();
+    expect(store.messages).toHaveLength(0);
+    expect(_queuedCount(bot.threadId)).toBe(1);
+    blocked.mockReturnValue(false);
+    drainSteeredMessages(store, run, blocked);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(store.messages.map((message) => message.text)).toEqual(["after handshake"]);
+  });
+
   it("does not append a queued user message until drain", () => {
     const bot = fakeBot("bot-a", "thread-a", true);
     const store = fakeStore([bot]);
@@ -140,10 +548,7 @@ describe("steer-queue module", () => {
     const [botId, threadId, prompt, userMessage] = run.mock.calls[0];
     expect(botId).toBe("bot-b");
     expect(threadId).toBe("thread-b");
-    // ONE turn for the whole burst, with a Markdown block boundary between
-    // messages so a trailing attachment tag remains standalone.
     expect(prompt).toBe("first note\n\nsecond note");
-    // appended at drain, last message so startTurn adds nothing new
     expect(store.messages.map((m) => m.text)).toEqual(["first note", "second note"]);
     expect(store.messages.map((m) => m.queueId)).toEqual([first.id, second.id]);
     expect(userMessage.text).toBe("second note");
@@ -151,9 +556,25 @@ describe("steer-queue module", () => {
     expect(store.messages.every((m) => !m.queued)).toBe(true);
     expect(_queuedCount("thread-b")).toBe(0);
 
-    // drain-once: a second settle finds nothing and fires nothing
     drainSteeredMessages(store, run);
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells whether one send still waits in its thread's queue", () => {
+    const bot = fakeBot("bot-waiting", "thread-waiting", true);
+    const store = fakeStore([bot]);
+    const kept = queueSteeredMessage(bot.id, bot.threadId, "keep waiting");
+    const edited = queueSteeredMessage(bot.id, bot.threadId, "edited away");
+    expect(isSteeredMessageQueued(bot.id, bot.threadId, kept.id)).toBe(true);
+    expect(isSteeredMessageQueued("other-bot", bot.threadId, kept.id)).toBe(false);
+    expect(isSteeredMessageQueued(bot.id, "other-thread", kept.id)).toBe(false);
+    expect(cancelSteeredMessage(bot.id, edited.id, bot.threadId)).toBe(true);
+    expect(isSteeredMessageQueued(bot.id, bot.threadId, edited.id)).toBe(false);
+    expect(isSteeredMessageQueued(bot.id, bot.threadId, kept.id)).toBe(true);
+    bot.busy = false;
+    drainSteeredMessages(store, vi.fn());
+    expect(store.messages.map((m) => m.queueId)).toEqual([kept.id]);
+    expect(isSteeredMessageQueued(bot.id, bot.threadId, kept.id)).toBe(false);
   });
 
   it("drops a cancelled message so drain does not send it", () => {
@@ -194,8 +615,9 @@ describe("steer-queue module", () => {
 
     bot.threadId = "thread-new-cancel";
     expect(cancelSteeredMessage("some-other-bot", queued.id)).toBe(false);
+    expect(cancelSteeredMessage(bot.id, queued.id, bot.threadId)).toBe(false);
     expect(_queuedCount("thread-original-cancel")).toBe(1);
-    expect(cancelSteeredMessage(bot.id, queued.id)).toBe(true);
+    expect(cancelSteeredMessage(bot.id, queued.id, "thread-original-cancel")).toBe(true);
     expect(_queuedCount("thread-original-cancel")).toBe(0);
   });
 
@@ -214,34 +636,84 @@ describe("steer-queue module", () => {
     expect(_queuedCount("thread-d")).toBe(0);
   });
 
+  it("drains an idle task B while the same bot's task A stays busy", () => {
+    const bot = fakeBot("bot-independent", "thread-independent-a", true);
+    const taskA = { ...bot };
+    const taskB = { ...bot, threadId: "thread-independent-b", busy: false };
+    const store = fakeStore([bot]);
+    store.projectBotForTask = (_botId, threadId) => threadId === taskA.threadId ? taskA : taskB;
+    queueSteeredMessage(bot.id, taskA.threadId, "wait for A");
+    queueSteeredMessage(bot.id, taskB.threadId, "run B");
+    const run = vi.fn();
+
+    drainSteeredMessages(store, run);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0].slice(0, 3)).toEqual([bot.id, taskB.threadId, "run B"]);
+    expect(_queuedCount(taskA.threadId)).toBe(1);
+    expect(_queuedCount(taskB.threadId)).toBe(0);
+
+    taskA.busy = false;
+    drainSteeredMessages(store, run);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1].slice(0, 3)).toEqual([bot.id, taskA.threadId, "wait for A"]);
+  });
+
+  it("drops a deleted task's queue even when its bot still exists", () => {
+    const bot = fakeBot("bot-deleted-task", "thread-deleted-task", false);
+    const store = fakeStore([bot]);
+    store.projectBotForTask = () => null;
+    queueSteeredMessage(bot.id, bot.threadId, "do not resurrect this task");
+    const run = vi.fn();
+
+    drainSteeredMessages(store, run);
+    expect(run).not.toHaveBeenCalled();
+    expect(store.messages).toHaveLength(0);
+    expect(_queuedCount(bot.threadId)).toBe(0);
+  });
+
 });
 
-// ── e2e: the real server on the gated fake ACP fleet ───────────────────
 describe("steer-queue e2e (fake ACP fleet)", () => {
   let child: ChildProcess;
   let home: string;
+  let base = "";
   let stderr = "";
   let drainGate: string;
   let stopGate: string;
   let stopRpcDump: string;
+  let earlyGate: string;
+  let receiptGate: string;
+  let dispatchGate: string;
+  let roomGate: string;
+  let roomRpcAppend: string;
+  const evidence: unknown[] = [];
+  let evidencePath: string;
 
-  /** the flat command payloads these tests POST/PATCH */
-  type ApiBody = Record<string, string | boolean | { instanceId: string; model: string }>;
+  type ApiBody = Record<
+    string,
+    | string
+    | boolean
+    | string[]
+    | { instanceId: string; model: string }
+    | { bulletin: string; defaultResponder: { kind: string; botId: string } }
+  >;
 
   const api = async (method: string, path: string, body?: ApiBody): Promise<{ status: number; body: any }> => {
-    const res = await fetch(`${BASE}${path}`, {
+    const res = await fetch(`${base}${path}`, {
       method,
-      headers: {
-        "x-danibot-desktop-owner": OWNER_TOKEN,
-        ...(body ? { "content-type": "application/json" } : {}),
-      },
+      headers: body ? { "content-type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
     });
-    return { status: res.status, body: await res.json() };
+    const result = { status: res.status, body: await res.json() };
+    if (method !== "GET") evidence.push({ method, path, body, result });
+    return result;
   };
 
   const botById = async (id: string) =>
     (await api("GET", "/api/bots")).body.bots.find((b: any) => b.id === id);
+
+  const groupById = async (id: string) =>
+    (await api("GET", "/api/bots?messages=0")).body.groups.find((g: any) => g.id === id);
 
   const echoes = (bot: any): any[] =>
     bot.messages.filter((m: any) => m.role === "bot" && m.kind === "text" && m.text?.startsWith("echo: "));
@@ -256,21 +728,68 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
   };
 
   const newBot = async (instanceId: string, name: string) => {
-    const bot = (await api("POST", "/api/bots")).body.bot;
-    await api("PATCH", `/api/bots/${bot.id}`, { name, modelSelection: { instanceId, model: "fake-model" } });
-    return bot;
+    return (await api("POST", "/api/bots", { name, modelSelection: { instanceId, model: "fake-model" } })).body.bot;
   };
 
   beforeAll(async () => {
     chmodSync(FAKE_CLI, 0o755);
     home = mkdtempSync(join(tmpdir(), "omb-steer-test-"));
-    mkdirSync(join(home, ".danibot"), { recursive: true });
+    mkdirSync(join(home, ".openmausbot"), { recursive: true });
     mkdirSync(join(home, "gates"), { recursive: true });
     drainGate = join(home, "gates", "drain.gate");
     stopGate = join(home, "gates", "stop.gate");
     stopRpcDump = join(home, "gates", "stop.rpc");
+    earlyGate = join(home, "gates", "early-provider.gate");
+    receiptGate = join(home, "gates", "receipt-provider.gate");
+    dispatchGate = join(home, "gates", "early-dispatch.gate");
+    roomGate = join(home, "gates", "room.gate");
+    roomRpcAppend = join(home, "gates", "room.rpc-append");
+    evidencePath = join(tmpdir(), `omb-steer-evidence-${Date.now()}-${process.pid}.json`);
+    // Delay only the adapter's returned acknowledgment, reproducing completion before sendTurn resolves.
+    const prelude = join(home, "delayed-dispatch.mjs");
+    writeFileSync(prelude, [
+      `import { ProviderRegistry } from ${JSON.stringify(pathToFileURL(join(SERVER_DIR, "harness/registry.ts")).href)};`,
+      `import { EventBus } from ${JSON.stringify(pathToFileURL(join(SERVER_DIR, "harness/bus.ts")).href)};`,
+      'import { existsSync, writeFileSync } from "node:fs";',
+      'import { randomUUID } from "node:crypto";',
+      'let oldCompletion, receiptBus;',
+      'const publish = EventBus.prototype.publish;',
+      'EventBus.prototype.publish = function(event) {',
+      '  if (event.providerInstanceId === "steerReceipt" && event.type === "turn.completed" && !oldCompletion) { oldCompletion = event; receiptBus = this; }',
+      '  return publish.call(this, event);',
+      '};',
+      'const load = ProviderRegistry.prototype.load;',
+      'ProviderRegistry.prototype.load = async function(configs) {',
+      '  await load.call(this, configs);',
+      '  const instance = this.get("steerEarly");',
+      '  if (!instance) return;',
+      '  const send = instance.adapter.sendTurn;',
+      '  instance.adapter.sendTurn = async (turn) => {',
+      '    const result = await send(turn);',
+      `    writeFileSync(${JSON.stringify(`${dispatchGate}.entered`)}, "entered");`,
+      `    while (!existsSync(${JSON.stringify(dispatchGate)})) await new Promise(resolve => setTimeout(resolve, 20));`,
+      '    return result;',
+      '  };',
+      '  const receipt = this.get("steerReceipt");',
+      '  if (!receipt) return;',
+      '  const sendReceipt = receipt.adapter.sendTurn;',
+      '  let calls = 0;',
+      '  receipt.adapter.sendTurn = async (turn) => {',
+      '    const replacement = ++calls === 2;',
+      '    if (replacement) {',
+      // Replay a completion from the old provider turn after the replacement installed its generation but before its ACK.
+      '      publish.call(receiptBus, { ...oldCompletion, eventId: randomUUID(), createdAt: new Date().toISOString() });',
+      `      writeFileSync(${JSON.stringify(`${receiptGate}.late`)}, "old completion delivered");`,
+      `      while (!existsSync(${JSON.stringify(`${receiptGate}.dispatch`)})) await new Promise(resolve => setTimeout(resolve, 20));`,
+      '    }',
+      '    const result = await sendReceipt(turn);',
+      `    while (replacement && !existsSync(${JSON.stringify(`${receiptGate}.ack`)})) await new Promise(resolve => setTimeout(resolve, 20));`,
+      '    return result;',
+      '  };',
+      '};',
+    ].join("\n"));
     writeFileSync(
-      join(home, ".danibot", "config.json"),
+      join(home, ".openmausbot", "config.json"),
       JSON.stringify({
         instances: {
           steer: {
@@ -278,9 +797,17 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
             environment: { FAKE_ACP_MODE: "echo-gated", FAKE_ACP_GATE_FILE: drainGate },
             config: { cli: FAKE_CLI, fullAuto: true },
           },
-          // the RPC dump lets the interrupt test wait for session/prompt to
-          // be in flight — interrupting earlier would be a no-op on a turn
-          // the driver has not registered yet
+          steerEarly: {
+            driver: "grokAgent",
+            environment: { FAKE_ACP_MODE: "echo-gated", FAKE_ACP_GATE_FILE: earlyGate },
+            config: { cli: FAKE_CLI, fullAuto: true },
+          },
+          steerReceipt: {
+            driver: "grokAgent",
+            environment: { FAKE_ACP_MODE: "echo-gated", FAKE_ACP_GATE_FILE: receiptGate },
+            config: { cli: FAKE_CLI, fullAuto: true },
+          },
+          // Wait for session/prompt to be in flight: an earlier interrupt is a no-op on a turn the driver has not registered.
           steerStop: {
             driver: "grokAgent",
             environment: {
@@ -290,20 +817,27 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
             },
             config: { cli: FAKE_CLI, fullAuto: true },
           },
+          // One gate holds the room's turn open while a 1:1 message arrives.
+          steerRoom: {
+            driver: "grokAgent",
+            environment: { FAKE_ACP_MODE: "echo-gated", FAKE_ACP_GATE_FILE: roomGate, FAKE_ACP_RPC_APPEND_FILE: roomRpcAppend },
+            config: { cli: FAKE_CLI, fullAuto: true },
+          },
         },
       }),
     );
 
+    const port = await freePortBlock([0, 1]);
+    base = `http://127.0.0.1:${port}`;
     const env: NodeJS.ProcessEnv = {
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(PORT),
-      DANI_OWNER_TOKEN: OWNER_TOKEN,
+      OMB_PORT: String(port),
     };
     if (process.env.PATH) env.PATH = process.env.PATH;
     // Without SystemRoot, winsock fails to initialize in the child.
     if (process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
-    child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
+    child = spawn(process.execPath, ["--import", pathToFileURL(prelude).href, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -313,10 +847,9 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
     const deadline = Date.now() + 20_000;
     for (;;) {
       try {
-        const res = await fetch(`${BASE}/api/health`);
+        const res = await fetch(`${base}/api/health`);
         if (res.ok) break;
       } catch {
-        /* not up yet */
       }
       if (Date.now() > deadline) throw new Error(`server never came up. stderr:\n${stderr}`);
       if (child.exitCode !== null) throw new Error(`server exited ${child.exitCode}. stderr:\n${stderr}`);
@@ -325,27 +858,70 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
   }, 30_000);
 
   afterAll(async () => {
-    child?.kill("SIGTERM");
-    await new Promise<void>((resolve) => {
-      if (!child || child.exitCode !== null) return resolve();
-      child.on("close", () => resolve());
-      setTimeout(() => (child.kill("SIGKILL"), resolve()), 5_000).unref?.();
-    });
-    rmSync(home, { recursive: true, force: true });
+    // Windows' SIGTERM ends only the server, so its engines would keep their working folders in the home open:
+    // the whole tree goes, and is gone, before the home is deleted.
+    if (child) await killCliTree(child, 15_000);
+    writeFileSync(evidencePath, JSON.stringify({ url: base, fixtureHome: home, requests: evidence, stderr }, null, 2));
+    console.info(JSON.stringify({ evidencePath }));
+    if (home) await removeTempDir(home);
   });
+
+  it("drains exactly once after completion precedes the dispatch acknowledgment", async () => {
+    const bot = await newBot("steerEarly", "Early completion");
+    expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "first before acknowledgment" })).status).toBe(202);
+    await until(async () => existsSync(`${dispatchGate}.entered`), "the pending dispatch acknowledgment");
+    expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "queued after acknowledgment" })).body.queued).toBe(true);
+    writeFileSync(earlyGate, "complete provider turn");
+    await until(async () => echoes(await botById(bot.id)).length === 1, "completion before acknowledgment");
+    const pending = await botById(bot.id);
+    expect(pending.messages.filter((message: any) => message.role === "user").map((message: any) => message.text))
+      .toEqual(["first before acknowledgment"]);
+    expect(pending.messages.some((message: any) => message.tool?.name?.includes("queued message could not start"))).toBe(false);
+    writeFileSync(dispatchGate, "acknowledge provider dispatch");
+    await until(async () => echoes(await botById(bot.id)).length === 2, "the queued turn after acknowledgment");
+    const final = await botById(bot.id);
+    expect(final.messages.filter((message: any) => message.role === "user").map((message: any) => message.text))
+      .toEqual(["first before acknowledgment", "queued after acknowledgment"]);
+    expect(echoes(final)[1].text).toContain("queued after acknowledgment");
+    expect(final.messages.some((message: any) => message.tool?.name?.includes("queued message could not start"))).toBe(false);
+    evidence.push({ earlyCompletionQueue: { pending, final } });
+  }, 30_000);
+
+  it("retains a replacement receipt through stale completion and settles its own completion before ACK", async () => {
+    const bot = await newBot("steerReceipt", "Receipt generation");
+    expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "first receipt turn" })).status).toBe(202);
+    const body = { threadId: bot.threadId, text: "queued replacement", sendId: "replacement_receipt_123456" };
+    const queued = await api("POST", `/api/bots/${bot.id}/messages`, body);
+    expect(queued.body).toMatchObject({ queued: true, queueId: expect.any(String) });
+    const receipt = () => {
+      const database = new DatabaseSync(join(home, ".openmausbot", "messages.db"), { readOnly: true });
+      try { return database.prepare("SELECT status FROM chat_followups WHERE id = ?").get(queued.body.queueId); }
+      finally { database.close(); }
+    };
+    writeFileSync(receiptGate, "finish the old turn");
+    await until(async () => existsSync(`${receiptGate}.late`), "old completion during replacement setup");
+    expect(receipt()).toEqual({ status: "dispatching" });
+    writeFileSync(`${receiptGate}.dispatch`, "start replacement provider");
+    await until(async () => echoes(await botById(bot.id)).length === 2, "replacement completion before its ACK");
+    expect(receipt()).toEqual({ status: "dispatching" });
+    writeFileSync(`${receiptGate}.ack`, "acknowledge replacement");
+    await until(async () => receipt() === undefined, "receipt settlement by the replacement's exact provider turn");
+    const retried = await api("POST", `/api/bots/${bot.id}/messages`, body);
+    expect(retried.body.message).toMatchObject({ queueId: queued.body.queueId, sendId: body.sendId });
+    expect(echoes(await botById(bot.id))).toHaveLength(2);
+    evidence.push({ receiptGeneration: { queued, retried, final: await botById(bot.id) } });
+  }, 30_000);
 
   it(
     "queues sends while busy and drains them into exactly one attended turn",
     async () => {
       const bot = await newBot("steer", "Steerable");
 
-      // the first send starts a turn that stays open until the gate exists
       const first = await api("POST", `/api/bots/${bot.id}/messages`, { text: "first task please" });
       expect(first.status).toBe(202);
       expect(first.body.queued).toBeUndefined();
       expect((await botById(bot.id)).busy).toBe(true);
 
-      // sends while busy stay off the transcript so they cannot become the leaf
       const second = await api("POST", `/api/bots/${bot.id}/messages`, { text: "steer two" });
       expect(second.status).toBe(202);
       expect(second.body).toMatchObject({ ok: true, queued: true });
@@ -357,9 +933,8 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
       expect(snapshot.messages.filter((m: any) => m.role === "user").map((m: any) => m.text)).toEqual([
         "first task please",
       ]);
-      expect(echoes(snapshot)).toHaveLength(0); // nothing has answered yet
+      expect(echoes(snapshot)).toHaveLength(0);
 
-      // open the gate: turn 1 settles, and the queue drains into ONE turn
       writeFileSync(drainGate, "open");
       await until(async () => {
         snapshot = await botById(bot.id);
@@ -367,22 +942,15 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
       }, "the queued turn");
 
       const replies = echoes(snapshot);
-      // exactly one drained turn for two queued messages — not one each
       expect(replies).toHaveLength(2);
       expect(replies[0].text).toContain("first task please");
-      // the drained prompt keeps a Markdown block boundary between messages
       expect(replies[1].text).toContain("steer two\n\nsteer three");
-      // ...and it is an ordinary attended turn: no webhook untrusted-data
-      // framing, no rewind replay wrapper
-      expect(replies[1].text).not.toContain("authenticated external webhook");
+      expect(replies[1].text).not.toContain("authenticated outside event");
       expect(replies[1].text).not.toContain("[The user rewound");
-      // drain appends the queued lines after the first turn's reply
       const userTexts = snapshot.messages.filter((m: any) => m.role === "user").map((m: any) => m.text);
       expect(userTexts).toEqual(["first task please", "steer two", "steer three"]);
       expect(snapshot.messages.some((m: any) => m.queued)).toBe(false);
 
-      // an idle send with an empty queue runs one normal turn — the drain
-      // adds nothing behind it
       const followUp = await api("POST", `/api/bots/${bot.id}/messages`, { text: "plain follow-up" });
       expect(followUp.body.queued).toBeUndefined();
       await until(async () => {
@@ -406,7 +974,6 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
       const queued = await api("POST", `/api/bots/${bot.id}/messages`, { text: "after stop please" });
       expect(queued.body.queued).toBe(true);
 
-      // wait for the prompt to be genuinely in flight before stopping it
       await until(async () => {
         try {
           return readFileSync(stopRpcDump, "utf8").includes("session/prompt");
@@ -416,9 +983,6 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
       }, "the hung prompt");
       expect((await api("POST", `/api/bots/${bot.id}/interrupt`)).status).toBe(200);
 
-      // the interrupt settles the hung turn (ACP cancel grace), and the
-      // drain consumes the queue: its message loses the queued flag while
-      // the steered turn waits on the still-missing gate
       await until(async () => {
         const snapshot = await botById(bot.id);
         const message = snapshot.messages.find((m: any) => m.text === "after stop please");
@@ -432,10 +996,59 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
         return !snapshot.busy && echoes(snapshot).length >= 1;
       }, "the steered turn");
 
-      // the interrupted turn produced no reply; the steered one answers
       const replies = echoes(snapshot);
       expect(replies).toHaveLength(1);
       expect(replies[0].text).toContain("after stop please");
+    },
+    60_000,
+  );
+
+  it(
+    "starts a person's 1:1 turn while the bot's room turn is still open",
+    async () => {
+      const bot = await newBot("steerRoom", "RoomBusy");
+      const roomPrompts = () => {
+        try {
+          return readFileSync(roomRpcAppend, "utf8").trim().split("\n")
+            .map((line) => JSON.parse(line))
+            .filter((entry: any) => entry.method === "session/prompt");
+        } catch {
+          return [];
+        }
+      };
+
+      // The room turn stays open until the gate exists, so the room holds the bot.
+      const room = (await api("POST", "/api/groups", {
+        name: "Ops Room",
+        memberIds: [bot.id],
+        setup: { bulletin: "", defaultResponder: { kind: "member", botId: bot.id } },
+      })).body.group;
+      expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "room work" })).status).toBe(202);
+      await until(async () => (await groupById(room.id))?.working === true, "the room turn to start");
+      await until(() => Promise.resolve(roomPrompts().length === 1), "the room prompt in flight");
+
+      const direct = await api("POST", `/api/bots/${bot.id}/messages`, { text: "meanwhile, direct words" });
+      expect(direct.status).toBe(202);
+      expect(direct.body.queued).toBeUndefined();
+      // A second prompt is in flight on the same provider while the room turn is still open.
+      await until(() => Promise.resolve(roomPrompts().length === 2), "the 1:1 prompt in flight beside the room turn");
+      expect((await groupById(room.id))?.working).toBe(true);
+      const during = await botById(bot.id);
+      expect(during.tasks.find((task: any) => task.threadId === bot.threadId)?.busy).toBe(true);
+
+      writeFileSync(roomGate, "open");
+      await until(async () => (await groupById(room.id))?.working === false, "the room turn to finish");
+      await until(async () => {
+        const after = await botById(bot.id);
+        return !after.busy && echoes(after).some((reply) => reply.text.includes("meanwhile, direct words"));
+      }, "the 1:1 turn");
+
+      const after = await botById(bot.id);
+      const directEchoes = echoes(after).filter((reply) => reply.text.includes("meanwhile, direct words"));
+      expect(directEchoes).toHaveLength(1);
+      expect(after.messages.filter((message: any) => message.role === "user").map((message: any) => message.text))
+        .toEqual(["meanwhile, direct words"]);
+      evidence.push({ roomTurnOverlap: { direct, during, after } });
     },
     60_000,
   );

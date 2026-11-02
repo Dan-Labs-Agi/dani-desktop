@@ -1,53 +1,51 @@
-// The authorization DECISION log: one fleet-wide, append-only NDJSON file
-// answering "which tool call was allowed, denied, or carded — by which
-// rule, when, for which bot".
-//
-// The per-thread event log (harness/bus.ts) cannot answer that. It records
-// that a request opened and later resolved, but the WHY — a grant waved it
-// through, a guard held it, an unattended block overrode a grant that
-// would otherwise have fired — exists only for a moment at the fold point
-// and is gone by the time the event is on disk. So the fold writes the
-// reason down here at the moment it is known, and the human-answer path
-// writes a second row when a card comes back.
-//
-// Same discipline as the event tee: 0600 (rows name tools and command
-// lines), through redactSecrets (summaries carry whatever the agent typed,
-// credentials included), and fire-and-forget — an audit log must never
-// take down the decision it is auditing.
-//
-// Deliberately NOT covered: ask_bot peer-approval cards. They never cross
-// the runtime bus (peer-approval.ts appends its cards straight to the
-// store), so wiring them here would mean a second, parallel tap — a
-// separate change if it earns its keep.
-import { readFileSync } from "node:fs";
-import { appendFile, rename, stat } from "node:fs/promises";
-import { join } from "node:path";
+// The authorization decision log: one fleet-wide, append-only NDJSON file per UTC month (<data>/decisions/YYYY-MM.ndjson)
+// recording why a tool call was allowed, denied or carded. 0600 and redacted (rows carry what the agent typed, credentials
+// included), and fire-and-forget: an audit log must never take down the decision it audits. ask_bot peer-approval cards are not covered.
+import { AsyncLocalStorage } from "node:async_hooks";
+import { readdirSync, readFileSync } from "node:fs";
+import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
+import { basename, join } from "node:path";
 
 import type { AutoVerdictSource } from "./auto-approve.ts";
 import { redactSecrets } from "./redact.ts";
+import { csvCell, monthKey } from "./usage-ledger.ts";
 
+/** auto-* rows came from a policy with no card in front of a person; user-* rows record what a person answered. */
 export type DecisionKind =
   | "auto-approved"
+  | "auto-denied"
   | "card-shown"
   | "user-approved"
   | "user-denied"
+  | "user-undone"
   | "review-would-approve"
   | "review-would-deny";
 
-/** Who or what produced the decision. The AutoVerdictSource values carry
- * straight through from auto-approve.ts; `question` marks cards a rule may
- * never answer, `auto-fallback` a card shown after delivery failed, `routine`
- * a durable chat scheduling proposal, `skill` a staged learned-skill card,
- * `user` the human's answer, and auto-review sources the isolated model reviewer. */
+/** `level`: a bot's change applied below Full access with no card; `self`: a bot's own routine applied that way (older rows
+ * use it for every own change); `question`: cards a rule may never answer; `auto-fallback`: a card shown after delivery
+ * failed; connector-scope: the person pre-decided it by editing a bot's connectorTools. */
 export type DecisionSource =
   | AutoVerdictSource
+  | "level"
+  | "self"
   | "question"
   | "auto-fallback"
   | "routine"
   | "skill"
+  | "profile"
+  | "model"
   | "user"
+  | "connector-scope"
+  | "outbound"
+  | "team-memory"
   | "auto-review"
   | "auto-review-shadow";
+
+/** Who answered a card: a signed-in session (a portal session's id is its membership grant and is never written), `loopback`, or `worker`. */
+export type DecisionActor =
+  | { kind: "session"; sessionId: string; label: string; email?: string; userId?: string }
+  | { kind: "loopback" }
+  | { kind: "worker" };
 
 export interface DecisionRow {
   at: string;
@@ -63,49 +61,72 @@ export interface DecisionRow {
   rule?: string;
   /** the turn ran with nobody at the keyboard when this was decided */
   unattended?: boolean;
+  actor?: DecisionActor;
+  /** How that person answered when it was not a tap: by voice on a Live call, or a 👍 or 👎 on the card */
+  via?: DecisionVia;
+  origin?: "output";
 }
 
-const FILE_NAME = "decisions.ndjson";
-
-// Rotation is logrotate at its simplest: when the live file crosses the cap
-// it becomes `.1` (clobbering the previous `.1`) and a fresh file starts.
-// Total disk is bounded at ~2× the cap; at a few hundred bytes per row that
-// is years of human-scale approvals, and anything fancier — dated segments,
-// compression — is more machinery than an audit trail this size warrants.
-const MAX_BYTES = 4 * 1024 * 1024;
+const DIR = "decisions";
+const LEGACY_FILE = "decisions.ndjson";
+const MONTH_FILE = /^(\d{4})-(\d{2})\.ndjson$/;
+const DAY_MS = 24 * 60 * 60_000;
+const PRUNE_EVERY_MS = 60 * 60_000;
+export const DEFAULT_DECISION_RETENTION_DAYS = 180;
+export const MAX_DECISION_RETENTION_DAYS = 3650;
 const writeQueues = new Map<string, Promise<void>>();
+const lastPrune = new Map<string, number>();
+let retentionDays: () => number = () => DEFAULT_DECISION_RETENTION_DAYS;
 
-async function writeDecision(
-  dataDir: string,
-  row: Omit<DecisionRow, "at">,
-  maxBytes: number,
-): Promise<void> {
-  const file = join(dataDir, FILE_NAME);
-  try {
-    if ((await stat(file)).size >= maxBytes) await rename(file, `${file}.1`);
-  } catch {
-    /* no live file yet — nothing to rotate */
-  }
-  const record = redactSecrets({ at: new Date().toISOString(), ...row });
-  await appendFile(file, JSON.stringify(record) + "\n", { mode: 0o600 });
+export function bindDecisionRetention(provider: () => number): void {
+  retentionDays = provider;
 }
 
-/** Append one decision row. Fire-and-forget, mirroring the event bus tee:
- * the fold that calls this is delivering approvals and cards, and a full
- * disk must not turn into denied tools. */
-export function appendDecision(
-  dataDir: string,
-  row: Omit<DecisionRow, "at">,
-  opts?: { maxBytes?: number },
-): void {
+export function boundRetentionDays(): number {
+  return retentionDays();
+}
+
+export function decisionRetentionDays(configured: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  const fromEnv = env.OMB_DECISION_RETENTION_DAYS?.trim();
+  const parsed = fromEnv ? Number(fromEnv) : NaN;
+  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= MAX_DECISION_RETENTION_DAYS) return parsed;
+  if (typeof configured === "number" && Number.isInteger(configured) && configured >= 1 && configured <= MAX_DECISION_RETENTION_DAYS) return configured;
+  return DEFAULT_DECISION_RETENTION_DAYS;
+}
+
+export type DecisionVia = "call" | "reaction";
+const actorScope = new AsyncLocalStorage<{ actor: DecisionActor; via?: DecisionVia }>();
+
+export function withDecisionActor<T>(actor: DecisionActor, work: () => T, via?: DecisionVia): T {
+  return actorScope.run(via ? { actor, via } : { actor }, work);
+}
+
+export function decisionFileFor(dataDir: string, at: Date): string {
+  return join(dataDir, DIR, `${monthKey(at)}.ndjson`);
+}
+
+async function writeDecision(dataDir: string, record: DecisionRow): Promise<void> {
+  const at = new Date(record.at);
+  await mkdir(join(dataDir, DIR), { recursive: true, mode: 0o700 });
+  await appendFile(decisionFileFor(dataDir, at), JSON.stringify(record) + "\n", { mode: 0o600 });
+  if (at.getTime() - (lastPrune.get(dataDir) ?? 0) >= PRUNE_EVERY_MS) {
+    lastPrune.set(dataDir, at.getTime());
+    await pruneDecisions(dataDir, retentionDays(), at);
+  }
+}
+
+/** A full disk must not turn into denied tools. */
+export function appendDecision(dataDir: string, row: Omit<DecisionRow, "at">): void {
+  const scope = row.source === "user" ? actorScope.getStore() : undefined;
+  const actor = row.actor ?? scope?.actor;
+  const via = row.via ?? scope?.via;
+  // Redact now: the row records what was true at the moment of the decision.
+  const record = redactSecrets({ at: new Date().toISOString(), ...row, ...(actor ? { actor } : {}), ...(via ? { via } : {}) }) as DecisionRow;
   const previous = writeQueues.get(dataDir) ?? Promise.resolve();
-  // Serialize stat → optional rotate → append for each directory. Without
-  // this queue two simultaneous approvals can both rotate, overwrite .1,
-  // or append out of decision order.
+  // Appends serialize per directory, so simultaneous approvals keep their order.
   const queued = previous
-    .then(() => writeDecision(dataDir, row, opts?.maxBytes ?? MAX_BYTES))
+    .then(() => writeDecision(dataDir, record))
     .catch(() => {
-      /* logging must never take down the fold */
     });
   writeQueues.set(dataDir, queued);
   void queued.finally(() => {
@@ -113,10 +134,43 @@ export function appendDecision(
   });
 }
 
-/** Test/shutdown seam: wait until every decision already queued for this
- * directory has reached disk. Normal request paths deliberately do not wait. */
 export async function flushDecisionLog(dataDir: string): Promise<void> {
   await writeQueues.get(dataDir);
+}
+
+/** Deletes month and legacy files the window no longer covers; never throws. */
+export async function pruneDecisions(dataDir: string, days: number, now = new Date()): Promise<string[]> {
+  const cutoff = now.getTime() - days * DAY_MS;
+  const removed = await pruneMonthFiles(join(dataDir, DIR), days, now);
+  for (const name of [`${LEGACY_FILE}.1`, LEGACY_FILE]) {
+    try {
+      if ((await stat(join(dataDir, name))).mtimeMs > cutoff) continue;
+      await unlink(join(dataDir, name));
+      removed.push(name);
+    } catch {
+    }
+  }
+  return removed;
+}
+
+export async function pruneMonthFiles(dir: string, days: number, now = new Date()): Promise<string[]> {
+  const cutoff = now.getTime() - days * DAY_MS;
+  const removed: string[] = [];
+  let names: string[] = [];
+  try {
+    names = await readdir(dir);
+  } catch {
+  }
+  for (const name of names) {
+    const match = MONTH_FILE.exec(name);
+    if (!match || Date.UTC(Number(match[1]), Number(match[2]), 1) > cutoff) continue;
+    try {
+      await unlink(join(dir, name));
+      removed.push(name);
+    } catch {
+    }
+  }
+  return removed;
 }
 
 const isDecisionRow = (value: unknown): value is DecisionRow =>
@@ -127,30 +181,89 @@ const isDecisionRow = (value: unknown): value is DecisionRow =>
   typeof (value as DecisionRow).decision === "string" &&
   typeof (value as DecisionRow).source === "string";
 
-/** The newest `limit` rows, oldest first — the same order the inspector
- * uses for thread events. Reads `.1` before the live file so a request
- * right after a rotation still sees history instead of a nearly empty
- * log; whole-file reads are fine here because rotation caps both files,
- * unlike the unbounded per-thread event logs that need a tail walk. */
-export function readDecisions(dataDir: string, limit: number): DecisionRow[] {
-  const file = join(dataDir, FILE_NAME);
+function readRows(path: string): DecisionRow[] {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return [];
+  }
   const rows: DecisionRow[] = [];
-  for (const path of [`${file}.1`, file]) {
-    let text: string;
+  for (const line of text.split("\n")) {
+    if (!line) continue;
     try {
-      text = readFileSync(path, "utf8");
+      const value: unknown = JSON.parse(line);
+      if (isDecisionRow(value)) rows.push(value);
     } catch {
-      continue;
-    }
-    for (const line of text.split("\n")) {
-      if (!line) continue;
-      try {
-        const value: unknown = JSON.parse(line);
-        if (isDecisionRow(value)) rows.push(value);
-      } catch {
-        /* a line torn mid-write — skip the fragment, keep the rest */
-      }
     }
   }
-  return rows.slice(-limit);
+  return rows;
+}
+
+function sources(dataDir: string): string[] {
+  let months: string[] = [];
+  try {
+    months = readdirSync(join(dataDir, DIR)).filter((name) => MONTH_FILE.test(name)).sort();
+  } catch {
+  }
+  return [join(dataDir, `${LEGACY_FILE}.1`), join(dataDir, LEGACY_FILE), ...months.map((name) => join(dataDir, DIR, name))];
+}
+
+export function readDecisions(dataDir: string, limit: number): DecisionRow[] {
+  const files = sources(dataDir);
+  const chunks: DecisionRow[][] = [];
+  let count = 0;
+  for (let index = files.length - 1; index >= 0 && count < limit; index -= 1) {
+    const rows = readRows(files[index]!);
+    chunks.unshift(rows);
+    count += rows.length;
+  }
+  return chunks.flat().slice(-limit);
+}
+
+export function readDecisionRange(dataDir: string, range: { from: Date; to: Date }): DecisionRow[] {
+  const from = range.from.getTime();
+  const to = range.to.getTime();
+  const first = monthKey(range.from);
+  const last = monthKey(range.to);
+  const rows: DecisionRow[] = [];
+  for (const file of sources(dataDir)) {
+    const month = MONTH_FILE.exec(basename(file));
+    if (month && (`${month[1]}-${month[2]}` < first || `${month[1]}-${month[2]}` > last)) continue;
+    for (const row of readRows(file)) {
+      const at = Date.parse(row.at);
+      if (at >= from && at <= to) rows.push(row);
+    }
+  }
+  return rows;
+}
+
+export function actorLabel(actor: DecisionActor | undefined): string {
+  if (!actor) return "";
+  if (actor.kind === "loopback") return "This computer";
+  if (actor.kind === "worker") return "Local service";
+  return actor.email ?? actor.label;
+}
+
+/** Cells are formula-neutralised and every row redacted again, so an export never carries more than the log itself. */
+export function decisionsCsv(rows: DecisionRow[]): string {
+  const header = ["time", "decision", "source", "bot", "tool", "summary", "rule", "unattended", "answered_by", "thread", "request"];
+  const lines = [header.join(",")];
+  for (const raw of rows) {
+    const row = redactSecrets(raw) as DecisionRow;
+    lines.push([
+      row.at,
+      row.decision,
+      row.source,
+      row.botName || row.botId || "",
+      row.tool ?? "",
+      row.summary ?? "",
+      row.rule ?? "",
+      row.unattended ? "yes" : "",
+      row.via ? `${actorLabel(row.actor)} (${row.via === "call" ? "by voice" : "by reaction"})` : actorLabel(row.actor),
+      row.threadId,
+      row.requestId ?? "",
+    ].map(csvCell).join(","));
+  }
+  return lines.join("\n") + "\n";
 }

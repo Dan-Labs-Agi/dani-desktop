@@ -1,27 +1,25 @@
-// Separate task contexts for an agent or a channel.
-//
-// One endless thread per bot means every job contaminates the next, and
-// the only clean slate is a second bot. A task is a real boundary — its
-// own transcript and its own provider session — so sensitive work, a
-// long job and a quick question can sit side by side under one agent.
-import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { useStore, formatTime, type Bot, type Group, type Task } from "@/state/store";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Check, ChevronDown, FolderInput, Pin, PinOff, Search, SquarePen, Trash2 } from "lucide-react";
+import { useStore, type Bot, type BotProject, type Group, type Task } from "@/state/store";
 import { cn } from "@/lib/cn";
+import { MENU_ITEM_SEPARATOR, MENU_SHEET } from "./menu-recipe";
+import { roomThreadsWorkingElsewhere } from "@/lib/room-threads";
+import { useMenuMotion } from "./MenuMotion";
+import { t } from "@/lib/i18n";
+import { localizedTaskTitle } from "@/lib/task-title";
 import { COMPACT_BUBBLE } from "@/lib/compact-chip";
-import { formatTaskTokens } from "@/lib/usage";
+import { formatTaskTokens, headlineTokens, usageDetail } from "@/lib/usage";
 import { nextRename } from "@/lib/rename";
+import { FolderIcon, NewThreadButton } from "./BotProjects";
+import { useShowThreads } from "@/lib/thread-preferences";
+import { attentionJumpAction, attentionOwnerName, AttentionThreadRows, crossBotAttentionThreads, threadsWhenTreeHidden, type AttentionThread } from "./SidebarBotActivity";
+import { formatUpdatedAt, orderedThreadList, threadByline, threadRecency, threadUpdatedLabel, useRelativeNow } from "./SidebarThreadRow";
+import { Select } from "./Select";
 
-/** Click-to-switch used to close this menu immediately, which unmounted the
- * row before a double-click (or right-click) could start a rename. Linger
- * just long enough for the second click to land; rename cancels the close. */
 export const TASK_PICKER_DISMISS_MS = 500;
 
-export const TASK_RENAME_HINT = "Click to switch · double-click or right-click to rename";
 
-/** Decide what a pointer event on a task row should do. The click that
- * accompanies a dblclick (detail >= 2) must not switch/close — that is
- * what used to eat the advertised rename. */
+/** The click that accompanies a dblclick has detail >= 2 and must not switch or close. */
 export function taskPickerPointerIntent(
   type: string,
   detail = 1,
@@ -32,9 +30,6 @@ export function taskPickerPointerIntent(
   return "ignore";
 }
 
-/** Filter the task switcher. Prefix matches float first so a few letters
- * still find the right row in a long list; within a tier the caller's
- * order (newest first) is preserved. */
 export function filterTasks<T extends { title: string }>(tasks: readonly T[], query: string): T[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [...tasks];
@@ -48,46 +43,74 @@ export function filterTasks<T extends { title: string }>(tasks: readonly T[], qu
   return [...prefix, ...substring];
 }
 
-/** Quiet per-task token tally — input+output combined, because one honest
- * total reads faster than a split; the split lives in the hover title. */
+function TaskUpdatedTime({ task, now }: { task: { updatedAt?: number; createdAt?: number }; now: number }) {
+  const stamp = threadRecency(task);
+  if (!Number.isFinite(stamp) || stamp <= 0) return null;
+  return <time dateTime={new Date(stamp).toISOString()} title={formatUpdatedAt(stamp)}>{threadUpdatedLabel(stamp, now)}</time>;
+}
+
 function TaskUsage({ usage }: { usage: Task["usage"] }) {
   if (!usage) return null;
-  const label = formatTaskTokens(usage.input + usage.output);
+  const label = formatTaskTokens(headlineTokens(usage));
   if (!label) return null;
   return (
-    <span title={`${usage.input.toLocaleString()} in · ${usage.output.toLocaleString()} out`}>
+    <span
+      title={usageDetail(usage)}
+    >
       {" · "}
       {label}
     </span>
   );
 }
 
-type PickerTask = Pick<Task, "threadId" | "title" | "createdAt"> & { usage?: Task["usage"] };
+type PickerTask = Pick<Task, "threadId" | "title" | "createdAt" | "updatedAt" | "pinned" | "busy" | "activity" | "unread" | "projectId" | "openedBy" | "closedBy" | "archivedAt" | "snoozedUntil" | "waitingForTeammates"> & { usage?: Task["usage"] };
+
+export function groupThreadTasks(tasks: PickerTask[], projects: BotProject[], query: string) {
+  const needle = query.trim().toLowerCase();
+  return [...projects, { id: "", name: t("folder.none") } as BotProject].map((project) => {
+    const members = tasks.filter((task) => project.id ? task.projectId === project.id : !projects.some((item) => item.id === task.projectId));
+    return { project, tasks: project.name.toLowerCase().includes(needle) ? members : filterTasks(members, query) };
+  }).filter((group) => group.tasks.length > 0);
+}
 
 function ConversationTaskPicker({
   threadId,
   tasks,
   busy,
+  bot,
   onNew,
   onSwitch,
   onRename,
   onDelete,
+  onMove,
+  onPin,
+  attention,
+  onAttentionJump,
+  workingElsewhere = 0,
 }: {
   threadId: string;
   tasks: PickerTask[];
   busy: boolean;
+  workingElsewhere?: number;
+  bot?: Bot;
   onNew: () => void;
   onSwitch: (threadId: string) => void;
   onRename: (threadId: string, title: string) => void;
   onDelete: (threadId: string) => void;
+  onMove?: (threadId: string, projectId: string | null) => void;
+  onPin?: (threadId: string, pinned: boolean) => void;
+  attention?: AttentionThread[];
+  onAttentionJump?: (entry: AttentionThread) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const motion = useMenuMotion(open);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishingRename = useRef(false);
+  const now = useRelativeNow();
 
   const current = tasks.find((t) => t.threadId === threadId);
 
@@ -136,6 +159,7 @@ function ConversationTaskPicker({
       return;
     }
     const onDown = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest("[data-thread-overlay]")) return;
       // SAFETY: a mousedown target inside a document is always a DOM Node
       if (!ref.current?.contains(e.target as Node)) {
         if (dismissTimer.current) {
@@ -148,6 +172,7 @@ function ConversationTaskPicker({
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (e.target instanceof Element && e.target.closest("[data-thread-overlay]")) return;
       if (renaming) return;
       if (dismissTimer.current) {
         clearTimeout(dismissTimer.current);
@@ -164,29 +189,8 @@ function ConversationTaskPicker({
     };
   }, [open, renaming]);
 
-  // a bot that has only ever done one thing doesn't need a switcher yet —
-  // just the button that gives it a second context
-  if (tasks.length <= 1) {
-    return (
-      <button
-        type="button"
-        onClick={onNew}
-        disabled={busy}
-        title={busy ? "Let this turn finish first" : "New task — a fresh conversation"}
-        className={cn(
-          "flex items-center gap-1 rounded-full border border-hairline/40 px-2.5 py-1 text-[12.5px] text-ink-secondary hover:bg-raised hover:text-ink disabled:opacity-40",
-          COMPACT_BUBBLE,
-        )}
-      >
-        <Plus size={12} className="@max-4xl/chathead:size-[14px]" />
-        <span className="@max-4xl/chathead:hidden">Task</span>
-      </button>
-    );
-  }
-
   const commitRename = (threadId: string, save: boolean) => {
-    // Escape unmounts the input, which fires blur. Without this guard the
-    // blur would save the draft the user just cancelled.
+    // Escape unmounts the input, which fires blur; without this guard blur would save the cancelled draft.
     if (finishingRename.current) return;
     finishingRename.current = true;
     const currentTitle = tasks.find((task) => task.threadId === threadId)?.title ?? "";
@@ -195,16 +199,22 @@ function ConversationTaskPicker({
     if (title) onRename(threadId, title);
   };
 
-  // the picker button stays as-is — a token count next to a truncated title
-  // and count would crowd it; the open task's tally rides the hover title
   const u = current?.usage;
-  const currentLabel = u ? formatTaskTokens(u.input + u.output) : null;
+  const currentLabel = u ? formatTaskTokens(headlineTokens(u)) : null;
   const switchTitle =
     u && currentLabel
-      ? `Switch task · ${currentLabel} (${u.input.toLocaleString()} in · ${u.output.toLocaleString()} out)`
-      : "Switch task";
-  const visible = filterTasks(tasks, query);
+      ? t("task.switchWithUsageDetail", {
+          label: currentLabel,
+          detail: usageDetail(u),
+        })
+      : t("task.switch");
+  const grouped = bot ? groupThreadTasks(tasks, bot.projects ?? [], query) : null;
+  const visible = grouped ? grouped.flatMap((group) => group.tasks) : filterTasks(tasks, query);
+  const attentionNeedle = query.trim().toLowerCase();
+  const attentionRows = (attention ?? []).filter((entry) =>
+    !attentionNeedle || entry.task.title.toLowerCase().includes(attentionNeedle) || attentionOwnerName(entry).toLowerCase().includes(attentionNeedle));
   const looking = query.trim();
+  const results = [...attentionRows.map((entry) => ({ kind: "attention" as const, entry })), ...visible.map((task) => ({ kind: "task" as const, task }))];
 
   return (
     <div className="relative" ref={ref}>
@@ -215,22 +225,31 @@ function ConversationTaskPicker({
           else setOpen(true);
         }}
         title={switchTitle}
+        aria-label={t("task.switch")}
         className={cn(
-          "flex max-w-[220px] items-center gap-1.5 rounded-full border border-hairline/40 px-2.5 py-1 text-[12.5px] text-ink-secondary hover:bg-raised hover:text-ink",
+          "flex max-w-[220px] items-center gap-1.5 rounded-full border border-hairline/40 px-2.5 py-1 text-[13px] text-ink-secondary hover:bg-raised hover:text-ink",
           COMPACT_BUBBLE,
         )}
       >
-        <span className="truncate @max-4xl/chathead:hidden">{current?.title ?? "Task"}</span>
-        {/* folded: just the count in the bubble — the title rides the tooltip */}
+        <span className="truncate @max-4xl/chathead:hidden">{t("task.switch")}</span>
         <span className="shrink-0 tabular-nums opacity-60 @max-4xl/chathead:opacity-100">{tasks.length}</span>
+        {workingElsewhere > 0 && (
+          <span
+            role="img"
+            data-working-elsewhere={workingElsewhere}
+            aria-label={t("task.workingElsewhere", { count: workingElsewhere })}
+            title={t("task.workingElsewhere", { count: workingElsewhere })}
+            className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent"
+          />
+        )}
         <ChevronDown size={12} className="shrink-0 @max-4xl/chathead:hidden" />
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full z-40 mt-1 w-[300px] overflow-hidden rounded-xl border border-hairline/50 bg-card py-1 shadow-2xl shadow-black/50">
-          <div className="px-2 pb-1 pt-1.5">
-            <div className="flex items-center gap-2 rounded-lg border border-hairline/40 bg-inset px-2.5 py-1.5 focus-within:border-accent/60">
-              <Search size={13} className="shrink-0 text-ink-secondary" />
+      {motion.shown && (
+        <div className={cn("absolute right-0 top-full z-40 mt-1 w-[300px] overflow-hidden", MENU_SHEET, motion.className)} {...motion.exitProps}>
+          <div>
+            <div className="flex items-center gap-2 rounded-md bg-ink/[0.05] px-2 py-1.5 focus-within:ring-2 focus-within:ring-focus/60">
+              <Search size={14} className="shrink-0 text-ink-secondary" />
               <input
                 autoFocus
                 value={query}
@@ -247,37 +266,45 @@ function ConversationTaskPicker({
                   }
                   if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                     e.preventDefault();
-                    const first = visible[0];
+                    const first = results[0];
                     if (!first) return;
-                    if (first.threadId !== threadId) onSwitch(first.threadId);
+                    if (first.kind === "attention") onAttentionJump?.(first.entry);
+                    else if (first.task.threadId !== threadId) onSwitch(first.task.threadId);
                     closeMenu();
                   }
                 }}
-                placeholder="Search tasks"
-                aria-label="Search tasks"
-                className="w-full bg-transparent text-[12.5px] text-ink placeholder:text-ink-secondary focus:outline-none"
+                placeholder={t("task.search")}
+                aria-label={t("task.search")}
+                className="w-full bg-transparent text-[13px] text-ink placeholder:text-ink-tertiary focus:outline-none"
               />
             </div>
           </div>
-          <div className="max-h-[320px] overflow-y-auto" role="group" aria-label={looking ? `${visible.length} matching tasks` : "Tasks"}>
-            {visible.length === 0 ? (
-              <div className="px-3 py-6 text-center text-[13px] text-ink-secondary">
-                Nothing matches “{looking}”
+          <div className="max-h-[320px] overflow-y-auto" role="group" aria-label={looking ? t("task.matching", { count: results.length }) : t("task.list")}>
+            {attentionRows.length > 0 && <div className="pb-1">
+              <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-[12px] font-medium text-ink-secondary"><Activity size={14} />{t("attention.title")}</div>
+              <AttentionThreadRows inset entries={attentionRows} onJump={(entry) => { onAttentionJump?.(entry); closeMenu(); }} />
+            </div>}
+            {results.length === 0 ? (
+              <div className="px-2 py-6 text-center text-[13px] text-ink-secondary">
+                {t("task.noMatch", { query: looking })}
               </div>
-            ) : visible.map((task) => {
+            ) : visible.map((task, index) => {
               const active = task.threadId === threadId;
+              const opener = threadByline(task);
+              const heading = grouped?.find((group) => group.tasks[0]?.threadId === task.threadId)?.project;
               return (
+                <Fragment key={task.threadId}>
+                {bot?.projects?.length && heading ? <div className={cn("flex items-center gap-1.5 px-2 pb-1 pt-2 text-[12px] font-medium text-ink-secondary", index > 0 && "border-t border-hairline/30")}>{heading.id && <FolderIcon emoji={heading.emoji} size={12} />}{heading.name}</div> : null}
                 <div
-                  key={task.threadId}
-                  className={cn("group flex items-center gap-2 px-2.5 py-2", active ? "bg-raised/60" : "hover:bg-raised/40")}
+                  className={cn("group flex items-center gap-2 rounded-md px-2 py-1.5", active ? "bg-menu-active" : "hover:bg-menu-hover")}
                 >
-                  <Check size={13} className={cn("shrink-0", active ? "text-accent" : "opacity-0")} />
+                  <Check size={14} className={cn("shrink-0", active ? "text-accent" : "opacity-0")} />
                   {renaming === task.threadId ? (
                     <input
                       autoFocus
                       value={draft}
                       maxLength={80}
-                      aria-label="Rename task"
+                      aria-label={t("task.renameAria")}
                       onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => setDraft(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
@@ -316,85 +343,148 @@ function ConversationTaskPicker({
                         startRename(task);
                       }}
                       className="min-w-0 flex-1 text-left"
-                      title={TASK_RENAME_HINT}
+                      title={t("task.renameHint")}
                     >
-                      <div className="truncate text-[13px] text-ink">{task.title}</div>
+                      <div dir="auto" className="truncate text-[14px] leading-[18px] text-ink">{localizedTaskTitle(task.title)}</div>
                       <div className="text-[11px] text-ink-secondary">
-                        {formatTime(task.createdAt)}
+                        {task.activity === "waiting-on-you" ? `${t("task.waiting")} · ` : task.waitingForTeammates ? `${t("task.waitingOnTeammate")} · ` : task.busy ? `${t("chat.activity.working")} · ` : task.unread ? `${t("task.unread")} · ` : ""}
+                        <TaskUpdatedTime task={task} now={now} />
                         <TaskUsage usage={task.usage} />
+                        {opener && ` · ${opener}`}
                       </div>
+                    </button>
+                  )}
+                  {onPin && renaming !== task.threadId && (
+                    <button
+                      type="button"
+                      onClick={() => onPin(task.threadId, task.pinned !== true)}
+                      aria-label={task.pinned === true ? t("sidebar.bot.unpin") : t("sidebar.bot.pin")}
+                      title={task.pinned === true ? t("sidebar.bot.unpin") : t("sidebar.bot.pin")}
+                      className="rounded-md p-1 text-ink-secondary opacity-0 hover:bg-menu-hover hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-70"
+                    >
+                      {task.pinned === true ? <PinOff size={14} /> : <Pin size={14} />}
                     </button>
                   )}
                   {renaming !== task.threadId && (
                     <button
                       type="button"
                       onClick={() => startRename(task)}
-                      aria-label={`Rename ${task.title}`}
-                      title="Rename this task"
-                      className="rounded p-1 text-ink-secondary opacity-0 hover:bg-raised hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+                      aria-label={t("task.renameNamed", { title: task.title })}
+                      title={t("task.renameTitle")}
+                      className="rounded-md p-1 text-ink-secondary opacity-0 hover:bg-menu-hover hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-70"
                     >
-                      <Pencil size={13} />
+                      <SquarePen size={14} />
                     </button>
                   )}
+                  {bot && onMove && (bot.projects?.length ?? 0) > 0 && <label title={t("folder.move")} className="relative rounded-md p-1 text-ink-secondary opacity-0 hover:bg-menu-hover hover:text-ink focus-within:opacity-100 group-hover:opacity-100 touch:opacity-70">
+                    <FolderInput size={14} />
+                    <select aria-label={t("folder.moveNamed", { title: task.title })} value={bot.projects?.some((project) => project.id === task.projectId) ? task.projectId : ""}
+                      onFocus={clearDismiss} onChange={(event) => { clearDismiss(); onMove(task.threadId, event.target.value || null); }}
+                      className="absolute inset-0 w-full cursor-pointer opacity-0">
+                      <option value="">{t("folder.none")}</option>
+                      {bot.projects?.map((project) => <option key={project.id} value={project.id}>{project.emoji ? `${project.emoji} ` : ""}{project.name}</option>)}
+                    </select>
+                  </label>}
                   <button
                     type="button"
                     onClick={() => onDelete(task.threadId)}
-                    disabled={busy && active}
-                    aria-label="Delete task"
-                    title="Delete this task and its conversation"
-                    className="rounded p-1 text-ink-secondary opacity-0 hover:bg-raised hover:text-danger group-hover:opacity-100 disabled:opacity-20"
+                    disabled={Boolean(task.busy) || busy && active}
+                    aria-label={t("task.deleteAria")}
+                    title={t("task.deleteTitle")}
+                    className="rounded-md p-1 text-ink-secondary opacity-0 hover:bg-menu-hover hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-20 touch:opacity-70 touch:disabled:opacity-20"
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
+                </Fragment>
               );
             })}
           </div>
-          <button
+          <div role="separator" className={MENU_ITEM_SEPARATOR} />
+          {bot ? <NewThreadButton bot={bot} onCreated={closeMenu} className="min-h-[30px] w-full rounded-md px-2 text-[14px] text-ink hover:bg-menu-hover" /> : <button
             type="button"
             onClick={() => {
               onNew();
               closeMenu();
             }}
             disabled={busy}
-            className="mt-1 flex w-full items-center gap-2 border-t border-hairline/40 px-3 py-2 text-left text-[13px] text-ink hover:bg-raised/50 disabled:opacity-40"
+            className="flex min-h-[30px] w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[14px] text-ink hover:bg-menu-hover disabled:opacity-40"
           >
-            <Plus size={13} className="text-ink-secondary" /> New task
-          </button>
+            <SquarePen size={16} className="text-ink-secondary" /> {t("task.newShort")}
+          </button>}
         </div>
       )}
     </div>
   );
 }
 
+export function BotActivityPicker({ bot }: { bot: Bot }) {
+  const { state, dispatch } = useStore();
+  const showThreads = useShowThreads();
+  if (showThreads) return null;
+  const activity = threadsWhenTreeHidden(bot, state.pendingQueued).filter((task) => task.threadId !== bot.threadId);
+  if (!activity.length) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-2 px-5 py-2" data-background-activity>
+      <Select variant="pill" size="sm" className="max-w-[180px] shrink-0"
+        aria-label={t("task.otherActivity", { count: activity.length })}
+        value=""
+        onChange={(event) => dispatch({ type: "switchTask", botId: bot.id, threadId: event.target.value })}
+      >
+        <option value="" disabled>{t("task.otherActivity", { count: activity.length })}</option>
+        {activity.map((task) => <option key={task.threadId} value={task.threadId}>
+          {task.title} · {task.activity === "waiting-on-you" ? t("task.waiting") : task.waitingForTeammates ? t("task.waitingOnTeammate") : task.busy || task.activity === "working" ? t("chat.activity.working") : task.queued ? t("task.queued") : t("task.unread")}
+        </option>)}
+      </Select>
+      <span dir="auto" className="truncate text-[12px] text-ink-secondary">{bot.tasks?.find((task) => task.threadId === bot.threadId)?.title}</span>
+    </div>
+  );
+}
+
 export function TaskPicker({ bot }: { bot: Bot }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
+  const showThreads = useShowThreads();
+  if (!showThreads) return null;
   return (
     <ConversationTaskPicker
       threadId={bot.threadId}
-      tasks={bot.tasks ?? []}
-      busy={Boolean(bot.busy)}
+      tasks={orderedThreadList((bot.tasks ?? []).filter((task) => !task.routineRunId))}
+      busy={false}
+      bot={bot}
+      attention={crossBotAttentionThreads(state.bots, state.pendingQueued, bot.id, state.groups)}
       onNew={() => dispatch({ type: "newTask", botId: bot.id })}
       onSwitch={(threadId) => dispatch({ type: "switchTask", botId: bot.id, threadId })}
       onRename={(threadId, title) => dispatch({ type: "renameTask", botId: bot.id, threadId, title })}
       onDelete={(threadId) => dispatch({ type: "deleteTask", botId: bot.id, threadId })}
+      onMove={(threadId, projectId) => dispatch({ type: "updateTask", botId: bot.id, threadId, patch: { projectId } })}
+      onPin={(threadId, pinned) => dispatch({ type: "updateTask", botId: bot.id, threadId, patch: { pinned } })}
+      onAttentionJump={(entry) => dispatch(attentionJumpAction(entry))}
     />
   );
 }
 
-/** The same task affordance in a channel. DMs never render it because their
- * transcript is the private bot-to-bot exchange rather than user work. */
 export function GroupTaskPicker({ group }: { group: Group }) {
   const { dispatch } = useStore();
+  const tasks = useMemo(() => {
+    return (group.tasks ?? []).map((task) => ({
+      ...task,
+      busy: Boolean(task.working || task.busyBotId),
+    }));
+  }, [group.tasks]);
   return (
     <ConversationTaskPicker
       threadId={group.threadId}
-      tasks={group.tasks ?? []}
-      busy={Boolean(group.working || group.busyBotId)}
+      tasks={orderedThreadList(tasks)}
+      busy={false}
+      workingElsewhere={roomThreadsWorkingElsewhere(group)}
       onNew={() => dispatch({ type: "newGroupTask", groupId: group.id })}
       onSwitch={(threadId) => dispatch({ type: "switchGroupTask", groupId: group.id, threadId })}
       onRename={(threadId, title) => dispatch({ type: "renameGroupTask", groupId: group.id, threadId, title })}
       onDelete={(threadId) => dispatch({ type: "deleteGroupTask", groupId: group.id, threadId })}
+      onPin={(threadId, pinned) => {
+        const title = group.tasks?.find((task) => task.threadId === threadId)?.title ?? "";
+        dispatch({ type: "pinGroupTask", groupId: group.id, threadId, pinned, title });
+      }}
     />
   );
 }

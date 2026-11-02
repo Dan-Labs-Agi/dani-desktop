@@ -53,20 +53,30 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-describe("Dani Bot data-directory lease", () => {
+describe("OpenMausBot data-directory lease", () => {
   it("holds one directory until its matching handle releases it", () => {
     const dir = tempDataDir();
     const lease = acquireDataDirLease(dir);
-    const stored = JSON.parse(readFileSync(join(dir, "danibot-server.lease"), "utf8"));
+    const stored = JSON.parse(readFileSync(join(dir, "openmausbot-server.lease"), "utf8"));
 
-    expect(stored).toEqual({
+    // boot/uptime identify which boot wrote the record, so a pid recycled
+    // across a restart cannot be mistaken for a live owner, and ns/start which
+    // pid namespace and process, so a container's reused pid cannot either.
+    // Each is null where the platform does not expose it.
+    const { boot, ns, start, ...rest } = stored;
+    expect(rest).toEqual({
       version: 1,
       pid: process.pid,
       host: hostname(),
       token: expect.stringMatching(/^[0-9a-f-]{36}$/),
       createdAt: expect.any(Number),
+      uptime: expect.any(Number),
     });
-    expect(Object.keys(stored).sort()).toEqual(["createdAt", "host", "pid", "token", "version"]);
+    expect(boot === null || (typeof boot === "string" && boot.length > 0)).toBe(true);
+    expect(process.platform === "linux" ? /^[1-9]\d*$/.test(ns) && Number.isSafeInteger(start) : ns === null && start === null).toBe(true);
+    expect(Object.keys(stored).sort()).toEqual(
+      ["boot", "createdAt", "host", "ns", "pid", "start", "token", "uptime", "version"],
+    );
     expect(() => acquireDataDirLease(dir)).toThrow(/already using this data directory/i);
 
     expect(lease.release()).toBe(true);
@@ -77,7 +87,7 @@ describe("Dani Bot data-directory lease", () => {
 
   it("will not release a lease whose owner token changed", () => {
     const dir = tempDataDir();
-    const path = join(dir, "danibot-server.lease");
+    const path = join(dir, "openmausbot-server.lease");
     const lease = acquireDataDirLease(dir);
     const original = JSON.parse(readFileSync(path, "utf8"));
     const replacement = { ...original, token: randomUUID() };
@@ -143,7 +153,7 @@ describe("Dani Bot data-directory lease", () => {
 
   it("fails closed on a corrupt owner record", () => {
     const dir = tempDataDir();
-    const path = join(dir, "danibot-server.lease");
+    const path = join(dir, "openmausbot-server.lease");
     writeFileSync(path, "not-json\n", { mode: 0o600 });
 
     expect(() => acquireDataDirLease(dir)).toThrow(/lease is invalid.*refusing to start/i);

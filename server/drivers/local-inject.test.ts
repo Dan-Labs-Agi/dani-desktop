@@ -260,6 +260,57 @@ describe("mergeLocalInject", () => {
       true,
     );
   });
+
+  it("lists LM Studio 0.4 llms from /api/v1/models and ignores the OpenAI variant id", async () => {
+    const catalog = await mergeLocalInject(
+      { default: "keep", options: [{ id: "keep", label: "Keep" }] },
+      { VITEST: "true", OPENMAUSBOT_PROBE_LOCAL_INJECT: "1" },
+      async (url) => {
+        const href = String(url);
+        if (href.endsWith("/api/v1/models")) {
+          return new Response(
+            JSON.stringify({
+              models: [
+                {
+                  type: "llm",
+                  key: "google/gemma-4-26b-a4b",
+                  loaded_instances: [{ config: { context_length: 4096 } }],
+                  max_context_length: 262144,
+                  selected_variant: "google/gemma-4-26b-a4b@q4_k_m",
+                },
+                {
+                  type: "llm",
+                  key: "deepseek-r1",
+                  loaded_instances: [],
+                  max_context_length: 131072,
+                },
+                { type: "embedding", key: "acme/vector-model" },
+                { type: "decision", key: "acme/router" },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        if (href.endsWith(":1234/v1/models")) {
+          return new Response(JSON.stringify({ data: [{ id: "google/gemma-4-26b-a4b@q4_k_m" }] }), { status: 200 });
+        }
+        return new Response("nope", { status: 500 });
+      },
+    );
+    expect(catalog.options.filter((option) => option.id.startsWith("lmstudio::")).map((option) => option.id)).toEqual([
+      "lmstudio::google/gemma-4-26b-a4b",
+      "lmstudio::deepseek-r1",
+    ]);
+    expect(catalog.options.find((option) => option.id === "lmstudio::google/gemma-4-26b-a4b")).toMatchObject({
+      custom: true,
+      loaded: true,
+      contextWindow: 4096,
+    });
+    const downloaded = catalog.options.find((option) => option.id === "lmstudio::deepseek-r1");
+    expect(downloaded).toMatchObject({ custom: true, contextWindow: 131072 });
+    expect(downloaded?.loaded).toBeUndefined();
+    expect(catalog.options.some((option) => option.id.includes("@") || option.id.includes("vector-model") || option.id.includes("acme/router"))).toBe(false);
+  });
 });
 
 describe("applyOpenAIInject", () => {
@@ -331,7 +382,7 @@ describe("ensureGrokInjectSlug", () => {
     const instance = await GrokAgentDriver.create({
       instanceId: "grok-omlx-argv",
       displayName: "Grok",
-      environment: { HOME: home, FAKE_ACP_DUMP: dump },
+      environment: { HOME: home, USERPROFILE: home, FAKE_ACP_DUMP: dump },
       enabled: true,
       config: { cli: FAKE_ACP, fullAuto: false },
     });
@@ -794,9 +845,9 @@ describe("applyDroidLocalAuthEnv", () => {
   it("fills a placeholder Factory key only for a local inject pick", () => {
     const env: Record<string, string | undefined> = {};
     applyDroidLocalAuthEnv(env, "ollama::ornith:35b-bf16");
-    expect(env.FACTORY_API_KEY).toBe("danibot-local");
+    expect(env.FACTORY_API_KEY).toBe("openmausbot-local");
     applyDroidLocalAuthEnv(env, "ollama::ornith:35b-bf16");
-    expect(env.FACTORY_API_KEY).toBe("danibot-local");
+    expect(env.FACTORY_API_KEY).toBe("openmausbot-local");
   });
 
   it("leaves a real Factory key and cloud slugs alone", () => {
@@ -839,7 +890,7 @@ describe("applyDroidLocalAuthEnv", () => {
         model: "ollama::ornith:35b-bf16",
       });
       await recorder.until((e) => e.type === "turn.completed");
-      expect(JSON.parse(readFileSync(dump, "utf8")).env.FACTORY_API_KEY).toBe("danibot-local");
+      expect(JSON.parse(readFileSync(dump, "utf8")).env.FACTORY_API_KEY).toBe("openmausbot-local");
 
       await instance.adapter.sendTurn({
         threadId: "t-cloud",
@@ -848,7 +899,7 @@ describe("applyDroidLocalAuthEnv", () => {
       });
       await recorder.until((e) => e.type === "turn.completed" && e.threadId === "t-cloud");
       expect(JSON.parse(readFileSync(dump, "utf8")).env.FACTORY_API_KEY).not.toBe(
-        "danibot-local",
+        "openmausbot-local",
       );
     } finally {
       await instance.dispose();

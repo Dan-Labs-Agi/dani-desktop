@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Plus, TabletSmartphone } from "lucide-react";
 
 import { cn } from "@/lib/cn";
-import type { Action } from "@/state/store";
+import { t } from "@/lib/i18n";
+import { phonePairingSettingsAction } from "@/lib/phone-pairing";
 import type { SidebarDensity } from "@/lib/sidebar-preferences";
-import { companionBridge, type CompanionState } from "./PhoneSetupFlow";
+import { companionBridge } from "@/lib/companion-bridge";
+import type { CompanionState } from "./PhoneSetupFlow";
 
 export const SIDEBAR_PHONE_RECENT_MS = 2 * 60_000;
 const SIDEBAR_PHONE_POLL_MS = 15_000;
@@ -30,25 +32,22 @@ export interface SidebarPhoneStatus {
   connectedCount: number;
 }
 
-/** Current sidecars report authenticated live event streams, so green means a
- * phone is connected now. The timestamp fallback is deliberately neutral and
- * exists only for an older unpackaged development sidecar. */
 export function deriveSidebarPhoneStatus(
   snapshot: SidebarPhoneSnapshot | null | undefined,
   now: number,
 ): SidebarPhoneStatus {
   if (snapshot === undefined) {
-    return { kind: "checking", label: "Checking device status", pairedCount: 0, connectedCount: 0 };
+    return { kind: "checking", label: t("sidebar.phone.checking"), pairedCount: 0, connectedCount: 0 };
   }
   if (snapshot === null) {
-    return { kind: "unavailable", label: "Device status unavailable", pairedCount: 0, connectedCount: 0 };
+    return { kind: "unavailable", label: t("sidebar.phone.unavailable"), pairedCount: 0, connectedCount: 0 };
   }
 
   const pairedCount = snapshot.devices.length;
   if (snapshot.error) {
     return {
       kind: "unavailable",
-      label: "Device status unavailable",
+      label: t("sidebar.phone.unavailable"),
       pairedCount,
       connectedCount: 0,
     };
@@ -56,13 +55,13 @@ export function deriveSidebarPhoneStatus(
   if (!snapshot.enabled) {
     return {
       kind: "unavailable",
-      label: "Remote access off",
+      label: t("sidebar.phone.off"),
       pairedCount,
       connectedCount: 0,
     };
   }
   if (!pairedCount) {
-    return { kind: "unpaired", label: "Pair a device", pairedCount: 0, connectedCount: 0 };
+    return { kind: "unpaired", label: t("sidebar.phone.pair"), pairedCount: 0, connectedCount: 0 };
   }
 
   if (Array.isArray(snapshot.connectedDeviceIds)) {
@@ -70,52 +69,47 @@ export function deriveSidebarPhoneStatus(
     const connectedCount = snapshot.devices.filter((device) => live.has(device.id)).length;
     if (connectedCount) {
       const label = pairedCount === 1
-        ? "Device connected"
+        ? t("sidebar.phone.connectedOne")
         : connectedCount === pairedCount
-          ? `${pairedCount} devices connected`
-          : `${connectedCount} of ${pairedCount} devices connected`;
+          ? t("sidebar.phone.connectedAll", { count: pairedCount })
+          : t("sidebar.phone.connectedSome", { connected: connectedCount, count: pairedCount });
       return { kind: "connected", label, pairedCount, connectedCount };
     }
     return {
       kind: "disconnected",
-      label: pairedCount === 1 ? "Device paired — not connected" : `${pairedCount} devices paired — none connected`,
+      label:
+        pairedCount === 1
+          ? t("sidebar.phone.disconnectedOne")
+          : t("sidebar.phone.disconnectedMany", { count: pairedCount }),
       pairedCount,
       connectedCount: 0,
     };
   }
 
-  // Compatibility with a sidecar from an older unpackaged development build.
-  // Recent activity stays neutral because it is not proof of a live stream.
   const recentCount = snapshot.devices.filter((device) => {
     const age = now - device.lastSeenAt;
     return Number.isFinite(device.lastSeenAt) && age >= 0 && age <= SIDEBAR_PHONE_RECENT_MS;
   }).length;
   if (recentCount) {
     const label = pairedCount === 1
-      ? "Device active recently"
+      ? t("sidebar.phone.recentOne")
       : recentCount === pairedCount
-        ? `${pairedCount} devices active recently`
-        : `${recentCount} of ${pairedCount} devices active recently`;
+        ? t("sidebar.phone.recentAll", { count: pairedCount })
+        : t("sidebar.phone.recentSome", { recent: recentCount, count: pairedCount });
     return { kind: "recent", label, pairedCount, connectedCount: 0 };
   }
 
   return {
     kind: "stale",
     label: pairedCount === 1
-      ? "Device paired — not recently active"
-      : `${pairedCount} devices paired — none recently active`,
+      ? t("sidebar.phone.staleOne")
+      : t("sidebar.phone.staleMany", { count: pairedCount }),
     pairedCount,
     connectedCount: 0,
   };
 }
 
-type ToggleAppSettingsAction = Extract<Action, { type: "toggleAppSettings" }>;
-
-export const phoneSettingsAction = (): ToggleAppSettingsAction => ({
-  type: "toggleAppSettings",
-  open: true,
-  section: "companion",
-});
+export const phoneSettingsAction = phonePairingSettingsAction;
 
 export function useSidebarPhoneStatus(): SidebarPhoneStatus {
   const [snapshot, setSnapshot] = useState<SidebarPhoneSnapshot | null>();
@@ -172,7 +166,7 @@ export function SidebarPhoneStatusButton({
       data-phone-status={status.kind}
       data-sidebar-density={density}
       className={cn(
-        "relative flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-raised",
+        "relative flex size-[46px] shrink-0 items-center justify-center rounded-xl hover:bg-raised",
         density === "icons" && "mx-auto",
         connected ? "text-success" : "text-ink-secondary hover:text-ink",
       )}

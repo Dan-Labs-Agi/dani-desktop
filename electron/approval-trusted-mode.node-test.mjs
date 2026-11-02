@@ -1,15 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-// The coordinator deliberately unrefs its request timeout so a pending ask
-// never wedges an Electron app quit. Under bare `node --test` an unref'd
-// timer lets the event loop drain while a test is still awaiting it, and the
-// runner cancels every pending test in the file ("Promise resolution is
-// still pending but the event loop has already resolved"). Hold one ref'd
-// handle for the file's lifetime so the real timeouts can fire.
-const keepEventLoopAlive = setInterval(() => {}, 60_000);
-test.after(() => clearInterval(keepEventLoopAlive));
-
 import approvalModule from "./approval-trusted-mode.cjs";
 
 const {
@@ -24,6 +15,92 @@ const {
 const REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000";
 const REQUEST_ID_2 = "123e4567-e89b-42d3-a456-426614174001";
 
+test("all-thread grants wait for committed thread modes and compensate the same scope on failure", async () => {
+  for (const valid of [true, false]) {
+    const proc = fakeProcess();
+    const coordinator = createTrustedApprovalModeCoordinator({ randomId: idSequence(REQUEST_ID, REQUEST_ID_2) });
+    let settled = false;
+    const pending = coordinator.request(proc, "bot-1", "full", { allThreads: true }).then(bot => { settled = true; return bot; });
+    assert.equal(proc.messages[0].allThreads, true);
+    const bot = { id: "bot-1", approvalMode: "full", tasks: [{ threadId: "old", approvalMode: "ask" }] };
+    coordinator.receive(proc, { type: "approval-trusted-mode-result", requestId: REQUEST_ID, ok: true, bot });
+    for (const phase of ["confirm", "activate", "finalize"]) coordinator.receive(proc, { type: `approval-trusted-mode-${phase}-result`, requestId: REQUEST_ID, ok: true });
+    await Promise.resolve(); assert.equal(settled, false);
+    coordinator.receive(proc, { type: "approval-trusted-mode-commit-result", requestId: REQUEST_ID, ok: true,
+      bot: { ...bot, tasks: [{ threadId: "old", approvalMode: valid ? "full" : "ask" }] } });
+    if (valid) assert.equal((await pending).tasks[0].approvalMode, "full");
+    else {
+      assert.equal(proc.messages.at(-1).allThreads, true);
+      assert.equal(proc.messages.at(-1).mode, "ask");
+      coordinator.receive(proc, { type: "approval-trusted-mode-result", requestId: REQUEST_ID_2, ok: true,
+        bot: { ...bot, approvalMode: "ask" } });
+      await assert.rejects(pending, /not committed/);
+    }
+  }
+});
+
+test("all-thread grants take every level but Custom, and reject mixed scopes", () => {
+  for (const mode of ["ask", "edits", "auto", "full"]) {
+    assert.equal(trustedApprovalModeRequest(REQUEST_ID, "bot-1", mode, false, undefined, undefined, undefined, false, true).allThreads, true);
+  }
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "custom", false, undefined, undefined, undefined, false, true), /all-threads/);
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full", false, "thread", undefined, undefined, false, true), /all-threads/);
+});
+
+test("an all-thread Auto leaving Custom settles on its one reply, with no grant phases", async () => {
+  const proc = fakeProcess();
+  const coordinator = createTrustedApprovalModeCoordinator({ randomId: () => REQUEST_ID });
+  const pending = coordinator.request(proc, "bot-1", "auto", { allThreads: true, acknowledgeLocalAuto: true });
+  assert.deepEqual(proc.messages[0], { type: "approval-trusted-mode-set", requestId: REQUEST_ID, botId: "bot-1", mode: "auto", acknowledgeLocalAuto: true, allThreads: true });
+  const bot = { id: "bot-1", approvalMode: "auto", tasks: [{ threadId: "rules", approvalMode: "auto" }] };
+  coordinator.receive(proc, { type: "approval-trusted-mode-result", requestId: REQUEST_ID, ok: true, bot });
+  assert.deepEqual(await pending, bot);
+  assert.equal(proc.messages.length, 1);
+});
+
+test("scoped composer grants wait for the real commit and keep the bot default", async () => {
+  const proc = fakeProcess();
+  const coordinator = createTrustedApprovalModeCoordinator({ randomId: () => REQUEST_ID });
+  let settled = false;
+  const pending = coordinator.request(proc, "bot-1", "full", { threadId: "thread-1", threadOnly: true }).then(bot => { settled = true; return bot; });
+  const before = { id: "bot-1", approvalMode: "ask", tasks: [{ threadId: "thread-1", approvalMode: "ask" }] };
+  coordinator.receive(proc, { type: "approval-trusted-mode-result", requestId: REQUEST_ID, ok: true, bot: before });
+  for (const phase of ["confirm", "activate", "finalize"]) coordinator.receive(proc, { type: `approval-trusted-mode-${phase}-result`, requestId: REQUEST_ID, ok: true });
+  await Promise.resolve(); assert.equal(settled, false);
+  const after = { ...before, tasks: [{ threadId: "thread-1", approvalMode: "full" }] };
+  coordinator.receive(proc, { type: "approval-trusted-mode-commit-result", requestId: REQUEST_ID, ok: true, bot: after });
+  assert.deepEqual(await pending, after);
+});
+
+test("an uncertain scoped commit compensates only its own thread", async () => {
+  const proc = fakeProcess();
+  const coordinator = createTrustedApprovalModeCoordinator({ randomId: idSequence(REQUEST_ID, REQUEST_ID_2) });
+  const pending = coordinator.request(proc, "bot-1", "full", { threadId: "thread-1", threadOnly: true });
+  const before = { id: "bot-1", approvalMode: "custom", tasks: [{ threadId: "thread-1", approvalMode: "ask" }] };
+  coordinator.receive(proc, { type: "approval-trusted-mode-result", requestId: REQUEST_ID, ok: true, bot: before });
+  for (const phase of ["confirm", "activate", "finalize"]) coordinator.receive(proc, { type: `approval-trusted-mode-${phase}-result`, requestId: REQUEST_ID, ok: true });
+  coordinator.receive(proc, { type: "approval-trusted-mode-commit-result", requestId: REQUEST_ID, ok: false });
+  assert.deepEqual(proc.messages.at(-1), { type: "approval-trusted-mode-set", requestId: REQUEST_ID_2, botId: "bot-1", mode: "ask", threadId: "thread-1", threadOnly: true });
+  coordinator.receive(proc, { type: "approval-trusted-mode-result", requestId: REQUEST_ID_2, ok: true, bot: before });
+  await assert.rejects(pending, /not committed/);
+});
+
+test("thread-only options reject missing or mixed scopes", () => {
+  for (const mode of ["ask", "edits", "auto", "full", "custom"]) assert.equal(trustedApprovalModeRequest(REQUEST_ID, "bot-1", mode, false, "thread-1", undefined, undefined, true).threadOnly, true);
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full", false, undefined, undefined, undefined, true), /thread-only/);
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full", false, "thread-1", undefined, true, true), /thread-only/);
+});
+
+test("permission refresh stays on one thread", () => {
+  const message = trustedApprovalModeRequest(REQUEST_ID, "bot-1", "auto", false, "thread-1", undefined, undefined, true, false, true);
+  assert.equal(message.refreshPermissions, true);
+  assert.equal(message.threadOnly, true);
+  assert.equal(message.threadId, "thread-1");
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full", false, "thread-1", undefined, undefined, false, false, true), /permission refresh/);
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full", false, undefined, undefined, undefined, false, true, true), /permission refresh/);
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "ask", false, undefined, undefined, undefined, false, false, "yes"), /permission refresh/);
+});
+
 function idSequence(...ids) {
   let index = 0;
   return () => ids[index++] ?? (() => { throw new Error("test request id sequence exhausted"); })();
@@ -34,7 +111,37 @@ function fakeProcess() {
   return { messages, postMessage: (message) => messages.push(message) };
 }
 
+test("confirmed model switches use only scoped Ask requests", () => {
+  const selection = { instanceId: "claude", model: "sonnet" };
+  assert.deepEqual(trustedApprovalModeRequest(REQUEST_ID, "bot-1", "ask", false, "thread-1", selection, false), {
+    type: "approval-trusted-mode-set", requestId: REQUEST_ID, botId: "bot-1", mode: "ask",
+    threadId: "thread-1", modelSelection: selection, updateBotDefault: false,
+  });
+  for (const mode of ["full", "custom", "auto"]) {
+    assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", mode, false, "thread-1", selection, true), /invalid confirmed model switch/);
+  }
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "ask", false, undefined, selection, true), /invalid confirmed model switch/);
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "ask", false, "thread-1", selection, "yes"), /invalid confirmed model switch/);
+});
+
+test("a thread-only switch verifies the thread mode without changing the bot default", async () => {
+  const proc = fakeProcess();
+  const coordinator = createTrustedApprovalModeCoordinator({ randomId: () => REQUEST_ID });
+  const pending = coordinator.request(proc, "bot-1", "ask", {
+    threadId: "thread-1", modelSelection: { instanceId: "claude", model: "sonnet" }, updateBotDefault: false,
+  });
+  const bot = { id: "bot-1", approvalMode: "custom", tasks: [{ threadId: "thread-1", approvalMode: "ask" }] };
+  coordinator.receive(proc, { type: "approval-trusted-mode-result", requestId: REQUEST_ID, ok: true, bot });
+  assert.deepEqual(await pending, bot);
+  assert.equal(proc.messages.length, 1);
+});
+
 test("builds only bounded bot-scoped approval-mode requests", () => {
+  assert.equal(trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full", false, "thread-1").threadId, "thread-1");
+  for (const threadId of ["", "../another-thread", null, 42]) {
+    assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full", false, threadId), /invalid thread/);
+  }
+  assert.throws(() => trustedApprovalModeRequest(REQUEST_ID, "bot-1", "ask", false, "thread-1"), /invalid thread/);
   assert.deepEqual(trustedApprovalModeRequest(REQUEST_ID, "bot-1", "full"), {
     type: "approval-trusted-mode-set",
     requestId: REQUEST_ID,

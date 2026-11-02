@@ -1,6 +1,7 @@
 import {
   containerComputerExists,
   perBotLocalVmTarget,
+  poolLocalVmTarget,
   type ContainerComputerStatus,
   type LocalVmTarget,
   type Runtime,
@@ -30,17 +31,14 @@ export interface LocalVmInventoryEntry {
   inUse: boolean;
 }
 
-/** Idle cleanup is destructive. An exact derived name alone is not ownership:
- * a pre-existing container must also carry Dani Bot's verified labels. */
+/** Idle cleanup is destructive: a derived name alone is not ownership without OpenMausBot's verified labels. */
 export function shouldArmLocalVmIdle(
   status: Pick<ContainerComputerStatus, "container" | "managed"> | null,
 ): boolean {
   return status?.container === "running" && status.managed;
 }
 
-/** Discover only exact, bot-derived container identities. Bot destination is
- * deliberately irrelevant: an existing VM must stay visible after its bot is
- * moved to Cloud, Browser, This computer, Auto, or Off. */
+/** Bot destination is deliberately irrelevant: a VM stays visible after its bot moves elsewhere. */
 export async function discoverExistingPerBotLocalVms(
   bots: LocalVmInventoryBot[],
   runtime: Runtime,
@@ -59,9 +57,21 @@ export async function discoverExistingPerBotLocalVms(
   return candidates.filter((_, index) => existing[index]);
 }
 
-/** The public inventory is an explicit allow-list. In particular, it cannot
- * leak viewer passwords/URLs, host workspace paths, runtime commands, or
- * target hashes from the full Local VM status object. */
+export async function discoverExistingPoolLocalVms(
+  seatCount: number,
+  runtime: Runtime,
+  exists: (
+    runtime: Runtime,
+    target: LocalVmTarget,
+  ) => Promise<boolean> = containerComputerExists,
+): Promise<LocalVmTarget[]> {
+  const seats = Math.max(1, Math.floor(seatCount));
+  const targets = Array.from({ length: seats }, (_, seat) => poolLocalVmTarget(seat));
+  const existing = await Promise.all(targets.map((target) => exists(runtime, target)));
+  return targets.filter((_, index) => existing[index]);
+}
+
+/** An explicit allow-list: never viewer passwords or URLs, host paths, runtime commands or target hashes. */
 export function localVmInventoryEntry(
   bot: LocalVmInventoryBot,
   status: ContainerComputerStatus,

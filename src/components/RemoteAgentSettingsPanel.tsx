@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { Bell, ChevronLeft, ImagePlus, Loader2, Trash2, X } from "lucide-react";
 
 import { api, useStore, type Bot } from "@/state/store";
+import { cn } from "@/lib/cn";
+import { useCaptionChrome } from "@/components/DesktopCapabilities";
 import { VoiceSettings } from "./VoiceSettings";
 import { Switch } from "./SettingsPrimitives";
 import { BotAvatar } from "./Avatar";
@@ -13,8 +15,12 @@ type RemoteProfilePatch = Partial<
   Pick<Bot, "name" | "title" | "description" | "avatarUrl" | "avatarCrop" | "voice" | "speakReplies" | "notifications">
 >;
 
-export function RemoteAgentSettingsPanel({ bot }: { bot: Bot }) {
+export function RemoteAgentSettingsPanel({ bot, overlay = false }: {
+  bot: Bot;
+  overlay?: boolean;
+}) {
   const { dispatch } = useStore();
+  const { dragProps } = useCaptionChrome();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -69,8 +75,11 @@ export function RemoteAgentSettingsPanel({ bot }: { bot: Bot }) {
   };
 
   return (
-    <aside className="animate-panel-in relative z-20 flex h-full w-[400px] shrink-0 flex-col border-l border-hairline/40 bg-panel">
-      <div className="flex items-center justify-between px-4 py-3">
+    <aside className={cn(
+      "animate-panel-in absolute inset-0 z-40 flex h-full min-w-0 flex-col border-l border-hairline/40 bg-panel",
+      overlay ? "md:left-auto md:w-[400px] md:shadow-2xl" : "md:relative md:z-20 md:w-[400px] md:shrink-0",
+    )}>
+      <div {...dragProps} className="flex items-center justify-between px-4 py-3">
         <button
           onClick={close}
           aria-label="Collapse remote agent settings"

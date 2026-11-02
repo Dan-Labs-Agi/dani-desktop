@@ -1,9 +1,8 @@
-// composeMessage with images, the image tag round-trip through
-// transcript attachment splitting, and the mime gate the composer pastes through.
 import { describe, expect, it, vi } from "vitest";
 
 import {
   appendPastedText,
+  attachmentAudioUrl,
   attachmentBasename,
   attachmentImageUrl,
   clipboardHasImages,
@@ -19,21 +18,46 @@ import {
   releaseAttachmentImagePreview,
   splitTranscriptAttachments,
   type ImageAttachment,
+  composerShouldRefocus,
+  composerTakesFocusOnOpen,
+  replyTargetTakesFocus,
+  dataContextFor,
+  discardUnsentUpload,
 } from "./composer-attachments";
 
-/** Exercises the spacing and empty-draft cases for pasted text insertion. */
+describe("discardUnsentUpload", () => {
+  it("asks the server to drop an uploaded file taken off the message, and nothing else", () => {
+    const fetchMock = vi.fn(async () => new Response("{}"));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      discardUnsentUpload(fileAttachment("notes.txt", "/home/a/.openmausbot/attachments/0f1e2d3c-aaaa-4bbb-8ccc-123456789abc.txt", 3));
+      discardUnsentUpload({ kind: "paste", id: "p", text: "hi", size: 2, lines: 1 });
+      discardUnsentUpload({ kind: "image", id: "i", path: "", name: "x.png", size: 0, mime: "image/png", uploading: true });
+      expect(fetchMock.mock.calls).toEqual([["/api/attachments/0f1e2d3c-aaaa-4bbb-8ccc-123456789abc.txt", { method: "DELETE" }]]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("the viewed Data result and the words", () => {
+  it("rides as its own field of the send (shared/data-context.ts), so the transcript keeps every typed line", () => {
+    expect(dataContextFor("Use last month", { botId: "pepper", threadId: "task", cardId: "c_1" }, { botId: "pepper", threadId: "task" })).toEqual({ cardId: "c_1" });
+    for (const typed of ['<data-context>{"cardId":"c_1"}</data-context>\nfix this', "<data-context>{bad}</data-context>", "```sql\nselect 1"]) {
+      expect(splitTranscriptAttachments(typed)).toEqual({ display: typed, images: [], files: [] });
+    }
+  });
+});
+
 function appendPastedTextTests() {
-  /** Keeps an existing draft ahead of newly inserted pasted content. */
   function addsPastedContentAfterDraft() {
     expect(appendPastedText("Keep this", "Edit this too")).toBe("Keep this\n\nEdit this too");
   }
 
-  /** Avoids duplicating a separator when the draft already ends with a newline. */
   function preservesExistingTrailingNewline() {
     expect(appendPastedText("Keep this\n", "Edit this too")).toBe("Keep this\nEdit this too");
   }
 
-  /** Inserts pasted content directly when no draft exists yet. */
   function insertsIntoEmptyDraft() {
     expect(appendPastedText("", "Edit this too")).toBe("Edit this too");
   }
@@ -45,7 +69,6 @@ function appendPastedTextTests() {
 
 describe("appendPastedText", appendPastedTextTests);
 
-/** Builds a stable image attachment fixture for prompt and preview tests. */
 function image(path: string): ImageAttachment {
   return {
     kind: "image",
@@ -59,16 +82,14 @@ function image(path: string): ImageAttachment {
 
 describe("composeMessage with images", () => {
   it("emits an attached-image tag carrying the server path and display name", () => {
-    const prompt = composeMessage("what is this?", [image("/home/u/.danibot/attachments/abc.png")]);
+    const prompt = composeMessage("what is this?", [image("/home/u/.openmausbot/attachments/abc.png")]);
     expect(prompt).toBe(
-      'what is this?\n\n<attached-image path="/home/u/.danibot/attachments/abc.png" name="shot.png" />',
+      'what is this?\n\n<attached-image path="/home/u/.openmausbot/attachments/abc.png" name="shot.png" />',
     );
   });
 
   it("escapes a hostile path the same way file paths are escaped", () => {
     const prompt = composeMessage("", [image('/x/")} onload="evil()')]);
-    // every quote is entity-encoded, so the payload can never break out of
-    // the attribute — the tag stays one well-formed element
     expect(prompt).toMatch(/<attached-image path="[^"]*" name="shot.png" \/>/);
     expect(prompt).toContain("&quot;");
   });
@@ -126,16 +147,16 @@ describe("splitTranscriptAttachments", () => {
 
   it("uses the saved basename for old file tags without a name", () => {
     const { display, files } = splitTranscriptAttachments(
-      '<attached-file path="/home/me/.danibot/attachments/report.pdf" />',
+      '<attached-file path="/home/me/.openmausbot/attachments/report.pdf" />',
     );
     expect(display).toBe("");
     expect(files).toEqual([
-      { path: "/home/me/.danibot/attachments/report.pdf", name: "report.pdf" },
+      { path: "/home/me/.openmausbot/attachments/report.pdf", name: "report.pdf" },
     ]);
   });
 
   it("marks only private-store UUID attachment names as actionable", () => {
-    const privatePath = "/home/me/.danibot/attachments/123e4567-e89b-42d3-a456-426614174000.pdf";
+    const privatePath = "/home/me/.openmausbot/attachments/123e4567-e89b-42d3-a456-426614174000.pdf";
     expect(splitTranscriptAttachments(`<attached-file path="${privatePath}" name="Report.pdf" />`).files[0])
       .toMatchObject({ path: privatePath, name: "Report.pdf", private: true });
     expect(splitTranscriptAttachments('<attached-file path="/Users/me/Desktop/report.pdf" />').files[0]?.private)
@@ -305,11 +326,7 @@ describe("splitTranscriptAttachments", () => {
       '<attached-file path="/tmp/real.pdf" name="Actual.pdf" />',
     ].join("\n");
     const parsed = splitTranscriptAttachments(stored);
-    expect(parsed.display).toBe([
-      '<pasted-text index="1">',
-      '<attached-file path="/tmp/pasted.pdf" />',
-      "</pasted-text>",
-    ].join("\n"));
+    expect(parsed.display).toBe('<attached-file path="/tmp/pasted.pdf" />');
     expect(parsed.files).toEqual([{ path: "/tmp/real.pdf", name: "Actual.pdf" }]);
     expect(parsed.images).toEqual([]);
   });
@@ -323,12 +340,27 @@ describe("splitTranscriptAttachments", () => {
     expect(splitTranscriptAttachments(stored)).toEqual({ display: stored, images: [], files: [] });
   });
 
-  it("leaves plain text and other tags untouched", () => {
-    const stored = '<pasted-text index="1">\nhi\n</pasted-text>';
+  it("shows only what was pasted, not the wrapper the bot reads", () => {
+    const stored = 'this is for 31/08/26\n\n<pasted-text index="1">\nWe, personally, been using it\n\nsecond paragraph\n</pasted-text>';
     const { display, images, files } = splitTranscriptAttachments(stored);
-    expect(display).toBe(stored);
+    expect(display).toBe("this is for 31/08/26\n\nWe, personally, been using it\n\nsecond paragraph");
     expect(images).toEqual([]);
     expect(files).toEqual([]);
+  });
+
+  it("hides every pasted block, and keeps a closing tag that belongs to the paste", () => {
+    const stored = [
+      '<pasted-text index="1">', "first", "</pasted-text>", "",
+      '<pasted-text index="2">', "a literal </pasted-text> mention", "</pasted-text>",
+    ].join("\n");
+    expect(splitTranscriptAttachments(stored).display).toBe(["first", "", "a literal </pasted-text> mention", "</pasted-text>"].join("\n"));
+  });
+
+  it("keeps tags visible when they are not the exact wrapper lines, and for exports", () => {
+    const inline = '<pasted-text index="1">hi</pasted-text>';
+    expect(splitTranscriptAttachments(inline).display).toBe(inline);
+    const stored = '<pasted-text index="1">\nhi\n</pasted-text>';
+    expect(splitTranscriptAttachments(stored, false, false).display).toBe(stored);
   });
 });
 
@@ -347,6 +379,17 @@ describe("attachmentBasename", () => {
     expect(attachmentImageUrl("/a/b/payload.svg")).toBeNull();
     expect(attachmentImageUrl("/a/b/not%2Fan-image.png")).toBeNull();
   });
+
+  it("turns only parked mp3 and wav names into same-origin audio sources", () => {
+    expect(attachmentAudioUrl("/a/b/123e4567-e89b-12d3-a456-426614174000.mp3")).toBe(
+      "/api/attachments/123e4567-e89b-12d3-a456-426614174000.mp3",
+    );
+    expect(attachmentAudioUrl("C:\\a\\b\\note.mp3")).toBe("/api/attachments/note.mp3");
+    expect(attachmentAudioUrl("/a/b/note.wav")).toBe("/api/attachments/note.wav");
+    expect(attachmentAudioUrl("/a/b/note.ogg")).toBeNull();
+    expect(attachmentAudioUrl("/a/b/notes.mp3.txt")).toBeNull();
+    expect(attachmentAudioUrl("https://attacker.example/clip.mp3?x=1")).toBeNull();
+  });
 });
 
 describe("isImageFile", () => {
@@ -359,20 +402,7 @@ describe("isImageFile", () => {
   });
 });
 
-/**
- * Helper to construct a mock clipboard item for DataTransferItemList testing.
- *
- * @param kind - Item kind (e.g. 'file' or 'string').
- * @param type - Item MIME type.
- * @param file - File instance returned by getAsFile, if any.
- * @returns Mock clipboard item object.
- */
 function mockClipboardItem(kind: string, type: string, file: File | null = null) {
-  /**
-   * Returns the mock file or null.
-   *
-   * @returns Mock file or null.
-   */
   function getAsFile() {
     return file;
   }
@@ -460,6 +490,38 @@ describe("clipboardHasImages", () => {
 });
 
 describe("private document intake", () => {
+  it.each([
+    ["Voice note.opus", "", "audio/opus"],
+    ["Voice note.opus", "audio/ogg; codecs=opus", "audio/ogg"],
+    ["Recording.M4A", "application/octet-stream", "audio/mp4"],
+    ["recording.wav", "audio/x-wav", "audio/x-wav"],
+  ])("uploads %s as audio without a local path", async (name, type, mime) => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      path: "/private/attachments/recording.opus", name, bytes: 3,
+    }), { status: 201, headers: { "content-type": "application/json" } }));
+    try {
+      const file = new File([new Uint8Array([1, 2, 3])], name, { type });
+      await expect(fileAttachmentFromFile(file)).resolves.toMatchObject({
+        kind: "file", name, path: "/private/attachments/recording.opus", size: 3,
+      });
+      expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/files\?/),
+        expect.objectContaining({ method: "POST", body: file, headers: { "content-type": mime } }));
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
+  it("rejects oversized audio before uploading", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    try {
+      const file = new File([new Uint8Array(25 * 1024 * 1024 + 1)], "large.opus", { type: "audio/opus" });
+      await expect(fileAttachmentFromFile(file)).rejects.toMatchObject({ status: 413 });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
   it("recognises supported documents by declared mime or filename", () => {
     expect(documentMime({ name: "notes.bin", type: "text/markdown; charset=utf-8" })).toBe("text/markdown");
     expect(documentMime({ name: "REPORT.PDF", type: "" })).toBe("application/pdf");
@@ -608,5 +670,120 @@ describe("private image intake", () => {
     } finally {
       fetch.mockRestore();
     }
+  });
+});
+
+describe("composerShouldRefocus", () => {
+  // No DOM here: plain objects stand in for the few Element members the rule reads.
+  type Fake = { name: string; parent?: Fake; closest: (sel: string) => Fake | null; contains: (el: unknown) => boolean };
+  const node = (name: string, parent?: Fake): Fake => {
+    const self: Fake = {
+      name,
+      parent,
+      closest: (sel) => {
+        for (let cur: Fake | undefined = self; cur; cur = cur.parent) {
+          if (sel === "[data-tour=composer]" && cur.name === "composer") return cur;
+        }
+        return null;
+      },
+      contains: (el) => {
+        for (let cur = el as Fake | undefined; cur; cur = cur.parent) if (cur === self) return true;
+        return false;
+      },
+    };
+    return self;
+  };
+  const html = node("html");
+  const body = node("body", html);
+  const composer = node("composer", body);
+  const paperclip = node("paperclip", composer);
+  const sidebar = node("sidebar", body);
+  const input = Object.assign(node("textarea", composer), {
+    ownerDocument: { body, documentElement: html },
+  });
+  const el = (fake: Fake | null) => fake;
+
+  it("refocuses when focus is on the input, gone, or on the page itself", () => {
+    expect(composerShouldRefocus(input, input)).toBe(true);
+    expect(composerShouldRefocus(null, input)).toBe(true);
+    expect(composerShouldRefocus(el(body), input)).toBe(true);
+    expect(composerShouldRefocus(el(html), input)).toBe(true);
+  });
+
+  it("refocuses from a control inside the composer, such as the attach button", () => {
+    expect(composerShouldRefocus(el(paperclip), input)).toBe(true);
+  });
+
+  it("leaves focus alone when the writer moved elsewhere", () => {
+    expect(composerShouldRefocus(el(sidebar), input)).toBe(false);
+  });
+});
+
+describe("replyTargetTakesFocus", () => {
+  it("focuses the draft when a message is chosen to reply to, or the target changes", () => {
+    expect(replyTargetTakesFocus(null, "m1")).toBe(true);
+    expect(replyTargetTakesFocus(undefined, "m1")).toBe(true);
+    expect(replyTargetTakesFocus("m1", "m2")).toBe(true);
+  });
+  it("leaves focus alone when the reply is cleared or the same target renders again", () => {
+    expect(replyTargetTakesFocus("m1", null)).toBe(false);
+    expect(replyTargetTakesFocus(null, null)).toBe(false);
+    expect(replyTargetTakesFocus("m1", "m1")).toBe(false);
+  });
+});
+
+describe("composerTakesFocusOnOpen", () => {
+  type Fake = {
+    parent?: Fake;
+    role?: string;
+    tagName?: string;
+    isContentEditable?: boolean;
+    closest: (sel: string) => Fake | null;
+    contains: (el: unknown) => boolean;
+  };
+  const node = (props: Omit<Fake, "closest" | "contains">): Fake => {
+    const self: Fake = {
+      ...props,
+      closest: (sel) => {
+        for (let cur: Fake | undefined = self; cur; cur = cur.parent) {
+          if (sel === "[data-tour=composer]" && cur.role === "composer") return cur;
+          if (sel.includes("[role=dialog]") && cur.role === "dialog") return cur;
+        }
+        return null;
+      },
+      contains: (el) => {
+        for (let cur = el as Fake | undefined; cur; cur = cur.parent) if (cur === self) return true;
+        return false;
+      },
+    };
+    return self;
+  };
+  const html = node({ tagName: "HTML" });
+  const body = node({ tagName: "BODY", parent: html });
+  const composer = node({ tagName: "DIV", role: "composer", parent: body });
+  const sidebar = node({ tagName: "NAV", parent: body });
+  const input = Object.assign(node({ tagName: "TEXTAREA", parent: composer }), {
+    ownerDocument: { body, documentElement: html },
+  });
+
+  it("takes focus from the thread row or New thread button that opened the thread", () => {
+    expect(composerTakesFocusOnOpen(node({ tagName: "DIV", parent: sidebar }), input)).toBe(true);
+    expect(composerTakesFocusOnOpen(node({ tagName: "BUTTON", parent: sidebar }), input)).toBe(true);
+  });
+
+  it("takes focus when nothing else holds it", () => {
+    expect(composerTakesFocusOnOpen(null, input)).toBe(true);
+    expect(composerTakesFocusOnOpen(body, input)).toBe(true);
+  });
+
+  it("leaves another text field alone, such as the sidebar search or a rename", () => {
+    expect(composerTakesFocusOnOpen(node({ tagName: "INPUT", parent: sidebar }), input)).toBe(false);
+    expect(composerTakesFocusOnOpen(node({ tagName: "TEXTAREA", parent: sidebar }), input)).toBe(false);
+    expect(composerTakesFocusOnOpen(node({ tagName: "DIV", isContentEditable: true, parent: sidebar }), input)).toBe(false);
+  });
+
+  it("leaves an open dialog alone", () => {
+    const dialog = node({ tagName: "DIV", role: "dialog", parent: body });
+    expect(composerTakesFocusOnOpen(node({ tagName: "BUTTON", parent: dialog }), input)).toBe(false);
   });
 });

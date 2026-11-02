@@ -1,15 +1,13 @@
-// Turning banked token/cost figures into something a header chip can show.
-// Pure, so the numbers can be tested without the components.
 import type { Bot, TaskUsage } from "@/state/store";
+import { t } from "./i18n";
 
 export const EMPTY_USAGE: TaskUsage = { input: 0, output: 0, costUsd: null, turns: 0 };
+type TokenUsage = Pick<TaskUsage, "input" | "output"> & Partial<TaskUsage>;
 
-/** True when a stored cost is a real number (not null, NaN, or Infinity). */
 export function hasFiniteCost(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/** Sum a set of usages; cost stays null until any of them has one. */
 export function sumUsage(items: Array<TaskUsage | undefined>): TaskUsage {
   const out: TaskUsage = { ...EMPTY_USAGE };
   for (const u of items) {
@@ -20,6 +18,7 @@ export function sumUsage(items: Array<TaskUsage | undefined>): TaskUsage {
     if (hasFiniteCost(u.cachedInput)) out.cachedInput = (out.cachedInput ?? 0) + u.cachedInput;
     if (hasFiniteCost(u.costUsd)) out.costUsd = (out.costUsd ?? 0) + u.costUsd;
   }
+  if (items.some((u) => u && u.input > 0 && !cachedKnown(u))) delete out.cachedInput;
   return out;
 }
 
@@ -27,7 +26,6 @@ export function botUsage(bot: Pick<Bot, "tasks">): TaskUsage {
   return sumUsage((bot.tasks ?? []).map((t) => t.usage));
 }
 
-/** 950 → "950", 12_400 → "12.4k", 2_300_000 → "2.3M" */
 export function formatTokens(n: number): string {
   if (!hasFiniteCost(n)) return "0";
   if (n < 1000) return String(n);
@@ -36,7 +34,6 @@ export function formatTokens(n: number): string {
 }
 const trim = (x: number) => (x >= 100 ? Math.round(x).toString() : x.toFixed(1).replace(/\.0$/, ""));
 
-/** Task-picker variant: hide unused tasks and spell out small counts. */
 export function formatTaskTokens(total: number): string | null {
   if (!Number.isFinite(total) || total < 1) return null;
   const n = Math.trunc(total);
@@ -51,7 +48,6 @@ const formatTenths = (value: number) => {
   return fraction === 0 ? `${value / 10}` : `${(value - fraction) / 10}.${fraction}`;
 };
 
-/** Dollars, with enough precision that a cheap turn isn't "$0.00". */
 export function formatUsd(usd: number): string {
   if (!hasFiniteCost(usd)) return "";
   if (usd === 0) return "$0";
@@ -59,37 +55,87 @@ export function formatUsd(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-/** How much of `input` the provider served from its prompt cache. Clamped to
- * `input` so a provider that reports cache reads outside its input figure
- * can never produce a negative "fresh" number. */
-export function cachedInput(u: TaskUsage): number {
+/** Clamped to `input`: some providers report cache reads outside their input figure. */
+export function cachedInput(u: TokenUsage): number {
   return hasFiniteCost(u.cachedInput) ? Math.min(Math.max(0, u.cachedInput), u.input) : 0;
 }
 
-/** The in/out breakdown behind the headline figure, with the cached share
- * called out when there is one: "88.2k in (79k cached) · 1.2k out". The
- * headline counts every token the model processed — five short messages
- * on a thread with a system prompt and tool schemas really do cost the
- * model ~17k tokens of reading each turn — so the breakdown is where the
- * "was that really 100k?" question gets answered. */
-export function usageDetail(u: TaskUsage): string {
-  const cached = cachedInput(u);
-  const input = cached > 0 ? `${formatTokens(u.input)} in (${formatTokens(cached)} cached)` : `${formatTokens(u.input)} in`;
-  return `${input} · ${formatTokens(u.output)} out`;
+export function usageDetail(u: TokenUsage): string {
+  const input = cachedKnown(u)
+    ? `${t("chat.usage.uncachedInput", { tokens: formatTokens(uncachedInput(u)) })} · ${t("chat.usage.cachedInput", { tokens: formatTokens(cachedInput(u)) })}`
+    : t("chat.usage.totalInput", { tokens: formatTokens(u.input) });
+  return `${input} · ${t("chat.usage.output", { tokens: formatTokens(u.output) })}`;
 }
 
-/** The chip text: tokens, and cost when known. Empty string when nothing
- * has been spent — a fresh task shows no chip. */
+export function uncachedInput(u: TokenUsage): number {
+  return Math.max(0, u.input - cachedInput(u));
+}
+
+export function freshTokens(u: TaskUsage): number {
+  return uncachedInput(u) + u.output;
+}
+
+export function headlineTokens(u: TaskUsage): number {
+  return cachedKnown(u) ? freshTokens(u) : u.input + u.output;
+}
+
+export function cachedKnown(u: Pick<TaskUsage, "cachedInput">): boolean {
+  return hasFiniteCost(u.cachedInput);
+}
+
+export function tokensColumnLabel(total: TaskUsage): string {
+  return t(cachedKnown(total) ? "usage.colNewTokens" : "usage.colTokens");
+}
+
+export function cachedUsageNote(total: TaskUsage): string | null {
+  const cached = cachedInput(total);
+  if (cached <= 0) return null;
+  return t("usage.cachedNote", {
+    cached: formatTokens(cached),
+    total: formatTokens(total.input + total.output),
+  });
+}
+
+export type ContextTone = "quiet" | "warning" | "danger";
+
+export function contextShare(u: TaskUsage): { tokens: number; window?: number; percent?: number; tone: ContextTone } | null {
+  const ctx = u.context;
+  if (!ctx || !hasFiniteCost(ctx.tokens) || ctx.tokens <= 0) return null;
+  const window = hasFiniteCost(ctx.window) && ctx.window > 0 ? ctx.window : undefined;
+  const percent = window ? Math.min(999, Math.round((ctx.tokens / window) * 100)) : undefined;
+  const tone: ContextTone = percent === undefined ? "quiet" : percent >= 80 ? "danger" : percent >= 50 ? "warning" : "quiet";
+  return { tokens: ctx.tokens, window, percent, tone };
+}
+
+export function contextChip(u: TaskUsage): string {
+  const share = contextShare(u);
+  if (!share) return "";
+  return t("chat.usage.contextShort", { value: share.percent === undefined ? formatTokens(share.tokens) : `${share.percent}%` });
+}
+
+export function contextDetail(u: TaskUsage): string | null {
+  const share = contextShare(u);
+  if (!share) return null;
+  return share.window && share.percent !== undefined
+    ? t("chat.usage.contextOfWindow", { tokens: formatTokens(share.tokens), percent: String(share.percent), window: formatTokens(share.window) })
+    : t("chat.usage.context", { tokens: formatTokens(share.tokens) });
+}
+
+export function lastTurnDetail(u: TaskUsage): string | null {
+  const last = u.lastTurn;
+  if (!last || !hasFiniteCost(last.input)) return null;
+  return t("chat.usage.lastTurnSplit", { detail: usageDetail(last) });
+}
+
 export function usageChip(u: TaskUsage): string {
   if (u.turns === 0 && u.input + u.output === 0) return "";
-  const parts = [`${formatTokens(u.input + u.output)} tok`];
-  if (hasFiniteCost(u.costUsd)) parts.push(formatUsd(u.costUsd));
-  return parts.join(" · ");
+  if (hasFiniteCost(u.costUsd)) return formatUsd(u.costUsd);
+  if (cachedKnown(u)) return t("chat.usage.uncachedShort", { tokens: formatTokens(uncachedInput(u)) });
+  return t("chat.usage.inputShort", { tokens: formatTokens(u.input) });
 }
 
-/** How to caption a cost figure given how the engine is billed. */
 export function costCaption(billing: "metered" | "subscription" | undefined): string {
-  if (billing === "subscription") return "equivalent — on your subscription, not billed";
-  if (billing === "metered") return "billed to your API key";
-  return "as reported by the engine";
+  if (billing === "subscription") return t("chat.usage.captionSubscription");
+  if (billing === "metered") return t("chat.usage.captionMetered");
+  return t("chat.usage.captionEngine");
 }

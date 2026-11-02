@@ -1,8 +1,24 @@
 # Bring your own engine
 
-Two zero-code ways to run Dani Bot bots on an engine the app doesn't ship.
-Both live in `~/.danibot/config.json` under `"instances"`; restart the app
+Two zero-code ways to run OpenMausBot bots on an engine the app doesn't ship.
+Both live in `~/.openmausbot/config.json` under `"instances"`; restart the app
 after editing (instance entries are read at boot).
+
+## Provider icons
+
+Each instance shows its driver's mark. An OpenAI-compatible server shows the
+mark of whoever runs it, read from the host in its address: `api.deepseek.com`
+shows DeepSeek, `<resource>.openai.azure.com` Microsoft Azure,
+`dashscope-intl.aliyuncs.com` Qwen, `openrouter.ai` OpenRouter, and so on
+(the list is `SERVER_HOSTS` in `server/provider-icon.ts`). A server without a
+mark of its own, such as Groq, Together, Ollama or LM Studio, keeps the default.
+
+An icon stored on the instance still wins: add
+`"icon": { "kind": "preset", "preset": "azure" }` alongside `driver` and
+`displayName`. The presets are OpenAI, Anthropic, Google Gemini, Microsoft
+Azure, Amazon Bedrock (AWS), xAI, DeepSeek, Meta, Mistral AI, Qwen, Moonshot
+AI, Cohere and OpenRouter. Custom images saved before v0.1.102 keep rendering;
+the app never fetches remote icon URLs.
 
 ## Any ACP agent (a CLI you spawn)
 
@@ -28,9 +44,16 @@ instance at it:
   the instance's row. An instance without a command shows up with exactly that
   hint instead of failing at first message.
 - **Sign in first.** The driver has no auth flow of its own — run the CLI once
-  in a terminal and log in there; Dani Bot spawns it with your login intact.
-- **Model choice stays inside the agent.** The picker shows a single
-  "Agent default" entry; whatever the CLI is configured to run is what runs.
+  in a terminal and log in there; OpenMausBot spawns it with your login intact.
+- **Choose models per bot.** Open the bot's model picker and use **Re-detect**
+  to load the models advertised by the agent. Select a model and, when offered,
+  its thinking level. Bot defaults and individual conversation overrides are
+  saved independently. **Agent default** leaves the native session's model
+  unchanged. An agent that does not advertise models still has this option.
+- **Choices come from the agent.** Discovery starts a temporary ACP session
+  without sending a prompt. Only confirmed, model-specific thinking options
+  are shown; a failed refresh keeps the last successful catalog. ZCode,
+  CodeBuddy, Qoder and other custom ACP engines use the same mechanism.
 - **`environment`** is passed to the CLI child. Foreign provider keys
   (XAI_API_KEY, OPENAI_COMPAT_API_KEY, …) are deliberately stripped so a
   custom CLI can never bill against another engine's login.
@@ -65,9 +88,15 @@ entry:
   instances can hold different keys without colliding.
 - The driver lists the endpoint's `/models` when it can and keeps your
   `model` as a custom option either way.
-- Honest limits: chat text + reasoning streams only — **no tool calls**, so
-  bots on these instances answer and write, but don't operate computers or
-  connected apps.
+- OpenAI-compatible instances support structured tools and image input. With a
+  model that accepts both, the harness can mount the approved host, Local VM,
+  VPS, Boat cloud or built-in browser tools and return their screenshots to the model.
+  The existing platform, computer-selection and approval checks still apply.
+  Boat turns retain the selected API model in direct chats, rooms and cloud
+  routines, as they do for every engine with computer tools.
+- Set `config.tools` to `false` for a model without tool support. Image support
+  also depends on the chosen model; the driver cannot add vision to a text-only
+  model. See [tool verification](verification/openai-tools.md) for scope and tests.
 
 ## Notes
 
