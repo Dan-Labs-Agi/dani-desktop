@@ -291,7 +291,13 @@ if os.name != "nt":
                 raise SystemExit(f"unsafe group/world-write mode {mode & 0o777:o}: {path}")
 PYMODE
 ARCHIVE="$OUT/hermes-payload-$TARGET-v2026.9.21.tar.gz"
-tar --mode='go-w' -czf "$ARCHIVE" -C "$OUT" "hermes-payload-$TARGET"
+# GNU tar normalizes shipped modes with --mode='go-w'; bsdtar (macOS) lacks
+# that flag. The POSIX live-tree assertion above already guarantees go-w, so
+# the plain pack preserves the boundary there, and the archive-metadata audit
+# below rejects drift either way.
+if ! tar --mode='go-w' -czf "$ARCHIVE" -C "$OUT" "hermes-payload-$TARGET" 2>/dev/null; then
+  tar -czf "$ARCHIVE" -C "$OUT" "hermes-payload-$TARGET"
+fi
 # Audit archive-declared modes too, after packing, so tar metadata cannot drift.
 python3 - "$ARCHIVE" <<'PYMODE'
 import sys, tarfile
