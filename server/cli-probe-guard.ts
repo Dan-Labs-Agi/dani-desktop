@@ -67,6 +67,13 @@ export function canonicalCliTarget(head: string): string | null {
   }
 }
 
+/** NTFS is case-insensitive but PATH discovery reports PATHEXT casing
+ * (`.CMD`) while realpath returns the on-disk casing (`.cmd`): one
+ * executable, two string forms. Windows comparisons case-fold; POSIX stays
+ * byte-exact. */
+export const cliProbeCompareKey = (path: string): string =>
+  process.platform === "win32" ? path.toLowerCase() : path;
+
 /** Fixed allowlist of discovered adapters: every built-in driver's default
  * CLI name (bare names probe through PATH exactly like a real turn does),
  * plus the canonical path of every copy found on the augmented PATH. */
@@ -75,9 +82,9 @@ export function buildCliProbeAllowlist(): Set<string> {
   for (const driver of BUILT_IN_DRIVERS) {
     const name = driverCliDefault(driver);
     if (!name) continue;
-    allow.add(name);
+    allow.add(cliProbeCompareKey(name));
     for (const candidate of findCliCandidates(name)) {
-      allow.add(canonicalCliTarget(candidate) ?? candidate);
+      allow.add(cliProbeCompareKey(canonicalCliTarget(candidate) ?? candidate));
     }
   }
   return allow;
@@ -108,7 +115,7 @@ export function classifyCliProbe(cli: string, explicitCustomPath: boolean): CliP
   }
   const allow = buildCliProbeAllowlist();
   const canonical = canonicalCliTarget(head);
-  if (allow.has(head) || (canonical !== null && allow.has(canonical))) {
+  if (allow.has(cliProbeCompareKey(head)) || (canonical !== null && allow.has(cliProbeCompareKey(canonical)))) {
     return { kind: "allowlisted" };
   }
   if (explicitCustomPath !== true) {
