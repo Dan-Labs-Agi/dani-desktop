@@ -287,7 +287,10 @@ export const POOLS = {
     22,
     13
   ]
-} satisfies Record<CursorState, number[]>
+} satisfies Record<string, CursorState[]>
+
+const isCursorState = (state: string): state is CursorState => state in POOLS
+export const CURSOR_STATES = Object.keys(POOLS).filter(isCursorState)
 
 export interface TrailSpec {
   count: number
