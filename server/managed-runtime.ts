@@ -185,6 +185,7 @@ const productMessage = (code: string) => ({
   "activation-failed": "Dani could not activate its local runtime.",
   "runtime-quarantined": "Dani's local runtime could not start. Security software may have quarantined it.",
   "probe-failed": "Dani's local runtime did not pass its readiness check.",
+  "model-route-failed": "Dani could not start its local model route.",
 }[code] ?? "Dani could not prepare its local runtime.");
 
 async function run(command: string, args: string[], timeoutMs: number, input?: string): Promise<{ stdout: string; stderr: string }> {
@@ -240,25 +241,57 @@ export class ManagedRuntimeService {
   private routeMonitor: ReturnType<typeof setInterval> | null = null;
   private bridgeUrl: string | null = null;
   private taskReadyHandler: (() => Promise<void>) | null = null;
+  private modelRouteRun: Promise<void> | null = null;
+  private recoveredReady = false;
+  private readonly routeStarter: () => Promise<void>;
   private status: RuntimeBootstrapStatus = this.statusValue("checking", "detect");
-  constructor(options: { resourcesRoot: string; dataDir: string }) {
+  constructor(options: { resourcesRoot: string; dataDir: string; startModelRoute?: () => Promise<void> }) {
     this.resourcesRoot = join(options.resourcesRoot, "managed-runtimes");
     this.installRoot = join(options.dataDir, "managed-runtimes");
+    this.routeStarter = options.startModelRoute ?? (() => this.startModelRoute());
     this.recoverActive("hermes"); this.recoverActive("opencode");
   }
   async initialize() {
     const results = await Promise.allSettled([this.verifyRecovered("hermes"), this.verifyRecovered("opencode")]);
     if (results[0]?.status === "rejected") delete this.active.hermes;
     if (results[1]?.status === "rejected") delete this.active.opencode;
-    if (results.every(result => result.status === "fulfilled")) this.refreshReadyStatus();
-    else {
+    if (results.every(result => result.status === "fulfilled")) {
+      this.refreshReadyStatus();
+      // Recovered runtimes still need their model route. Only startBootstrap
+      // used to start it, so every restart with an already-valid installation
+      // sat on "Checking this computer" forever. Kick the same startup here.
+      this.recoveredReady = true;
+      this.ensureModelRoute();
+    } else {
       const error = results.find(result => result.status === "rejected") as PromiseRejectedResult | undefined;
       const code = this.errorCode(error?.reason, "not-activated");
       this.status = this.statusValue("repairable-error", null, safeError(code, code === "not-activated" ? "Dani's local runtimes need to be prepared." : productMessage(code)));
     }
   }
   bootstrapStatus(): RuntimeBootstrapStatus { return structuredClone(this.status); }
-  setTaskReadyHandler(handler: () => Promise<void>) { this.taskReadyHandler = handler; }
+  setTaskReadyHandler(handler: () => Promise<void>) {
+    this.taskReadyHandler = handler;
+    // The server registers this after initialize(); a route kick that already
+    // ran must not miss the handler that adopts the managed executable.
+    if (this.recoveredReady) this.ensureModelRoute();
+  }
+  private ensureModelRoute() {
+    if (this.modelRouteRun || this.modelRouteState === "ready") return;
+    this.modelRouteRun = (async () => {
+      try {
+        await this.routeStarter();
+        this.modelRouteState = "ready";
+        await this.taskReadyHandler?.();
+        this.refreshReadyStatus();
+      } catch (error) {
+        this.setModelRouteReadiness("error");
+        const code = this.errorCode(error, "model-route-failed");
+        this.status = this.statusValue("repairable-error", null, safeError(code, productMessage(code)));
+      } finally {
+        this.modelRouteRun = null;
+      }
+    })();
+  }
   executable(kind: ManagedRuntimeKind): string | null { return this.active[kind] ?? null; }
   useManagedExecutables() {
     if (this.active.hermes) process.env.DANI_MANAGED_HERMES_EXECUTABLE = this.active.hermes;
@@ -279,10 +312,10 @@ export class ManagedRuntimeService {
       this.status = this.statusValue("installing", "verify-bundled");
       this.bootstrapRun = Promise.all([this.install("hermes"), this.install("opencode")])
         .then(async () => {
-          await this.startModelRoute();
           // Keep bootstrap non-ready until product state has adopted the managed
           // executable and exact model. Otherwise a fresh UI can dispatch its
           // quiz against the empty selection captured at server boot.
+          await this.routeStarter();
           await this.taskReadyHandler?.();
           this.refreshReadyStatus();
         })
