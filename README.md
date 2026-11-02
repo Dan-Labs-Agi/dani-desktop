@@ -64,7 +64,17 @@ Dani is the two-legged robot every bot in the app is drawn as. The purple, crown
     <td><img src="docs/assets/screenshots/dani-chat-light.png" alt="A chat with Dani in light mode, his character in the sidebar, header and typing indicator" width="680"></td>
     <td><img src="docs/assets/screenshots/dani-chat-dark.png" alt="A chat with Dani in dark mode, his character in the sidebar, header and typing indicator" width="680"></td>
   </tr>
+  <tr>
+    <td><img src="docs/assets/screenshots/dani-team-light.png" alt="A whole team of Dani characters in the light-mode sidebar, each with its own color and accessory" width="680"></td>
+    <td><img src="docs/assets/screenshots/dani-team-dark.png" alt="A whole team of Dani characters in the dark-mode sidebar, each with its own color and accessory" width="680"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screenshots/dani-group-light.png" alt="A group chat with several Dani bots in light mode, one of them mid-reply" width="680"></td>
+    <td><img src="docs/assets/screenshots/dani-group-dark.png" alt="A group chat with several Dani bots in dark mode, one of them mid-reply" width="680"></td>
+  </tr>
 </table>
+
+Bots are not just one assistant: make as many as you like, give each its own color and character, and pull them into group chats where they take turns.
 
 ---
 
