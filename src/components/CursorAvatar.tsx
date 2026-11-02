@@ -457,7 +457,11 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       const initial = BLOUB_STATE[(propsRef.current.state ?? "idle") as CursorState] ?? BLOUB_STATE.idle
       const phase = phaseFromSeed(propsRef.current.phaseSeed)
       phaseRef.current = phase
-      const eng = new BotEngine(100, initial.state, null, initial.expression ? EXPRESSION_BY_ID.get(initial.expression) ?? null : null)
+      // Start on the worn body too: a paused avatar never runs followProps, so a null
+      // shape here would leave the engine's own default body on every still avatar.
+      const wornId = propsRef.current.silhouette?.id as MascotBodyId | undefined
+      const wornShape = wornId ? BLOUB_SHAPE[wornId] : null
+      const eng = new BotEngine(100, initial.state, wornShape ? SHAPE_BY_ID.get(wornShape)?.radii ?? null : null, initial.expression ? EXPRESSION_BY_ID.get(initial.expression) ?? null : null)
       eng.setState(initial.state, phase)
       engineRef.current = eng
 

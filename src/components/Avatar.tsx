@@ -147,7 +147,8 @@ function GradientAvatarComponent(
   }: MausAvatarProps,
   ref: React.Ref<MausAvatarHandle>,
 ) {
-  const silhouette = MASCOT_BODIES[botMascotBody(bodyId)];
+  // A bot without a picked body wears the Dani blob, never the legacy cursor silhouette.
+  const silhouette = MASCOT_BODIES[bodyId ? botMascotBody(bodyId) : "blob"];
   const chrome = color === "chrome";
   const faceInk = mascotFaceInk(faceColor);
   const inner = useRef<CursorAvatarHandle>(null);
