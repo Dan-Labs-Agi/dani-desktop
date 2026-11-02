@@ -11,10 +11,12 @@ import {
   type MausState,
 } from "@/lib/mascot";
 import { BOT_AVATAR_CROPS } from "../../shared/bot-avatar";
-import { MASCOT_BODIES, MASCOT_BODY_IDS } from "../../shared/mascot-bodies";
+import { daniVariantForBot, type DaniVariantId } from "./robot/dani-variants";
+import { RobotAvatar } from "./robot/RobotAvatar";
 import { HALLOWEEN_BODIES, HALLOWEEN_BODY_IDS } from "../../shared/halloween-bodies";
 import type { BotBodyId } from "../../shared/bot-body";
 import { BotAvatar, MausAvatar } from "./Avatar";
+import type { MausColor } from "@/lib/mascot";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
 import { t } from "@/lib/i18n";
@@ -137,7 +139,7 @@ export function BotProfileAvatarCard({
                   title={expression}
                   aria-label={`Use ${expression} expression`}
                 >
-                  <MausAvatar color={bot.color} faceColor={bot.mascotFaceColor} bodyId={bot.mascotBody ?? undefined} state={expression} size={42} animated={false} />
+                  <RobotAvatar variant={daniVariantForBot(bot.name, bot.color)} label={bot.name} state={expression} size={42} animated={false} />
                 </button>
               ))}
             </div>
@@ -165,11 +167,25 @@ export function BotProfileAvatarCard({
             </div>
 
             <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-              {t("botIdentity.body")}
+              {t("mausbotWelcome.look")}
             </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {MASCOT_BODY_IDS.map((id) => (
-                <BodyButton key={id} id={id} name={MASCOT_BODIES[id].name} bot={bot} busy={busy} onPatch={onPatch} />
+            <div className="grid grid-cols-7 gap-1.5">
+              {DANI_VARIANT_PICKS.map(({ variant, color, label }) => (
+                <button
+                  key={variant}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={daniVariantForBot(bot.name, bot.color) === variant}
+                  aria-label={label}
+                  title={label}
+                  onClick={() => onPatch({ color })}
+                  className={cn(
+                    "flex items-center justify-center rounded-lg py-1.5 disabled:opacity-50",
+                    daniVariantForBot(bot.name, bot.color) === variant ? "bg-control text-ink" : "text-ink-secondary hover:bg-control/60",
+                  )}
+                >
+                  <RobotAvatar variant={variant} label={label} size={34} animated={false} />
+                </button>
               ))}
             </div>
             <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
@@ -196,6 +212,17 @@ export function BotProfileAvatarCard({
     </div>
   );
 }
+
+/** The seven Dani characters offered on the profile card, each standing on its signature colour. */
+const DANI_VARIANT_PICKS: Array<{ variant: DaniVariantId; color: MausColor; label: string }> = [
+  { variant: "dani", color: "purple", label: "Dani" },
+  { variant: "sprout", color: "teal", label: "Sprout" },
+  { variant: "tuft", color: "blue", label: "Tuft" },
+  { variant: "sweep", color: "green", label: "Sweep" },
+  { variant: "cap", color: "orange", label: "Cap" },
+  { variant: "shades", color: "coral", label: "Shades" },
+  { variant: "bow", color: "pink", label: "Bow" },
+];
 
 function BodyButton({ id, name, bot, busy, onPatch }: {
   id: BotBodyId;
