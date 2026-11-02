@@ -122,14 +122,12 @@ describe("organisation sign-in row in the welcome flow", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("signs in to the default Admin once, then follows the browser step to connected", async () => {
+  it("offers no one-click sign-in while no portal is configured, and still follows a started enrollment to connected", async () => {
     await mount();
-    const signIn = button("Sign in")!;
-    signIn.props.onClick!();
-    signIn.props.onClick!();
-    await flush();
-    expect(bridge.begin).toHaveBeenCalledExactlyOnceWith({ portalOrigin: "https://admin.openmausbot.com" });
+    expect(button("Sign in")).toBeUndefined();
+    expect(bridge.begin).not.toHaveBeenCalled();
 
+    push(connecting);
     let html = render().html;
     expect(html).toContain("Finish in your browser");
     expect(html).toContain("ABCDE-FGHIJ");
@@ -181,9 +179,9 @@ describe("organisation sign-in row in the welcome flow", () => {
   });
 
   it("shows product copy for a failed action, never the IPC error", async () => {
-    await mount();
-    vi.mocked(bridge.begin).mockRejectedValueOnce(new Error("Private /path token-secret"));
-    button("Sign in")!.props.onClick!();
+    await mount(connecting);
+    vi.mocked(bridge.cancelEnrollment).mockRejectedValueOnce(new Error("Private /path token-secret"));
+    button("Cancel sign-in")!.props.onClick!();
     await flush();
     const html = render().html;
     expect(html).toContain("Could not complete this action");
@@ -191,17 +189,17 @@ describe("organisation sign-in row in the welcome flow", () => {
   });
 
   it("unsubscribes and ignores late answers once the beat closes", async () => {
-    const cleanup = await mount();
+    const cleanup = await mount(connecting);
     let resolveBegin!: (state: ManagedDesktopState) => void;
-    vi.mocked(bridge.begin).mockImplementation(() => new Promise((resolve) => { resolveBegin = resolve; }));
-    button("Sign in")!.props.onClick!();
+    vi.mocked(bridge.cancelEnrollment).mockImplementation(() => new Promise((resolve) => { resolveBegin = resolve; }));
+    button("Cancel sign-in")!.props.onClick!();
     if (typeof cleanup === "function") cleanup();
     push(connected);
-    resolveBegin(connecting);
+    resolveBegin({ status: "connecting", enrollment: { userCode: "LATE1-CODE0", verificationUri: "https://admin.example.test/enroll", expiresAt: Date.now() + 60_000 } });
     await flush();
     expect(unsubscribe).toHaveBeenCalledOnce();
     expect(render().html).not.toContain("Fixture Company");
-    expect(render().html).not.toContain("ABCDE-FGHIJ");
+    expect(render().html).not.toContain("LATE1-CODE0");
     expect(onConnected).not.toHaveBeenCalled();
   });
 });
