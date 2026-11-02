@@ -7,11 +7,11 @@ import { APP_REPOSITORY } from "@/lib/app-links";
 import { track } from "@/lib/analytics";
 import { boatOfferRuns } from "@/lib/boat-offer";
 import { brandStatus } from "@/lib/brand";
-import { buyOfferAllowed, cloudNoticeKind, cloudPlanView, cloudTrialNotice, cloudTrialView, offerTrialDays } from "@/lib/cloud-plan";
+import { buyOfferAllowed, cloudNoticeKind, cloudPlanView, cloudTrialView } from "@/lib/cloud-plan";
 import { jobRoutine, useCloudIntent } from "@/lib/cloud-intent";
 import { CLOUD_INTENT_GIVEN, cloudSetupStage } from "@/lib/cloud-setup";
 import { cornerPopupWaits, firstReplyPending } from "@/lib/corner-popup";
-import { BOAT_OFFER_NOTICE, CLOUD_INTRO, CLOUD_NOTICE, CLOUD_TRIAL_NOTICE, dismissNotice, introShown, introStage, launchNotice, markLaunchNotice, nextNotice, noticeSeen, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_UNTIL, PRODUCT_HUNT_URL, SIMPLE_MODE_NOTICE, STAR_NOTICE, TWO_PLACES_NOTICE, UPDATES_CONSENT_NOTICE, usedBefore, WHATS_NEW_NOTICE } from "@/lib/notices";
+import { BOAT_OFFER_NOTICE, CLOUD_INTRO, CLOUD_NOTICE, CLOUD_TRIAL_NOTICE, dismissNotice, introShown, introStage, launchNotice, markLaunchNotice, nextNotice, noticeSeen, PRODUCT_HUNT_NOTICE, PRODUCT_HUNT_URL, SIMPLE_MODE_NOTICE, STAR_NOTICE, TWO_PLACES_NOTICE, UPDATES_CONSENT_NOTICE, WHATS_NEW_NOTICE } from "@/lib/notices";
 import { useTwoPlaces } from "@/lib/two-places";
 import { useSimpleModePromptSeen } from "@/lib/simple-mode-prompt";
 import { reportWhatsNew, WHATS_NEW_SOURCES, whatsNewAudience, whatsNewView, type WhatsNewAction, type WhatsNewSlide } from "@/lib/whats-new";
@@ -108,7 +108,6 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
   const record = state.config?.onboarding;
   const introAllowed = Boolean(bridge) && brandStatus().source !== "file" && organization !== true && !onboardingCloudOffered(record);
   const stage = introStage(record, now());
-  const trialDue = cloudTrialNotice(plan);
   // What's new: This computer's page of a desktop that sells MausBot Cloud, once per person; never on a branded build or a
   // desktop an organization runs.
   const whatsNewHere = Boolean(bridge && desktop) && brandStatus().source !== "file";
@@ -148,14 +147,6 @@ export function AppNotices({ quiet = false, viewer = null, now = Date.now }: { q
       engineReady: state.instances.some(engineReady), onboarding: setupRecord, planned: Boolean(jobRoutine(state.routines, intent.sent)) }));
   const waits = cornerPopupWaits(state, updater, { quiet, idle: true, viewer }) || Boolean(state.cloudAdd) || state.cloudHowTo || setupHere;
   const kind = view ? cloudNoticeKind(view, account) : null;
-  const introDue = (): boolean | null => {
-    if (!introAllowed || !view) return false;
-    if (view.kind === "unknown" || view.kind === "connecting" || organization === null) return null;
-    if (!buyOfferAllowed(view) || !usedBefore(state.bots)) return false;
-    if (offer === undefined) return null;
-    if (offerTrialDays(offer) === null) return false;
-    return introOpen || stage === "due" ? true : null;
-  };
   const cards = Boolean(bridge || planBridge);
   // Promotions never land on a new install's first chat: they wait for its first reply, and the full-screen What's new popup
   // also for a launch after the one whose welcome just finished. Account and billing notices keep their own rules.

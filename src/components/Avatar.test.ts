@@ -9,7 +9,6 @@ import {
   MausAvatar,
   resolveBotAvatarOutcome,
   type BotAvatarProps,
-  type MausAvatarProps,
 } from "./Avatar";
 import { MASCOT_BODIES } from "../../shared/mascot-bodies";
 import { BLOUB_SHAPE } from "./bloub-adapter";
@@ -31,9 +30,6 @@ afterEach(() => {
   vi.useRealTimers();
   document.body.innerHTML = "";
 });
-
-const render = (props: Partial<MausAvatarProps>) =>
-  renderToStaticMarkup(createElement(MausAvatar, { color: "green", animated: false, ...props }));
 
 const renderBot = (bot: Partial<BotAvatarProps["bot"]>) =>
   renderToStaticMarkup(
