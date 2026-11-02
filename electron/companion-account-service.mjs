@@ -9,7 +9,12 @@ import {
   withoutManagedCompanionTunnelAccess,
 } from "./managed-companion-tunnel.mjs";
 
-export const DEFAULT_COMPANION_CONTROL_PLANE_URL = "https://accounts.openmausbot.com";
+// Dani ships no hosted companion control plane of its own yet, and a Dani
+// build must not send accounts to the upstream OpenMausBot service. Until a
+// Dani control plane is deployed, hosted Companion sign-in stays off unless
+// DANI_CONTROL_PLANE_URL points at one explicitly. Direct LAN, Bonjour, and
+// Tailscale pairing are unaffected.
+export const DEFAULT_COMPANION_CONTROL_PLANE_URL = "";
 
 export const COMPANION_CLIENT_INSTANCE_FIELD = "companionClientInstanceId";
 export const COMPANION_ACCOUNT_TOKEN_FIELD = "companionAccountToken";
@@ -28,10 +33,10 @@ const DEFAULT_HEALTH_CACHE_MS = 30_000;
 const ownString = (document, field) =>
   typeof document?.[field] === "string" ? document[field] : "";
 
-/** Packaged builds have a safe hosted default. Development must opt into an
- * exact HTTPS origin (or HTTP loopback Worker) so a contributor never sends
- * an OTP or bearer to an accidental host. An explicitly invalid override
- * disables the feature instead of silently falling back to production. */
+/** No hosted default: every build requires an explicit exact HTTPS origin
+ * (or HTTP loopback Worker) so neither a contributor nor a packaged install
+ * sends an OTP or bearer to an accidental or third-party host. An explicitly
+ * invalid override disables the feature instead of silently falling back. */
 export function resolveCompanionControlPlaneURL({
   isPackaged,
   environment = process.env,
@@ -40,7 +45,7 @@ export function resolveCompanionControlPlaneURL({
   if (override !== undefined) {
     return normalizeControlPlaneURL(override);
   }
-  return isPackaged ? DEFAULT_COMPANION_CONTROL_PLANE_URL : "";
+  return DEFAULT_COMPANION_CONTROL_PLANE_URL;
 }
 
 export function companionAccountCleanupPending(credentials) {
