@@ -119,7 +119,7 @@ function Tuner({
           state={state}
           expression={expression}
           size={300}
-          label={`${state} maus`}
+          label={`${state} Dani`}
           eyeScale={tuning.eyeScale}
           mouthStroke={tuning.mouthStroke}
           spring={tuning.spring}
@@ -293,12 +293,12 @@ function Preview() {
     <main className="preview-shell">
       <header className="preview-header">
         <div>
-          <p className="eyebrow">Morphing face engine · 25 expressions · 39 states</p>
-          <h1>Maus motion library</h1>
+          <p className="eyebrow">The Dani character · 16 faces · 39 states</p>
+          <h1>Dani motion library</h1>
           <p className="intro">
-            The app&rsquo;s lit body with the face engine behind it. Expressions morph on a
-            spring, blink on each state&rsquo;s own rhythm, and the eyes wrap around an implied
-            sphere so a turn reads as a head turning — the silhouette itself never rotates.
+            The app&rsquo;s Dani character, driven by the Bloub engine. Poses morph on their own
+            rhythm, each state carries its own face, and a bot&rsquo;s saved color inks its
+            character — the body itself never rotates.
           </p>
         </div>
         <button className="replay-all" type="button" onClick={() => setReplayAll((v) => v + 1)}>
@@ -360,7 +360,7 @@ function Preview() {
                 </div>
                 {PICKABLE_STATES.map((s) => (
                   <div className="mascot-cell" key={`${c}-${s}`}>
-                    <MausAvatar color={c} state={s} size={86} label={`${c} ${s} maus`} />
+                    <MausAvatar color={c} state={s} size={86} label={`${c} ${s} Dani`} />
                   </div>
                 ))}
               </div>
