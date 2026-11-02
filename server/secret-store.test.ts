@@ -92,7 +92,10 @@ function memoryIo(files: Record<string, string>, opts: { failWrite?: boolean } =
   return io;
 }
 
-const CONFIG_PATH = "/fixture/.danibot/config.json";
+const DATA_DIR = join("/", "fixture", ".danibot");
+// Fixture paths must be built with join(): the code under test resolves
+// join(dataDir, "config.json"), which is a backslash path on Windows.
+const CONFIG_PATH = join(DATA_DIR, "config.json");
 const headless: SecretStoreMode = { kind: "headless", failClosed: true, warning: null };
 const desktop: SecretStoreMode = { kind: "desktop", failClosed: false, warning: null };
 
@@ -110,7 +113,7 @@ describe("resolveSecretStore", () => {
       expect(mode.kind).toBe("headless");
       expect(mode.failClosed).toBe(true);
     }
-    const mode = resolveSecretStore({ DANI_INSECURE_LOCAL_DEV: "1" }, "/fixture/.danibot");
+    const mode = resolveSecretStore({ DANI_INSECURE_LOCAL_DEV: "1" }, DATA_DIR);
     expect(mode.kind).toBe("insecure-local-dev");
     expect(mode.failClosed).toBe(false);
     expect(mode.warning).toContain("DANI_INSECURE_LOCAL_DEV=1");
@@ -181,7 +184,7 @@ describe("scrubPlaintextSecretsAtBoot", () => {
     const io = memoryIo({ [CONFIG_PATH]: JSON.stringify(plaintextConfig()) });
     const env = coveredEnv();
     const result = scrubPlaintextSecretsAtBoot({
-      dataDir: "/fixture/.danibot",
+      dataDir: DATA_DIR,
       store: headless,
       env,
       io,
@@ -202,12 +205,12 @@ describe("scrubPlaintextSecretsAtBoot", () => {
   it("no-op when config.json has no secrets or is absent", () => {
     const io = memoryIo({ [CONFIG_PATH]: JSON.stringify({ language: "en" }) });
     expect(
-      scrubPlaintextSecretsAtBoot({ dataDir: "/fixture/.danibot", store: headless, env: {}, io, onWarning }).scrubbed,
+      scrubPlaintextSecretsAtBoot({ dataDir: DATA_DIR, store: headless, env: {}, io, onWarning }).scrubbed,
     ).toBe(false);
     expect(io.writes).toBe(0);
     const missing = memoryIo({});
     expect(
-      scrubPlaintextSecretsAtBoot({ dataDir: "/fixture/.danibot", store: headless, env: {}, io: missing, onWarning })
+      scrubPlaintextSecretsAtBoot({ dataDir: DATA_DIR, store: headless, env: {}, io: missing, onWarning })
         .scrubbed,
     ).toBe(false);
   });
@@ -216,7 +219,7 @@ describe("scrubPlaintextSecretsAtBoot", () => {
     const before = JSON.stringify(plaintextConfig());
     const io = memoryIo({ [CONFIG_PATH]: before });
     expect(() =>
-      scrubPlaintextSecretsAtBoot({ dataDir: "/fixture/.danibot", store: headless, env: {}, io, onWarning }),
+      scrubPlaintextSecretsAtBoot({ dataDir: DATA_DIR, store: headless, env: {}, io, onWarning }),
     ).toThrow(/refusing to boot/);
     expect(io.files[CONFIG_PATH]).toBe(before);
     expect(io.writes).toBe(0);
@@ -226,7 +229,7 @@ describe("scrubPlaintextSecretsAtBoot", () => {
     const io = memoryIo({ [CONFIG_PATH]: JSON.stringify(plaintextConfig()) });
     expect(() =>
       scrubPlaintextSecretsAtBoot({
-        dataDir: "/fixture/.danibot",
+        dataDir: DATA_DIR,
         store: headless,
         env: { XAI_API_KEY: FIX.xai },
         io,
@@ -241,7 +244,7 @@ describe("scrubPlaintextSecretsAtBoot", () => {
     const io = memoryIo({ [CONFIG_PATH]: before });
     // keychain unreadable this launch: shell injected nothing, store empty
     const result = scrubPlaintextSecretsAtBoot({
-      dataDir: "/fixture/.danibot",
+      dataDir: DATA_DIR,
       store: desktop,
       env: {},
       io,
@@ -255,7 +258,7 @@ describe("scrubPlaintextSecretsAtBoot", () => {
   it("desktop: scrubs covered secrets, leaves uncovered ones for the next launch", () => {
     const io = memoryIo({ [CONFIG_PATH]: JSON.stringify(plaintextConfig()) });
     const result = scrubPlaintextSecretsAtBoot({
-      dataDir: "/fixture/.danibot",
+      dataDir: DATA_DIR,
       store: desktop,
       env: { XAI_API_KEY: FIX.xai, BOX_TOKEN: FIX.box },
       io,
@@ -273,7 +276,7 @@ describe("scrubPlaintextSecretsAtBoot", () => {
     const io = memoryIo({ [CONFIG_PATH]: before }, { failWrite: true });
     expect(() =>
       scrubPlaintextSecretsAtBoot({
-        dataDir: "/fixture/.danibot",
+        dataDir: DATA_DIR,
         store: headless,
         env: coveredEnv(),
         io,
@@ -295,7 +298,7 @@ describe("scrubPlaintextSecretsAtBoot", () => {
     };
     expect(() =>
       scrubPlaintextSecretsAtBoot({
-        dataDir: "/fixture/.danibot",
+        dataDir: DATA_DIR,
         store: headless,
         env: coveredEnv(),
         io,
@@ -324,7 +327,10 @@ describe("scrubPlaintextSecretsAtBoot", () => {
       const after = JSON.parse(readFileSync(configPath, "utf8"));
       expect(plaintextSecretsPresent(after)).toEqual([]);
       expect(after.language).toBe("en");
-      expect(statSync(configPath).mode & 0o777).toBe(0o600);
+      // Windows cannot enforce POSIX mode bits (Node reports 0o666
+      // there); the 0o600 contract is POSIX-only.
+      const expectedMode = process.platform === "win32" ? 0o666 : 0o600;
+      expect(statSync(configPath).mode & 0o777).toBe(expectedMode);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -333,8 +339,8 @@ describe("scrubPlaintextSecretsAtBoot", () => {
   it("insecure local-dev mode: leaves plaintext in place with a warning", () => {
     const before = JSON.stringify(plaintextConfig());
     const io = memoryIo({ [CONFIG_PATH]: before });
-    const store = resolveSecretStore({ DANI_INSECURE_LOCAL_DEV: "1" }, "/fixture/.danibot");
-    const result = scrubPlaintextSecretsAtBoot({ dataDir: "/fixture/.danibot", store, env: {}, io, onWarning });
+    const store = resolveSecretStore({ DANI_INSECURE_LOCAL_DEV: "1" }, DATA_DIR);
+    const result = scrubPlaintextSecretsAtBoot({ dataDir: DATA_DIR, store, env: {}, io, onWarning });
     expect(result.scrubbed).toBe(false);
     expect(io.files[CONFIG_PATH]).toBe(before);
     expect(warnings.join("\n")).toContain("INSECURE LOCAL DEVELOPMENT MODE");
@@ -451,7 +457,7 @@ describe("applySecretAwareConfigSave", () => {
   it("insecure local-dev: legacy plaintext save with a loud warning", () => {
     const warnings: string[] = [];
     const saved: Array<Record<string, unknown>> = [];
-    const store = resolveSecretStore({ DANI_INSECURE_LOCAL_DEV: "1" }, "/fixture/.danibot");
+    const store = resolveSecretStore({ DANI_INSECURE_LOCAL_DEV: "1" }, DATA_DIR);
     const result = applySecretAwareConfigSave({
       patch: { xai: { key: FIX.xai } },
       store,
