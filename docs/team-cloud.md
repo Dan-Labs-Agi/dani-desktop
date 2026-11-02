@@ -136,7 +136,7 @@ this server shares with every bot. It exists only on a Team Cloud.
 
 Every app (a Composio toolkit) and MCP server has a scope. `team`, the default and what every connection made before this
 is, is one connection an Admin makes and every turn uses. `person` is one connection per member, made by that member on
-their team page in Dani Cloud (the Admin's Cloud page calls the routes below as them).
+their team page in MausBot Cloud (the Admin's Cloud page calls the routes below as them).
 
 - **Who gets a member's own connection.** Only a turn that acts for them (server/host/acting-person.ts), read from the
   harness's records, and only in a chat that is theirs alone, where nobody else reads what their connection brings back.
