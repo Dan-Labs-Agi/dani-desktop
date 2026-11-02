@@ -1,6 +1,8 @@
 name: Docker image
 
 on:
+  # Manual dispatch is the explicit, approved route for publishing :latest.
+  workflow_dispatch:
   push:
     branches: [main]
     tags: ["v*"]
@@ -121,7 +123,10 @@ jobs:
   publish:
     name: publish to GHCR
     needs: build-and-smoke
-    if: github.event_name == 'push'
+    # Release hold: branch pushes only build and smoke-test the image above.
+    # Publishing to GHCR happens only on a v* tag push or an explicit manual
+    # dispatch, after the required checks have passed.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: read
