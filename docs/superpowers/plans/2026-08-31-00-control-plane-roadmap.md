@@ -4,7 +4,7 @@
 > Each numbered plan below is its own file and its own working, testable deliverable.
 > Execute them with superpowers:subagent-driven-development, one plan at a time.
 
-**Goal:** Close the gap between what Dani Bot already is (an engine-neutral harness
+**Goal:** Close the gap between what OpenMausBot already is (an engine-neutral harness
 that owns memory, skills, permissions, and computers) and what it is not yet packaged
 as (a portable Bot Profile, a real connections surface, and a machine that stays on).
 
@@ -44,7 +44,10 @@ codebase already enforces; a task that violates one is wrong even if its tests p
   is deliberately unvalidated for this reason.
 - **Exports never carry** credentials, transcripts, memory, grants, absolute paths,
   engine bindings, or a schedule's active state. `server/package-export.ts` states
-  this as its contract; every new export path inherits it.
+  this as its contract; every new export path inherits it. The one deliberate
+  exception is the private team backup (`server/team-backup.ts`): it exists to
+  move a person's own fleet between their own machines, so it carries transcripts
+  and memory — redacted — and is never a shareable package.
 - **Imports land disabled.** Skills, connectors, routines, and MCP servers arriving
   from outside are inert until a person enables them after reading. See the policy
   comment at the top of `server/skills.ts`.
