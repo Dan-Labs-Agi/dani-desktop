@@ -35,7 +35,7 @@ own connected apps. Talk to them like contacts. Watch them work. Approve what ma
 <br>
 
 
-<img src="docs/assets/screenshots/dani-chat-dark.png" alt="Dani Bot — a chat app where every chat is a real AI agent, shown in dark mode" width="900">
+<img src="docs/assets/screenshots/dani-hero-dark.png" alt="Dani Desktop in dark mode: a chat with Dani and the connected-apps market, with the Dani robots around the windows" width="900">
 
 </div>
 
@@ -70,6 +70,7 @@ Each bot's model picker shows the models its engine can actually run - local mod
 of the box, cloud providers once their keys are in Settings - with the default marked. Switch a bot's model
 mid-conversation.
 
+<img src="docs/assets/screenshots/dani-models-dark.png" alt="The per-bot model picker listing the models the installed engine can run, in dark mode" width="100%">
 
 </td>
 <td width="50%" valign="top">
@@ -79,7 +80,7 @@ mid-conversation.
 Open the Computer panel to see which computer a bot is assigned to, start a private view-only
 preview of this machine, or enable local control after explicit opt-in - every local action still asks
 first.
-
+<img src="docs/assets/screenshots/dani-computer-dark.png" alt="The bot Computer panel with Screen, Browser, Data and Files tabs and the browser permission toggle, in dark mode" width="100%">
 
 </td>
 </tr>
@@ -99,7 +100,7 @@ permission broker turns every risky action into a decision you make, for cloud a
 
 A one-click marketplace over Composio Sessions: Gmail, Slack, GitHub, Notion, Linear and hundreds more.
 OAuth once, and every bot can use them as tools.
-
+<img src="docs/assets/screenshots/dani-apps-dark.png" alt="The connected-apps market: Gmail, Slack, GitHub, Notion, Linear and more with one-click Connect buttons, in dark mode" width="100%">
 
 </td>
 </tr>
@@ -120,7 +121,7 @@ messaging app — your agents behave like contacts.
 
 Paste credentials in App Settings — they persist locally and the provider fleet hot-reloads instantly.
 Secrets are write-only: the UI only ever sees "configured" flags.
-
+<img src="docs/assets/screenshots/dani-keys-dark.png" alt="AI settings: every provider with one Set up button and the API keys section, in dark mode" width="100%">
 
 </td>
 </tr>
