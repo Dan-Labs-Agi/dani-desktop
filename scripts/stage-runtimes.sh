@@ -58,8 +58,14 @@ if [ ! -f "$HM_ARCHIVE" ]; then
     PATH="$HOME/.local/bin:$PATH"; export PATH
   fi
   if ! python3 -c 'import packaging' >/dev/null 2>&1; then
-    echo "    python3 'packaging' module not found; installing with pip --user"
-    python3 -m pip install --user packaging
+    # PEP 668 blocks pip --user on Homebrew/system pythons (macOS runners).
+    # Use a uv-managed python (never externally managed) with 'packaging'
+    # installed, and shadow python3 for the payload build via PATH.
+    echo "    python3 'packaging' module not found; using a uv-managed venv"
+    TOOLVENV="$(mktemp -d)/venv"
+    uv venv --python 3.11 "$TOOLVENV" >/dev/null
+    uv pip install --python "$TOOLVENV/bin/python3" packaging >/dev/null
+    PATH="$TOOLVENV/bin:$PATH"; export PATH
   fi
   sh "$ROOT/scripts/build-hermes-payload.sh" "$BUILD_TARGET" "$OUT"
 fi
