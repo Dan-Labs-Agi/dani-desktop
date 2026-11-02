@@ -14,6 +14,15 @@ const xvfb = process.platform === "linux" && !process.env.DISPLAY
   ? spawnSync("which", ["xvfb-run"], { encoding: "utf8" }).stdout.trim()
   : "";
 const canRun = process.platform !== "linux" || Boolean(process.env.DISPLAY) || Boolean(xvfb);
+// Same upstream regression gate as browser-closed-shadow: Electron 43 exits
+// with EXCEPTION_BREAKPOINT before ready on GitHub's Windows runners
+// (electron/electron#51761). ci.yml sets the legacy-named flag on
+// windows-latest and keeps a continue-on-error canary probing the fix.
+const skipRealElectronFixture =
+  (process.env.DANI_SKIP_REAL_ELECTRON_BROWSER_FIXTURE ??
+    process.env.OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE) === "1";
+const canRunRealElectronFixture = canRun
+  && !(process.platform === "win32" && skipRealElectronFixture);
 const fixtureTimeoutMs = 45_000;
 
 const expectedMarkers = [
@@ -25,7 +34,7 @@ const expectedMarkers = [
   "malicious-canary-unreached",
 ];
 
-it.runIf(canRun)("sandboxed renderer cannot reach raw APIs or unexposed IPC channels", async () => {
+it.runIf(canRunRealElectronFixture)("sandboxed renderer cannot reach raw APIs or unexposed IPC channels", async () => {
   const command = xvfb || electron;
   const args = xvfb ? ["-a", electron, "--no-sandbox", fixture] : [fixture];
   const childEnv = { ...process.env };

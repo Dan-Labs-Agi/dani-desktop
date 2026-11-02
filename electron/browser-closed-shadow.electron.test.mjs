@@ -13,8 +13,15 @@ const xvfb = process.platform === "linux" && !process.env.DISPLAY
   ? spawnSync("which", ["xvfb-run"], { encoding: "utf8" }).stdout.trim()
   : "";
 const canRun = process.platform !== "linux" || Boolean(process.env.DISPLAY) || Boolean(xvfb);
+// Current name first, CI-era legacy name as fallback: ci.yml still sets
+// OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE for the documented upstream
+// regression (electron/electron#51761) and the workflow file cannot be
+// renamed from here.
+const skipRealElectronFixture =
+  (process.env.DANI_SKIP_REAL_ELECTRON_BROWSER_FIXTURE ??
+    process.env.OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE) === "1";
 const canRunRealElectronFixture = canRun
-  && !(process.platform === "win32" && process.env.DANI_SKIP_REAL_ELECTRON_BROWSER_FIXTURE === "1");
+  && !(process.platform === "win32" && skipRealElectronFixture);
 const windowsSandboxSid = "S-1-15-2-2";
 const fixtureTimeoutMs = 45_000;
 
