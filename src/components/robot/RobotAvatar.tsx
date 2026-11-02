@@ -22,6 +22,8 @@ export type RobotAvatarProps = {
   color?: string;
   /** A Dani character variant; overrides role/color when set. */
   variant?: DaniVariantId;
+  /** Camera zoom for this avatar only; 1 keeps the shared framing. */
+  zoom?: number;
   role?: RobotRole;
   state?: string;
   animated?: boolean;
@@ -59,6 +61,7 @@ export function RobotAvatar(props: RobotAvatarProps) {
       size,
       role,
       variant: props.variant,
+      zoom: props.zoom,
       color,
       motion,
       animated,
@@ -88,7 +91,7 @@ export function RobotAvatar(props: RobotAvatarProps) {
       instanceRef.current = null;
       unregister();
     };
-  }, [size, label, role, props.variant, color, motion, animated]);
+  }, [size, label, role, props.variant, props.zoom, color, motion, animated]);
 
   useEffect(() => {
     if (props.motionKey === previousMotionKey.current) return;

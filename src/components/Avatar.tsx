@@ -220,6 +220,8 @@ export const MausAvatar = memo(forwardRef(MausAvatarComponent));
 
 export type BotAvatarProps = Omit<MausAvatarProps, "color" | "gradient"> & {
   readable?: boolean;
+  /** Camera zoom for the robot character only; 1 keeps the shared framing. */
+  robotZoom?: number;
   bot: {
     name?: string;
     color: MausColor;
@@ -248,7 +250,7 @@ export function resolveBotAvatarOutcome(params: {
   return "flatImage";
 }
 
-export function BotAvatar({ bot, size = 44, label, readable: _readable = false, ...mascotProps }: BotAvatarProps) {
+export function BotAvatar({ bot, size = 44, label, readable: _readable = false, robotZoom, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -266,6 +268,7 @@ export function BotAvatar({ bot, size = 44, label, readable: _readable = false, 
         size={size}
         label={label ?? bot.name}
         variant={daniVariantForBot(bot.name, bot.color)}
+        zoom={robotZoom}
         state={mascotProps.state}
         animated={mascotProps.animated}
       />
