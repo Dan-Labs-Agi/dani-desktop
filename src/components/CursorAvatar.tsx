@@ -49,6 +49,15 @@ const VIEW_BOX = "-158 -158 316 316"
 const SVG_NS = "http://www.w3.org/2000/svg"
 const DEFAULT_INK = "#0a0a0c"
 
+/** Stable seconds offset from a seed so every bot's character moves on its own clock. */
+function phaseFromSeed(seed: string | number | undefined): number {
+  if (seed === undefined) return Math.random() * 12
+  const text = String(seed)
+  let h = 2166136261
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619) }
+  return (h >>> 0) % 12000 / 1000
+}
+
 export type CursorState =
   | "sleeping"
   | "waking"
@@ -367,6 +376,8 @@ export interface CursorAvatarProps {
   gradient?: [string, string, string]
   picture?: string | null
   eyeColor?: string
+  /** Desynchronizes multiple avatars: each seed starts the character at a different point in its motion, like Dani-Dex's per-bot initialPhase. */
+  phaseSeed?: string | number
   title?: string | null
   className?: string
   style?: React.CSSProperties
@@ -405,18 +416,20 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
     const svgRef = useRef<SVGSVGElement>(null)
     const engineRef = useRef<BotEngine | null>(null)
     const pulseTimer = useRef<number | undefined>(undefined)
+    const phaseRef = useRef(0)
     const propsRef = useRef(props)
     propsRef.current = props
 
     const pulse = (to: string, ms: number) => {
       const eng = engineRef.current
       if (!eng) return
-      const now = performance.now() / 1000
+      const phase = phaseRef.current
+      const now = performance.now() / 1000 + phase
       eng.setState(to, now)
       window.clearTimeout(pulseTimer.current)
       pulseTimer.current = window.setTimeout(() => {
         const pose = BLOUB_STATE[(propsRef.current.state ?? "idle") as CursorState] ?? BLOUB_STATE.idle
-        eng.setState(pose.state, performance.now() / 1000)
+        eng.setState(pose.state, performance.now() / 1000 + phaseRef.current)
       }, ms)
     }
 
@@ -426,7 +439,7 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       setExpression: (index: number) => {
         const id = bloubExpressionAt(index)
         const expr = id ? EXPRESSION_BY_ID.get(id) : undefined
-        if (expr) engineRef.current?.setExpression(expr, performance.now() / 1000)
+        if (expr) engineRef.current?.setExpression(expr, performance.now() / 1000 + phaseRef.current)
       },
     }))
 
@@ -434,7 +447,10 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       const svg = svgRef.current
       if (!svg) return
       const initial = BLOUB_STATE[(propsRef.current.state ?? "idle") as CursorState] ?? BLOUB_STATE.idle
+      const phase = phaseFromSeed(propsRef.current.phaseSeed)
+      phaseRef.current = phase
       const eng = new BotEngine(100, initial.state, null, initial.expression ? EXPRESSION_BY_ID.get(initial.expression) ?? null : null)
+      eng.setState(initial.state, phase)
       engineRef.current = eng
 
       const arcsBack = makeEl("g", { fill: "none", "stroke-linecap": "round" })
@@ -552,14 +568,14 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
       const still = paused || reduced
       if (still) {
-        followProps(0)
-        apply(eng.sample(0), gradient[1], eyeColor ?? DEFAULT_INK)
+        followProps(phase)
+        apply(eng.sample(phase), gradient[1], eyeColor ?? DEFAULT_INK)
         return () => { engineRef.current = null }
       }
 
       let raf = 0
       const tick = (nowMs: number) => {
-        const now = nowMs / 1000
+        const now = nowMs / 1000 + phase
         followProps(now)
         const p = propsRef.current
         apply(eng.sample(now), (p.gradient ?? DEFAULT_GRADIENT)[1], p.eyeColor ?? DEFAULT_INK)
