@@ -136,7 +136,7 @@ this server shares with every bot. It exists only on a Team Cloud.
 
 Every app (a Composio toolkit) and MCP server has a scope. `team`, the default and what every connection made before this
 is, is one connection an Admin makes and every turn uses. `person` is one connection per member, made by that member on
-their team page in MausBot Cloud (the Admin's Cloud page calls the routes below as them).
+their team page in Dani Cloud (the Admin's Cloud page calls the routes below as them).
 
 - **Who gets a member's own connection.** Only a turn that acts for them (server/host/acting-person.ts), read from the
   harness's records, and only in a chat that is theirs alone, where nobody else reads what their connection brings back.
@@ -188,7 +188,7 @@ mcp: { <name>: [address] } }`: who has connected each, never with what.
 The Admin signs the usual pairing body with two more fields:
 
 ```json
-{ "label": "OpenMausBot app (Team Cloud)", "ttlSeconds": 300,
+{ "label": "Dani Desktop app (Team Cloud)", "ttlSeconds": 300,
   "team": { "id": "<team id>", "name": "Acme" },
   "member": { "email": "mira@example.com", "role": "owner" | "admin" | "member" } }
 ```
@@ -215,7 +215,7 @@ the Admin (404). A session is also kept only across a clean restart.
 /api/cloud/team/member-left` with `{ "email": "<address>" }`, signed with its body like the sleep request (400
 `invalid_member` for a bad address; only on a Team Cloud). The machine then deletes what was that person's alone and
 answers `{ ok, chats, layers, sessions, files, browsers, bots }`: every session and phone of theirs and any open code of
-theirs end at once; their own MausBot is deleted as the app deletes a bot, with its chats and notes (`bots`, its chats
+theirs end at once; their own Dani Bot is deleted as the app deletes a bot, with its chats and notes (`bots`, its chats
 counted in `chats`), and should they join again they get a new one; their private chats with every bot are deleted as
 the app deletes a conversation (messages, notifications, follow-ups, a running turn stopped first), with the uploaded
 files only those chats used and every file they uploaded that nothing uses (a file they took off a message before
@@ -397,7 +397,7 @@ allow, folders), where it runs, its department, whom it answers to or directs, c
   current member of the team (an older list's address or `@domain` may stay), and the owner is never stored. The bot's
   `visibility` follows in the same write (everyone when everyone may at least view it, else the owner and the people
   added), so every rule of the audience rule above that reads who sees a bot holds unchanged. A new team bot is
-  Everyone · Can chat. A member's own MausBot stays theirs alone, as before.
+  Everyone · Can chat. A member's own Dani Bot stays theirs alone, as before.
 - **Before levels.** A bot whose sharing was never set is read from its visibility, exactly as it was: everyone →
   Everyone · Can chat; admins only → Only people added (admins still edit); a list of addresses → those people · Can
   chat. Nothing is rewritten on disk; the first change in the Share dialog stores the sharing. An older app's
@@ -417,7 +417,7 @@ allow, folders), where it runs, its department, whom it answers to or directs, c
   dialog on a team; the conversation's copy and download sit under the ⋯ of its header. Someone who can only view a bot sees "You
   can view Payroll, not chat with it." where the composer would be (and in a room with that bot), opens its main chat
   rather than a new one of their own, and is offered no New conversation. Off a team none of this shows.
-- **Bot access** (its own Settings page, for a team's admins): one row per team bot (each person's own MausBot stays
+- **Bot access** (its own Settings page, for a team's admins): one row per team bot (each person's own Dani Bot stays
   out) with its owner, what everyone gets and the faces of those with their own access; a row opens that bot's Share
   dialog. By person lists each User, and opening one shows their bots with the same level menus and Remove. The same
   sharing as the Share dialog, applied at once with Undo.
@@ -433,7 +433,7 @@ allow, folders), where it runs, its department, whom it answers to or directs, c
 ## One inbox per person
 
 Everything addressed to a person reaches one place, their **inbox** (`server/host/person-inbox.ts`): their own private
-chat with their own Chief of Staff, or with their own MausBot while they crowned none (every member gets one). It is the
+chat with their own Chief of Staff, or with their own Dani Bot while they crowned none (every member gets one). It is the
 chat that bot opens to for them (`WireTask.inbox`, sent to its person alone): the one their brief was in, else their
 newest own chat with that bot, else a new one, "Inbox". Crowning another Chief moves it. Nothing is turned on: every
 member of a team has one, and off a team none exists.
@@ -555,6 +555,6 @@ person as before, and `message_person` and the inbox do not exist.
   (the team's), whichever chat wrote them; so are a routine's definition and schedule (its runs and results are the
   conversation's). The Owner's whole-machine export (`OMB_CLOUD_EXPORT_ONLY`, the workspace backup) still carries every
   member's private chats.
-- **Own apps with the team's own Composio project.** A member's own apps always use OpenMausBot's connected-apps
+- **Own apps with the team's own Composio project.** A member's own apps always use Dani Desktop's connected-apps
   service, even when the team connected a Composio project key of its own; an app that needs the project's own auth
   config can't be connected by each person.

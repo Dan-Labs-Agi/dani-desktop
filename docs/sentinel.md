@@ -1,6 +1,6 @@
 # Sentinel
 
-Sentinel is an opt-in health scanner for an OpenMausBot data dir. It reads the
+Sentinel is an opt-in health scanner for a Dani Desktop data dir. It reads the
 data dir's databases and logs without modifying them, groups failures into
 issues, and writes those issues to its own folder outside the data dir (see
 [Privacy model](#privacy-model)). An `--out` inside the data dir is refused.
@@ -10,9 +10,9 @@ crashes. The code lives in [`server/sentinel/`](../server/sentinel/). Every
 input is explicit, so the same scan could later run inside the server.
 
 ```sh
-openmausbot sentinel [--data-dir DIR] [--out DIR] [--once] [--json]
+pnpm omb sentinel [--data-dir DIR] [--out DIR] [--once] [--json]
                      [--queue-wait SECONDS] [--cost USD]
-openmausbot sentinel --check-install [--json]
+pnpm omb sentinel --check-install [--json]
 ```
 
 Each run does one scan, prints a short summary (or JSON with `--json`) and
@@ -86,7 +86,7 @@ Issues hold references and a normalized title, never raw content. A line in
   `$XDG_STATE_HOME/openmausbot-sentinel/` (by default
   `~/.local/state/openmausbot-sentinel/`), on Windows
   `%LOCALAPPDATA%\openmausbot-sentinel\`. You can choose another folder with
-  `--out`. A data dir other than `~/.openmausbot` gets its own `data-<hash>`
+  `--out`. A data dir other than `~/.danibot` gets its own `data-<hash>`
   subfolder. The folder is `0700` and its files are `0600`. Sentinel refuses
   an `--out` inside a git repository or inside the data dir, so it never
   writes into the folder it reads, and backups of the data dir never carry its
@@ -117,19 +117,19 @@ in its `index.ts`. A detector may see the same record on several scans. The
 
 | Kind | Fires on | Origin |
 |---|---|---|
-| `tool_error` | A failed tool call, grouped by tool and normalized error | `harness` for OpenMausBot's own MCP servers (`mcp__agents__*`, `computer`, `browser`, …) and harness notices; `shell` for Bash and exec; `external` for other MCP servers and the engine's built-in tools |
+| `tool_error` | A failed tool call, grouped by tool and normalized error | `harness` for Dani Desktop's own MCP servers (`mcp__agents__*`, `computer`, `browser`, …) and harness notices; `shell` for Bash and exec; `external` for other MCP servers and the engine's built-in tools |
 | `turn_timeout` / `turn_stop` | A `turn.completed` that is not ok (stops the person chose are excluded), a turn stopped on budget (`max_tokens`, `max_turns`), or a room turn the harness stopped for running too long | `external` for account stops (`auth_required`, `quota`, …), otherwise `harness` |
 | `queue_wait` | Delegated work that waited longer than `--queue-wait` (default 300 s) before starting, or is still waiting | `harness` |
 | `cost` | A single turn that cost more than `--cost` (default $5) | `harness` |
 | `retry_loop` | The same tool failing with the same signature 3 or more times in one turn | That of the tool |
 
-Harness failures are ranked `high`, because they are bugs in OpenMausBot
+Harness failures are ranked `high`, because they are bugs in Dani Desktop
 itself.
 
 ## Installing it
 
 ```sh
-openmausbot service install --sentinel [--data-dir DIR]
+pnpm omb service install --sentinel [--data-dir DIR]
 ```
 
 This writes the schedule into Sentinel's own folder (above) and prints the
@@ -144,7 +144,7 @@ explicitly, so the paths it prints are the ones the scan uses.
 - **Windows:** prints a `schtasks` command that runs the same scan every two
   minutes.
 
-`openmausbot service uninstall --sentinel` prints the commands that remove it.
+`pnpm omb service uninstall --sentinel` prints the commands that remove it.
 
 ### Which CLI the schedule runs
 
@@ -154,8 +154,8 @@ ships, whichever command you ran it from:
 
 | Platform | Node | Script |
 |---|---|---|
-| macOS | `/Applications/OpenMausBot.app/Contents/MacOS/OpenMausBot` (or under `~/Applications`) | `…/Contents/Resources/server/openmausbot.js` |
-| Ubuntu `.deb` | `/opt/OpenMausBot/openmausbot` | `/opt/OpenMausBot/resources/server/openmausbot.js` |
+| macOS | `/Applications/Dani Desktop.app/Contents/MacOS/Dani Desktop` (or under `~/Applications`) | `…/Contents/Resources/server/openmausbot.js` |
+| Ubuntu `.deb` | `/opt/Dani Desktop/openmausbot` | `/opt/Dani Desktop/resources/server/openmausbot.js` |
 
 The app's own executable runs as Node with `ELECTRON_RUN_AS_NODE=1`, just as
 the [MCP server](mcp-server.md#from-the-installed-desktop-app) does. App
@@ -170,7 +170,7 @@ after an nvm upgrade or a fresh checkout.
 ### After an update
 
 ```sh
-openmausbot sentinel --check-install
+pnpm omb sentinel --check-install
 ```
 
 This reads the installed plist or unit and checks that its Node and script
