@@ -1,7 +1,8 @@
 // MausBot Cloud's night card, cut like a linocut: the three bots ride a cloud under the moon while this computer's
 // laptop sleeps on the hill.
 import { memo, useRef, type ReactNode } from "react";
-import { MausAvatar } from "@/components/Avatar";
+import { daniVariantForColor } from "@/components/robot/dani-variants";
+import { RobotAvatar } from "@/components/robot/RobotAvatar";
 import { cn } from "@/lib/cn";
 import type { MausColor, MausState } from "@/lib/mascot";
 import { useLiveMotion } from "./live-motion";
@@ -66,7 +67,7 @@ const Scene = memo(function Scene({ moving }: { moving: boolean }) {
       <path d="M640 86c6-4 12-4 18 0" /><path d="M676 82c7-5 15-5 22 0" /><path d="M712 86c5-3 10-3 15 0" />
     </g>
     {CREW.map(({ color, state, spot: [x, y, size] }) => <foreignObject key={color} x={x} y={y} width={size} height={size} overflow="visible">
-      <MausAvatar color={color} state={state} size={size} animated={moving} trackPointer={false} />
+      <RobotAvatar variant={daniVariantForColor(color)} label={color} state={state} size={size} animated={moving} />
     </foreignObject>)}
     <Laptop moving={moving} />
   </svg>;

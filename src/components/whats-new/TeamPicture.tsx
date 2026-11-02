@@ -1,7 +1,8 @@
 // The Team slide's picture: a team's shared bots on its one Cloud, in two departments, and around them each person with
 // their own Chief. Drawn with the skin's tokens; the work handed to the shared bots moves only while motion is allowed.
 import { memo, useId, useRef } from "react";
-import { MausAvatar } from "@/components/Avatar";
+import { daniVariantForColor } from "@/components/robot/dani-variants";
+import { RobotAvatar } from "@/components/robot/RobotAvatar";
 import { t } from "@/lib/i18n";
 import type { MausColor, MausState } from "@/lib/mascot";
 import { useLiveMotion } from "../cloud-buy/live-motion";
@@ -36,7 +37,7 @@ function CloudShape({ fill, line }: { fill: string; line: string }) {
 }
 
 function PersonCard({ person, moving }: { person: Person; moving: boolean }) {
-  const { name, color, chief, x, y, right } = person;
+  const { name, color, x, y, right } = person;
   const avatar = right ? x + CHIP.width - 23 : x + 23, label = right ? x + CHIP.width - 42 : x + 42, chiefX = right ? x + 8 : x + CHIP.width - 34;
   return <g>
     <rect x={x} y={y} width={CHIP.width} height={CHIP.height} rx="14" fill="var(--color-card)" stroke={ink(10)} />
@@ -44,7 +45,7 @@ function PersonCard({ person, moving }: { person: Person; moving: boolean }) {
     <text x={avatar} y={y + 26.5} textAnchor="middle" fontSize="13" fontWeight="600" fill={`var(--identity-${color})`}>{name[0]}</text>
     <text x={label} y={y + 26.5} textAnchor={right ? "end" : "start"} fontSize="13" fontWeight="600" fill="var(--color-ink)">{name}</text>
     <foreignObject x={chiefX} y={y + 12} width="26" height="26" overflow="visible">
-      <MausAvatar color={chief} state="idle" size={26} animated={moving} trackPointer={false} />
+      <RobotAvatar variant="dani" label="Dani" state="idle" size={26} animated={moving} />
     </foreignObject>
     <path transform={`translate(${chiefX + 7} ${y + 3})`} d={CROWN} fill="var(--color-warning)" />
   </g>;
@@ -73,7 +74,7 @@ export const TeamPicture = memo(function TeamPicture({ active }: { active: boole
       <CloudShape fill={`color-mix(in srgb, var(--color-accent) 7%, var(--color-card))`} line={ink(12)} />
       {DEPARTMENTS.map(department => <g key={department.label}>
         {department.bots.map(bot => <foreignObject key={bot.color} x={bot.x} y={bot.y} width={bot.size} height={bot.size} overflow="visible">
-          <MausAvatar color={bot.color} state={bot.state} size={bot.size} animated={moving} trackPointer={false} />
+          <RobotAvatar variant={daniVariantForColor(bot.color)} label={bot.color} state={bot.state} size={bot.size} animated={moving} />
         </foreignObject>)}
         <text x={department.x} y="198" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--color-ink-secondary)">{t(department.label)}</text>
       </g>)}

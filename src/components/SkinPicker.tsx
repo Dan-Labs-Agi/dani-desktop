@@ -3,11 +3,6 @@
 import { Check } from "lucide-react";
 import { SKINS, applySkin, resolveSkin, type SkinId } from "@/lib/skins";
 import { cn } from "@/lib/cn";
-import { t } from "@/lib/i18n";
-import { setDressUp, useDressUp } from "@/lib/halloween-dress";
-import type { HalloweenBodyId } from "../../shared/halloween-bodies";
-import { MausAvatar } from "./Avatar";
-import { Switch } from "./SettingsPrimitives";
 import { useSkinChoice } from "./ThemeRow";
 
 function Miniature({ skin }: { skin: SkinId }) {
@@ -53,32 +48,6 @@ function Miniature({ skin }: { skin: SkinId }) {
   );
 }
 
-const DRESS_UP_PREVIEW: ReadonlyArray<[HalloweenBodyId, "orange" | "purple" | "teal" | "red"]> = [
-  ["pumpkin", "orange"],
-  ["ghost", "purple"],
-  ["witch", "teal"],
-  ["bat", "red"],
-];
-
-export function DressUpRow() {
-  const dressed = useDressUp();
-  const title = t("settings.skin.dressUp.title");
-  return (
-    <div data-dress-up className="mt-4 flex items-center gap-4 rounded-xl border border-accent-border/40 bg-accent/[0.06] p-3">
-      <div className="flex shrink-0 -space-x-1.5" aria-hidden="true">
-        {DRESS_UP_PREVIEW.map(([body, color]) => (
-          <MausAvatar key={body} color={color} bodyId={body} size={30} animated={false} trackPointer={false} />
-        ))}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-medium text-ink">{title}</div>
-        <div className="mt-1 text-[12px] leading-relaxed text-ink-secondary">{t("settings.skin.dressUp.subtitle")}</div>
-      </div>
-      <Switch checked={dressed} aria-label={title} onClick={() => setDressUp(!dressed)} />
-    </div>
-  );
-}
-
 export function SkinPicker() {
   const active = resolveSkin(useSkinChoice());
 
@@ -116,7 +85,6 @@ export function SkinPicker() {
           );
         })}
       </div>
-      {active === "halloween" && <DressUpRow />}
     </>
   );
 }

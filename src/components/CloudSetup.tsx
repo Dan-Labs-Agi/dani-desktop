@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, Check, ChevronDown, Cloud, Minus } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
+import { RobotAvatar } from "@/components/robot/RobotAvatar";
+import { robotMotionForMaus } from "@/components/robot/robot-avatar-engine";
 import { engineReady } from "@/components/EngineLibrary";
 import { staggerIndex } from "@/components/onboarding/beats/shared";
 import { withViewTransition } from "@/components/onboarding/view-transition";
@@ -76,7 +77,7 @@ function CloudReady({ routine, onDone }: { routine?: Routine; onDone: () => void
   const next = routine ? nextRunLabel(routine.nextRunAt) : null;
   return <aside aria-labelledby="cloud-ready-title" data-cloud-setup-ready className={cn(CARD, "flex flex-col items-center p-5 pt-6 text-center", leaving ? "animate-pop-out" : "animate-spot-in")}>
     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(60%_100%_at_50%_0%,color-mix(in_oklab,var(--color-success)_16%,transparent),transparent)]" />
-    <MausAvatar color="green" state="celebrate" motion={motion.kind} motionKey={motion.key} size={56} label={productName()} />
+    <RobotAvatar variant="dani" state="celebrate" motion={robotMotionForMaus(motion.kind)} motionKey={motion.key} size={56} label={productName()} />
     <div role="status" className="relative">
       <h2 id="cloud-ready-title" className="mt-3 text-[15px] font-semibold">{t("cloudSetup.ready.title")}</h2>
       {routine
