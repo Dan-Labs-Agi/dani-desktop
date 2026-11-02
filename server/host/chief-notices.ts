@@ -57,7 +57,7 @@ export interface ChiefNoticeDeps {
 
 /** How long a run stopped for memory waits before it starts again; the memory gate then holds it until there is room. */
 export const MEMORY_RETRY_MS = 30_000;
-export const MEMORY_RETRY_TEXT = "[OpenMausBot started this again by itself, once: the last run was stopped to free memory on this Cloud. "
+export const MEMORY_RETRY_TEXT = "[Dani Bot started this again by itself, once: the last run was stopped to free memory on this Cloud. "
   + "Continue the request above from where it stopped and finish it. If the same problem comes back, say exactly what is blocking and stop.]";
 
 export function createChiefNotices(deps: ChiefNoticeDeps) {
@@ -185,7 +185,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
     return "chief";
   }
 
-  /** A failed teammate run gets one retry from OpenMausBot before its Chief hears; the Chief then hears how that retry ended.
+  /** A failed teammate run gets one retry from Dani Bot before its Chief hears; the Chief then hears how that retry ended.
    * Never retried: a stall the turn watchdog stopped (kind "stalled"), a stop, a refusal or a cap (retriesTeammateThread,
    * from the failure's words and `facts`), a run that answered a retry, and a thread whose asks are not the Chief's person's. */
   /** `notified`: the person already heard of it another way (a usage limit's own notice), so only the Chief is told. */
@@ -216,7 +216,8 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
     if (input.kind === "failed" && !group && !chiefRetries && memoryStopped(input.detail) && retryForRoom(bot, threadId, report)) return;
     if (!chief || !chiefRetries) return report();
     const answered = store.activePath(threadId).findLast((line) => line.role === "user")?.text ?? "";
-    if (answered.startsWith(AUTO_RETRY_LEAD)) return report({ retried: true });
+    const LEGACY_AUTO_RETRY_LEAD = "[Retry requested by Dani Bot, automatically";
+    if (answered.startsWith(AUTO_RETRY_LEAD) || answered.startsWith(LEGACY_AUTO_RETRY_LEAD)) return report({ retried: true });
     if (input.kind !== "failed" || answered.startsWith(RETRY_LEAD) || !count.mayRetry || !retriesTeammateThread(input.detail, input.facts)) return report();
     const failedAt = Date.now();
     schedule(() => {

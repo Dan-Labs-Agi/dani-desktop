@@ -1,43 +1,43 @@
 export { HEADLESS_VERBS as HEADLESS_VERB_NAMES } from "./headless/args.ts";
 
 export const HEADLESS_USAGE = `Drive a running workspace (scripts, CI, other agents):
-  openmausbot doctor                    check the server answers and an engine is ready
-  openmausbot bots | channels | models  your bots, your rooms, the engines and their models
-  openmausbot run BOT "do this"         give a bot one job and wait until it and every teammate it asked are done
+  danibot doctor                    check the server answers and an engine is ready
+  danibot bots | channels | models  your bots, your rooms, the engines and their models
+  danibot run BOT "do this"         give a bot one job and wait until it and every teammate it asked are done
   openmausbot send BOT "text"           send one message and return at once
-  openmausbot wait BOT                  wait on work already running
-  openmausbot messages BOT              the latest messages of a conversation
-  openmausbot interrupt BOT [--tree]    press Stop (--tree: and every teammate on its job)
-  openmausbot export BOT --out DIR      write a job's transcripts, files and screens to DIR
-  openmausbot events [--job THREAD]     the server's live events as JSON lines
-  openmausbot team apply FILE           make the workspace match a team file (team export writes one)
-  openmausbot engine set claude --key-env ANTHROPIC_API_KEY   give it an engine without a screen
-  openmausbot connect URL --code CODE --out FILE              get a token for a workspace elsewhere
-  openmausbot new-bot | new-channel | set-model | edit | mcp
+  danibot wait BOT                  wait on work already running
+  danibot messages BOT              the latest messages of a conversation
+  danibot interrupt BOT [--tree]    press Stop (--tree: and every teammate on its job)
+  danibot export BOT --out DIR      write a job's transcripts, files and screens to DIR
+  danibot events [--job THREAD]     the server's live events as JSON lines
+  danibot team apply FILE           make the workspace match a team file (team export writes one)
+  danibot engine set claude --key-env ANTHROPIC_API_KEY   give it an engine without a screen
+  danibot connect URL --code CODE --out FILE              get a token for a workspace elsewhere
+  danibot new-bot | new-channel | set-model | edit | mcp
 
   Server: --url URL (or OPENMAUSBOT_URL), --port N (or OMB_PORT), else this computer's.
   Token: OPENMAUSBOT_TOKEN or --token-file FILE. --json prints one JSON document;
-  progress goes to stderr (--quiet drops it). openmausbot help VERB for the details.`;
+  progress goes to stderr (--quiet drops it). danibot help VERB for the details.`;
 
 export const USAGE = `openmausbot — your team of AI bots, ready in a few steps
 
   openmausbot                         set up once, then open your workspace
-  openmausbot setup [--data-dir DIR]
-  openmausbot start [the same options as serve]
-  openmausbot serve [--port 8799] [--data-dir DIR] [--label NAME]
+  danibot setup [--data-dir DIR]
+  danibot start [the same options as serve]
+  danibot serve [--port 8799] [--data-dir DIR] [--label NAME]
                     [--public-url https://host] [--tailscale | --tunnel | --domain HOST] [--no-pair]
-  openmausbot pair  [--label NAME] [--client] [--phone ios|android]
+  danibot pair  [--label NAME] [--client] [--phone ios|android]
                     [--public-url https://host]
-  openmausbot sessions [revoke ID]
-  openmausbot status
-  openmausbot login [--email you@example.com]
+  danibot sessions [revoke ID]
+  danibot status
+  danibot login [--email you@example.com]
   openmausbot logout
-  openmausbot access list | add EMAIL [--chat-only] | remove EMAIL
-  openmausbot service install [--domain HOST | --tunnel | --tailscale] [--port N] [--data-dir DIR] | uninstall
+  danibot access list | add EMAIL [--chat-only] | remove EMAIL
+  danibot service install [--domain HOST | --tunnel | --tailscale] [--port N] [--data-dir DIR] | uninstall
                     [--sentinel]   (the health scan below, every two minutes, instead of the server)
-  openmausbot sentinel [--data-dir DIR] [--out DIR] [--once] [--json]   (read-only health scan; see --help)
-  openmausbot browser install [--with-deps] | status
-  openmausbot fleet init --domain HOST [--operator USER] | create NAME --admin EMAIL [--member EMAIL] [--brand FILE]
+  danibot sentinel [--data-dir DIR] [--out DIR] [--once] [--json]   (read-only health scan; see --help)
+  danibot browser install [--with-deps] | status
+  danibot fleet init --domain HOST [--operator USER] | create NAME --admin EMAIL [--member EMAIL] [--brand FILE]
                     [--anthropic-key-file FILE] [--cap USD] [--license-key KEY] [--memory 1G]
                   | list | users NAME add|remove EMAIL [--chat-only] | suspend NAME | resume NAME
                   | delete NAME --yes [--keep-data] | upgrade   (all take --dry-run)
@@ -49,7 +49,7 @@ serve   starts the server without prompts and prints a pairing link + QR code
 pair    mints a pairing code against a running server (--client: chat only)
 sessions lists paired devices; "sessions revoke ID" signs one out
 status  what the server says about itself
-login   signs this machine in to an OpenMausBot account (an emailed code)
+login   signs this machine in to a Dani Bot account (an emailed code)
         and reserves its public address for --tunnel
 logout  releases that address and signs out
 access  who may sign in with an emailed code at /pair: an address or
@@ -78,7 +78,7 @@ fleet   many client workspaces on one Linux server, each its own account,
              and HTTPS certificates enabled for the tailnet)
 --tunnel     serve at a public https://c-… address through a
              Cloudflare tunnel: no domain, no proxy, no open port. Run
-             \`openmausbot login\` once on this machine first.
+             \`danibot login\` once on this machine first.
 --domain     serve at https://HOST on your own domain: a pinned Caddy is
              downloaded once and run alongside the server, and gets the
              certificate itself. Point the domain's DNS at this machine and

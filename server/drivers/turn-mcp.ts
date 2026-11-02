@@ -19,7 +19,7 @@ export interface TurnStdioMcpServer {
 }
 
 /** URL servers always go through OpenDani's remote proxy: agents' own MCP clients add capability
- * fields strict servers refuse. Under a schema profile OpenMausBot fits every tool list: its own proxies and gates read
+ * fields strict servers refuse. Under a schema profile Dani Bot fits every tool list: its own proxies and gates read
  * the profile, and the person's stdio servers go through a gate. */
 export function turnStdioMcpServers(turn: SendTurnInput, options: { schemaProfile?: ToolSchemaProfileId; toolBudget?: number } = {}): TurnStdioMcpServer[] {
   const { schemaProfile, toolBudget } = options;

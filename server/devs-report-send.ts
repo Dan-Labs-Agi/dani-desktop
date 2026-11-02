@@ -21,7 +21,7 @@ export type SendOutcome =
   | { ok: false; retry: false; why: "refused"; detail: string };
 
 /** DANI_BUG_REPORT_URL (legacy OMB_BUG_REPORT_URL; an https address, or http on this machine's loopback, for
- * fixtures). Dani runs no bug-report service, and a report must never default to the upstream OpenMausBot
+ * fixtures). Dani runs no bug-report service, and a report must never default to the upstream Dani Bot
  * endpoint: with no explicit address this is "", and nothing is sent or asked anywhere. */
 export function bugReportEndpoint(env: NodeJS.ProcessEnv, _cloudOrigin?: string | null): string {
   const explicit = (env.DANI_BUG_REPORT_URL ?? env.OMB_BUG_REPORT_URL)?.trim();
