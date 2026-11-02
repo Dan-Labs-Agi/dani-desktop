@@ -36,6 +36,17 @@ export function bindHermesScreenshotCompat(
   env[HERMES_OPENMAUS_SCREENSHOT_COMPAT_MODEL] = inject.model;
 }
 
+
+/** The signed managed hermes payload lives inside an integrity-verified
+ * tree: the next boot's recovery digest covers every file under it. A
+ * launched Python process that writes `__pycache__` bytecode into the tree
+ * flips recovery to verification-failed and the app demands re-activation
+ * after every restart. Every hermes spawn therefore suppresses bytecode
+ * writes, matching the managed-runtime probe. */
+export function hermesSpawnEnv(env: Record<string, string | undefined>): NodeJS.ProcessEnv {
+  return { ...env, PYTHONDONTWRITEBYTECODE: "1" } as NodeJS.ProcessEnv;
+}
+
 function hermesHome(env: Record<string, string | undefined>): string {
   return env.HERMES_HOME || join(env.HOME || env.USERPROFILE || homedir(), ".hermes");
 }
@@ -271,7 +282,7 @@ async function fetchHermesAcpModels(
   return await new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(cli, ["acp"], { stdio: ["pipe", "pipe", "ignore"], env: env as NodeJS.ProcessEnv });
+      child = spawn(cli, ["acp"], { stdio: ["pipe", "pipe", "ignore"], env: hermesSpawnEnv(env) });
     } catch {
       return resolve([]);
     }
@@ -420,7 +431,10 @@ const support: AcpSupport = {
     return model;
   },
   defaultCli: "hermes",
-  resolveCommand: async (_env, config) => ({ command: process.env.DANI_MANAGED_HERMES_EXECUTABLE || config.cli }),
+  resolveCommand: async (env, config) => ({
+    command: process.env.DANI_MANAGED_HERMES_EXECUTABLE || config.cli,
+    env: hermesSpawnEnv(env),
+  }),
   nativeSource: "hermes.acp",
   loginNote: "Hermes CLI is not installed",
   install: {
@@ -439,7 +453,7 @@ const support: AcpSupport = {
   spawnArgs: () => /(?:^|[\\/])hermes-acp(?:\.cmd)?$/i.test(process.env.DANI_MANAGED_HERMES_EXECUTABLE ?? "") ? [] : ["acp"],
   snapshot: async (env, config) => await new Promise((resolve) => {
     const cli = process.env.DANI_MANAGED_HERMES_EXECUTABLE || config.cli;
-    execFile(cli, ["--version"], { env: env as NodeJS.ProcessEnv, timeout: 8_000 }, (error, stdout) => {
+    execFile(cli, ["--version"], { env: hermesSpawnEnv(env), timeout: 8_000 }, (error, stdout) => {
       if (error) return resolve({ state: "unavailable", reason: "`hermes` CLI not found" });
       const version = String(stdout).trim();
       const compatible = new RegExp(`(?:^|\\s)v?${HERMES_PINNED_VERSION.replaceAll(".", "\\.")}(?:\\s|$|\\()`).test(version);
