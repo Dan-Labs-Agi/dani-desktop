@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,8 +61,9 @@ describe("room speaker names", () => {
     expect(html).toContain('class="text-[11px] font-medium bot-identity" data-bot-color="blue"');
     expect(html).toContain(">Ada<");
     expect(html).toContain(">Kai<");
-    expect(html).toContain("var(--identity-blue)");
-    expect(html).toContain("var(--identity-orange)");
+    const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+    expect(css).toContain('.bot-identity[data-bot-color="blue"] { color: var(--identity-blue); }');
+    expect(css).toContain('.bot-identity[data-bot-color="orange"] { color: var(--identity-orange); }');
     expect(html).not.toContain('data-bot-color="blue">still me');
     expect(html).toContain("bg-bubble-user");
     expect(html).not.toContain("user-bubble-colored");
