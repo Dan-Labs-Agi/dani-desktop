@@ -87,11 +87,13 @@ first.
 <tr>
 <td width="50%" valign="top">
 
-### 🙋 Bots ask before they act
+### 👥 Put the whole crew in one chat
 
-Shell commands, file edits, and questions surface as inline cards — Allow / Deny / answer in chat. A
-permission broker turns every risky action into a decision you make, for cloud and local computers alike.
+Create a group chat from any bots on your roster. Give the team a shared working folder and a brief
+every member sees on each turn, then choose who answers - an auto lead, one named bot, everyone,
+or only the bots you @mention.
 
+<img src="docs/assets/screenshots/dani-group-setup-dark.png" alt="Setting up a group chat: shared working folder, default responder choices, and a shared group brief, in dark mode" width="100%">
 
 </td>
 <td width="50%" valign="top">
