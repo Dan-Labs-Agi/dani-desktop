@@ -160,6 +160,8 @@ jobs:
 
   ios:
     name: Swift tests + iOS build
+    # This repo does not contain the iOS package yet; run only when it appears.
+    if: hashFiles('ios/Package.swift') != ''
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
@@ -187,6 +189,8 @@ jobs:
   # Kotlin suite on exactly the change that breaks it.
   android:
     name: Kotlin tests + Android build
+    # This repo does not contain a Gradle project yet; run only when it appears.
+    if: hashFiles('**/gradlew') != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
