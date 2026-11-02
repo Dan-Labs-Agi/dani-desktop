@@ -63,7 +63,7 @@ describe("mascot facial feature colors", () => {
     const ink = mascotFaceColor === "white" ? "#ffffff" : "#000000";
     for (const mascotBody of ["circle", "star"] as const) {
       for (const color of ["green", "chrome"] as const) {
-        const { host, root } = mount(createElement(BotAvatar, { bot: { color, mascotBody, mascotFaceColor }, animated: false }));
+        const { host, root } = mount(createElement(MausAvatar, { color, bodyId: mascotBody, faceColor: mascotFaceColor, animated: false }));
         const eyes = [...host.querySelectorAll("svg g path")].filter((p) => p.getAttribute("fill") === ink);
         expect(eyes.length).toBeGreaterThan(0);
         act(() => root.unmount());
@@ -72,10 +72,18 @@ describe("mascot facial feature colors", () => {
   });
 
   it("keeps default inks when an override is reset or comes from an older profile", () => {
-    expect(renderBot({ mascotBody: "pumpkin" })).toContain('stroke="#0d0a10"');
-    const { host } = mount(createElement(BotAvatar, { bot: { color: "green", mascotFaceColor: null }, animated: false }));
-    const eyes = [...host.querySelectorAll("svg g path")].filter((p) => p.getAttribute("fill") === "#0a0a0c");
+    const { host } = mount(createElement(MausAvatar, { color: "green", bodyId: "pumpkin", animated: false }));
+    expect(host.innerHTML).toContain('stroke="#0d0a10"');
+    const { host: plain } = mount(createElement(MausAvatar, { color: "green", faceColor: null, animated: false }));
+    const eyes = [...plain.querySelectorAll("svg g path")].filter((p) => p.getAttribute("fill") === "#0a0a0c");
     expect(eyes.length).toBeGreaterThan(0);
+  });
+
+  it("renders the robot character for a bot, with its inferred role", () => {
+    const { host } = mount(createElement(BotAvatar, { bot: { color: "green", name: "Chief of Staff" }, animated: false }));
+    const avatar = host.querySelector("[data-robot-role]")!;
+    expect(avatar.getAttribute("data-robot-role")).toBe("chief");
+    expect(avatar.querySelector("canvas")).not.toBeNull();
   });
 
   it("does not paint features over an uploaded image", () => {
@@ -113,16 +121,16 @@ describe("BotAvatar's two avatar outcomes", () => {
     expect(markup).not.toContain("radialGradient");
   });
 
-  it("renders the gradient mascot when the crop is mascot, image or not", () => {
+  it("renders the robot character when the crop is mascot, image or not", () => {
     const markup = renderBot({ avatarUrl: "/api/attachments/cat.webp", avatarCrop: "mascot" });
     expect(markup).not.toContain("<img");
-    expect(markup).toContain("<svg");
+    expect(markup).toContain("mz-robot-avatar");
   });
 
-  it("falls back to the gradient mascot when a flat crop has no valid image", () => {
+  it("falls back to the robot character when a flat crop has no valid image", () => {
     const markup = renderBot({ avatarUrl: undefined, avatarCrop: "circle" });
     expect(markup).not.toContain("<img");
-    expect(markup).toContain("<svg");
+    expect(markup).toContain("mz-robot-avatar");
   });
 });
 
