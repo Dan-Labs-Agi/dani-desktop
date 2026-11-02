@@ -14,8 +14,10 @@ import { CursorAvatar, type CursorAvatarHandle } from "./CursorAvatar";
 import { avatarCropRadius, botAvatarProfile, clampAvatarFocus, clampAvatarZoom, mascotFaceInk, type BotAvatarCrop, type MascotFaceColor } from "../../shared/bot-avatar";
 import { MASCOT_BODIES, botMascotBody } from "../../shared/mascot-bodies";
 import { isHalloweenBody, type BotBodyId } from "../../shared/bot-body";
-import { useHalloweenDressed, wornBody } from "@/lib/halloween-dress";
+
 import { CarvedAvatar } from "./CarvedAvatar";
+import { RobotAvatar } from "./robot/RobotAvatar";
+import { inferRobotRole } from "./robot/robot-avatar-engine";
 
 export const EYE_SCALE = 1.12;
 export const MOUTH_WEIGHT = 11;
@@ -246,9 +248,8 @@ export function resolveBotAvatarOutcome(params: {
   return "flatImage";
 }
 
-export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotProps }: BotAvatarProps) {
+export function BotAvatar({ bot, size = 44, label, readable: _readable = false, ...mascotProps }: BotAvatarProps) {
   const profile = botAvatarProfile(bot);
-  const dressed = useHalloweenDressed();
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => setImageFailed(false), [profile.avatarUrl]);
@@ -261,15 +262,13 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
 
   if (outcome !== "flatImage") {
     return (
-      <MausAvatar
-        bodyId={wornBody(bot.mascotBody, bot.color, dressed)}
-        {...mascotProps}
-        color={bot.color}
-        faceColor={bot.mascotFaceColor}
-        phaseSeed={bot.name}
-        gradient={readable ? roomAvatarGradient(bot.color) : undefined}
+      <RobotAvatar
         size={size}
         label={label ?? bot.name}
+        role={inferRobotRole(bot.name)}
+        color={MAUS_COLORS[bot.color] ?? MAUS_COLORS.chrome}
+        state={mascotProps.state}
+        animated={mascotProps.animated}
       />
     );
   }
