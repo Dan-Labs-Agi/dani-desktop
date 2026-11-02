@@ -1,5 +1,5 @@
 // pi's MCP client: pi core ships none ("does not include built-in MCP"), so this extension, loaded with
-// `-e`, mounts every server in the OMB_MCP_CONFIG file as pi tools. OpenDani's proxies speak raw
+// `-e`, mounts every server in the OMB_MCP_CONFIG file as pi tools. Dani Bot's proxies speak raw
 // JSON-RPC 2.0 over stdio, one frame per line, without Content-Length framing.
 import { Type, type TObjectOptions, type TSchema, type TSchemaOptions } from "typebox";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";

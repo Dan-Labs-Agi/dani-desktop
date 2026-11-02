@@ -385,7 +385,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       try {
         delete instances[instanceId];
         await persistProviderInstance(instanceId, instances);
-        // An added Antigravity account's Google sign-in lives in OpenDani's data folder too: removing the account deletes it.
+        // An added Antigravity account's Google sign-in lives in Dani Bot's data folder too: removing the account deletes it.
         if (addedAntigravity) await removeAntigravityProfile(instanceId);
         return json(res, 200, { instances: await describeInstances() });
       } finally {

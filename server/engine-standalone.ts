@@ -587,7 +587,7 @@ async function realFolder(path: string, release: StandaloneRelease): Promise<voi
     return;
   }
   if (!info.isDirectory()) {
-    throw new StandaloneInstallError(`OpenDani's folder for ${release.name} is not a plain folder (${path}), so nothing was changed. Move it away, then try again.`);
+    throw new StandaloneInstallError(`Dani Bot's folder for ${release.name} is not a plain folder (${path}), so nothing was changed. Move it away, then try again.`);
   }
 }
 
@@ -597,7 +597,7 @@ async function checkBinFolder(binDir: string, release: StandaloneRelease): Promi
   await realFolder(binDir, release);
   const folder = (await readdir(binDir, { withFileTypes: true })).find((entry) => entry.isDirectory());
   if (folder) {
-    throw new StandaloneInstallError(`OpenDani's folder for ${release.name} holds something it did not put there (${join(binDir, folder.name)}), so nothing was changed. Move it away, then try again.`);
+    throw new StandaloneInstallError(`Dani Bot's folder for ${release.name} holds something it did not put there (${join(binDir, folder.name)}), so nothing was changed. Move it away, then try again.`);
   }
 }
 

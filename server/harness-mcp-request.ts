@@ -1,4 +1,4 @@
-// One MCP request to OpenDani's own browser, computer, data or HighLevel tools, made with a turn's capability: the
+// One MCP request to Dani Bot's own browser, computer, data or HighLevel tools, made with a turn's capability: the
 // stdio proxy an engine starts and the HTTP endpoint an engine reaches both answer through it.
 import { DATA_INSTRUCTIONS } from "./data/instructions.ts";
 import { HIGHLEVEL_INSTRUCTIONS } from "./highlevel/instructions.ts";

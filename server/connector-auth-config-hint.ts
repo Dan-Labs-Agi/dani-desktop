@@ -19,7 +19,7 @@ export function authConfigUseLine(toolkit: string, choice: AuthConfigChoice): st
 
 const MANAGED_NOTE = (toolkit: string) =>
   `Dani Bot note: ${toolkit} has no Composio-managed sign-in, so it needs the person's own OAuth app, which `
-  + "OpenDani's built-in connected apps cannot use. Tell the person: add their own Composio project key in "
+  + "Dani Bot's built-in connected apps cannot use. Tell the person: add their own Composio project key in "
   + `Settings → API keys (the project that has their ${toolkit} auth config); Dani Bot then picks that auth config up `
   + `on its own, and they connect ${toolkit} again. Do not retry this call.`;
 

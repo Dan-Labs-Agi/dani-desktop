@@ -1142,7 +1142,7 @@ describe("ACP turns (fake CLI)", () => {
     });
   });
 
-  it("hands an agent that reaches MCP servers by URL OpenDani's own servers as endpoints of this server, no proxy process", async () => {
+  it("hands an agent that reaches MCP servers by URL Dani Bot's own servers as endpoints of this server, no proxy process", async () => {
     await create(createAcpDriver({ ...SELECT_MODEL_SUPPORT, driverKind: "httpMcpTest", selectModel: undefined, ownMcpOverHttp: true }));
     const dump = join(scratch, "own-http.json");
     process.env.FAKE_ACP_DUMP = dump;
@@ -1317,7 +1317,7 @@ describe("ACP turns (fake CLI)", () => {
   it.each([
     ["advertises no remote transport", undefined],
     ["advertises http and sse", "http,sse"],
-  ])("mounts every url server as OpenDani's connector for an agent that %s", async (_name, transports) => {
+  ])("mounts every url server as Dani Bot's connector for an agent that %s", async (_name, transports) => {
     if (transports) process.env.FAKE_ACP_MCP_TRANSPORTS = transports;
     try {
       await create();
@@ -1340,7 +1340,7 @@ describe("ACP turns (fake CLI)", () => {
   });
 
   // The fake agent connects each mounted server with grok 1.0.25's handshake, which a strict server refuses.
-  it("lists a strict url server's tools through OpenDani's connector, even for an agent that speaks http", async () => {
+  it("lists a strict url server's tools through Dani Bot's connector, even for an agent that speaks http", async () => {
     const strict = await startFakeHttpMcp({ strictInitialize: "http-400", strictSchema: "2025-11-25",
       tools: [{ name: "report", inputSchema: { type: "object" } }, { name: "campaigns", inputSchema: { type: "object" } }],
       requireHeader: { name: "Authorization", value: "Bearer tok-voluum" } });

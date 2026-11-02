@@ -15,7 +15,7 @@ export type Refusal = "omb" | "this-computer" | "local-network" | "link-local" |
 
 /** How a refusal reads in the page-health line. */
 export const REFUSAL_TEXT: Record<Refusal, string> = {
-  omb: "OpenDani's own service",
+  omb: "Dani Bot's own service",
   "this-computer": "a service on this computer that no bot started",
   "local-network": "the local network",
   "link-local": "a link-local address",
@@ -41,7 +41,7 @@ export function namesThisMachine(host: string): boolean {
 /** `browserEngine.egress` in config.json. */
 export const browserEgressConfigSchema = z.object({
   /** Self-hosted servers only: local-network or this-computer destinations bots' browsers may reach, as
-   * `10.0.0.5`, `192.168.1.0/24`, `10.0.0.5:8080`, `fd12::/48` or `[fd12::1]:443`. OpenDani's own ports,
+   * `10.0.0.5`, `192.168.1.0/24`, `10.0.0.5:8080`, `fd12::/48` or `[fd12::1]:443`. Dani Bot's own ports,
    * cloud metadata and link-local addresses stay closed. Cloud ignores it. */
   allow: z.array(z.string().trim().max(64).refine((entry) => parseAllowEntry(entry) !== null, {
     message: "must be an IP address or CIDR range, with an optional :port",
@@ -85,7 +85,7 @@ export function allowList(entries: readonly string[] | undefined): (address: str
 
 export interface EgressRules {
   host: EgressHost;
-  /** A port one of OpenDani's own listeners holds on this machine. */
+  /** A port one of Dani Bot's own listeners holds on this machine. */
   ownPort(port: number): boolean;
   /** Whether every listener on this loopback port belongs to a bot's processes. */
   botPort(port: number): Promise<boolean>;
@@ -110,7 +110,7 @@ export async function refusalFor(
     let kind = addressClass(address, own);
     // On the desktop these come from the person's own proxy: the local network, unless this computer holds the address.
     if (kind === "reserved" && rules.host === "desktop" && listed(FAKE_IP, address)) {
-      // The proxy picks the real destination, which may be this computer: never let it reach OpenDani's own ports.
+      // The proxy picks the real destination, which may be this computer: never let it reach Dani Bot's own ports.
       if (rules.ownPort(port)) return "omb";
       kind = listed(own, address) ? "this-machine" : "private";
     }

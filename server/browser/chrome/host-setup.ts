@@ -23,7 +23,7 @@ export function sandboxDisabled(env: Readonly<Record<string, string | undefined>
 
 /** Set on Ubuntu 23.10+: unprivileged user namespaces need an AppArmor profile. */
 export const USERNS_RESTRICTION = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns";
-export const APPARMOR_PROFILE_NAME = "openmausbot-chrome";
+export const APPARMOR_PROFILE_NAME = "danibot-chrome";
 export const APPARMOR_PROFILE_PATH = `/etc/apparmor.d/${APPARMOR_PROFILE_NAME}`;
 
 /**
@@ -32,10 +32,14 @@ export const APPARMOR_PROFILE_PATH = `/etc/apparmor.d/${APPARMOR_PROFILE_NAME}`;
  * write, or a pattern, would let any program claim the exemption.
  */
 export function appArmorProfile(executable: string): string {
-  if (!isAbsolute(executable) || /[\s*?[\]{}"'\\^]/.test(executable) || !executable.startsWith("/opt/")) {
-    throw new Error(`The browser's AppArmor exemption is only for a root-owned path under /opt, not ${executable}.`);
+  // Pin to the app's own install layout: a path any user can write, a glob,
+  // or a quoting hazard would let any program claim the exemption. The
+  // branded install directory itself contains a space ("Dani Bot"), so spaces
+  // are allowed but every other pattern/quoting character is not.
+  if (!isAbsolute(executable) || /[*?[\]{}"'\\^]/.test(executable) || !executable.startsWith("/opt/") || !executable.endsWith("/resources/chrome/chrome")) {
+    throw new Error(`The browser's AppArmor exemption is only for Dani Bot's own root-owned Chrome under /opt, not ${executable}.`);
   }
-  return `# Written by \`danibot browser setup\`: lets OpenDani's Chrome use its sandbox.
+  return `# Written by \`danibot browser setup\`: lets Dani Bot's Chrome use its sandbox.
 abi <abi/4.0>,
 include <tunables/global>
 

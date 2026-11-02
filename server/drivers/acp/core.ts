@@ -180,7 +180,7 @@ export interface AcpSupport {
   clientFileSystem?: boolean;
   /** Sent as `clientCapabilities._meta` on initialize, where agents read vendor capabilities. */
   clientCapabilitiesMeta?: Record<string, unknown>;
-  /** The agent reaches MCP servers by URL: OpenDani's own servers are this server's endpoints, no process each. */
+  /** The agent reaches MCP servers by URL: Dani Bot's own servers are this server's endpoints, no process each. */
   ownMcpOverHttp?: boolean;
   /** How many tools the agent lists of its own beside the MCP servers', counted against a provider's tool limit. */
   engineTools?: number;

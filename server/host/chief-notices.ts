@@ -31,7 +31,7 @@ export interface ChiefNoticeDeps {
   threadSettling?(threadId: string): boolean;
   /** The thread waits for a free slot and starts on its own. */
   threadQueued?(botId: string, threadId: string): boolean;
-  /** Runs OpenDani's automatic retry after the failed turn's own handling is done; the host's next tick by default. */
+  /** Runs Dani Bot's automatic retry after the failed turn's own handling is done; the host's next tick by default. */
   schedule?(run: () => void): void;
   /** Starts this thread's request again where it stopped: a continuation of the request the harness recorded, never a line
    * of the person's. Absent: a run stopped for memory with no Chief to retry it is only reported. */
@@ -102,7 +102,7 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
     return null;
   }
 
-  /** The one way a teammate's stopped thread runs again: a Chief's retry_thread and OpenDani's automatic retry both
+  /** The one way a teammate's stopped thread runs again: a Chief's retry_thread and Dani Bot's automatic retry both
    * start it here, after the same refusal checks. Throws the refusal, or why the start failed. */
   async function retryThread(input: { chief: BotRecord; bot: BotRecord; threadId: string; unattended: boolean; note?: string; automatic?: true }): Promise<void> {
     const refused = retryRefusal(input.bot.id, input.threadId);

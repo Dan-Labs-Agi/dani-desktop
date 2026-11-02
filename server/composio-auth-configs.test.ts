@@ -420,7 +420,7 @@ describe("custom auth configs made in the Composio dashboard", () => {
   });
 });
 
-describe("OpenDani's managed connected apps", () => {
+describe("Dani Bot's managed connected apps", () => {
   const managed = {} as AppConfig;
   const plainLine = "xero needs your own OAuth app. Add your Composio project key in Settings → API keys; OpenMausBot then "
     + "uses your xero auth config from that project. Connect again.";
@@ -436,7 +436,7 @@ describe("OpenDani's managed connected apps", () => {
     expect(calls.slice(before)).toEqual([]);
 
     const reply = await callTool(managed, "XERO_LIST_INVOICES");
-    expect(reply.result.content[1]!.text).toContain("OpenDani's built-in connected apps cannot use. Tell the person: add their own Composio project key in Settings → API keys");
+    expect(reply.result.content[1]!.text).toContain("Dani Bot's built-in connected apps cannot use. Tell the person: add their own Composio project key in Settings → API keys");
     expect(reply.result.content[1]!.text).toContain("OpenMausBot then picks that auth config up on its own");
     expect(calls.slice(before).some((call) => call.path.startsWith("/api/"))).toBe(false);
   });

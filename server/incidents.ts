@@ -51,7 +51,7 @@ export const RETRY_BLOCKED = {
   queued: "that thread is waiting for a free slot and starts on its own — do not retry it",
 } as const;
 
-/** How a retry's own message opens: a Chief's retry_thread names the Chief, OpenDani's one automatic retry names itself.
+/** How a retry's own message opens: a Chief's retry_thread names the Chief, Dani Bot's one automatic retry names itself.
  * It is a delivered note (peer-provenance.ts), so the request it retries stays the thread's last request. */
 export const RETRY_LEAD = "[Retry requested by ";
 export const AUTO_RETRY_LEAD = `${RETRY_LEAD}Dani Bot, automatically`;

@@ -79,7 +79,7 @@ function recoveryStateError(detail: string, cause?: unknown): Error & { status: 
   return Object.assign(
     new Error(
       `Cloud computer creation is paused because its recovery state is ${detail}. `
-      + "Check boat.dev for an unnamed Boat before repairing OpenDani's local state.",
+      + "Check boat.dev for an unnamed Boat before repairing Dani Bot's local state.",
     ),
     { status: 503, cause },
   );
