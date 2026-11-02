@@ -39,3 +39,4 @@ deploy/.env
 # Python build artefacts from staging the local speech CLI
 scripts/local-speech/build/
 scripts/local-speech/*.egg-info/
+dist-payloads
