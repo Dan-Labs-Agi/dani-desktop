@@ -266,7 +266,7 @@ export function BotAvatar({ bot, size = 44, label, readable: _readable = false, 
     return (
       <RobotAvatar
         size={size}
-        label={label ?? bot.name}
+        label={label ?? bot.name ?? "AI agent"}
         variant={daniVariantForBot(bot.name, bot.color)}
         zoom={robotZoom}
         state={mascotProps.state}

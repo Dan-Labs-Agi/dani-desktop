@@ -1,14 +1,15 @@
 /** Maps this app's avatar vocabulary onto the Bloub character (@norbert_bodziony/bloub, the
  * Dani-Dex bot). The app's 39 cursor states pick a Bloub pose (body motion) plus a default face,
- * and the app's 10 mascot bodies pick the closest Bloub silhouette. Bloub's declared TypeScript
- * unions lag its runtime catalog, so the ids below are the runtime-verified ones (STATES /
- * EXPRESSIONS / SHAPES exported by the package) kept as plain strings on purpose. */
+ * and the app's 10 mascot bodies pick the closest Bloub silhouette. Bloub state ids use the
+ * package's own StateId union (verified against its runtime STATES catalog); expression and
+ * shape ids are runtime-verified strings (EXPRESSIONS / SHAPES exported by the package). */
+import type { StateId } from "@norbert_bodziony/bloub"
 import type { MascotBodyId } from "../../shared/mascot-bodies"
 import type { CursorState } from "./CursorAvatar"
 
 interface BloubPose {
-  /** Runtime Bloub state id: idle|thinking|wink|wide|alert|notify|exclaim|sleep|egg|hexagon|play|orbit|swirl|burst|comet. */
-  state: string
+  /** Bloub state id; the package's StateId union matches its runtime STATES catalog. */
+  state: StateId
   /** Runtime Bloub expression id, shown when the state's pose keeps the base face. */
   expression?: string
 }
@@ -34,6 +35,16 @@ export const BLOUB_STATE: Record<CursorState, BloubPose> = {
   sad: { state: "idle", expression: "triste" },
   shy: { state: "idle", expression: "timide" },
   bored: { state: "idle", expression: "blase" },
+  waking: { state: "idle", expression: "somnolent" },
+  happy: { state: "play", expression: "heureux" },
+  laughing: { state: "burst", expression: "hilare" },
+  playful: { state: "play", expression: "hilare" },
+  orbit: { state: "orbit" },
+  progress: { state: "play", expression: "attentif" },
+  spawning: { state: "egg", expression: "curieux" },
+  humming: { state: "idle", expression: "heureux" },
+  loading: { state: "swirl" },
+  dictating: { state: "play", expression: "attentif" },
   dizzy: { state: "orbit" },
   love: { state: "wink", expression: "heureux" },
   wink: { state: "wink" },

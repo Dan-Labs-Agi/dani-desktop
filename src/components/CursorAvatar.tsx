@@ -10,6 +10,7 @@ import {
   EXPRESSION_BY_ID,
   SHAPE_BY_ID,
   type BotFrame,
+  type StateId,
 } from "@norbert_bodziony/bloub"
 
 import { BLOUB_STATE, BLOUB_SHAPE, bloubExpressionAt } from "./bloub-adapter"
@@ -83,6 +84,8 @@ export type CursorState =
   | "scared"
   | "playful"
   | "celebrate"
+  | "love"
+  | "wink"
   | "orbit"
   | "radar"
   | "progress"
@@ -93,12 +96,21 @@ export type CursorState =
   | "sending"
   | "receiving"
   | "uploading"
+  | "downloading"
   | "writing"
+  | "speaking"
+  | "recording"
   | "notifying"
   | "alerting"
   | "bouncing"
   | "dragging"
+  | "dizzy"
   | "powering-down"
+  | "bluetooth"
+  | "calling"
+  | "muted"
+  | "paused"
+  | "error"
 
 export const POOLS = {
   sleeping: [
@@ -297,7 +309,7 @@ export const POOLS = {
     22,
     13
   ]
-} satisfies Record<string, CursorState[]>
+} satisfies Record<string, number[]>
 
 const isCursorState = (state: string): state is CursorState => state in POOLS
 export const CURSOR_STATES = Object.keys(POOLS).filter(isCursorState)
@@ -312,6 +324,14 @@ export interface GlyphSpec {
   markup: string
   period: number
   hold: number
+}
+
+export interface ConfettiSpec {
+  count: number
+  period: number
+  life: number
+  origin: number
+  spread: number
 }
 
 export interface StateEffects {
@@ -429,7 +449,7 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
     const still = paused || reduced
     stillRef.current = still
 
-    const pulse = (to: string, ms: number) => {
+    const pulse = (to: StateId, ms: number) => {
       const eng = engineRef.current
       if (!eng || stillRef.current) return
       const now = performance.now() + phaseRef.current * 1000
