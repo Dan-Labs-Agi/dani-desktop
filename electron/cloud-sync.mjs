@@ -63,7 +63,7 @@ export function createCloudFilesService({
 }) {
   let settings = readSettings(settingsFile);
   const state = openSyncState(stateFile);
-  const outputsDir = path.join(documentsDir, "Dani");
+  const outputsDir = path.join(documentsDir, "Dani Bot");
   let closed = false, interval = null, poller = null, cursor = 0, chain = Promise.resolve(), pending = null;
   let status = { phase: "unavailable", lastSyncedAt: null, disk: null, shared: [], outputs: { enabled: true, dir: outputsDir, folders: 0, problem: null } };
   const results = new Map();

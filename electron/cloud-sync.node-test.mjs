@@ -34,7 +34,7 @@ test("checks a folder before sharing: too broad, private, Dani's own, or already
   const s = setup(t);
   mkdirSync(join(s.home, ".ssh"), { recursive: true });
   mkdirSync(join(s.home, ".openmausbot", "files"), { recursive: true });
-  mkdirSync(join(s.home, "Documents", "Dani"), { recursive: true });
+  mkdirSync(join(s.home, "Documents", "Dani Bot"), { recursive: true });
   assert.equal((await s.service.check(s.home)).refusal, "too-broad");
   assert.equal((await s.service.check(join(s.home, ".ssh"))).refusal, "private");
   for (const cli of [".claude", ".codex", ".gemini", ".grok"]) {
@@ -147,7 +147,7 @@ test("bots' work from now on comes to Documents/Dani/<bot>/<conversation>; older
   s.cloud.put(recent.id, "plan.md", "the plan");
   s.cloud.put(old.id, "old.md", "old work");
   await s.service.pass();
-  const owl = join(s.home, "Documents", "Dani", "Owl");
+  const owl = join(s.home, "Documents", "Dani Bot", "Owl");
   assert.deepEqual(readdirSync(owl), ["Q3- plan-"]);
   assert.equal(readFileSync(join(owl, "Q3- plan-", "plan.md"), "utf8"), "the plan");
   assert.equal(s.service.state().outputs.folders, 1);
