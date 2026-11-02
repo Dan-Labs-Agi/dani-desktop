@@ -23,7 +23,7 @@ import {
   updateLabel,
   updatePhase,
 } from "./SidebarProfileMenu";
-import { ANDROID_APK_URL, DOCS_URL, FEEDBACK_URL, HELP_CENTER_URL, IOS_APP_STORE_URL, platformLabel } from "@/lib/app-links";
+import { DOCS_URL, FEEDBACK_URL, HELP_CENTER_URL, platformLabel } from "@/lib/app-links";
 import { profileForSession } from "@/lib/session";
 import {
   cloudPhoneDestination,
@@ -112,7 +112,7 @@ describe("updatePhase", () => {
 describe("updateLabel", () => {
   it("names the version it is ready to install", () => {
     expect(updateLabel("downloaded", state({ status: "downloaded", version: "0.2.0" }))).toBe(
-      "Restart to update to MausBot 0.2.0",
+      "Restart to update to Dani Bot 0.2.0",
     );
   });
 
@@ -126,7 +126,7 @@ describe("updateLabel", () => {
     expect(updateLabel("installing", state({ status: "installing", message: "Restart is taking longer than expected." })))
       .toBe("Restart is taking longer than expected.");
     expect(updateLabel("downloaded", state({ status: "downloaded", version: "0.2.0", installMode: "handoff" })))
-      .toBe("Install MausBot 0.2.0");
+      .toBe("Install Dani Bot 0.2.0");
     expect(updateLabel("installing", state({ status: "installing", installMode: "handoff" })))
       .toBe("Opening a terminal…");
   });
@@ -200,11 +200,11 @@ describe("updateNoteworthy", () => {
 describe("outward links", () => {
   it("sends Help Center to the docs the website also links to", () => {
     expect(HELP_CENTER_URL).toBe(DOCS_URL);
-    expect(DOCS_URL).toBe("https://github.com/milind-soni/OpenMausBot/tree/main/docs");
+    expect(DOCS_URL).toBe("https://github.com/somdipto/dani-desktop/tree/main/docs");
   });
 
-  it("sends Send Feedback to the Discord community", () => {
-    expect(FEEDBACK_URL).toBe("https://discord.gg/9Wb8MEpXRs");
+  it("sends Send Feedback to this repository's issues", () => {
+    expect(FEEDBACK_URL).toBe("https://github.com/somdipto/dani-desktop/issues");
   });
 });
 
@@ -328,10 +328,8 @@ describe("choosing where the phone connects", () => {
 });
 
 describe("Get the phone app", () => {
-  it("offers iPhone and Android with the links the website and Cloud page use", () => {
-    expect(PHONE_APPS.map((app) => [app.id, app.url])).toEqual([["ios", IOS_APP_STORE_URL], ["android", ANDROID_APK_URL]]);
-    expect(IOS_APP_STORE_URL).toBe("https://apps.apple.com/in/app/mausbot/id6803387923");
-    expect(ANDROID_APK_URL).toBe("https://github.com/milind-soni/OpenMausBot/releases/download/android-v1.5.0/OpenMausBot.apk");
+  it("lists no store apps until real Dani listings exist", () => {
+    expect(PHONE_APPS).toEqual([]);
   });
 
   const render = (connect?: PhoneAppConnect[]) => {
@@ -344,13 +342,11 @@ describe("Get the phone app", () => {
   };
   const to = (key: string, subtitle: string): PhoneAppConnect => ({ key, subtitle, onSelect: () => {} });
 
-  it("draws a code to scan for each, and points on to Connect your phone where this window can pair", () => {
+  it("draws no store entries, and points on to Connect your phone where this window can pair", () => {
     const html = render([to("here", "to this computer")]);
-    expect(html).toContain('data-phone-app="ios"');
-    expect(html).toContain('data-phone-app="android"');
-    expect(html.match(/<svg/g)?.length).toBe(2);
-    expect(html).toContain("Open in the App Store");
-    expect(html).toContain("Download the APK");
+    expect(html).not.toContain("data-phone-app=");
+    expect(html).not.toContain("Open in the App Store");
+    expect(html).not.toContain("Download the APK");
     expect(html).toContain("Connect your phone");
     expect(html).toContain("to this computer");
     expect(render()).not.toContain("Connect your phone");
@@ -374,7 +370,7 @@ describe("profileMenuItems", () => {
     phone: [{ key: "phone-app", label: "Get the phone app", onSelect: noop }],
     usage: true,
     update: null,
-    account: "OpenMausBot Cloud",
+    account: "Cloud",
     onUsage: noop, onSettings: noop, onShortcuts: noop, onAbout: noop, onHelp: noop, onFeedback: noop, onAccount: noop,
     ...patch,
   });
@@ -384,7 +380,7 @@ describe("profileMenuItems", () => {
     expect(items.map((item) => item.key)).toEqual(["usage", "phone-app", "support", "settings", "account"]);
     expect(items.filter((item) => item.separatorBefore).map((item) => item.key)).toEqual(["account"]);
     expect(items.find((item) => item.key === "support")!.submenu!.map((item) => item.key)).toEqual(["help", "feedback", "shortcuts", "about"]);
-    expect(items.find((item) => item.key === "account")!.label).toBe("OpenMausBot Cloud");
+    expect(items.find((item) => item.key === "account")!.label).toBe("Cloud");
   });
 
   it("only offers what this window has: no usage on a remote server, no account without one", () => {
@@ -446,7 +442,7 @@ describe("Simple mode's account menu", () => {
   });
 
   it("raises an update that is ready or failed to its own top row with a pill, and keeps it out of support", () => {
-    const update = { key: "update", label: "Restart to update to MausBot 0.2.0", subtitle: "notes", attention: true, onSelect: noop };
+    const update = { key: "update", label: "Restart to update to Dani Bot 0.2.0", subtitle: "notes", attention: true, onSelect: noop };
     const items = build({ update, updateTop: { label: "Update ready", action: "Restart" } });
     expect(groups(items)[0]).toEqual(["update"]);
     expect(items[0]).toMatchObject({ label: "Update ready", subtitle: undefined, attention: false });
