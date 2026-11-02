@@ -98,7 +98,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Stage pinned cloudflared for Linux
-        run: node scripts/prepare-cloudflared.mjs --target linux-x64
+        run: node scripts/prepare-cloudflared.mjs
       - name: Build Linux packages
         run: pnpm package:linux
       - name: Verify release files
@@ -148,7 +148,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Stage pinned cloudflared for Windows
-        run: node scripts/prepare-cloudflared.mjs --target win32-x64
+        run: node scripts/prepare-cloudflared.mjs
       - name: Build Windows packages
         run: pnpm package:win
       - name: Verify release files
@@ -198,10 +198,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Stage pinned cloudflared for both Mac architectures
-        run: >-
-          node scripts/prepare-cloudflared.mjs
-          --target darwin-arm64
-          --target darwin-x64
+        run: node scripts/prepare-cloudflared.mjs
       - name: Build macOS packages
         run: pnpm package:mac
       - name: Verify release files
