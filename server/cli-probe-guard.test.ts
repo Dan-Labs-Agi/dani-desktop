@@ -12,6 +12,7 @@ import {
   buildCliProbeAllowlist,
   canonicalCliTarget,
   classifyCliProbe,
+  cliProbeCompareKey,
   cliProbeHead,
 } from "./cli-probe-guard.ts";
 import { resetPathCacheForTests } from "./env-path.ts";
@@ -64,7 +65,7 @@ describe("buildCliProbeAllowlist", () => {
   it("contains the canonical path of a discovered driver-default binary", () => {
     const installed = fakeCliOnPath("codex");
     const allow = buildCliProbeAllowlist();
-    expect(allow.has(resolve(installed))).toBe(true);
+    expect(allow.has(cliProbeCompareKey(resolve(installed)))).toBe(true);
   });
 });
 
@@ -80,6 +81,24 @@ describe("classifyCliProbe", () => {
     symlinkSync(installed, link);
     // the symlink resolves to the allowlisted file: same binary, same lane
     expect(classifyCliProbe(link, false)).toEqual({ kind: "allowlisted" });
+  });
+
+  it.runIf(process.platform === "win32")("allowlists a discovered adapter regardless of path casing", () => {
+    // Discovery reports PATHEXT casing (`.CMD`), the file on disk is
+    // `codex.cmd`, and a typed path may carry any casing: NTFS names one
+    // executable under all of them.
+    const installed = fakeCliOnPath("codex");
+    expect(classifyCliProbe(installed, false)).toEqual({ kind: "allowlisted" });
+    expect(classifyCliProbe(installed.toUpperCase(), false)).toEqual({ kind: "allowlisted" });
+  });
+
+  it.runIf(process.platform !== "win32")("does not case-fold paths on POSIX", () => {
+    // Byte-exact comparison is the security boundary off Windows: a
+    // case-variant that resolves to no file must never be allowlisted.
+    const installed = fakeCliOnPath("codex");
+    const variant = installed.replace(/codex$/, "CODEX");
+    const verdict = classifyCliProbe(variant, false);
+    expect(verdict.kind).toBe("rejected");
   });
 
   it("rejects an arbitrary executable for a caller without explicit selection", () => {
