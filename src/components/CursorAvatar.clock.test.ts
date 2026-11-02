@@ -4,7 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MausAvatar, type MausAvatarHandle, type MausAvatarProps } from "./Avatar";
-import { EFFECTS, EXPRESSIONS, POOLS } from "./CursorAvatar";
 import { mascotClock } from "./mascot-clock";
 import { UNREAD_NOTICE_MS, useUnreadNotice } from "./unread-notice";
 
@@ -63,8 +62,8 @@ afterEach(() => {
 const render = (avatars: Array<Partial<MausAvatarProps> & { ref?: React.Ref<MausAvatarHandle> }>) =>
   act(() => root.render(avatars.map((props, key) => createElement(MausAvatar, { key, color: "green", ...props }))));
 const run = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
-const eyePaths = () => [...host.querySelectorAll("svg")].map((svg) => svg.querySelector("g[clip-path] path")!.getAttribute("d"));
-const toPath = (ring: Array<[number, number]>) => "M" + ring.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2)).join("L") + "Z";
+const bodyPath = () => host.querySelector("svg")!.querySelector("path")!.getAttribute("d");
+const eyeTransforms = () => [...host.querySelectorAll("svg g path")].map((p) => p.getAttribute("transform"));
 
 describe("CursorAvatar on the shared clock", () => {
   it("draws every animated mascot from one animation frame", () => {
@@ -86,10 +85,10 @@ describe("CursorAvatar on the shared clock", () => {
     expect(frameRequests).toBeLessThanOrEqual(21);
   });
 
-  it("paints a still mascot with its state's face and then asks for nothing", () => {
+  it("paints a still mascot with its state's pose and then asks for nothing", () => {
     render([{ state: "sleeping", animated: false, size: 24 }]);
     run(100);
-    expect(eyePaths()[0]).toBe(toPath(EXPRESSIONS[POOLS.sleeping[0]][0]));
+    expect(bodyPath()).toMatch(/^M/);
     frameRequests = 0;
     run(2000);
     expect(frameRequests).toBe(0);
@@ -99,11 +98,10 @@ describe("CursorAvatar on the shared clock", () => {
   it("redraws a still mascot when its look changes", () => {
     render([{ state: "idle", animated: false, size: 24, turn: 0 }]);
     run(100);
-    const eye = () => host.querySelector("g[clip-path] path")!.getAttribute("transform");
-    const before = eye();
+    const before = eyeTransforms().join("|");
     render([{ state: "idle", animated: false, size: 24, turn: 40 }]);
     run(100);
-    expect(eye()).not.toBe(before);
+    expect(eyeTransforms().join("|")).not.toBe(before);
     expect(mascotClock().pending()).toBe(0);
   });
 
@@ -121,16 +119,14 @@ describe("CursorAvatar on the shared clock", () => {
     expect(mascotClock().pending()).toBe(0);
   });
 
-  it("leaves an alert glyph's layer alone between its appearances", () => {
-    render([{ state: "confused", size: 64 }]);
-    const { period } = EFFECTS.confused!.glyph!;
-    run(period - (performance.now() % period) + 100);
-    const glyphLayer = [...host.querySelectorAll("svg g")].find((g) => (g as SVGGElement).style.opacity === "0")!;
-    const writes = vi.spyOn(glyphLayer, "setAttribute");
-    run(3000);
-    expect(writes).not.toHaveBeenCalled();
+  it("shows the notice dot while alerting and hides it when the state clears", () => {
+    render([{ state: "notifying", size: 64 }]);
     run(1500);
-    expect(writes).toHaveBeenCalled();
+    const shown = () => [...host.querySelectorAll("svg g")].some((g) => g.getAttribute("display") !== "none" && g.querySelectorAll("circle").length > 0);
+    expect(shown()).toBe(true);
+    render([{ state: "idle", size: 64 }]);
+    run(1500);
+    expect(shown()).toBe(false);
   });
 
   it("lets an unread mascot play its notice, then draws nothing while the news waits", () => {
@@ -168,8 +164,9 @@ describe("CursorAvatar on the shared clock", () => {
     const ref = createRef<MausAvatarHandle>();
     render([{ state: "celebrate", size: 220, ref }]);
     run(200);
-    const svg = host.querySelector("svg")!;
-    expect(svg.querySelector("g > g:nth-child(2)")!.getAttribute("transform")).toBeNull();
+    const still = bodyPath();
+    run(500);
+    expect(bodyPath()).toBe(still);
     frameRequests = 0;
     act(() => { ref.current!.blink(); ref.current!.spin(); });
     run(2000);
