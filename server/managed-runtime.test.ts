@@ -83,7 +83,7 @@ describe("recovered installation startup", () => {
     const visit = (dir: string) => {
       for (const name of readdirSync(dir).sort()) {
         const p = join(dir, name);
-        const rel = relative(root, p).replaceAll("\\\\", "/");
+        const rel = relative(root, p).replaceAll("\\", "/");
         const info = lstatSync(p);
         if (info.isDirectory()) visit(p);
         else if (info.isFile()) hash.update(`${rel}\0${info.size}\0${digestFile(p)}\n`);
