@@ -28,25 +28,6 @@ Talk to them like contacts. Watch them work. Approve what matters.
 
 <br>
 
-<a href="https://github.com/sponsors/milind-soni">
-  <img src="https://img.shields.io/badge/%E2%9D%A4%EF%B8%8F%20%20Support%20OpenMausBot-GitHub%20Sponsors-38d591?style=for-the-badge&labelColor=070707" alt="Support OpenMausBot via GitHub Sponsors" height="40">
-</a>
-
-<br>
-<br>
-
-<sub>Powered by <a href="https://boat.dev">boat.dev</a></sub>
-<br>
-<a href="https://boat.dev">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/sponsors/boat-logo-white.svg">
-    <img src="docs/assets/sponsors/boat-logo.svg" alt="Boat (boat.dev)" height="34">
-  </picture>
-</a>
-
-<br>
-<br>
-
 </div>
 
 ---
@@ -258,11 +239,9 @@ expressions · screenshots of the bot's work folded into the transcript.
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-0F172A?logo=tailwindcss&logoColor=38BDF8)
 ![Composio](https://img.shields.io/badge/Composio-e6493a)
-![Boat](https://img.shields.io/badge/Boat-sponsor-111111)
 ![Cua](https://img.shields.io/badge/Cua%20Driver-1f2937)
 ![ElevenLabs](https://img.shields.io/badge/ElevenLabs-000000?logo=elevenlabs&logoColor=white)
 ![Fish Audio](https://img.shields.io/badge/Fish%20Audio-2563eb)
-![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-ea4aaa)
 
 </div>
 
@@ -271,7 +250,7 @@ expressions · screenshots of the bot's work folded into the transcript.
 | **Claude · Codex · Grok** | The agents behind every bot, run through their local CLIs |
 | **Electron** | Desktop shells for macOS, Windows, and Ubuntu |
 | **React + Vite + Tailwind CSS** | The chat app UI and its build |
-| **Boat** ([boat.dev](https://boat.dev)) | Each bot's cloud computer · our sponsor |
+| **Boat** ([boat.dev](https://boat.dev)) | Each bot's optional cloud computer, with your own API key |
 | **Composio** | Connected apps — Gmail, Slack, GitHub, and more |
 | **Cua Driver** | Native computer use on your own machine |
 | **ElevenLabs · Fish Audio** | Hosted voices for bots that talk back |
@@ -478,12 +457,11 @@ Usage analytics are optional and anonymous: product events and a once-a-day coun
 names, addresses or conversations. Turn them off in Settings → General → Usage analytics;
 [`docs/analytics.md`](docs/analytics.md) lists every event and property.
 
-## Support the project
+## Acknowledgments
 
-OpenMausBot is free and open source. If it does real work for you, you can
-[support its development through GitHub Sponsors](https://github.com/sponsors/milind-soni)
-with a one-time contribution or a monthly sponsorship. Your support helps fund ongoing development
-and maintenance; OpenMausBot remains free and open source.
+Dani Desktop is built on [OpenMausBot](https://github.com/milind-soni/OpenMausBot)
+by Milind Soni, which is free and open source. The upstream copyright and
+license notices are kept in this repository.
 
 ## Run from a terminal or on a server
 
