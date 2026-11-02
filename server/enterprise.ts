@@ -207,7 +207,7 @@ export function licenseWarning(status: EditionStatus): string | null {
 export function describeEdition(status: EditionStatus): string {
   if (status.edition === "enterprise") {
     const until = status.expiresAt ? ` until ${status.expiresAt}` : "";
-    return `openmausbot enterprise edition for ${status.customer}${until}: ${status.features.join(", ") || "no features"}`;
+    return `danibot enterprise edition for ${status.customer}${until}: ${status.features.join(", ") || "no features"}`;
   }
   return `openmausbot open-source edition${status.notice ? ` (${status.notice})` : ""}`;
 }

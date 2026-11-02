@@ -4,7 +4,7 @@
 // default), which on a 1M-token model is nearly always: every model call pays for every connected
 // app's schemas, and a session writes them into the prompt cache again and again. Claude Code
 // 2.1.312 defers by default when nothing is set, but holds a resumed conversation that ran without
-// ToolSearch to the old way ("ENABLE_TOOL_SEARCH=true overrides this"), and OpenMausBot resumes every
+// ToolSearch to the old way ("ENABLE_TOOL_SEARCH=true overrides this"), and Dani Bot resumes every
 // thread. So a turn runs with ENABLE_TOOL_SEARCH=true unless the person chose otherwise.
 //
 // The value goes in the turn's private --settings file. Claude Code applies a settings file's `env`

@@ -333,7 +333,7 @@ function acquireJournalLock(): JournalLockOwner {
       }
       const current = readLockOwner();
       const reaped = current !== null && !processIsAlive(current.pid) && reapDeadLock(current);
-      if (performance.now() >= deadline) throw stateError("locked by another OpenMausBot process");
+      if (performance.now() >= deadline) throw stateError("locked by another Dani Bot process");
       if (reaped) continue;
       Atomics.wait(lockWait, 0, 0, LOCK_RETRY_MS);
     }

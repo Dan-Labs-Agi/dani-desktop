@@ -94,7 +94,7 @@ describe("openmausbot command line", () => {
     const guided = browserSignInLines(local, "ABCD-EFGH-JKLM", Date.now() + 60_000);
     expect(guided).toContain(local);
     expect(guided).toContain("ABCD-EFGH-JKLM");
-    expect(guided).toContain("openmausbot pair");
+    expect(guided).toContain("danibot pair");
   });
 
   describe("the two links one pairing window has", () => {
@@ -107,7 +107,7 @@ describe("openmausbot command line", () => {
       const out = block({ phone: "android" });
       expect(out).toContain(qrToString(invite));
       expect(out).not.toContain(qrToString(url));
-      expect(out).toContain("Scan that in the OpenMausBot app");
+      expect(out).toContain("Scan that in the Dani Bot app");
       expect(out).toContain(`web browser:   ${url}`);
       expect(out).not.toContain("open or scan:");
     });
@@ -125,7 +125,7 @@ describe("openmausbot command line", () => {
       expect(out).toContain(qrToString(url));
       expect(out).toContain("The Android app needs the phone-app link");
       expect(out).toContain("OMB_PUBLIC_URL");
-      expect(out).not.toContain("Scan that in the OpenMausBot app");
+      expect(out).not.toContain("Scan that in the Dani Bot app");
     });
   });
 
@@ -163,7 +163,7 @@ describe("openmausbot command line", () => {
     try {
       const deadline = Date.now() + 60_000;
       while (!out.includes("open or scan:") && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
-      expect(out).toContain(`OpenMausBot is running on http://127.0.0.1:${port}, reachable at https://mini.example`);
+      expect(out).toContain(`Dani Bot is running on http://127.0.0.1:${port}, reachable at https://mini.example`);
       expect(out).toMatch(/pairing code:  [A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/);
       expect(out).toContain("open or scan:  https://mini.example/pair#code=");
       expect(out).toMatch(/[▀▄█]/);
@@ -228,7 +228,7 @@ describe("terminal onboarding commands", () => {
     expect(setup.runSetup).toHaveBeenCalledWith({ dataDir: options.dataDir, port: options.port });
     expect(setup.isSetupComplete).not.toHaveBeenCalled();
     expect(serve).not.toHaveBeenCalled();
-    expect(output.log).toHaveBeenCalledWith(expect.stringContaining("Start with: openmausbot"));
+    expect(output.log).toHaveBeenCalledWith(expect.stringContaining("Start with: danibot"));
     expect(phoneSetup).toHaveBeenCalledOnce();
     expect(setup.saveCliStartup).toHaveBeenCalledWith(options.dataDir, { access: "local" });
   });
@@ -408,7 +408,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     child.stderr?.on("data", (chunk) => (err += String(chunk)));
     try {
       expect(await exited(child)).toBe(1);
-      expect(err).toContain("run `openmausbot login` first");
+      expect(err).toContain("run `danibot login` first");
       let dead = false;
       try {
         await fetch(`http://127.0.0.1:${port}/api/health`);
@@ -511,7 +511,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     try {
       const deadline = Date.now() + 60_000;
       while (!out.includes("open or scan:") && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
-      expect(out).toContain(`OpenMausBot is running on http://127.0.0.1:${port}, reachable at ${stub.endpointUrl}`);
+      expect(out).toContain(`Dani Bot is running on http://127.0.0.1:${port}, reachable at ${stub.endpointUrl}`);
       expect(out).toContain(`open or scan:  ${stub.endpointUrl}/pair#code=`);
       expect(stub.calls).toContain("POST /v1/installations/self/endpoint");
 
@@ -618,7 +618,7 @@ describe.skipIf(process.platform === "win32")("serve --domain", () => {
     try {
       const deadline = Date.now() + 60_000;
       while (!out.includes("open or scan:") && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
-      expect(out).toContain(`OpenMausBot is running on http://127.0.0.1:${port}, reachable at https://omb.example.test`);
+      expect(out).toContain(`Dani Bot is running on http://127.0.0.1:${port}, reachable at https://omb.example.test`);
       expect(out).toContain("https: Caddy serves https://omb.example.test");
       expect(out).toContain("open or scan:  https://omb.example.test/pair#code=");
       const args = readFileSync(join(home, "caddy-args.txt"), "utf8").trim();

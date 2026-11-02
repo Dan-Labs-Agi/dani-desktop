@@ -65,7 +65,7 @@ export function edgeClientAddress(env: NodeJS.ProcessEnv): { OMB_CLOUD_EDGE_CLIE
 
 /** The server's data directory on the volume. */
 export function cloudHomeDataDir(env: NodeJS.ProcessEnv, home: string): string {
-  return env.OMB_DATA_DIR || posix.join(home, ".openmausbot");
+  return env.DANI_DATA_DIR || env.OMB_DATA_DIR || posix.join(home, ".openmausbot");
 }
 
 /** flock(1)'s exit status when another process holds the lock (its --conflict-exit-code). */

@@ -30,7 +30,7 @@ import { turnStdioMcpServers } from "./turn-mcp.ts";
 
 const DRIVER_KIND = "museCode";
 const PROVIDER_ID = "meta";
-const CLIENT_INFO = { name: "openmausbot", title: "OpenMausBot", version: "1" };
+const CLIENT_INFO = { name: "openmausbot", title: "Dani Bot", version: "1" };
 const MUSE_CONTEXT_WINDOW = 1_048_576;
 const RE_ANCHOR_TURNS = 8;
 const STARTUP_TIMEOUT_MS = 30_000;

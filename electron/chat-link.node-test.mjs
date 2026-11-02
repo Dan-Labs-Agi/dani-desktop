@@ -4,14 +4,21 @@ import test from "node:test";
 import { externalWebUrl } from "./app-permissions.mjs";
 import { chatLinkFrom, chatLinkFromCommandLine } from "./chat-link.mjs";
 
-const THREAD_LINK = "openmausbot://thread/2633ea27-cc9d-4690-97bf-aca853eca4c6?bot=1f72ec75-821b-44a5-a7a3-93ff64276c7d";
-const BOT_LINK = "openmausbot://bot/1f72ec75-821b-44a5-a7a3-93ff64276c7d";
+const THREAD_LINK = "danibot://thread/2633ea27-cc9d-4690-97bf-aca853eca4c6?bot=1f72ec75-821b-44a5-a7a3-93ff64276c7d";
+const BOT_LINK = "danibot://bot/1f72ec75-821b-44a5-a7a3-93ff64276c7d";
 
 test("recognizes the links Copy link and a dashboard make", () => {
   assert.equal(chatLinkFrom(THREAD_LINK), THREAD_LINK);
   assert.equal(chatLinkFrom(BOT_LINK), BOT_LINK);
   assert.equal(chatLinkFrom(` ${BOT_LINK}\n`), BOT_LINK);
-  assert.equal(chatLinkFrom("Dani Bot://Bot/abc"), "Dani Bot://Bot/abc");
+  assert.equal(chatLinkFrom("DaniBot://Bot/abc"), "DaniBot://Bot/abc");
+});
+
+test("still opens the openmausbot:// links made before the rename", () => {
+  const legacyThread = THREAD_LINK.replace("danibot://", "openmausbot://");
+  const legacyBot = BOT_LINK.replace("danibot://", "openmausbot://");
+  assert.equal(chatLinkFrom(legacyThread), legacyThread);
+  assert.equal(chatLinkFrom(legacyBot), legacyBot);
 });
 
 test("leaves every other link to its own handler", () => {

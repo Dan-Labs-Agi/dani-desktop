@@ -311,7 +311,7 @@ function acquireJournalLock(): JournalLockOwner {
       const reaped = current !== null && !processIsAlive(current.pid) && reapDeadLock(current);
       // Every retry path is bounded: an adversarially changing lock can vanish or be replaced between steps.
       if (performance.now() >= deadline) {
-        throw recoveryStateError("locked by another OpenMausBot process");
+        throw recoveryStateError("locked by another Dani Bot process");
       }
       if (reaped) continue;
       Atomics.wait(lockWait, 0, 0, LOCK_RETRY_MS);

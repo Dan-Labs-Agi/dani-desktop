@@ -8,6 +8,7 @@ const generatedPaths = [
   "release",
   "electron/resources/speech-helper",
   "electron/resources/OpenMausBot Speech.app",
+  "electron/resources/Dani Bot Speech.app",
 ];
 
 await Promise.all(

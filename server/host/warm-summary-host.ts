@@ -36,7 +36,7 @@ export interface WarmSummaryHostDeps {
   instance(instanceId: string): { adapter: { cacheKeepWarm?: { compact?: CompactFn; hold(threadId: string, until: number | null): boolean } } } | null | undefined;
   /** Off with `context.autoCompact: false` or OMB_WARM_SUMMARY=0. */
   enabled(): boolean;
-  /** Where the engine summarizes by itself, in tokens (Claude Code's --autocompact); undefined when OpenMausBot set none. */
+  /** Where the engine summarizes by itself, in tokens (Claude Code's --autocompact); undefined when Dani Bot set none. */
   nativeCompactAt(instanceId: string): number | undefined;
   /** A turn is running or being set up in this conversation, or the bot is busy elsewhere. */
   busy(botId: string, threadId: string): boolean;

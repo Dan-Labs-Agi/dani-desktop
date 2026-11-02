@@ -2,7 +2,7 @@
 // the workspace credentials and every OMB_CLOUD_ setting before a spawn (server/config.ts stripWorkspaceCredentialEnv);
 // this is the second gate, applied at the box boundary, so a name a driver forgot never reaches a bot's shell.
 
-/** Names a bot's engine, its tools and the proxies OpenMausBot starts inside the box may read. */
+/** Names a bot's engine, its tools and the proxies Dani Bot starts inside the box may read. */
 export const BOX_ENV_NAMES: ReadonlySet<string> = new Set([
   "PATH", "HOME", "USER", "LOGNAME", "SHELL", "HOSTNAME", "PWD",
   "LANG", "LANGUAGE", "TZ", "TERM", "COLORTERM", "TMPDIR", "NO_COLOR", "FORCE_COLOR", "CI", "DEBUG",

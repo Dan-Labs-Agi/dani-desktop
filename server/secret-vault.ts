@@ -1,4 +1,4 @@
-// Values a person typed into a bot's card for a secret OpenMausBot does not keep itself.
+// Values a person typed into a bot's card for a secret Dani Bot does not keep itself.
 // Security: a `ref` value stays in this process's memory, behind a one-use reference bound to the asking bot and
 // conversation that only OpenDani's own tools accept. A `file` value goes to an owner-only file in a private folder
 // of that bot's own workspace (or the Local VM workspace its turn runs in); nothing that syncs, backs up, moves, links,
@@ -67,7 +67,7 @@ function refText(ref: string, reason: "unknown" | "used" | "expired" | "owner"):
     case "owner":
       return `${ref} was given to another bot or conversation. Ask the person here with request_credential.`;
     default:
-      return `${ref} is not a secretRef OpenMausBot holds: it is mistyped, or OpenMausBot restarted before it was used. Ask again with request_credential.`;
+      return `${ref} is not a secretRef Dani Bot holds: it is mistyped, or Dani Bot restarted before it was used. Ask again with request_credential.`;
   }
 }
 

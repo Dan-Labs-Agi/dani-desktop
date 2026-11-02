@@ -1,5 +1,5 @@
 // What a bot's browser may connect to: every address a destination resolves to gets a class, and the host
-// OpenMausBot runs on decides which classes pass.
+// Dani Bot runs on decides which classes pass.
 import { BlockList, isIP } from "node:net";
 import { z } from "zod";
 
