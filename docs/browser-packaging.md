@@ -92,7 +92,7 @@ device link, to the DevTools port the computer finds itself, and only the
 person's own conversations and routines use it. My Chrome works only on a
 personal Cloud home: on a Team Cloud and on self-hosted servers profiles stay
 built-in. Details: [the browser engine plan, step 5](plans/browser-engine.md)
-and [Dani Cloud](cloud-pro.md#your-chrome).
+and [MausBot Cloud](cloud-pro.md#your-chrome).
 
 ## What a bot's browser can reach
 
@@ -106,7 +106,7 @@ loopback traffic through it too (`--proxy-bypass-list=<-loopback>`), and
 WebRTC sends no UDP around it. If the gate is not running, the browser
 connects nowhere.
 
-| Destination | Desktop | Self-hosted server | Dani Cloud |
+| Destination | Desktop | Self-hosted server | MausBot Cloud |
 |---|---|---|---|
 | Public internet | yes | yes | yes |
 | Dani Desktop's own ports (loopback and this machine's addresses) | no | no | no |
@@ -135,7 +135,7 @@ A self-hosted server opens more with `config.json`:
 
 Each entry is an address or CIDR range with an optional `:port` (IPv6 in
 brackets for a port: `[fd12::1]:443`). Dani Desktop's own ports, metadata and
-link-local addresses stay closed whatever it lists, and Dani Cloud ignores
+link-local addresses stay closed whatever it lists, and MausBot Cloud ignores
 it. Every refused connection shows up in the bot's next browser result:
 `The page tried to reach "127.0.0.1:8799" (blocked: Dani Desktop's own service)`.
 
@@ -176,7 +176,7 @@ same rules hold on the desktop, a server and Cloud:
   read from `/proc`, so an image without `ps` works the same.
 - **Unused browsers close.** A browser nothing has used for
   `browserEngine.idleTimeoutMinutes` in `config.json` (1 to 60; 10 when
-  unset, 3 on a Dani Cloud home, whose 4 GB fits few browsers) is closed: no bot call (a tool listing counts, and so do a call
+  unset, 3 on a MausBot Cloud home, whose 4 GB fits few browsers) is closed: no bot call (a tool listing counts, and so do a call
   waiting behind another, its page-health reads and recorded step, and
   fill_login's typing; a preview frame only holds off a close while it is
   taken), no turn that has used it and is still running, and no person

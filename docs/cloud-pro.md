@@ -1,17 +1,18 @@
-# Dani Cloud: the home machine
+# MausBot Cloud: the home machine
 
-Dani Cloud (the Starter, Pro and Max plans) gives one person an always-on
-Dani Desktop server of their own (a plan may instead sleep when idle: see
+MausBot Cloud (the Starter, Pro and Max plans) is the upstream hosted service
+(OpenMausBot's commercial offering, run by its maintainer, not by this project).
+It gives one person an always-on Dani Desktop server of their own (a plan may instead sleep when idle: see
 [Sleeping homes](#sleeping-homes-the-power-read-and-the-sleep-handshake)). The plans differ in machine size, disk and
 included allowances; everything on this page applies to all of them. Each
 customer gets one Fly app with one `home` machine that is always on, a volume
 at `/data`, and TLS at `https://<app>.fly.dev`. The desktop app, the phone and
 the web are windows onto it. Local use of the app is unchanged and free.
-Customers read its name as **Dani Cloud** wherever they meet it (the
-app, the Admin's pages, emails); "Dani Cloud" is this page's shorthand, and
+Customers read its name as **MausBot Cloud** wherever they meet it (the
+app, the Admin's pages, emails); "OMB Cloud" is this page's shorthand, and
 the app itself is still Dani Desktop.
 
-Dani Cloud includes no AI usage. The person signs in on their machine with their
+MausBot Cloud includes no AI usage. The person signs in on their machine with their
 own Claude or ChatGPT subscription, or an API key, through the same sign-in
 flows as any Dani Desktop server. Nothing on a Cloud home is routed to a
 platform model gateway. The one exception is a free trial's Claude credit, a
@@ -32,7 +33,7 @@ Contract version: `1` (`cloudContractVersion` on the wire).
 ## What the person sees
 
 1. They subscribe on the Cloud site. The Admin creates the Fly app and machine.
-2. They open the desktop app, go to **Settings → Dani Cloud** and sign in (the
+2. They open the desktop app, go to **Settings → MausBot Cloud** and sign in (the
    existing device sign-in). A **Your Cloud** card says **Setting up** until
    the machine is up.
 3. When it is ready, the machine appears under **Servers** as **My Cloud**, and
@@ -142,7 +143,7 @@ sign-in instead of the welcome flow, which describes the person's own computer
 1. Get the phone app: the menu under your name → **Get the phone app** (App
    Store for iPhone, APK for Android).
 2. The same menu → **Connect your phone · to your Cloud (always on)**, or
-   **Settings → Dani Cloud → Use My Cloud on your phone**. The Cloud opens in
+   **Settings → MausBot Cloud → Use My Cloud on your phone**. The Cloud opens in
    the app window at its phone pairing.
 3. **Create pairing code**, and scan the QR code with the phone app.
 
@@ -159,14 +160,14 @@ How it fits together (`src/lib/phone-pairing.ts`):
   Cloud (always on)* first, which does what **Use My Cloud on your phone**
   does, then *to this computer*. A paid plan whose Cloud is not Ready keeps
   the single *to this computer* line, with a note that the Cloud will show
-  there. A failed switch opens Settings → Dani Cloud.
+  there. A failed switch opens Settings → MausBot Cloud.
 - **Use My Cloud on your phone** shows for a paid plan. With a Ready Cloud it
   calls `cloud-account:connectHomeForPhone`, which takes no arguments and
   connects as **Open My Cloud** does, adding the one fixed request
   `?desktop-settings=phone` (on `/pair` too, which carries it on once paired).
   The Cloud's page opens Settings on its phone pairing. It never makes a code
   by itself. Before the Cloud is Ready, or if opening it failed, the card
-  lists the two steps instead. On the Cloud itself, Settings → Dani Cloud
+  lists the two steps instead. On the Cloud itself, Settings → MausBot Cloud
   offers the same button and opens the pairing directly.
 
 ### Only your own devices
@@ -429,7 +430,7 @@ says "sign in again on your computer". A check that names no machine for the
 account ends it (a stopped machine named without its address does not). A
 call placed while a saved sign-in is still restoring, in the first seconds
 after launch, waits for it (at most 5 seconds) rather than being refused.
-Signing out of Dani Cloud takes it away at once, and so do another
+Signing out of MausBot Cloud takes it away at once, and so do another
 account, companion client mode and restarting the app before a check succeeds
 (the last verified Cloud is kept in memory only); every other server's page
 stays refused. In a web browser, the browser asks for the microphone for
@@ -471,7 +472,7 @@ decides everything from its own verified state (`electron/cloud-entry.mjs`).
    that arrives before the app is ready). If the window already shows
    **My Cloud**, coming forward is all it does.
 2. Otherwise the window returns to this computer (a hosted server that was
-   showing stays saved under **Servers**) and opens **Settings → Dani Cloud**.
+   showing stays saved under **Servers**) and opens **Settings → MausBot Cloud**.
    Before that view acts, the app gives a saved Cloud sign-in up to five
    seconds to finish restoring, so it is never mistaken for signed out.
 3. Opened this way, the view acts on its own, with no confirmation:
@@ -489,7 +490,7 @@ sign-out in that view starts nothing) and one automatic connection per link.
 A failed connection shows the card's error; clicking the link again retries.
 Closing Settings or choosing another section ends it. While it is open, the
 first-run welcome waits, as it does for Organization settings. A normal visit
-to **Settings → Dani Cloud** never signs in or connects by itself.
+to **Settings → MausBot Cloud** never signs in or connects by itself.
 
 The link does nothing in development builds, and in companion client mode it
 explains that the app must be disconnected from the other computer first.
@@ -797,7 +798,7 @@ On the Mac (the authority; `electron/computer-sharing.mjs`,
 - **Bound to the account and the machine.** The grant records the Cloud
   account id and the machine's origin from the verified Cloud session
   (`cloud-account.mjs`), and the Cloud home's environment id on first contact.
-  Signing out of Dani Cloud, another account signing in, the Cloud moving to
+  Signing out of MausBot Cloud, another account signing in, the Cloud moving to
   another machine, or another server answering at that address ends that
   grant; a new one is made only once the verified session lists that Cloud as
   the person's own again. A Cloud
@@ -852,14 +853,14 @@ On the Cloud home (`server/shared-computers.ts`, `server/index.ts`):
   apps and screen or a terminal, when it was last online (written at most once
   a minute) and last used (a page opened through its internet connection
   counts, at most once a minute), and whether it stopped lending (paused there,
-  or signed out of Dani Cloud). Never a
+  or signed out of MausBot Cloud). Never a
   folder name or path, a secret or anything a job carried; kept 90 days.
 - **What bots are told.** `list_shared_computers` lists online computers with
   their `device` ("PC", "Mac" or "computer"). When none is online it adds
   `offline` and a `say` sentence naming the computer, its kind and when it was
   last online ("Their PC ASH-PC is lent to My Cloud but offline (last online
   …)"), or that it no longer lends itself (paused there, or signed out of
-  Dani Cloud, and how to resume). The Cloud prompt names the
+  MausBot Cloud, and how to resume). The Cloud prompt names the
   person's computer the same way and tells bots never to call a PC a Mac; an
   offline `shared_computer` call says the same.
 - The server refuses operations outside the scopes the Mac registered before
@@ -1211,7 +1212,7 @@ never echoes a secret.
 
 ### No model gateway
 
-Dani Cloud includes no AI, so the contract has no model gateway. If a Cloud
+MausBot Cloud includes no AI, so the contract has no model gateway. If a Cloud
 home is ever given `OMB_HOSTED_MODEL_URL`, `OMB_HOSTED_MODEL_TOKEN` or
 `OMB_HOSTED_MODELS` (an Admin from before this decision set all three), it
 still boots, logs one warning naming the variables (never their values), and
@@ -1300,7 +1301,7 @@ computers belong to this machine on every request.
   engine, so a process running as the same user that may trace it (the
   kernel's ptrace policy, `kernel.yama.ptrace_scope`, decides) could read
   them there. That is why a guest's turn gets no shell (above); the complete
-  fix is engines under a user of their own. A relay token is only this customer's own Dani Cloud
+  fix is engines under a user of their own. A relay token is only this customer's own MausBot Cloud
   allowance: it works only through the Admin, only on this machine's cloud
   computers, voice and decisions, and only up to the monthly caps.
 - A refusal from the Boat or voice relay (for example, the month's cloud
@@ -1788,7 +1789,7 @@ notice queue (below), on this computer's page and on My Cloud's own page.
 Customers couldn't find how to cancel: the plan card only said **Manage in
 your browser**. Now, while the session's `renewal` says this account pays for a
 plan that runs, the plan card in Settings (Usage & billing → Plan in Simple
-mode, Dani Cloud in Advanced) and on the Cloud's own page in home mode
+mode, MausBot Cloud in Advanced) and on the Cloud's own page in home mode
 (`CloudPlanOnCloud`) shows **Cancel trial** during a free trial and **Cancel
 plan** otherwise (`src/components/CloudCancelPlan.tsx`). Someone in a team's
 Cloud never sees it: the Admin sends no `renewal` for a Cloud they don't pay
@@ -1850,7 +1851,7 @@ launch: What's new comes first, and the Boat card waits for a later one.
    slides from the account the app already holds (its plan, its trial, its
    teams and its Clouds list):
    - **No Cloud plan** (signed out, or signed in with none): **Meet the new
-     Dani Cloud**, the Cloud website's Home pictured in the skin's light or
+     MausBot Cloud**, the Cloud website's Home pictured in the skin's light or
      dark, then **Team**.
    - **A Cloud plan of one's own**, in no team: the Team slide only.
    - **In a team** (any role, a Team or Business plan, or a team's Cloud in the
@@ -1877,10 +1878,10 @@ launch: What's new comes first, and the Boat card waits for a later one.
    unless focus has moved on. `whats_new` ([docs/analytics.md](analytics.md))
    counts each slide seen and each step.
 2. **The card after the update** (`CloudTrialIntro`, id `cloud-trial-intro-v1`):
-   Dani Cloud's free trial for someone signed out or with no plan who
+   MausBot Cloud's free trial for someone signed out or with no plan who
    has used the app before this launch, only while the Admin offers a trial
    (it waits for one), and never on a desktop whose first-run welcome
-   showed its Dani Cloud step. Its numbers are the Admin's: the trial's
+   showed its MausBot Cloud step. Its numbers are the Admin's: the trial's
    days, the lowest monthly price, the Claude credit and money-back. At most
    once a calendar day, on at most three days (one for someone who closed the
    earlier Pro card), kept in browser storage and the workspace's hint record;
@@ -1922,15 +1923,15 @@ restoring or connecting.
 
 In the Server menu, **My Cloud** goes through the same connection as
 **Open My Cloud** (no pairing code to type); when it cannot, the app
-opens **Settings → Dani Cloud**, which says the next step. In the desktop app a
+opens **Settings → MausBot Cloud**, which says the next step. In the desktop app a
 `/pair#code=` link connects without a second click; a browser still asks. On a
 Cloud home the pairing page says where its connection starts (the environment
 descriptor's `capabilities.cloudHome`).
 
-On the person's own Cloud, open in the app's window, **Settings → Dani Cloud**
+On the person's own Cloud, open in the app's window, **Settings → MausBot Cloud**
 shows the plan read only (`cloud-plan:*`: its name and whether it is active,
 **Manage in your browser** and **Switch to this computer**). It is listed only
-on a Dani Cloud home (`config.cloudHome`), never on another server open in the
+on a MausBot Cloud home (`config.cloudHome`), never on another server open in the
 window. Main answers it for the Cloud this account verified, or last verified
 while a check is failing or the sign-in has ended (`myCloudOrigin`, the rule
 the Cloud's microphone uses too), so that page says
@@ -1985,7 +1986,7 @@ page alike (`ogb.cloudPlan`), so the meter reads the same on both (`src/componen
   month at this level: it comes back when one reaches 100%, and next month. Never shown in a browser, without a paid plan,
   or on a Team Cloud unless the plan whose usage it is is that team's (only the person who pays for a team sees its usage;
   its members never do).
-- **Settings → General → Dani Cloud usage**, while there is a paid plan: every allowance with its meter, when they
+- **Settings → General → MausBot Cloud usage**, while there is a paid plan: every allowance with its meter, when they
   start over, and Upgrade to the next plan (the others as links), "You're on the top plan" on Max, or "To change your
   team's plan, write to us" on a team's plan.
 - **Upgrade, one tap and a confirm.** Upgrade asks main for a preview (`ogb.cloudPlan.upgradePreview(plan, source)`,
@@ -2026,10 +2027,10 @@ only.
 
 ## Add a Cloud
 
-The one way to buy Dani Cloud in the app, the same for every way in:
+The one way to buy MausBot Cloud in the app, the same for every way in:
 What's new, the card after the update, **Show me how**, **Add a
 Cloud…** in the server menu (the sidebar's and the menu bar's Server menu),
-Settings (the Cloud card in General, and Dani Cloud), and the routine
+Settings (the Cloud card in General, and MausBot Cloud), and the routine
 screen's note.
 
 - **The menu item.** Main adds **Add a Cloud…** under the saved servers only
@@ -2052,7 +2053,7 @@ screen's note.
   the menu is.
 - **The dialog** (`components/CloudAddDialog.tsx`, one state→view function,
   `lib/cloud-plan` `cloudAddView`) covers the buying journey only: the offer
-  (the night card: Dani Cloud's name and one line over a linocut night sky
+  (the night card: MausBot Cloud's name and one line over a linocut night sky
   where the three bots ride a cloud while this computer's laptop sleeps, with
   Compare plans in the card; then one card
   per plan the Admin sells, side by side on a wide sheet and stacked in a
@@ -2085,7 +2086,7 @@ screen's note.
   checkout already being prepared), the offer says why. A screen reader
   hears each card's button with its plan's name, and each new step takes
   focus at its heading. A payment problem, an ended sign-in or a Cloud that can't
-  be reached go to Settings → Dani Cloud instead.
+  be reached go to Settings → MausBot Cloud instead.
 - **Checkout runs in the default browser, never the app.** Signed in, main
   asks the Admin for this account's checkout (`POST /api/cloud/desktop/checkout`
   with the plan and where it was opened) and opens the address only when it is
