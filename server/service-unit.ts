@@ -15,8 +15,8 @@ export interface ServiceSpec {
   label?: string;
 }
 
-export const SYSTEMD_UNIT_NAME = "openmausbot.service";
-export const LAUNCHD_LABEL = "com.openmausbot.serve";
+export const SYSTEMD_UNIT_NAME = "danibot.service";
+export const LAUNCHD_LABEL = "com.danibot.serve";
 
 function quoteSystemd(value: string): string {
   // systemd's ExecStart splits on whitespace and understands double quotes.
@@ -133,7 +133,7 @@ export function servicePlan(platform: NodeJS.Platform, dataDir: string, home = h
   return null;
 }
 
-export const SENTINEL_LAUNCHD_LABEL = "com.openmausbot.sentinel";
+export const SENTINEL_LAUNCHD_LABEL = "com.danibot.sentinel";
 export const SENTINEL_SYSTEMD_NAME = "openmausbot-sentinel";
 export const SENTINEL_INTERVAL_SECONDS = 120;
 
@@ -149,9 +149,9 @@ export function shippedSentinelCli(
 ): { node: string; script: string } | null {
   const candidates = platform === "darwin"
     ? ["/Applications/OpenMausBot.app", join(home, "Applications", "OpenMausBot.app")].map((app) => ({
-      node: join(app, "Contents", "MacOS", "OpenMausBot"), script: join(app, "Contents", "Resources", "server", "openmausbot.js"),
+      node: join(app, "Contents", "MacOS", "Dani Bot"), script: join(app, "Contents", "Resources", "server", "openmausbot.js"),
     }))
-    : platform === "linux" ? [{ node: "/opt/OpenMausBot/openmausbot", script: "/opt/OpenMausBot/resources/server/openmausbot.js" }] : [];
+    : platform === "linux" ? [{ node: "/opt/Dani Bot/danibot", script: "/opt/Dani Bot/resources/server/openmausbot.js" }] : [];
   return candidates.find((cli) => exists(cli.node) && exists(cli.script) && hasSentinel(cli.script)) ?? null;
 }
 
