@@ -56,6 +56,6 @@ describe("the card a bot asks for a key or secret with", () => {
     const { cards, lines, bot } = fixture();
     cards.requestCredential(bot, "ledger-main", { label: "Notion token", reason: "For Notion's MCP server.", delivery: "ref" });
     expect(lines[0]!.text).toBe("Securely provide the Notion token from OpenMausBot on your phone or computer. It is never added to chat.");
-    expect(lines[0]!.secret!.description).toBe("For Notion's MCP server. Ledger gets a one-use reference for OpenDani's own tools and never sees it.");
+    expect(lines[0]!.secret!.description).toBe("For Notion's MCP server. Ledger gets a one-use reference for Dani Bot's own tools and never sees it.");
   });
 });

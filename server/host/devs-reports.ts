@@ -153,7 +153,7 @@ const droppedLine = (language: string | undefined) => serverLine(language, "serv
 const FAILED_MARKER = "Dani";
 
 /** Rides on the turn that answers a @devs message. */
-const TURN_NOTE = "\n\n[From Dani Bot, not the person: this message tags @devs, so it is a bug report for the Dani team, OpenDani's developers. Call report_bug once, first: what the person says went wrong; what you saw yourself in this conversation (errors, failed tools, stuck steps), or that you saw nothing unusual; and steps to reproduce. Leave out passwords, keys, tokens and file contents; Dani Bot adds the app's own diagnostics. Then tell the person, word for word, the line report_bug returns, and help with the problem if you can.]";
+const TURN_NOTE = "\n\n[From Dani Bot, not the person: this message tags @devs, so it is a bug report for the Dani team, Dani Bot's developers. Call report_bug once, first: what the person says went wrong; what you saw yourself in this conversation (errors, failed tools, stuck steps), or that you saw nothing unusual; and steps to reproduce. Leave out passwords, keys, tokens and file contents; Dani Bot adds the app's own diagnostics. Then tell the person, word for word, the line report_bug returns, and help with the problem if you can.]";
 
 const iso = (at: number) => new Date(at).toISOString();
 const firstLine = (text: string | undefined) => (text ?? "").split("\n").map((line) => line.trim()).find(Boolean) ?? "";
@@ -375,7 +375,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
   function why(entry: Waiting): string {
     if (entry.restored) return "Dani Bot restarted before a bot wrote one";
     if (!entry.answered) return "no bot answered the message";
-    if (entry.offered === false) return "the bot's engine cannot use OpenDani's tools";
+    if (entry.offered === false) return "the bot's engine cannot use Dani Bot's tools";
     const path = store.activePath(entry.threadId);
     const after = path.slice(path.findIndex((line) => line.id === entry.messageId) + 1);
     if (after.some((line) => line.kind === "activity" && line.tool && failedTurnCause(line.tool.name) !== null)) return "the bot's turn failed";
@@ -480,7 +480,7 @@ export function createDevsReports(deps: DevsReportsDeps) {
 
   return {
     /** The note on a turn in this conversation while a @devs message waits for its summary (none for a turn without
-     * OpenDani's tools); and, on the first turn after its line, that a report's fix runs here now. Empty otherwise. */
+     * Dani Bot's tools); and, on the first turn after its line, that a report's fix runs here now. Empty otherwise. */
     note(threadId: string, tools: boolean): string {
       const fixed = tracked.filter((one) => one.threadId === threadId && one.told !== undefined && !one.noted);
       for (const one of fixed) one.noted = true;

@@ -2,7 +2,7 @@
 // apps, the Chief's turn mounts the device tools, a tool call becomes a phone job the phone polls, leases and answers,
 // and the phone hears of the job over SSE. A bot whose phone apps are switched off sees no phone tools, a read-and-draft
 // run gets no phone at all, a turn hears whether the person wrote from the phone or the computer, and a send goes to the
-// phone with no card of OpenDani's own.
+// phone with no card of Dani Bot's own.
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -321,7 +321,7 @@ it("a conversation an outside event's run reported into loses the phone", async 
   expect(after.mcpConfig.mcpServers[PHONE_MCP_SERVER]).toBeUndefined();
 }, 90_000);
 
-it("a send reaches the phone with no card of OpenDani's own in the chat: the person taps Send on the phone", async () => {
+it("a send reaches the phone with no card of Dani Bot's own in the chat: the person taps Send on the phone", async () => {
   await settle();
   const allowed = await phone("PUT", "/api/phones/self", { ...registration("install-0001", PHONE_NAME), capabilities: { calendar: "full", messages: "send" } });
   expect(allowed.status).toBe(200);

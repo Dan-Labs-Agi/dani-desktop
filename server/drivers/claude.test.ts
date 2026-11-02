@@ -1566,7 +1566,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
       return { bot, thread, file };
     };
 
-    it("reaches a turn in a thread's own folder, beside OpenDani's own settings", async () => {
+    it("reaches a turn in a thread's own folder, beside Dani Bot's own settings", async () => {
       const dump = join(scratch, "bot-settings.json");
       process.env.FAKE_CLAUDE_DUMP = dump;
       await create();
@@ -1811,7 +1811,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(after.settings.env.ANTHROPIC_API_KEY).toBe("synthetic-new");
   });
 
-  it("loads third-party MCP tools on demand and keeps OpenDani's own servers loaded", async () => {
+  it("loads third-party MCP tools on demand and keeps Dani Bot's own servers loaded", async () => {
     await create();
     const dump = join(scratch, "tool-search.json");
     process.env.FAKE_CLAUDE_DUMP = dump;
@@ -3033,7 +3033,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(dumpedPid(dump)).not.toBe(failedLaunch);
   });
 
-  it("reports which of the turn's own MCP servers did not connect, and none of OpenDani's", async () => {
+  it("reports which of the turn's own MCP servers did not connect, and none of Dani Bot's", async () => {
     await create(undefined, { FAKE_CLAUDE_MCP_FAILED: "agents,blender,stranger" });
     const custom = { blender: { command: "/usr/bin/python3", args: ["/srv/blender.py"], env: {} }, notes: { command: "npx", args: ["notes-mcp"], env: {} } };
     const turn = await instance.adapter.sendTurn({ threadId: "t-custom-failed", text: "one", integrations: { custom } });

@@ -106,7 +106,7 @@ function stateError(detail: string, cause?: unknown): Error & { status: number }
   return Object.assign(
     new Error(
       `Cloud computer deletion is paused because its recovery state is ${detail}. `
-      + "Check the Boat provider before repairing OpenDani's local state.",
+      + "Check the Boat provider before repairing Dani Bot's local state.",
     ),
     { status: 503, cause },
   );

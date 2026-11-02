@@ -1,8 +1,8 @@
-// The bots' browser tools: OpenDani's agent_browser_* names over T3 Code's preview tool semantics.
+// The bots' browser tools: Dani Bot's agent_browser_* names over T3 Code's preview tool semantics.
 //
 // Adapted from pingdotgg/t3code@00cdceb1 apps/server/src/mcp/toolkits/preview/tools.ts and
 // packages/contracts/src/previewAutomation.ts, MIT License, Copyright (c) 2026 T3 Tools Inc. (full text in
-// third_party/t3-code/LICENSE); modified: zod schemas under OpenDani's tool names, refs instead of Playwright
+// third_party/t3-code/LICENSE); modified: zod schemas under Dani Bot's tool names, refs instead of Playwright
 // locators, and the names agent-browser advertised accepted as aliases.
 import { z } from "zod";
 

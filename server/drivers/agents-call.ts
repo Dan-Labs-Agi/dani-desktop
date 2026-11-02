@@ -879,7 +879,7 @@ async function requestCustomSecret(args: Json, context: ToolCallContext): Promis
   if (!r.ok) return { text: String(r.body.error ?? `request_credential failed (HTTP ${r.status}).`), isError: true };
   if (typeof r.body.text === "string") return { text: `${r.body.text} Continue the task.` };
   const asked = r.body.savedAs === "ref"
-    ? ` ${label} was saved earlier for OpenDani's tools only, not as a file for your commands (not a file request), so this card asks for it again.`
+    ? ` ${label} was saved earlier for Dani Bot's tools only, not as a file for your commands (not a file request), so this card asks for it again.`
     : r.body.savedAs === "file" ? ` ${label} was saved earlier as a file for your commands, not as a secretRef, so this card asks for it again.` : "";
   return {
     text: `A secure card for ${label} is ready in Dani Bot, on the computer and on a freshly QR-paired phone.${asked} End this turn now and say in one line that you are waiting for it; Dani Bot resumes you when the person saves or declines, and tells you how to use it. Never ask for it in chat.`,

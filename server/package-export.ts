@@ -775,7 +775,7 @@ export function createLibraryPackageExport(input: LibraryExportInput): LibraryEx
     id: packageId,
     release,
     name: displayName,
-    tagline: input.tagline?.trim() || "A preset bot for OpenDani's New bot dialog.",
+    tagline: input.tagline?.trim() || "A preset bot for Dani Bot's New bot dialog.",
     summary: input.summary?.trim() ||
       "Shared from Dani Bot. Adds a preset bot to New bot. Its skills arrive switched off; model choices, computers, approval levels and connected apps never travel.",
     ...(notes ? { notes } : {}),
