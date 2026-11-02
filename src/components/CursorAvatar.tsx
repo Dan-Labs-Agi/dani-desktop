@@ -25,7 +25,8 @@ import {
   mouthFrame,
   type Ring,
 } from "./cursor-face-data"
-import { MOTION, bodyTransform, type BodyMotion } from "./mascot-motion"
+import { MOTION, bodyTransform, frameFloorMs, nextFrameAt, type BodyMotion } from "./mascot-motion"
+import { mascotClock, usePrefersReducedMotion, type MascotTicket } from "./mascot-clock"
 import type { MascotBodyId } from "../../shared/mascot-bodies"
 
 export { MOTION, bodyTransform }
@@ -352,8 +353,6 @@ export const EFFECTS: EffectsByState = {
 
 
 
-export type { CursorAvatarHandle }
-
 export interface CursorAvatarProps {
   state?: CursorState
   expression?: number
@@ -376,7 +375,7 @@ export interface CursorAvatarProps {
   gradient?: [string, string, string]
   picture?: string | null
   eyeColor?: string
-  /** Desynchronizes multiple avatars: each seed starts the character at a different point in its motion, like Dani-Dex's per-bot initialPhase. */
+  /** Desynchronizes multiple avatars: each seed starts the character at a different point in its motion, like Dani-Dex's initialPhase. */
   phaseSeed?: string | number
   title?: string | null
   className?: string
@@ -388,6 +387,7 @@ export interface CursorAvatarHandle {
   spin: (durationMs?: number) => void
   setExpression: (index: number) => void
 }
+export type { CursorAvatarHandle as Handle }
 
 function makeEl<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string> = {}): SVGElementTagNameMap[K] {
   const el = document.createElementNS(SVG_NS, tag)
@@ -395,12 +395,16 @@ function makeEl<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<stri
   return el
 }
 
-/** Grow/shrink a pooled layer of paths to `count`. */
-function pool(layer: SVGGElement, tag: "path" | "circle", count: number): SVGElement[] {
-  while (layer.childNodes.length > count) layer.removeChild(layer.lastChild!)
-  while (layer.childNodes.length < count) layer.appendChild(makeEl(tag))
-  return Array.from(layer.childNodes) as SVGElement[]
-}
+/** States whose character keeps moving; calmer states settle to a still frame after a moment. */
+const ACTIVE_STATES = new Set<CursorState>([
+  "working", "writing", "thinking", "searching", "sending", "receiving", "uploading", "downloading",
+  "speaking", "recording", "excited", "celebrate", "dizzy", "radar", "notifying", "alerting",
+  "bouncing", "dragging", "calling", "bluetooth", "error", "wink", "love", "powering-down",
+])
+
+/** Calm states draw for this long after a change, then hold their frame until something happens. */
+const SETTLE_WINDOW_MS = 2000
+const PULSE_MS = 450
 
 export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarProps>(
   function CursorAvatar(props, ref) {
@@ -409,37 +413,41 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       title = null,
       className,
       style,
-      gradient = DEFAULT_GRADIENT,
-      eyeColor,
       paused = false,
     } = props
+    const reduced = usePrefersReducedMotion()
     const svgRef = useRef<SVGSVGElement>(null)
     const engineRef = useRef<BotEngine | null>(null)
-    const pulseTimer = useRef<number | undefined>(undefined)
+    const ticketRef = useRef<MascotTicket | null>(null)
+    const pulseUntilRef = useRef(0)
+    const settleUntilRef = useRef(0)
     const phaseRef = useRef(0)
+    const stillRef = useRef(false)
     const propsRef = useRef(props)
     propsRef.current = props
 
+    const still = paused || reduced
+    stillRef.current = still
+
     const pulse = (to: string, ms: number) => {
       const eng = engineRef.current
-      if (!eng) return
-      const phase = phaseRef.current
-      const now = performance.now() / 1000 + phase
-      eng.setState(to, now)
-      window.clearTimeout(pulseTimer.current)
-      pulseTimer.current = window.setTimeout(() => {
-        const pose = BLOUB_STATE[(propsRef.current.state ?? "idle") as CursorState] ?? BLOUB_STATE.idle
-        eng.setState(pose.state, performance.now() / 1000 + phaseRef.current)
-      }, ms)
+      if (!eng || stillRef.current) return
+      const now = performance.now() + phaseRef.current * 1000
+      eng.setState(to, now / 1000)
+      pulseUntilRef.current = now + ms
+      ticketRef.current?.wake()
     }
 
     useImperativeHandle(ref, () => ({
-      blink: () => pulse("wink", 700),
+      blink: () => pulse("wink", PULSE_MS),
       spin: (durationMs = 900) => pulse("swirl", durationMs),
       setExpression: (index: number) => {
         const id = bloubExpressionAt(index)
         const expr = id ? EXPRESSION_BY_ID.get(id) : undefined
-        if (expr) engineRef.current?.setExpression(expr, performance.now() / 1000 + phaseRef.current)
+        if (expr) {
+          engineRef.current?.setExpression(expr, performance.now() / 1000 + phaseRef.current)
+          ticketRef.current?.wake()
+        }
       },
     }))
 
@@ -468,7 +476,7 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
       svg.append(arcsBack, dotsBack, body, eyesG, notif, dotsFront, arcsFront)
 
       let lastFollowedState: CursorState | null = null
-      let lastShapeId: string | undefined = undefined
+      let lastShapeKey = ""
       let lastLookKey = ""
 
       const apply = (frame: BotFrame, bodyColor: string, ink: string) => {
@@ -477,7 +485,7 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
         body.setAttribute("opacity", String(frame.bodyAlpha))
         for (let i = 0; i < 2; i++) {
           const eye = frame.eyes[i]
-          const el = eyes[i]
+          const el = eyes[i]!
           if (!eye) { el.setAttribute("opacity", "0"); continue }
           el.setAttribute("d", eye.d)
           el.setAttribute("transform", eye.matrix)
@@ -489,10 +497,9 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
           dots.forEach((dot, i) => {
             const wantPath = !!dot.d
             let el = layer.childNodes[i] as SVGElement | undefined
-            const isPath = el?.tagName === "path"
-            if (!el || isPath !== wantPath) {
+            if (!el || (el.tagName === "path") !== wantPath) {
               el = makeEl(wantPath ? "path" : "circle")
-              if (layer.childNodes[i]) layer.replaceChild(el, layer.childNodes[i])
+              if (layer.childNodes[i]) layer.replaceChild(el, layer.childNodes[i]!)
               else layer.appendChild(el)
             }
             el.setAttribute("opacity", String(dot.opacity))
@@ -510,9 +517,11 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
         drawDots(dotsBack, frame.dots.filter(() => frame.dotsBehind))
         drawDots(dotsFront, frame.dots.filter(() => !frame.dotsBehind))
         const drawArcs = (layer: SVGGElement, part: "front" | "back", arcs: BotFrame["arcs"]) => {
-          const els = pool(layer, "path", arcs.length)
+          while (layer.childNodes.length > arcs.length) layer.removeChild(layer.lastChild!)
+          while (layer.childNodes.length < arcs.length) layer.appendChild(makeEl("path"))
+          const els = Array.from(layer.childNodes) as SVGElement[]
           arcs.forEach((arc, i) => {
-            const el = els[i]
+            const el = els[i]!
             el.setAttribute("d", part === "front" ? arc.front : arc.back)
             el.setAttribute("stroke", arc.grad?.stops?.[arc.grad.stops.length - 1] ?? bodyColor)
             el.setAttribute("stroke-width", String(arc.width))
@@ -545,49 +554,61 @@ export const CursorAvatar = React.forwardRef<CursorAvatarHandle, CursorAvatarPro
           lastFollowedState = (p.state ?? "idle") as CursorState
           eng.setState(wanted.state, now)
           eng.setExpression(wanted.expression ? EXPRESSION_BY_ID.get(wanted.expression) ?? null : null, now)
+          settleUntilRef.current = now * 1000 + SETTLE_WINDOW_MS
         }
-        const bodyId = (p.silhouette?.id ?? undefined) as MascotBodyId | undefined
+        const bodyId = p.silhouette?.id as MascotBodyId | undefined
         const shapeKey = bodyId ?? ""
-        if (shapeKey !== lastShapeId) {
-          lastShapeId = shapeKey
+        if (shapeKey !== lastShapeKey) {
+          lastShapeKey = shapeKey
           const mapped = bodyId ? BLOUB_SHAPE[bodyId] : undefined
           eng.setShape(mapped ? SHAPE_BY_ID.get(mapped)?.radii ?? null : null, now)
         }
         const g = p.gaze
-        const lookKey = g ? `${(g.x ?? 0).toFixed(3)}:${(g.y ?? 0).toFixed(3)}:${p.lookAround ?? 1}` : ""
+        const turnYaw = p.turn ?? 0
+        const lookKey = g
+          ? `${(g.x ?? 0).toFixed(3)}:${(g.y ?? 0).toFixed(3)}:${p.lookAround ?? 1}`
+          : turnYaw ? `turn:${turnYaw}` : ""
         if (lookKey !== lastLookKey) {
           lastLookKey = lookKey
           if (g && ((g.x ?? 0) !== 0 || (g.y ?? 0) !== 0)) {
             eng.setLook({ yaw: (g.x ?? 0) * 35, pitch: (g.y ?? 0) * 25, mix: 1, spin: 0, wander: p.lookAround ?? 0 }, now)
+          } else if (turnYaw) {
+            eng.setLook({ yaw: turnYaw, pitch: 0, mix: 1, spin: 0, wander: 0 }, now)
           } else {
             eng.setLook(null, now)
           }
         }
       }
 
-      const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
-      const still = paused || reduced
-      if (still) {
-        followProps(phase)
-        apply(eng.sample(phase), gradient[1], eyeColor ?? DEFAULT_INK)
-        return () => { engineRef.current = null }
-      }
-
-      let raf = 0
-      const tick = (nowMs: number) => {
+      const frame = (nowMs: number): number => {
         const now = nowMs / 1000 + phase
         followProps(now)
         const p = propsRef.current
         apply(eng.sample(now), (p.gradient ?? DEFAULT_GRADIENT)[1], p.eyeColor ?? DEFAULT_INK)
-        raf = requestAnimationFrame(tick)
+        if (stillRef.current) return Infinity
+        const active = ACTIVE_STATES.has((p.state ?? "idle") as CursorState)
+        if (active || nowMs + phase * 1000 < pulseUntilRef.current || nowMs + phase * 1000 < settleUntilRef.current) {
+          return nextFrameAt(nowMs, frameFloorMs(typeof p.size === "number" ? p.size : 160))
+        }
+        return Infinity
       }
-      raf = requestAnimationFrame(tick)
+
+      settleUntilRef.current = (performance.now() + phase * 1000) + SETTLE_WINDOW_MS
+      const ticket = mascotClock().add(frame, svg)
+      ticketRef.current = ticket
       return () => {
-        cancelAnimationFrame(raf)
-        window.clearTimeout(pulseTimer.current)
+        ticket.remove()
+        ticketRef.current = null
         engineRef.current = null
       }
-    }, [paused])
+      // The clock reads current props through propsRef; only a still/animated switch re-registers.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [still])
+
+    // A still avatar redraws once whenever its look inputs change.
+    useEffect(() => {
+      if (still) ticketRef.current?.wake()
+    })
 
     return (
       <svg
