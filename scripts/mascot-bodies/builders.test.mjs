@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import { BODY_DEFS, BODY_IDS } from "./builders.ts";
 
 const EXPECTED_IDS = [
-  "blob", "circle", "squircle", "capsule",
+  "cursor", "blob", "circle", "squircle", "capsule",
   "drop", "shield", "hexagon", "diamond", "star",
 ];
 
 describe("body builders", () => {
-  it("produces the catalog in its persisted order, the Dani blob first", () => {
+  it("produces the catalog in its persisted order, cursor first", () => {
     expect(BODY_IDS).toEqual(EXPECTED_IDS);
   });
 
@@ -36,9 +36,9 @@ describe("body builders", () => {
     }
   });
 
-  it("keeps the blob outline byte-identical to the shipped Dani artwork", () => {
-    const blob = BODY_DEFS.find(s => s.id === "blob");
-    expect(blob.d.startsWith("M198.91052 113.12915C198.30169 121.88191")).toBe(true);
-    expect(blob.d.trimEnd().endsWith("199.51935 104.37638 198.91052 113.12915Z")).toBe(true);
+  it("keeps the cursor outline byte-identical to the shipped artwork", () => {
+    const cursor = BODY_DEFS.find(s => s.id === "cursor");
+    expect(cursor.d.startsWith("M0 0 C1.12815992 0.94880479")).toBe(true);
+    expect(cursor.d.trimEnd().endsWith("-21.34867451 -18.24899383 0 0 Z")).toBe(true);
   });
 });
