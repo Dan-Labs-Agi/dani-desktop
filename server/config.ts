@@ -733,16 +733,24 @@ export function changedInstanceIds(before: Record<string, unknown>, after: Recor
     .filter((id) => !isDeepStrictEqual(before[id], after[id]));
 }
 
-export const DATA_DIR = process.env.OMB_DATA_DIR ?? join(homedir(), ".openmausbot");
-const LEGACY_DATA_DIR = join(homedir(), ".opengrokbot");
+// DANI_DATA_DIR (legacy OMB_DATA_DIR) isolates test/soak rigs from the user's real fleet.
+export const DATA_DIR = process.env.DANI_DATA_DIR ?? process.env.OMB_DATA_DIR ?? join(homedir(), ".danibot");
+const LEGACY_DATA_DIRS = [join(homedir(), ".openmausbot"), join(homedir(), ".opengrokbot")];
 export const EVENTS_DIR = join(DATA_DIR, "events");
 export const NATIVE_DIR = join(DATA_DIR, "native");
 
 export function ensureDirs() {
-  if (!existsSync(DATA_DIR) && existsSync(LEGACY_DATA_DIR)) {
-    try {
-      renameSync(LEGACY_DATA_DIR, DATA_DIR);
-    } catch {
+  // one-time migration from a previous home folder - bots, transcripts,
+  // config and keys all carry over
+  if (!existsSync(DATA_DIR)) {
+    for (const legacy of LEGACY_DATA_DIRS) {
+      if (!existsSync(legacy)) continue;
+      try {
+        renameSync(legacy, DATA_DIR);
+      } catch {
+        /* cross-device or busy - fall through to a fresh dir */
+      }
+      break;
     }
   }
   for (const dir of [DATA_DIR, EVENTS_DIR, NATIVE_DIR]) mkdirSync(dir, { recursive: true });

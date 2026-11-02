@@ -12,7 +12,12 @@ import {
   withoutManagedCompanionTunnelAccess,
 } from "./managed-companion-tunnel.mjs";
 
-export const DEFAULT_COMPANION_CONTROL_PLANE_URL = "https://accounts.openmausbot.com";
+// Dani ships no hosted companion control plane of its own, and a Dani
+// build must not send accounts to the upstream OpenMausBot service. Until a
+// Dani control plane is deployed, hosted Companion sign-in stays off unless
+// DANI_CONTROL_PLANE_URL points at one explicitly. Direct LAN, Bonjour, and
+// Tailscale pairing are unaffected.
+export const DEFAULT_COMPANION_CONTROL_PLANE_URL = "";
 
 export const COMPANION_CLIENT_INSTANCE_FIELD = "companionClientInstanceId";
 export const COMPANION_ACCOUNT_TOKEN_FIELD = "companionAccountToken";
@@ -26,7 +31,7 @@ export const COMPANION_ENDPOINT_RELEASE_PENDING_FIELD = "companionEndpointReleas
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INSTALLATION_ID = UUID;
-const INSTALLATION_CREDENTIAL = /^omb_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
+const INSTALLATION_CREDENTIAL = /^(?:omb|dani)_install_[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/;
 const DEFAULT_HEALTH_CACHE_MS = 30_000;
 const DEFAULT_AUTO_RETRY_BASE_MS = 10 * 60_000;
 const DEFAULT_AUTO_RETRY_MAX_MS = 6 * 60 * 60_000;
@@ -70,8 +75,9 @@ export function resolveCompanionControlPlaneURL({
   isPackaged,
   environment = process.env,
 } = {}) {
-  if (Object.hasOwn(environment, "OMB_CONTROL_PLANE_URL")) {
-    return normalizeControlPlaneURL(environment.OMB_CONTROL_PLANE_URL);
+  const override = environment.DANI_CONTROL_PLANE_URL ?? environment.OMB_CONTROL_PLANE_URL;
+  if (override !== undefined) {
+    return normalizeControlPlaneURL(override);
   }
   return isPackaged ? DEFAULT_COMPANION_CONTROL_PLANE_URL : "";
 }
