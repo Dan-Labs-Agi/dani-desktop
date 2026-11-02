@@ -21,7 +21,13 @@ Talk to them like contacts. Watch them work. Approve what matters.
 
 <br>
 
-> Desktop installers for macOS, Windows, and Ubuntu: [download the latest release](https://github.com/somdipto/dani-desktop/releases/latest), or use the direct per-OS links in Quick start below.
+### ⬇️ Download Dani Bot
+
+**macOS** — [Apple Silicon](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg) · [Intel](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg)<br>
+**Windows** — [Installer (.exe)](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe) · [Portable (.zip)](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip)<br>
+**Linux** — [AppImage](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage) · [Ubuntu/Debian (.deb)](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb)
+
+<sub>These links always fetch the newest release. [All downloads and release notes →](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
 
 <br>
 
