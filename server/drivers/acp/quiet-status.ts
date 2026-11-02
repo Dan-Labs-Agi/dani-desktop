@@ -322,6 +322,22 @@ export const limitQuietMs = (): number => knob("OMB_ACP_LIMIT_QUIET_MS", DEFAULT
 export const usageLimitWait = (status: number | null | undefined, waitMs: number | null | undefined): boolean =>
   status === 429 && (waitMs ?? 0) > limitQuietMs();
 
+/** Whether a logged signal gathered before the quiet notice window is dropped. One-shot terminal
+ * provider errors (a shared log's single "stream error" row for the session) are consumed on the first
+ * read and never repeat: clearing them because ordinary session traffic arrived after them loses the
+ * only copy, and the turn then lingers until the generic no-progress watchdog instead of surfacing the
+ * provider's own error. Transient signals (retries, context snapshots) keep the old rule: newer inbound
+ * traffic, or any non-shared log read, clears them because they are re-logged while they still apply. */
+export function clearsLoggedBeforeNotice(
+  logged: { signal: LogSignal; at: number } | null,
+  shared: boolean,
+  lastInboundAt: number,
+): boolean {
+  if (!logged) return false;
+  if (logged.signal.kind === "provider-error") return false;
+  return !shared || lastInboundAt > logged.at;
+}
+
 /** No open request, no CPU and nothing logged, this long: the engine is stuck, and the turn is stopped
  * (OMB_ACP_NO_SIGNS_STOP_MS overrides). */
 export const DEFAULT_NO_SIGNS_STOP_MS = 5 * 60_000;
