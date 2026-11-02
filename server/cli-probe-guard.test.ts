@@ -155,7 +155,9 @@ describe("canonicalCliTarget", () => {
   it("resolves symlinks and PATH lookups, null when unresolvable", () => {
     const installed = fakeCliOnPath("codex");
     expect(canonicalCliTarget(installed)).toBe(resolve(installed));
-    expect(canonicalCliTarget("codex")).toBe(resolve(installed));
+    // A bare-name lookup returns the PATH-hit casing (`.CMD` via PATHEXT on
+    // Windows): same file, different string. Compare with platform semantics.
+    expect(cliProbeCompareKey(canonicalCliTarget("codex") ?? "")).toBe(cliProbeCompareKey(resolve(installed)));
     const link = join(dir, "canon-alias");
     symlinkSync(installed, link);
     expect(canonicalCliTarget(link)).toBe(resolve(installed));
