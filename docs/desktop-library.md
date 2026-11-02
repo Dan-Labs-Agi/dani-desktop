@@ -2,7 +2,7 @@
 
 When an Organization shares packages with its members, or a partner shares
 them with its Customers, Admin builds a catalog for each receiving
-Organization. A connected OpenMausBot desktop keeps a verified copy of that
+Organization. A connected Dani Desktop desktop keeps a verified copy of that
 catalog and of each package's release file, so **Templates → From
 {Organization}** can show and add them. This page describes the desktop's half
 of that channel: Electron main. The runtime's shelf, the Add button and the
@@ -64,7 +64,7 @@ connection generation as company backups: signing out aborts it.
 | `<data dir>/org-library/blobs/<sha256>.json` | release files, owner-only, written atomically | Electron main |
 | `<data dir>/org-library/state.json`, `presets.json` | what this installation added | the runtime |
 
-`<data dir>` is `~/.openmausbot` unless `OMB_DATA_DIR` says otherwise.
+`<data dir>` is `~/.danibot` unless `OMB_DATA_DIR` says otherwise.
 
 Workspace and company backups leave out `catalog.json` and `blobs/`, because
 main downloads them again and sign-out deletes them. They keep the runtime's
@@ -133,8 +133,8 @@ Main waits 5 s after a snapshot arrives and sends only the newest one.
 
 | Desktop \ Admin | Admin without `capabilities.library` | Admin with it |
 |---|---|---|
-| OpenMausBot before this channel | as before | ignores the pointer, stays connected |
-| OpenMausBot with it | no library request, no shelf; file import and export work | the shelf |
+| Dani Desktop before this channel | as before | ignores the pointer, stays connected |
+| Dani Desktop with it | no library request, no shelf; file import and export work | the shelf |
 | No organization account | as before | — |
 
 This channel and the runtime's handler for `openmausbot:managed-library`

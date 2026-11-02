@@ -59,8 +59,6 @@ Bots are not just one assistant: make as many as you like, give each its own col
 
 ---
 
-> ⚠️ **No affiliation with any cryptocurrency.** OpenMausBot has no token. Any coin using the OpenMausBot, Maus, or SupaMaus name is not created, endorsed, or affiliated with this project or its maintainer. I have received no tokens, payment, or allocation from anyone, and I will not be endorsing any token.
-
 ## Why
 
 One assistant in one box is the wrong shape for agents. Dani Desktop is an independent, open-source project built on OpenMausBot and inspired by **Grok Bot** —
@@ -301,14 +299,14 @@ See [MCP server setup and tool reference](docs/mcp-server.md).
 
 ### Run it from scripts and CI
 
-The `danibot` command drives a running workspace without a screen: set a
+From a source checkout (see Quick start), `pnpm omb` drives a running workspace without a screen: set a
 team up from a file, give a bot one job, wait until it and every teammate it
 asked are done, and export what they made. One JSON document with `--json`,
 and exit codes a script can branch on.
 
 ```sh
-danibot team apply team.yaml
-danibot run "Room Lead" "Rehearse the launch of https://example.com" --export ./out
+pnpm omb team apply team.yaml
+pnpm omb run "Room Lead" "Rehearse the launch of https://example.com" --export ./out
 ```
 
 See [Run Dani Bot from scripts and CI](docs/headless-cli.md).
@@ -416,7 +414,7 @@ with a long poll, so a desktop needs no public address and events wait while it 
 Cloud 2,000; what is skipped shows on the automation. App events need the included connected apps: a server
 using its own Composio key cannot watch apps yet. Details: [docs/composio.md](docs/composio.md#app-events).
 
-OpenMausBot starts a webhook-only receiver on `127.0.0.1:8800` by default (or one port above `OMB_PORT`).
+Dani Desktop starts a webhook-only receiver on `127.0.0.1:8800` by default (or one port above `OMB_PORT`).
 Set `OMB_WEBHOOK_PORT` to choose another port. A webhook secret is shown once when the trigger is created
 or rotated. Bearer authentication is recommended so the secret stays out of request URLs and most access
 logs; a single capability URL remains available for senders that cannot configure headers. The receiver
@@ -507,6 +505,6 @@ Packaged Cua Driver components retain their upstream MIT, SIL OFL 1.1, MPL-2.0, 
 the corresponding notices, license texts, source locations, and SBOM are in
 [`third_party/cua-driver/`](third_party/cua-driver/) and ship beside the native runtime.
 
-OpenMausBot is an independent, open-source project inspired by Grok Bot. It is
+Dani Desktop is an independent, open-source project inspired by Grok Bot. It is
 not affiliated with, endorsed by, or associated with xAI; "Grok" is a trademark
 of its respective owner.
