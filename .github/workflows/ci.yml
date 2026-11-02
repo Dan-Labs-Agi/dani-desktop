@@ -17,6 +17,9 @@ concurrency:
 jobs:
   sdd:
     name: spec traceability and negative fixtures
+    # The SDD kit documents are not part of the current tree; run only when they return.
+    needs: detect-optional-jobs
+    if: needs.detect-optional-jobs.outputs.sdd == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -52,7 +55,12 @@ jobs:
         # before Vitest starts so a cold download cannot consume the fixture
         # timeout.
         run: node --input-type=commonjs -e "require('electron')"
-      - run: pnpm typecheck
+      - name: Run pnpm typecheck
+        # The default V8 heap (~4 GB) is not enough for this monorepo's
+        # typecheck on the standard runners; give it more of the runner's RAM.
+        env:
+          NODE_OPTIONS: --max-old-space-size=7168
+        run: pnpm typecheck
       - name: Run tests
         run: pnpm test
         env:
@@ -160,13 +168,14 @@ jobs:
 
   # hashFiles cannot run in a job-level `if` (no workspace exists at
   # evaluation time), so a small job checks out and reports what exists.
-  native-detect:
-    name: Detect native projects
+  detect-optional-jobs:
+    name: Detect optional jobs
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       ios: ${{ steps.detect.outputs.ios }}
       android: ${{ steps.detect.outputs.android }}
+      sdd: ${{ steps.detect.outputs.sdd }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -175,12 +184,13 @@ jobs:
         run: |
           { [ -f ios/Package.swift ] && echo "ios=true" || echo "ios=false"; } >> "$GITHUB_OUTPUT"
           { find . -name gradlew -print -quit | grep -q . && echo "android=true" || echo "android=false"; } >> "$GITHUB_OUTPUT"
+          { [ -f docs/dani-sdd-kit/scripts/check_kit.py ] && echo "sdd=true" || echo "sdd=false"; } >> "$GITHUB_OUTPUT"
 
   ios:
     name: Swift tests + iOS build
     # This repo does not contain the iOS package yet; run only when it appears.
-    needs: native-detect
-    if: needs.native-detect.outputs.ios == 'true'
+    needs: detect-optional-jobs
+    if: needs.detect-optional-jobs.outputs.ios == 'true'
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
@@ -209,8 +219,8 @@ jobs:
   android:
     name: Kotlin tests + Android build
     # This repo does not contain a Gradle project yet; run only when it appears.
-    needs: native-detect
-    if: needs.native-detect.outputs.android == 'true'
+    needs: detect-optional-jobs
+    if: needs.detect-optional-jobs.outputs.android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
