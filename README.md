@@ -66,6 +66,23 @@ Talk to them like contacts. Watch them work. Approve what matters.
 
 ---
 
+## Meet Dani
+
+Dani is the two-legged robot every bot in the app is drawn as. The purple, crowned Dani is your Chief of Staff; the other six characters - Sprout, Tuft, Sweep, Cap, Shades and Bow - are the same rig in their own colors, hair and accessories. The app follows your system's light or dark mode.
+
+<table>
+  <tr>
+    <td><img src="docs/assets/screenshots/meet-dani-light.png" alt="First-run screen in light mode, with the crowned purple Dani above the composer" width="680"></td>
+    <td><img src="docs/assets/screenshots/meet-dani-dark.png" alt="First-run screen in dark mode, with the crowned purple Dani above the composer" width="680"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screenshots/dani-chat-light.png" alt="A chat with Dani in light mode, his character in the sidebar, header and typing indicator" width="680"></td>
+    <td><img src="docs/assets/screenshots/dani-chat-dark.png" alt="A chat with Dani in dark mode, his character in the sidebar, header and typing indicator" width="680"></td>
+  </tr>
+</table>
+
+---
+
 > ⚠️ **No affiliation with any cryptocurrency.** OpenMausBot has no token. Any coin using the OpenMausBot, Maus, or SupaMaus name is not created, endorsed, or affiliated with this project or its maintainer. I have received no tokens, payment, or allocation from anyone, and I will not be endorsing any token.
 
 ## Why
