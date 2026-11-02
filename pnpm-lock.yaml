@@ -48,6 +48,9 @@ importers:
       '@muse-code/sdk':
         specifier: 1.4.6
         version: 1.4.6(@types/node@26.2.0)
+      '@norbert_bodziony/bloub':
+        specifier: 0.3.0
+        version: 0.3.0(@solidjs/web@2.0.0-rc.0(solid-js@2.0.0-rc.20))(solid-js@2.0.0-rc.20)
       '@novnc/novnc':
         specifier: 1.7.0
         version: 1.7.0
@@ -304,7 +307,7 @@ importers:
     dependencies:
       better-auth:
         specifier: 1.7.7
-        version: 1.7.7(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@types/node@26.2.0)(happy-dom@21.0.4)(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.16.9)(yaml@2.9.0)))
+        version: 1.7.7(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@2.0.0-rc.20)(vitest@4.1.11(@types/node@26.2.0)(happy-dom@21.0.4)(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.16.9)(yaml@2.9.0)))
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -1646,6 +1649,12 @@ packages:
     resolution: {integrity: sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ==}
     engines: {node: '>= 20.19.0'}
 
+  '@norbert_bodziony/bloub@0.3.0':
+    resolution: {integrity: sha512-nWqtQsX9dQ4fFipi3x0YvygFXXe3i3vcBtJovLTX5UdKK2XIGK1oAWQahXJqpOLjeVNiAGutB5SpaBf6IJoDAQ==}
+    peerDependencies:
+      '@solidjs/web': ^2.0.0-rc.0
+      solid-js: ^2.0.0-rc.0
+
   '@novnc/novnc@1.7.0':
     resolution: {integrity: sha512-ucEJOx4T2avIRCleodk7YobZj5O2Ga2AeLfQ69A/yjG9HHba2+PDgwSkN3FttrmG+70ZGx21sElNFouK13RzyA==}
 
@@ -2066,6 +2075,15 @@ packages:
   '@sindresorhus/is@7.2.0':
     resolution: {integrity: sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw==}
     engines: {node: '>=18'}
+
+  '@solidjs/signals@2.0.0-rc.20':
+    resolution: {integrity: sha512-BIL5dKm0dAtPGsCEuLSNw60spDbmYG5QFK+aHUxPIgPLweA8IeJKd62DiqqqU/jqX0x39ty31GoP1n+ZINkrcg==}
+    engines: {node: '>=22.12.0'}
+
+  '@solidjs/web@2.0.0-rc.0':
+    resolution: {integrity: sha512-pYSaA9+dH8H1h/d/ZF/P2kR6omfzFGNcdzKhWTcg9fJghXhn8+5UrXUr2iYxDdYNOXZzxxFQhYHSJ7P4HKDqgw==}
+    peerDependencies:
+      solid-js: ^2.0.0-rc.0
 
   '@speed-highlight/core@1.2.24':
     resolution: {integrity: sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw==}
@@ -4724,6 +4742,26 @@ packages:
     resolution: {integrity: sha512-8I8TjW5KMOKsZQTvoxjuSIa7foAwPWGOts+6o7sgjz41/qMD9VQHEDxi6PBvK2l0MXUmqZyNpUK+T2tQaaElvw==}
     engines: {node: '>=10'}
 
+  seroval-plugins@1.5.6:
+    resolution: {integrity: sha512-HXuLAX2pu/UByPpaeo/TaMfvMIi+1QqIoPJYCcAtU8QkVNwgR6MPlGuCQTErV1JwraaMbYaWVIBX7mppzGLATQ==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      seroval: ^1.0
+
+  seroval-plugins@1.7.0:
+    resolution: {integrity: sha512-WM4rArfPtLZriTuxC5DBvNulEwAaRcjNe/dkMOEesOcuvXf5nEwKf5Bw3AT92WHohqcc45+57GdtsCuBTI0mjw==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      seroval: ^1.0
+
+  seroval@1.5.6:
+    resolution: {integrity: sha512-rVQVWjjSvlINzaQPZH5JFqsqEsIWdTxY3iJZCnTL/5gQbXIRooVZKI60tVCkOVfzcRPejboxO2t0P89dg5mQaA==}
+    engines: {node: '>=10'}
+
+  seroval@1.7.0:
+    resolution: {integrity: sha512-FU+LUkmDzWNsJ6oubZFN3dGPKny53DRhPJG6nftEaXDL8MIn19+kEE1Gvc+63Go+qPOwVUlKIdKhsu2HN6tksw==}
+    engines: {node: '>=20'}
+
   set-cookie-parser@3.1.2:
     resolution: {integrity: sha512-5/r/lTwbJ3zQ+qwdUFZYeRNqda7P5HD8zQKqlSjdGt1/S0cjLAphHusj4Y58ahDtWn/g32xrIS58/ikOvwl0Lw==}
 
@@ -4764,6 +4802,10 @@ packages:
 
   sisteransi@1.0.5:
     resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
+
+  solid-js@2.0.0-rc.20:
+    resolution: {integrity: sha512-FxaEI7LHupehFoR9j2CfJAGCoRgiKgeNlzii4szUS6lnD8RkpdtvX1k6WFG71vl5bskXRRsmEQVAXsbIemQOuw==}
+    engines: {node: '>=22.12.0'}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -6554,6 +6596,11 @@ snapshots:
 
   '@noble/hashes@2.3.0': {}
 
+  '@norbert_bodziony/bloub@0.3.0(@solidjs/web@2.0.0-rc.0(solid-js@2.0.0-rc.20))(solid-js@2.0.0-rc.20)':
+    dependencies:
+      '@solidjs/web': 2.0.0-rc.0(solid-js@2.0.0-rc.20)
+      solid-js: 2.0.0-rc.20
+
   '@novnc/novnc@1.7.0': {}
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
@@ -6831,6 +6878,14 @@ snapshots:
   '@sindresorhus/is@4.6.0': {}
 
   '@sindresorhus/is@7.2.0': {}
+
+  '@solidjs/signals@2.0.0-rc.20': {}
+
+  '@solidjs/web@2.0.0-rc.0(solid-js@2.0.0-rc.20)':
+    dependencies:
+      seroval: 1.5.6
+      seroval-plugins: 1.5.6(seroval@1.5.6)
+      solid-js: 2.0.0-rc.20
 
   '@speed-highlight/core@1.2.24': {}
 
@@ -7455,7 +7510,7 @@ snapshots:
 
   baseline-browser-mapping@2.11.13: {}
 
-  better-auth@1.7.7(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11(@types/node@26.2.0)(happy-dom@21.0.4)(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.16.9)(yaml@2.9.0))):
+  better-auth@1.7.7(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(solid-js@2.0.0-rc.20)(vitest@4.1.11(@types/node@26.2.0)(happy-dom@21.0.4)(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.16.9)(yaml@2.9.0))):
     dependencies:
       '@better-auth/core': 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.7))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2)
       '@better-auth/drizzle-adapter': 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.7))(jose@6.2.10)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)
@@ -7478,6 +7533,7 @@ snapshots:
       next: 16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
+      solid-js: 2.0.0-rc.20
       vitest: 4.1.11(@types/node@26.2.0)(happy-dom@21.0.4)(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.16.9)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@opentelemetry/api'
@@ -10004,6 +10060,18 @@ snapshots:
       type-fest: 0.13.1
     optional: true
 
+  seroval-plugins@1.5.6(seroval@1.5.6):
+    dependencies:
+      seroval: 1.5.6
+
+  seroval-plugins@1.7.0(seroval@1.7.0):
+    dependencies:
+      seroval: 1.7.0
+
+  seroval@1.5.6: {}
+
+  seroval@1.7.0: {}
+
   set-cookie-parser@3.1.2: {}
 
   sharp@0.35.2:
@@ -10098,6 +10166,13 @@ snapshots:
       semver: 7.8.5
 
   sisteransi@1.0.5: {}
+
+  solid-js@2.0.0-rc.20:
+    dependencies:
+      '@solidjs/signals': 2.0.0-rc.20
+      csstype: 3.2.3
+      seroval: 1.7.0
+      seroval-plugins: 1.7.0(seroval@1.7.0)
 
   source-map-js@1.2.1: {}
 
