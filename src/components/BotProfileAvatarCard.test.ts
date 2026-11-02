@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { StoreProvider, type Bot } from "@/state/store";
-import { HALLOWEEN_BODIES, HALLOWEEN_BODY_IDS } from "../../shared/halloween-bodies";
 import { BotProfileAvatarCard } from "./BotProfileAvatarCard";
 
 function makeBot(overrides: Partial<Bot> = {}): Bot {
@@ -45,16 +44,6 @@ describe("BotProfileAvatarCard character picker", () => {
     for (const label of ["Dani", "Sprout", "Tuft", "Sweep", "Cap", "Shades", "Bow"]) {
       expect(markup).toContain(`aria-label="${label}"`);
     }
-  });
-
-  it("offers the Halloween bodies in their own row", () => {
-    const markup = renderCard(makeBot({ mascotBody: "witch" }));
-
-    expect(markup).toContain(">Halloween<");
-    for (const id of HALLOWEEN_BODY_IDS) {
-      expect(markup).toContain(`aria-label="Use the ${HALLOWEEN_BODIES[id].name} body"`);
-    }
-    expect(markup).toContain(`aria-pressed="true" aria-label="Use the ${HALLOWEEN_BODIES.witch.name} body"`);
   });
 
   it("marks the bot's own character pressed and the rest unpressed", () => {

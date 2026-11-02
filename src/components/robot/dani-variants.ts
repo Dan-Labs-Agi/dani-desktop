@@ -243,8 +243,7 @@ export function createDaniVariant(variantId: DaniVariantId = "dani"): THREE.Grou
 }
 
 /** Chief of Staff is always Dani; other bots take the variant nearest their color. */
-export function daniVariantForBot(name: string | undefined, color: string): DaniVariantId {
-  if (!name || /\b(chief|chief of staff|cos|coordinator|director|dani)\b/i.test(name)) return "dani";
+export function daniVariantForColor(color: string): DaniVariantId {
   switch (color) {
     case "purple":
       return "dani";
@@ -266,4 +265,9 @@ export function daniVariantForBot(name: string | undefined, color: string): Dani
     default:
       return "sprout";
   }
+}
+
+export function daniVariantForBot(name: string | undefined, color: string): DaniVariantId {
+  if (!name || /\b(chief|chief of staff|cos|coordinator|director|dani)\b/i.test(name)) return "dani";
+  return daniVariantForColor(color);
 }

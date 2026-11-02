@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, Info, KeyRound, RefreshCw } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
+import { RobotAvatar } from "@/components/robot/RobotAvatar";
+import { robotMotionForMaus } from "@/components/robot/robot-avatar-engine";
 import { startCloudSetup } from "@/components/CloudIntent";
 import { engineReady } from "@/components/EngineLibrary";
 import { EngineCheckLine, useEngineLiveCheck } from "@/components/EngineLiveCheck";
@@ -195,7 +196,7 @@ export function CloudEngineSignIn() {
       />
       <div className="stagger relative mx-auto flex w-full max-w-[540px] flex-col px-6 pb-12 pt-[clamp(48px,10vh,112px)]">
         <div className="animate-rise flex flex-col items-center text-center" style={staggerIndex(0)}>
-          <MausAvatar color="green" state={face} motion={motion.kind} motionKey={motion.key} size={64} label={productName()} />
+          <RobotAvatar variant="dani" state={face} motion={robotMotionForMaus(motion.kind)} motionKey={motion.key} size={64} label={productName()} />
         </div>
         {pending && (
           <figure data-cloud-intent-pending className="mt-6 rounded-2xl bg-composer px-4 pb-3 pt-2.5 ring-1 ring-composer-ring" style={{ viewTransitionName: "cloud-intent" }}>

@@ -461,5 +461,20 @@ export function motionFromState(state?: string): "idle" | "working" | "waiting" 
   return "idle";
 }
 
+/** The blob mascot's one-shot motions spoken in the robot's own set, so old call sites keep their cues. */
+export function robotMotionForMaus(motion: string | undefined): import("./robot-model").RobotMotion | undefined {
+  switch (motion) {
+    case "arrive": return "wave";
+    case "switch": return "walk";
+    case "customize": case "alert": return "point";
+    case "thinking": case "working": return "working";
+    case "launch": case "surprise": return "jump";
+    case "success": case "celebrate": return "celebrate";
+    case "blink": return "blink";
+    case "failure": return "sit";
+    default: return undefined;
+  }
+}
+
 export { inferRobotRole, resolveRobotColor } from "./robot-model";
 export type { RobotMotion, RobotRole };

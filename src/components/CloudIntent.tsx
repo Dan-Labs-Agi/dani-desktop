@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ArrowUp, CalendarCheck, Eye, Newspaper, Search, type LucideIcon } from "lucide-react";
-import { MausAvatar } from "@/components/Avatar";
+import { RobotAvatar } from "@/components/robot/RobotAvatar";
+import { robotMotionForMaus } from "@/components/robot/robot-avatar-engine";
 import { engineReady } from "@/components/EngineLibrary";
 import { staggerIndex } from "@/components/onboarding/beats/shared";
 import { withViewTransition } from "@/components/onboarding/view-transition";
@@ -146,7 +147,7 @@ export function CloudIntent() {
       />
       <div className="stagger relative mx-auto flex w-full max-w-[620px] flex-col px-6 pb-12 pt-[clamp(48px,12vh,128px)]">
         <div className="animate-rise flex justify-center" style={staggerIndex(0)}>
-          <MausAvatar color="green" state={face} motion={motion.kind} motionKey={motion.key} size={64} label={productName()} />
+          <RobotAvatar variant="dani" state={face} motion={robotMotionForMaus(motion.kind)} motionKey={motion.key} size={64} label={productName()} />
         </div>
         <h1 className="animate-rise mt-5 text-center text-[24px] font-semibold tracking-[-0.015em] text-ink [text-wrap:balance]" style={staggerIndex(1)}>
           {t("cloudIntent.title")}
