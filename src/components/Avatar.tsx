@@ -96,6 +96,7 @@ export type MausAvatarProps = {
   bodyId?: BotBodyId;
   gradient?: [string, string, string];
   faceColor?: MascotFaceColor | null;
+  phaseSeed?: string | number;
 };
 
 function MausAvatarComponent(props: MausAvatarProps, ref: React.Ref<MausAvatarHandle>) {
@@ -143,6 +144,7 @@ function GradientAvatarComponent(
     bodyId,
     gradient,
     faceColor,
+    phaseSeed,
   }: MausAvatarProps,
   ref: React.Ref<MausAvatarHandle>,
 ) {
@@ -196,6 +198,7 @@ function GradientAvatarComponent(
         gradient={gradient ?? gradientFor(color)}
         picture={chrome && !faceInk ? steelBodyImage(silhouette.id, size, globalThis.devicePixelRatio ?? 1) : null}
         eyeColor={faceInk ?? (chrome ? CHROME_EYES : undefined)}
+        phaseSeed={phaseSeed}
         title={label ?? null}
         lookAround={lookAround ?? (forward ? 0 : 1)}
         gaze={{ x: (gaze?.x ?? 0) + pointer.x, y: (gaze?.y ?? 0) + pointer.y }}
@@ -264,6 +267,7 @@ export function BotAvatar({ bot, size = 44, label, readable = false, ...mascotPr
         {...mascotProps}
         color={bot.color}
         faceColor={bot.mascotFaceColor}
+        phaseSeed={bot.name}
         gradient={readable ? roomAvatarGradient(bot.color) : undefined}
         size={size}
         label={label ?? bot.name}
