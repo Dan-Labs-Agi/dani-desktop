@@ -39,7 +39,7 @@ export function boatDeletionOperation(
   return { id, kind: "sandbox", targetId: boxId, status: status as BoatDeletionOperation["status"], stage };
 }
 
-/** Blocked only until Boat finishes on its own: OpenMausBot's delete is done. */
+/** Blocked only until Boat finishes on its own: OpenDani's delete is done. */
 export const blockedUntilBoatFinishes = (operation: BoatDeletionOperation) =>
   operation.status === "blocked" && SELF_FINISHING_STAGES.has(operation.stage ?? "");
 

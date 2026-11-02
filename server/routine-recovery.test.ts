@@ -430,7 +430,7 @@ describe("an unattended run only its owner can fix", () => {
   });
 });
 
-describe("a run that OpenMausBot's shutdown cuts off", () => {
+describe("a run that OpenDani's shutdown cuts off", () => {
   it("stays running through the shutdown, and the next start picks it up once in its own thread", async () => {
     const h = harness();
     const run = await h.start(h.routine().id);

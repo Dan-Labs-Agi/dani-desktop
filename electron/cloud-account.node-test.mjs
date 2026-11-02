@@ -77,8 +77,8 @@ async function fixture(t, options = {}) {
   return f;
 }
 
-test("Cloud origin is fixed; only explicit fixtures can use loopback", () => {
-  assert.equal(cloudOrigin(), CLOUD_ORIGIN);
+test("No hosted cloud by default; only explicit fixtures can use loopback", () => {
+  assert.throws(() => cloudOrigin(), /no hosted cloud service/);
   for (const value of ["https://attacker.example.test", "http://127.0.0.1:1234", `${CLOUD_ORIGIN}/`, `${CLOUD_ORIGIN}/?paid=true`]) assert.throws(() => cloudOrigin(value));
   assert.equal(cloudOrigin("http://127.0.0.1:1234", true), "http://127.0.0.1:1234");
   assert.throws(() => cloudOrigin("https://attacker.example.test", true));
@@ -238,7 +238,7 @@ test("what this person may buy: the session's own offer when signed in, else the
   const asked = () => f.requests.filter(row => row.route === "/api/public/config");
   assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1);
   assert.equal(await f.client.offer(), null); assert.equal(asked().length, 1, "a failed ask counts for 30 seconds");
-  f.now += 30_000; f.publicConfig = { status: 200, body: { name: "OpenMausBot", surface: "cloud", plans: plans(), trial: { days: 7, holdDays: 3, creditUsd: 5 }, refundDays: 14 } };
+  f.now += 30_000; f.publicConfig = { status: 200, body: { name: "Dani Bot", surface: "cloud", plans: plans(), trial: { days: 7, holdDays: 3, creditUsd: 5 }, refundDays: 14 } };
   const [first, second] = await Promise.all([f.client.offer(), f.client.offer()]);
   assert.deepEqual(first.plans.map(plan => [plan.tier, plan.amount, plan.trialDays]), [["starter", 1500, 7], ["pro", 4900, 7]]);
   assert.deepEqual([first.recommended, first.creditUsd, first.refundDays], ["pro", 5, 14]);

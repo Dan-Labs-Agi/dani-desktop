@@ -1,6 +1,6 @@
 // Values a person typed into a bot's card for a secret OpenMausBot does not keep itself.
 // Security: a `ref` value stays in this process's memory, behind a one-use reference bound to the asking bot and
-// conversation that only OpenMausBot's own tools accept. A `file` value goes to an owner-only file in a private folder
+// conversation that only OpenDani's own tools accept. A `file` value goes to an owner-only file in a private folder
 // of that bot's own workspace (or the Local VM workspace its turn runs in); nothing that syncs, backs up, moves, links,
 // attaches, publishes or uploads workspace files carries that folder (inSecretFolder). Neither value is ever logged,
 // and while either lives, held-secret redaction masks it in transcripts, events and logs.
@@ -72,7 +72,7 @@ function refText(ref: string, reason: "unknown" | "used" | "expired" | "owner"):
 }
 
 export const NOT_A_REF_TEXT =
-  "That is a secret file for your own commands, not a secretRef: it is deleted after 24 hours, and OpenMausBot's tools take only a secretRef. Ask again with request_credential and delivery ref.";
+  "That is a secret file for your own commands, not a secretRef: it is deleted after 24 hours, and OpenDani's tools take only a secretRef. Ask again with request_credential and delivery ref.";
 
 export class SecretVault {
   private readonly refs = new Map<string, RefEntry>();

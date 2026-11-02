@@ -208,7 +208,7 @@ export function createCloudPairing(options: {
       if (member) sessions.revokeMember(member.email, member.role);
       const opened = sessions.openPairing({
         scopes: member ? teamRoleScopes(member.role) : ["admin", "client"],
-        label: typeof label === "string" && label.trim() ? label.trim() : "MausBot Cloud",
+        label: typeof label === "string" && label.trim() ? label.trim() : "Cloud",
         ttlMs: ttl * 1000,
         browser,
         ...(browser ? { owner: owner as string } : {}),

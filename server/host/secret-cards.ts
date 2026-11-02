@@ -107,7 +107,7 @@ function customRequest(body: Record<string, unknown>): { label: string; reason: 
   if (!label) return { error: "request_credential needs credential_id for a key OpenMausBot keeps, or label for any other secret." };
   if (!reason) return { error: "request_credential needs reason: one short line on what the secret is for and where the person finds it." };
   if (!SECRET_DELIVERIES.includes(body.delivery as SecretDelivery)) {
-    return { error: "request_credential needs delivery: ref for OpenMausBot's own tools such as mcp_server, or file for your own commands." };
+    return { error: "request_credential needs delivery: ref for OpenDani's own tools such as mcp_server, or file for your own commands." };
   }
   return { label, reason, placeholder: text(body.placeholder, CUSTOM_SECRET_LABEL_MAX), delivery: body.delivery as SecretDelivery };
 }

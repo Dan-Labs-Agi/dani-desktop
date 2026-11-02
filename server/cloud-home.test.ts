@@ -211,7 +211,7 @@ it("keeps every window single use and short lived, capping what the Admin asks f
   expect(f.exchange(long.body.code as string).ok).toBe(false);
   const plain = f.mint(f.sign("{}"));
   expect(plain.body.expiresAt).toBe(f.now() + 300_000);
-  expect(f.exchange(plain.body.code as string)).toMatchObject({ ok: true, session: { label: "MausBot Cloud" } });
+  expect(f.exchange(plain.body.code as string)).toMatchObject({ ok: true, session: { label: "Cloud" } });
 });
 
 it("opens a browser sign-in only a browser redeems, by credential alone, for at most two minutes", () => {
@@ -303,7 +303,7 @@ it("a new home on a kept volume clears the data-directory lease the previous mac
   expect(() => prepareCloudHomeData(home, dataDir, "home-other", lock)).toThrow(/another Cloud machine/);
   expect(readFileSync(lease, "utf8")).toContain("d8d9e0f1a2b3c4");
   // A volume another live home holds: refused before the volume is even checked.
-  const held = () => { throw new Error("Another MausBot home is already running on this volume. No data was changed."); };
+  const held = () => { throw new Error("Another Dani home is already running on this volume. No data was changed."); };
   expect(() => prepareCloudHomeData(home, dataDir, "home-7f3k2", held)).toThrow(/already running on this volume/);
   expect(readFileSync(lease, "utf8")).toContain("d8d9e0f1a2b3c4");
   expect(prepareCloudHomeData(home, dataDir, "home-7f3k2", lock)).toEqual({ volume: "existing", cleared: [{ path: lease, host: "d8d9e0f1a2b3c4", pid: 613 }] });
@@ -318,7 +318,7 @@ it("holds its volume for as long as it lives, and says plainly why it will not s
   const home = directory();
   const calls: number[] = [];
   const answer = (status: number | null, extra: { error?: Error; stderr?: string } = {}) => (fd: number) => { calls.push(fd); return { status, ...extra }; };
-  expect(() => holdVolume(home, answer(75))).toThrow("Another MausBot home is already running on this volume. No data was changed.");
+  expect(() => holdVolume(home, answer(75))).toThrow("Another Dani home is already running on this volume. No data was changed.");
   expect(() => holdVolume(home, answer(null, { error: new Error("spawnSync /usr/bin/flock ENOENT") }))).toThrow(/could not lock its volume \(spawnSync \/usr\/bin\/flock ENOENT\)/);
   expect(() => holdVolume(home, answer(1, { stderr: "flock: 3: Bad file descriptor\n" }))).toThrow(/could not lock its volume \(flock: 3: Bad file descriptor\)/);
   holdVolume(home, answer(0));
@@ -337,7 +337,7 @@ it.skipIf(!existsSync("/usr/bin/flock"))("a second home on a volume a live home 
       holder.stdout.on("data", (chunk: Buffer) => { if (chunk.toString().includes("held")) resolve(); });
       holder.once("exit", (code) => reject(new Error(`the holder exited ${code}`)));
     });
-    expect(() => holdVolume(home)).toThrow("Another MausBot home is already running on this volume. No data was changed.");
+    expect(() => holdVolume(home)).toThrow("Another Dani home is already running on this volume. No data was changed.");
   } finally {
     holder.kill("SIGKILL");
   }
