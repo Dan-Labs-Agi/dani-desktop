@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { CLOUD_ORIGIN, STAGING_CLOUD_ORIGIN, checkoutDestination, cloudOrigin, cloudTarget, createCloudAccountClient } from "./cloud-account.mjs";
+import { STAGING_CLOUD_ORIGIN, checkoutDestination, cloudOrigin, cloudTarget, createCloudAccountClient } from "./cloud-account.mjs";
 
 const accessToken = `omc_${"S".repeat(43)}`;
 
 test("OMB_CLOUD_STAGING=1, and only that, points the app at the fixed staging Admin with its own token file", () => {
-  assert.deepEqual(cloudTarget({}), { origin: CLOUD_ORIGIN, staging: false, file: "cloud-account.bin", environments: "environments.json", sync: "cloud-sync", look: "cloud-home-look.json" });
+  assert.deepEqual(cloudTarget({}), { origin: "", staging: false, file: "cloud-account.bin", environments: "environments.json", sync: "cloud-sync", look: "cloud-home-look.json" });
   assert.deepEqual(cloudTarget({ OMB_CLOUD_STAGING: "1" }), { origin: "https://omb-cloud-staging.fly.dev", staging: true, file: "cloud-account-staging.bin",
     environments: "environments-staging.json", sync: "cloud-sync-staging", look: "cloud-home-look-staging.json" });
   const production = Object.values(cloudTarget({})), staging = Object.values(cloudTarget({ OMB_CLOUD_STAGING: "1" }));
@@ -15,14 +15,17 @@ test("OMB_CLOUD_STAGING=1, and only that, points the app at the fixed staging Ad
   for (const value of ["0", "true", "yes", " 1", "1 ", "01", "2", "", "https://evil.example.test", "https://omb-cloud-staging.fly.dev"]) {
     assert.deepEqual(cloudTarget({ OMB_CLOUD_STAGING: value }), cloudTarget({}), JSON.stringify(value));
   }
-  assert.deepEqual(cloudTarget({ OMB_CLOUD_ORIGIN: "https://evil.example.test", OMB_CLOUD_STAGING_URL: "https://evil.example.test" }), cloudTarget({}), "no address is ever read from the environment");
-  assert.deepEqual(cloudTarget(undefined).origin, process.env.OMB_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : CLOUD_ORIGIN);
+  assert.deepEqual(cloudTarget({ OMB_CLOUD_STAGING_URL: "https://evil.example.test" }), cloudTarget({}), "no staging address is ever read from the environment");
+  assert.equal(cloudTarget({ DANI_CLOUD_ORIGIN: "https://cloud.example.test" }).origin, "https://cloud.example.test", "the operator's own Admin address is honored");
+  assert.equal(cloudTarget({ OMB_CLOUD_ORIGIN: "https://legacy.example.test" }).origin, "https://legacy.example.test", "the legacy variable names the same operator Admin");
+  assert.equal(cloudTarget({ DANI_CLOUD_ORIGIN: "https://cloud.example.test", OMB_CLOUD_ORIGIN: "https://legacy.example.test" }).origin, "https://cloud.example.test", "the current variable wins over the legacy one");
+  assert.deepEqual(cloudTarget(undefined).origin, process.env.OMB_CLOUD_STAGING === "1" ? STAGING_CLOUD_ORIGIN : "");
 });
 
 test("the staging address is the one exact https origin; staging checkouts are only Dodo's test page", () => {
   assert.equal(cloudOrigin(STAGING_CLOUD_ORIGIN), STAGING_CLOUD_ORIGIN);
   for (const value of ["http://omb-cloud-staging.fly.dev", `${STAGING_CLOUD_ORIGIN}/`, `${STAGING_CLOUD_ORIGIN}:8443`, "https://omb-cloud-staging.fly.dev.evil.test", "https://evil.fly.dev"]) {
-    assert.throws(() => cloudOrigin(value), /Invalid Cloud address/, value);
+    assert.throws(() => cloudOrigin(value), /Invalid cloud address/, value);
   }
   const test = "https://test.checkout.dodopayments.com/session/cks_1", live = "https://checkout.dodopayments.com/session/cks_1";
   assert.equal(checkoutDestination(test, { staging: true }), test);
