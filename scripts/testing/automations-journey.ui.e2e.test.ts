@@ -507,7 +507,7 @@ await import(${JSON.stringify(pathToFileURL(join(ROOT, "server", "testing", "fak
     await expect.poll(() => rowText(FORM), { timeout: 30_000 }).toMatch(/Working · last ran today/);
     await evaluate(`${"[...document.querySelectorAll('[data-automation]')]"}.find((item) => item.innerText.includes(${JSON.stringify(FORM)})).querySelector("button").click(); true`);
     await expect.poll(panel).toContain("Copy address");
-    expect(await panel()).not.toContain("Keep OpenMausBot open");
+    expect(await panel()).not.toContain("Keep Dani Bot open");
     await evaluate(`document.querySelector('aside[aria-label="Automation"] details summary').click(); true`);
     await expect.poll(() => evaluate(`[...document.querySelectorAll('aside[aria-label="Automation"] [data-call]')].map((item) => item.innerText.replace(/\\n/g, " "))`))
       .toEqual([expect.stringMatching(/✗ Wrong secret$/), expect.stringMatching(/✓ Received$/)]);
