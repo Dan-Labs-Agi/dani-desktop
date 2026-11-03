@@ -4542,7 +4542,6 @@
   "connectors.typeAria": "Tipo de plugin",
   "connectors.tab.apps": "Apps conectados",
   "connectors.tab.mcp": "Servidores MCP",
-  "connectors.stale": "Mostrando o que estava conectado da última vez — o cofre de credenciais deste Mac não pôde ser aberto agora, então não deu para reverificar. Seus apps continuam conectados; reiniciar o {app} costuma resolver.",
   "connectors.viewAria": "Visualização dos apps conectados",
   "connectors.tab.marketplace": "Marketplace",
   "connectors.tab.connected": "Conectados",

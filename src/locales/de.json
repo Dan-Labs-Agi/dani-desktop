@@ -1118,7 +1118,6 @@
   "connectors.selfHostOnlyReason": "Twitter/X braucht deine eigene X-Developer-App und eine eigene Anmelde-Einrichtung. Nutz vorerst selbst gehostete verbundene Apps.",
   "connectors.setupNeeded": "Verbundene Apps sind noch nicht eingerichtet. Um Gmail, Slack und mehr zu verbinden, füge unter Einstellungen → API-Schlüssel bei „Verbundene Apps selbst hosten“ einen Projektschlüssel hinzu.",
   "connectors.setupNeededRemote": "Verbundene Apps sind auf dem Host noch nicht eingerichtet. Füge in den Einstellungen des Hosts unter „Verbundene Apps selbst hosten“ einen Projektschlüssel hinzu.",
-  "connectors.stale": "Zeigt, was zuletzt verbunden war — der Anmeldedaten-Speicher dieses Macs ließ sich gerade nicht öffnen, also konnte nichts erneut geprüft werden. Deine Apps sind weiterhin verbunden; ein Neustart von {app} behebt das meistens.",
   "connectors.subtitle": "Verbinde Apps und deine eigenen MCP-Tools.",
   "connectors.tab.apps": "Verbundene Apps",
   "connectors.tab.connected": "Verbunden",

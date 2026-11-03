@@ -416,6 +416,10 @@ const __APP_VERSION__: string;
         name: "composioApiKey" | "xaiApiKey" | "boxToken" | "opencodeGoApiKey" | "ttsKey" | "fishAudioKey" | "jevApiKey" | "openrouterDeciderKey" | "workersAiToken" | "openaiImageApiKey" | "customImageApiKey" | "openaiLiveKey" | "tregApiKey" | "postizApiKey",
         value: string,
       ): Promise<ConfigStatus>;
+      /** The locked-sign-ins notice's "Try again": re-read the OS credential
+       * store. `ok` means saved sign-ins are unlocked in this process and
+       * reach the app after the person chooses to restart. */
+      retryCredentialStore?(): Promise<{ status: "ok" | "unavailable" | "superseded"; requiresRelaunch?: boolean }>;
       /** In-app auto-update (packaged app only; dormant in dev). Updates
        * download by themselves. On this computer's page and the person's own
        * Cloud page; any other server's page gets no state. onState fires

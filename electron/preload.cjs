@@ -381,6 +381,7 @@ const bridge = {
       ? ipcRenderer.invoke("open-at-login:set", on === true) : Promise.reject(new Error("Turn on the switch to open Dani Bot at login.")),
   },
   setCredential: (name, value) => ipcRenderer.invoke("credential:set", name, value),
+  retryCredentialStore: () => ipcRenderer.invoke("credential-store:retry"),
 
   updater: {
     check: () => ipcRenderer.invoke("update:check"),
