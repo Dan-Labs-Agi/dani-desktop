@@ -23,7 +23,7 @@ export const POLL_MS = 60_000;
 export const MAX_WAIT_MS = 170 * 60_000;
 
 /** @typedef {{ name: string, status?: string, conclusion: string | null, steps?: Array<{ status?: string, conclusion?: string | null }> }} Job */
-/** @typedef {{ id: number, event: string, status: string, head_branch: string, head_sha?: string, created_at: string, run_attempt?: number }} Run */
+/** @typedef {{ id: number, event: string, status: string, conclusion?: string | null, path?: string, head_branch: string, head_sha?: string, created_at: string, run_attempt?: number }} Run */
 
 const isTestJob = (job) => job.name.startsWith("typecheck + test (");
 /** A job that never started a step never got a runner: GitHub gave up acquiring one. */
@@ -84,13 +84,19 @@ export async function waitForReleaseCi({ api, sha, sleep = (ms) => new Promise((
     // Verify the exact revision in the returned data itself: never trust the
     // head_sha query filter alone to keep another commit's run out.
     const runs = (await api.runsForCommit(sha))
-      .filter((run) => run.head_sha === sha && RELEASE_EVENTS.has(run.event))
+      .filter((run) => run.head_sha === sha && run.path === ".github/workflows/ci.yml" && RELEASE_EVENTS.has(run.event))
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
     let live = null;
     for (const run of runs) {
       if (run.status !== "completed") {
         live ??= run;
+        continue;
+      }
+      // always() jobs may finish even after cancellation. A successful gate
+      // inside a cancelled/failed workflow is never release proof.
+      if (run.conclusion !== "success") {
+        if (run.conclusion === "failure") return { ok: false, reason: `CI workflow failed on ${sha}: run ${run.id}` };
         continue;
       }
       const result = await verdict(run);
