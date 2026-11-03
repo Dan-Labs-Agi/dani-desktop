@@ -162,8 +162,9 @@ async function shoot(name, note = "") {
   console.log(`[capture] ${name}.png ${1440}x${height}`);
 }
 
-// click the visible control whose label matches; false when there is none
-const click = (pattern) => evaluate(`(() => {
+// Pointer-click a visible, unobscured control whose label matches. DOM click()
+// would bypass scrims and turn blocked human journeys into false passes.
+const click = async (pattern) => { const hit = await evaluate(`(() => {
   const re = new RegExp(${JSON.stringify(pattern)}, "i");
   const label = (el) => (el.getAttribute("aria-label") || el.textContent || "").trim().replace(/\\s+/g, " ");
   // Actually on screen: sized and inside the viewport, so an off-canvas control cannot pass the journey.
@@ -171,9 +172,17 @@ const click = (pattern) => evaluate(`(() => {
   const el = [...document.querySelectorAll("button,[role=button],[role=tab],a[href],[role=menuitem]")]
     .find((e) => onScreen(e) && re.test(label(e)));
   if (!el) return false;
-  el.click();
-  return label(el);
+  const r = el.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const top = document.elementFromPoint(x, y);
+  if (!top || !el.contains(top)) return false;
+  return { x, y, label: label(el) };
 })()`);
+  if (!hit) return false;
+  await cdp("Input.dispatchMouseEvent", { type: "mousePressed", x: hit.x, y: hit.y, button: "left", clickCount: 1 });
+  await cdp("Input.dispatchMouseEvent", { type: "mouseReleased", x: hit.x, y: hit.y, button: "left", clickCount: 1 });
+  return hit.label;
+};
 
 try {
   await sleep(3000);
