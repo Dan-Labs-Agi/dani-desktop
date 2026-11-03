@@ -33,7 +33,11 @@ mkdirSync(home, { recursive: true });
 // product shows its actual locked-sign-ins notice. The bytes are garbage on
 // purpose; nothing about a real store or a real person's data is touched.
 const seedUnreadable = process.argv.includes("--seed-unreadable-credentials");
-const seedDir = path.join(sandbox, "config", "Dani Bot");
+// The packaged app's package.json has name "dani-desktop" and no productName,
+// so Electron's Linux userData is $XDG_CONFIG_HOME/dani-desktop (verified from
+// the shipped deb's app.asar). "Dani Bot" here would be the installer/mac name,
+// which the Linux runtime never reads.
+const seedDir = path.join(sandbox, "config", "dani-desktop");
 if (seedUnreadable) {
   mkdirSync(seedDir, { recursive: true });
   writeFileSync(path.join(seedDir, "credentials.bin"), Buffer.from("not-a-real-credential-store"));
