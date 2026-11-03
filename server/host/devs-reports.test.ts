@@ -302,6 +302,16 @@ describe("a report that cannot go yet", () => {
     fx.stop();
   });
 
+  it("says honestly that this build sends reports nowhere when no endpoint is configured, never that one was sent", async () => {
+    const fx = fixture({ outcomes: [{ ok: false, retry: false, why: "refused", detail: "Bug reports are not sent anywhere from this build." }] });
+    fx.person("scout-main", "@devs nothing works");
+    fx.advance(NO_ANSWER_MS);
+    await fx.settle();
+    expect(fx.notices("scout-main")).toEqual(["notice: This build does not send bug reports anywhere, so nothing was sent."]);
+    expect(JSON.stringify(fx.notices("scout-main"))).not.toContain("refused");
+    fx.stop();
+  });
+
   it("is dropped when the endpoint refuses it, and the person is told why", async () => {
     const fx = fixture({ outcomes: [{ ok: false, retry: false, why: "refused", detail: "description must be 1 to 10,000 characters of text." }] });
     fx.person("scout-main", "@devs refused");

@@ -74,8 +74,10 @@ async function post(endpoint: string, payload: DevsReportPayload, fetcher: typeo
 
 export const devsReportSender = (endpoint: string, fetcher: typeof fetch = fetch) => (payload: DevsReportPayload) => sendDevsReport(endpoint, payload, fetcher);
 
+export const DISABLED_REPORT_DETAIL = "Bug reports are not sent anywhere from this build.";
+
 export async function sendDevsReport(endpoint: string, payload: DevsReportPayload, fetcher: typeof fetch = fetch): Promise<SendOutcome> {
-  if (!endpoint) return { ok: false, retry: false, why: "refused", detail: "Bug reports are not sent anywhere from this build." };
+  if (!endpoint) return { ok: false, retry: false, why: "refused", detail: DISABLED_REPORT_DETAIL };
   let answer = await post(endpoint, payload, fetcher);
   // An address the endpoint will not take must not cost the person their report.
   if (answer?.status === 400 && /contact/i.test(sentence(answer.body.error)) && (payload.contactEmail || payload.contact)) {
