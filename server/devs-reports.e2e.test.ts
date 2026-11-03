@@ -97,7 +97,7 @@ afterAll(async () => {
   if (script) rmSync(script, { recursive: true, force: true });
 });
 
-it("sends one report with the bot's report_bug summary and the facts, redacted, and the person sees where it went", async () => {
+it("sends one report with the server's facts, redacted, when the bot cannot call report_bug, and the person sees where it went", async () => {
   plan([
     { name: "Bash", input: { command: "convert in.png out.webp" }, ok: false, output: `convert: command not found (OPENAI_API_KEY=${KEY})` },
     { name: "report_bug", server: "agents", input: { went_wrong: "Pictures never load", you_saw: `Bash failed: convert: command not found; token ${TOKEN}`, steps: "1. Attach a picture\n2. Send it" } },
@@ -112,13 +112,12 @@ it("sends one report with the bot's report_bug summary and the facts, redacted, 
   expect(report!.appVersion).toMatch(/^\d+\.\d+\.\d+/);
   expect(report!.platform).toMatch(/^(darwin|linux|win32) \w+, self-hosted server$/);
   expect(report!.description.split("\n")[0]).toBe(`pictures never load (my key is «redacted ${KEY.length} chars»)`);
-  expect(report!.description).toContain("Scout's summary: Pictures never load");
-  expect(report!.description).toContain("Steps to reproduce: 1. Attach a picture\n2. Send it");
+  expect(report!.description).toContain("No summary from a bot: the bot did not call report_bug.");
   expect(report!.diagnostics).toContain(`Conversation: ${scout.threadId}`);
   expect(report!.diagnostics).toContain("Bot: Scout");
   expect(report!.diagnostics).toMatch(/Engine: Verification fixture \(claude\), model /);
   expect(report!.diagnostics).toContain("tool Bash failed: convert: command not found");
-  expect(report!.diagnostics).toContain("Summary from a bot: yes, by Scout (report_bug)");
+  expect(report!.diagnostics).toContain("Summary from a bot: no, the bot did not call report_bug");
   const whole = JSON.stringify(report);
   for (const secret of [KEY, TOKEN]) expect(whole).not.toContain(secret);
   expect(whole).not.toContain("I sent your report to the team.");
@@ -126,10 +125,11 @@ it("sends one report with the bot's report_bug summary and the facts, redacted, 
 
   const dump = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as { prompt: unknown };
   expect(JSON.stringify(dump.prompt)).toContain("this message tags @devs, so it is a bug report for the Dani team");
-  const line = "Sent to the Dani team (report report-1). Milind and Omkar get it by email and will reply to ada@example.com.";
+  const line = "Sent to the report server (report report-1). A reply goes to ada@example.com.";
   await until(async () => (await rows()).some((row) => row.kind === "activity" && row.tool?.name === `notice: ${line}`), 20_000);
-  const tool = (await rows()).find((row) => row.kind === "activity" && row.tool?.name === "report_bug");
-  expect(tool?.tool?.output).toContain(line);
+  const refused = (await rows()).find((row) => row.kind === "activity" && row.tool?.name === "report_bug");
+  expect(refused?.tool?.ok).toBe(false);
+  expect(refused?.tool?.output).toBe("Unknown tool: report_bug");
 }, hostTimeout(120_000));
 
 it("still sends the report, with the server's facts, when the bot never calls report_bug, and only once", async () => {
@@ -140,8 +140,8 @@ it("still sends the report, with the server's facts, when the bot never calls re
   expect(report.description.split("\n")[0]).toBe("the send button froze again");
   expect(report.description).toContain("No summary from a bot: the bot did not call report_bug.");
   expect(report.diagnostics).toContain("tool Bash failed: convert: command not found");
-  expect(report.diagnostics).toContain("notice: Sent to the Dani team (report report-1)");
-  const line = "Sent to the Dani team (report report-2). Milind and Omkar get it by email and will reply to ada@example.com.";
+  expect(report.diagnostics).toContain("notice: Sent to the report server (report report-1)");
+  const line = "Sent to the report server (report report-2). A reply goes to ada@example.com.";
   await until(async () => (await rows()).some((row) => row.kind === "activity" && row.tool?.name === `notice: ${line}`), 20_000);
 
   plan([], "Noted.");
