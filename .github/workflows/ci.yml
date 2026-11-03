@@ -514,6 +514,7 @@ jobs:
           echo "existing app data at $data"
           (cd "$data" && find . -type f -printf '%s|%p\n' | sort) > results/inventory-old.txt
           echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
+          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 sha256sum) > results/checksums-old.txt
           wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
       - name: Probe cold launch of the branch build over existing data
         shell: bash
@@ -544,12 +545,20 @@ jobs:
           done
           [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
           (cd "$data" && find . -type f -printf '%s|%p\n' | sort) > results/inventory-new.txt
+          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 sha256sum) > results/checksums-new.txt
           missing=$(comm -23 results/inventory-old.txt results/inventory-new.txt || true)
           if [ -n "$missing" ]; then
             { echo "MISSING AFTER UPGRADE:"; echo "$missing"; } > results/upgrade-diff.txt
             echo "upgrade dropped pre-existing files (see upgrade-diff.txt)"; exit 1
           fi
-          echo "all $(wc -l < results/inventory-old.txt | tr -d ' ') pre-existing files present after upgrade" > results/upgrade-diff.txt
+          changed=$(join -j 2 -o 1.1,1.2,2.2 <(sort -k2 results/checksums-old.txt) <(sort -k2 results/checksums-new.txt) | awk '$2 != $3 {print $1}' || true)
+          added=$(comm -13 <(cut -d'|' -f2 results/inventory-old.txt) <(cut -d'|' -f2 results/inventory-new.txt) || true)
+          {
+            echo "all $(wc -l < results/inventory-old.txt | tr -d ' ') pre-existing files present after upgrade (name+size)"
+            echo "content-identical non-credential files: $(comm -12 <(sort results/checksums-old.txt) <(sort results/checksums-new.txt) | wc -l | tr -d ' ')"
+            echo "content-changed pre-existing files:"; echo "${changed:-none}"
+            echo "files added by the new build:"; echo "${added:-none}"
+          } > results/upgrade-diff.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -612,6 +621,7 @@ jobs:
           echo "existing app data at $data"
           (cd "$data" && find . -type f -exec ls -l {} + | awk '{print $5"|"$9}' | sort) > results/inventory-old.txt
           echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
+          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 shasum -a 256) > results/checksums-old.txt
           wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
       - name: Probe cold launch of the branch build over existing data
         run: |
@@ -639,12 +649,20 @@ jobs:
           done
           [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
           (cd "$data" && find . -type f -exec ls -l {} + | awk '{print $5"|"$9}' | sort) > results/inventory-new.txt
+          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 shasum -a 256) > results/checksums-new.txt
           missing=$(comm -23 results/inventory-old.txt results/inventory-new.txt || true)
           if [ -n "$missing" ]; then
             { echo "MISSING AFTER UPGRADE:"; echo "$missing"; } > results/upgrade-diff.txt
             echo "upgrade dropped pre-existing files (see upgrade-diff.txt)"; exit 1
           fi
-          echo "all $(wc -l < results/inventory-old.txt | tr -d ' ') pre-existing files present after upgrade" > results/upgrade-diff.txt
+          changed=$(join -j 2 -o 1.1,1.2,2.2 <(sort -k2 results/checksums-old.txt) <(sort -k2 results/checksums-new.txt) | awk '$2 != $3 {print $1}' || true)
+          added=$(comm -13 <(cut -d'|' -f2 results/inventory-old.txt) <(cut -d'|' -f2 results/inventory-new.txt) || true)
+          {
+            echo "all $(wc -l < results/inventory-old.txt | tr -d ' ') pre-existing files present after upgrade (name+size)"
+            echo "content-identical non-credential files: $(comm -12 <(sort results/checksums-old.txt) <(sort results/checksums-new.txt) | wc -l | tr -d ' ')"
+            echo "content-changed pre-existing files:"; echo "${changed:-none}"
+            echo "files added by the new build:"; echo "${added:-none}"
+          } > results/upgrade-diff.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
