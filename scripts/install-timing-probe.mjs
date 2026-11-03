@@ -13,6 +13,10 @@ const logPath = process.env.PROBE_LOG;
 const port = Number(process.env.PROBE_PORT || 8799);
 const budgetMs = Number(process.env.PROBE_BUDGET_MIN || 10) * 60_000;
 const wantBootstrap = process.env.PROBE_BOOTSTRAP === "1";
+// PROBE_EXPECT_NO_BOOTSTRAP=1: record what /api/runtime/bootstrap answers
+// (expected: endpoint absent) without treating any answer as readiness.
+const expectNoBootstrap = process.env.PROBE_EXPECT_NO_BOOTSTRAP === "1";
+let bootstrapEndpoint = null;
 if (!exe || !out || !logPath) { console.error("PROBE_EXE, PROBE_OUT and PROBE_LOG are required"); process.exit(2); }
 
 const startedAt = Date.now();
@@ -57,6 +61,10 @@ while (!terminal && Date.now() - startedAt < budgetMs) {
       }
     }
   } else if (health.ok && !wantBootstrap) {
+    if (expectNoBootstrap && bootstrapEndpoint === null) {
+      const boot = await get("/api/runtime/bootstrap");
+      bootstrapEndpoint = { httpStatus: boot.status, answersJson: boot.body !== null && boot.body !== undefined };
+    }
     readyMs = t; terminal = { kind: "ready" };
   }
   timeline.push(entry);
@@ -74,6 +82,6 @@ writeFileSync(logPath, logText);
 writeFileSync(out, JSON.stringify({
   exe, port, startedAt: new Date(startedAt).toISOString(),
   timeToFirstHealthMs: firstHealthMs, timeToReadyMs: readyMs,
-  budgetMs, terminal, timeline, logTail: logText.slice(-4000),
+  budgetMs, terminal, bootstrapEndpoint, timeline, logTail: logText.slice(-4000),
 }, null, 2));
 console.log(`probe terminal=${terminal.kind} firstHealth=${firstHealthMs}ms ready=${readyMs}ms detail=${JSON.stringify(terminal)}`);
