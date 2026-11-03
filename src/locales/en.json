@@ -5334,7 +5334,7 @@
   "connectors.typeAria": "Plugin type",
   "connectors.tab.apps": "Connected apps",
   "connectors.tab.mcp": "MCP servers",
-  "connectors.stale": "Showing what was connected last time. This Mac's credential store couldn't be opened just now, so these couldn't be re-checked. Your apps are still connected. Restarting {app} usually clears this.",
+  "connectors.stale": "Saved sign-ins couldn't be unlocked. Your saved data hasn't been changed. Allow the system prompt if shown, then try again.",
   "connectors.viewAria": "Connected apps view",
   "connectors.tab.marketplace": "Marketplace",
   "connectors.tab.connected": "Connected",
@@ -7378,5 +7378,8 @@
   "botAccess.overview.botCount.other": "{count} bots",
   "botAccess.overview.noBotsForPerson": "{name} has no bots yet.",
   "botAccess.overview.allPeople": "All people",
-  "botAccess.overview.toastRemoved": "{bot}: removed {name}"
+  "botAccess.overview.toastRemoved": "{bot}: removed {name}",
+  "connectors.tryAgain": "Try again",
+  "connectors.unlockedRelaunch": "Saved sign-ins unlocked. They reach the app after a restart - nothing restarts on its own. Choose Restart when you're ready.",
+  "connectors.relaunchAction": "Restart {app}"
 }

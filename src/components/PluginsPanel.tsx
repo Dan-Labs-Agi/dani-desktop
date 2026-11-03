@@ -129,6 +129,7 @@ export function PluginsPanel() {
   const [stale, setStale] = useState(
     connectorStatusMemory()?.authoritative === false,
   );
+  const [unlock, setUnlock] = useState<"idle" | "busy" | "unlocked">("idle");
   const [pendingUrls, setPendingUrls] = useState<Record<string, PendingAuthorization>>({});
   const [aliasSlug, setAliasSlug] = useState<string | null>(null);
   const [aliasDraft, setAliasDraft] = useState("");
@@ -208,6 +209,26 @@ export function PluginsPanel() {
       })
       .finally(() => setRefreshing(false));
   }, []);
+
+  // The locked-sign-ins notice's "Try again": re-read the OS credential
+  // store. On success the saved sign-ins work in this process, and the panel
+  // offers a restart to apply them to the app - the person chooses, nothing
+  // restarts on its own.
+  const retryUnlock = useCallback(() => {
+    if (unlock === "busy") return;
+    setUnlock("busy");
+    void window.ogb?.retryCredentialStore?.()
+      .then((result) => {
+        if (result?.status === "ok") {
+          setUnlock("unlocked");
+          setStale(false);
+          void refreshConnectedStatus(true);
+        } else {
+          setUnlock("idle");
+        }
+      })
+      .catch(() => setUnlock("idle"));
+  }, [unlock, refreshConnectedStatus]);
 
   const loadConnectionInventory = useCallback((force = false) => {
     const hadCachedInventory = connectorStatusMemory() !== null;
@@ -580,7 +601,29 @@ export function PluginsPanel() {
             <div className="mb-3 flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2 text-[13px] text-warning">
               <TriangleAlert size={14} className="mt-px shrink-0" />
               <span>
-                {t("connectors.stale")}
+                {t("connectors.stale")}{" "}
+                <button
+                  type="button"
+                  disabled={unlock === "busy"}
+                  onClick={retryUnlock}
+                  className="font-medium underline underline-offset-2 disabled:no-underline disabled:opacity-60"
+                >
+                  {t("connectors.tryAgain")}
+                </button>
+              </span>
+            </div>
+          )}
+          {unlock === "unlocked" && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl bg-control/50 px-3 py-2 text-[13px] text-ink-secondary">
+              <span>
+                {t("connectors.unlockedRelaunch")}{" "}
+                <button
+                  type="button"
+                  onClick={() => void window.ogb?.relaunch?.()}
+                  className="font-medium text-ink underline underline-offset-2"
+                >
+                  {t("connectors.relaunchAction")}
+                </button>
               </span>
             </div>
           )}
