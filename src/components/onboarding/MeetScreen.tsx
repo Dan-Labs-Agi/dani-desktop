@@ -56,7 +56,7 @@ function DemoComposer({ reduced, onTyping }: { reduced: boolean; onTyping: (typi
 
 /** The first run's first screen: the app's name, its mascot and a composer typing one sentence, then one pill. With
  * no AI working yet the pill is the sign-in, and Next comes once the AI has answered its test message. */
-export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => void }) {
+export function MeetScreen({ hosted, onNext, onLater }: { hosted: boolean; onNext: () => void; onLater: () => void }) {
   const { state } = useStore();
   const reduced = usePrefersReducedMotion();
   const maus = myDefaultBot(state.bots, useViewerEmail());
@@ -114,7 +114,7 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
           <p className="mt-3 text-[13px] leading-[18px] text-ink-secondary">
             <button type="button" onClick={() => setDialog(true)} className="rounded transition-colors hover:text-ink">{t("onboarding.meet.otherWays")}</button>
             <span aria-hidden="true"> · </span>
-            <button type="button" data-welcome-later="" onClick={onNext} className="rounded transition-colors hover:text-ink">{t("onboarding.meet.setupLater")}</button>
+            <button type="button" data-welcome-later="" onClick={onLater} className="rounded transition-colors hover:text-ink">{t("onboarding.meet.setupLater")}</button>
           </p>
         )}
         {signingIn && failure && <p role="alert" className="mt-2 text-[13px] leading-[18px] text-danger">{failure}</p>}

@@ -188,8 +188,12 @@ describe("with no AI working yet", () => {
     expect(button("Sign in with Claude")).toBeDefined();
     expect(button("Other ways to connect")).toBeDefined();
     expect(host.querySelector("[data-engine-setup]"), "no setup card on the screen itself").toBeNull();
-    await toChief("Set up later");
-    expect(text()).toContain("Introducing your Chief of Staff");
+    await press("Set up later");
+    expect(f.onDone).toHaveBeenCalledWith(null);
+    expect(text()).not.toContain("Introducing your Chief of Staff");
+    expect(saved()[0].onboarding.hintsSeen).toBeUndefined();
+    expect(f.landed).not.toHaveBeenCalled();
+    expect(f.dispatch.mock.calls.some(([action]) => action.type === "updateBot")).toBe(false);
   });
 
   it("opens every other way in the Connect an AI dialog, where OpenCode's free model is only a backup", async () => {
@@ -249,7 +253,8 @@ describe("with no AI working yet", () => {
     await act(async () => { host.querySelector("[data-connect-ai]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     await key("Escape");
     await tick(100);
-    expect(text()).toContain("Introducing your Chief of Staff");
+    expect(f.onDone).toHaveBeenCalledWith(null);
+    expect(text()).not.toContain("Introducing your Chief of Staff");
   });
 });
 
@@ -272,4 +277,49 @@ describe("other first runs", () => {
     expect(saved()[0].onboarding).not.toHaveProperty("hintsSeen");
     expect(introStaged("maus"), "a replay lands in a chat that may be long under way").toBe(false);
   });
+});
+
+
+describe("defer setup without creating a bot", () => {
+  it("persists welcome dismissal without claiming the Chief was met, clears the draft, and allows a later replay", async () => {
+    f.state = { ...f.state, instances: [claude(false)] };
+    await show();
+    await press("Set up later");
+    const patch = saved()[0];
+    expect(patch.onboarding.completedAt).toBeTruthy();
+    expect(patch.onboarding.version).toBe(WELCOME_VERSION);
+    expect(patch.onboarding.hintsSeen).toBeUndefined();
+    expect(f.onDone).toHaveBeenCalledExactlyOnceWith(null);
+    expect(f.landed).not.toHaveBeenCalled();
+    expect(introStaged("maus")).toBe(false);
+    expect(localStorage.getItem("omb.onboarding.welcomeDraft")).toBeNull();
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    f.state = { ...f.state, config: { onboarding: patch.onboarding }, instances: [claude(true)] };
+    await show({ replay: true });
+    await toChief();
+    expect(text()).toContain("Introducing your Chief of Staff");
+    expect(f.landed).not.toHaveBeenCalled();
+  });
+  it("Escape on the meet screen defers rather than forcing Chief creation", async () => {
+    await show();
+    await key("Escape");
+    expect(f.onDone).toHaveBeenCalledExactlyOnceWith(null);
+    expect(saved()[0].onboarding.hintsSeen).toBeUndefined();
+    expect(chiefStep).toBe(false);
+  });
+});
+
+
+it("returns keyboard focus outside the dismissed overlay", async () => {
+  const settings = document.createElement("button");
+  settings.textContent = "Settings";
+  document.body.append(settings);
+  settings.focus();
+  f.state = { ...f.state, instances: [claude(false)] };
+  await show();
+  await press("Set up later");
+  await tick(30);
+  expect(document.activeElement).toBe(settings);
+  settings.remove();
 });
