@@ -572,7 +572,7 @@ jobs:
           xvfb-run -a --server-args="-screen 0 1600x1000x24" \
             node scripts/capture-product-pages.mjs --exe "$exe" --out shots \
             --seed-unreadable-credentials \
-            --steps "^Connect apps$" \
+            --steps "^Set up later$|^Connect apps$" \
             --require "Saved sign-ins couldn't be unlocked" \
             --require "Try again"
           ls -la shots/
