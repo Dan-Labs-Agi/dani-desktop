@@ -9,6 +9,50 @@ import { interpolate } from "./testing/github-expression.ts";
 const workflow = parse(readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"));
 const requiredRuntimeJobs = ["vitest", "behavior-evals", "packaged-server", "windows-cua", "electron-smokes"];
 
+// Every label this repo's workflows may resolve to is GitHub-hosted; a job
+// routed anywhere else (self-hosted, expressions over inputs/vars/secrets)
+// shows up here as an offender. Zero registered self-hosted runners exist
+// (API-verified 2026-11-03), so this invariant should never gain an exception.
+const GITHUB_HOSTED = new Set(["ubuntu-latest", "ubuntu-24.04", "windows-latest", "macos-latest", "macos-15-intel"]);
+function jobsOffGitHubRunners(): string[] {
+  const offenders: string[] = [];
+  for (const file of readdirSync(new URL("../.github/workflows", import.meta.url))) {
+    if (!String(file).endsWith(".yml")) continue;
+    const doc = parse(readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), "utf8"));
+    for (const [name, job] of Object.entries(doc.jobs ?? {}) as [string, { "runs-on"?: unknown; strategy?: { matrix?: { os?: unknown } } }][]) {
+      const runsOn = job["runs-on"];
+      if (typeof runsOn !== "string") continue;
+      const labels = /^\$\{\{\s*matrix\.os\s*\}\}$/.test(runsOn)
+        ? (Array.isArray(job.strategy?.matrix?.os) ? job.strategy!.matrix!.os as string[] : [`unverifiable matrix.os in ${name}`])
+        : [runsOn];
+      for (const label of labels) if (!GITHUB_HOSTED.has(label)) offenders.push(`${file}::${name} -> ${label}`);
+    }
+  }
+  return offenders;
+}
+
+/** Contracts below need ci.yml's final gate job. It does not exist in this
+ * repo - a real missing guard, since releases currently draft without waiting
+ * on required CI outcomes - so each depending test fails on this precondition,
+ * documented, until the gate lands. Detecting the absence is the adaptation;
+ * the contract assertions stay in place after it. */
+function requireFinalGate() {
+  expect(
+    workflow.jobs.gate,
+    "ci.yml has no final gate job: merges and releases cannot wait on required CI outcomes (real missing guard, detected not approved)",
+  ).toBeDefined();
+}
+
+/** The ci-scope.mjs selection module exists and is imported by release-ci.mjs,
+ * but ci.yml wires no static selection job, so every run executes every lane.
+ * Absent optimization infrastructure, not a guard bypass. */
+function requireSelection() {
+  expect(
+    workflow.jobs.static,
+    "ci.yml has no static selection job: scripts/ci-scope.mjs is not wired into the workflow, so every run executes every lane (absent infrastructure)",
+  ).toBeDefined();
+}
+
 function runGate(needs: Record<string, unknown>) {
   // Execute the actual gate, not a duplicate of its success/failure logic.
   const command = workflow.jobs.gate.steps[0].run as string;
@@ -33,20 +77,26 @@ function gateNeeds(selected: string[]) {
 
 describe("CI concurrency", () => {
   it("supersedes old PR checks but never cancels a running main or merge-queue run", () => {
-    expect(workflow.on.push.branches).toEqual(["main"]);
-    expect(workflow.on).toHaveProperty("merge_group");
+    // Adapted to this repo: pushes land on main and prod, and no merge queue
+    // exists here (no merge_group trigger; absent infrastructure tracked with
+    // the still-failing merge-group Boat test below). Pull-request runs cancel
+    // their superseded predecessors; pushes and manual dispatches never cancel
+    // a run already in progress.
+    expect(workflow.on.push.branches).toEqual(["main", "prod"]);
     expect(workflow.concurrency["cancel-in-progress"]).toBe("${{ github.event_name == 'pull_request' }}");
   });
 
   it("keeps main's pushes to one running and one waiting run, and gives every other run a group no push joins", () => {
-    // One group for every main push: GitHub keeps the running run and only
-    // the newest waiting one, so a burst of merges cannot pile up runs. A
-    // merge group has its own ref; the nightly run and each manual run (the
-    // release lane among them) are named by event and branch, so a push
-    // never replaces one that is waiting.
-    expect(workflow.concurrency.group).toBe(
-      "ci-${{ github.event_name == 'merge_group' && github.event.merge_group.head_ref || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'push' && github.ref || format('{0}-{1}', github.event_name, github.ref) }}",
-    );
+    // Same-ref runs serialize (GitHub keeps the running run and only the
+    // newest waiting one), so a burst of merges cannot pile up runs.
+    expect(workflow.concurrency.group).toContain("github.ref");
+    // KNOWN GAP, detected rather than approved: every event kind shares the one
+    // ref group here, so a manual or probe dispatch on a branch supersedes a
+    // still-pending push run for that same branch (observed live when a probe
+    // dispatch queued behind a full suite run). The protection this test's name
+    // describes - a push never replaces another event kind's waiting run -
+    // needs event-scoped groups for non-push events and fails until they exist.
+    expect(workflow.concurrency.group).toContain("github.event_name");
   });
 
   it("runs the full lane every night", () => {
@@ -71,11 +121,13 @@ describe("CI concurrency", () => {
   });
 
   it("allows cancelled summary jobs to stop without skipping failure reporting", () => {
+    requireFinalGate();
     expect(workflow.jobs.gate.if).toBe("${{ !cancelled() }}");
     expect(workflow.jobs.gate.needs).toEqual(["static", ...requiredRuntimeJobs]);
   });
 
   it("schedules one read-only final gate over the selected platform matrix", () => {
+    requireFinalGate();
     expect(workflow.jobs.gate.name).toBe("CI");
     expect(workflow.jobs.gate.strategy).toBeUndefined();
     expect(workflow.permissions).toEqual({ contents: "read" });
@@ -111,9 +163,13 @@ describe("CI concurrency", () => {
     const macosJobs = Object.entries(workflow.jobs as Record<string, { "runs-on": string; strategy?: { matrix?: { os?: unknown } } }>)
       .filter(([, job]) => job["runs-on"] === "macos-latest" || JSON.stringify(job.strategy?.matrix?.os ?? "").includes("macos"))
       .map(([name]) => name);
-    expect(macosJobs.sort()).toEqual(["electron-smokes"]);
-    const smokes = workflow.jobs["electron-smokes"].steps.map((step: { run?: string }) => step.run);
-    expect(smokes).toContain("pnpm test:packaged-server");
+    // Adapted: this repo's pull-request path runs two deliberate macOS lanes -
+    // the iOS build and the macOS leg of the test matrix (upstream had only
+    // Electron smokes; this product ships an iOS app). The protection stands:
+    // every PR-path macOS job is named here, so a third cannot slip in
+    // unnoticed. The dispatch-gated probe jobs run on macos-15-intel and never
+    // on pull requests, so they are outside this filter.
+    expect(macosJobs.sort()).toEqual(["ios", "test"]);
   });
 
   it("checks delegated approval modes on the receipt's work thread, not the selected sibling", () => {
@@ -135,6 +191,15 @@ describe("CI concurrency", () => {
 
   it("makes a release wait for its commit's CI gate before any draft", () => {
     const release = parse(readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"));
+    // REAL MISSING GUARD, detected not approved: release.yml builds its draft
+    // from packaging lanes alone - no job in it runs scripts/release-ci.mjs or
+    // otherwise waits on the commit's ci.yml conclusion (verified by reading
+    // every release.yml job on 2026-11-03). The upstream gate assertions below
+    // stay as the contract this repo still has to meet.
+    expect(
+      JSON.stringify(release.jobs).includes("release-ci.mjs"),
+      "release.yml has no step running scripts/release-ci.mjs: a release drafts without waiting for its commit's CI",
+    ).toBe(true);
     expect(release.jobs.assemble.needs).toContain("ci");
     expect(release.jobs.ci.needs).toBe("prepare");
     expect(release.jobs.ci.permissions).toEqual({ actions: "write", contents: "write" });
@@ -169,14 +234,16 @@ describe("CI concurrency", () => {
   });
 
   it("lets the scope read the previous commit's CI and a pull request's labels, and nothing more", () => {
-    // ci-scope.mjs runs a push's docs- or version-only diff without the runtime
-    // jobs only when the commit before it has its own green run, and a PR's
-    // Windows jobs when it carries the windows label.
-    expect(workflow.jobs.static.permissions).toEqual({ contents: "read", actions: "read", "pull-requests": "read" });
-    const scope = workflow.jobs.static.steps.find((step: { id?: string }) => step.id === "scope");
-    expect(scope.env).toEqual({ GH_TOKEN: "${{ github.token }}", OMB_CI_LINUX_IN_STATIC: "${{ runner.environment == 'self-hosted' }}" });
+    // Adapted: this repo has no static/scope step, so the equivalent
+    // protection is ci.yml's workflow-level permission ceiling - read-only
+    // contents, nothing else - plus no job-level escalation anywhere in ci.yml.
+    // (Publishing rights live in release.yml's draft job, outside ci.yml.)
+    expect(workflow.permissions, "ci.yml must declare its permission ceiling explicitly").toBeDefined();
+    for (const [key, value] of Object.entries(workflow.permissions) as [string, string][]) {
+      expect(value, `ci.yml permission ${key}`).toBe("read");
+    }
     for (const [name, job] of Object.entries(workflow.jobs) as [string, { permissions?: unknown }][]) {
-      if (name !== "static") expect(job.permissions, name).toBeUndefined();
+      expect(job.permissions, name).toBeUndefined();
     }
   });
 
@@ -195,6 +262,7 @@ describe("CI concurrency", () => {
   });
 
   it.each(requiredRuntimeJobs)("fails closed for every required %s outcome when selected", (job) => {
+    requireFinalGate();
     for (const result of ["success", "failure", "cancelled", "skipped"]) {
       const check = runGate({ ...gateNeeds(SELECTABLE_JOBS), [job]: { result } });
       expect(check.status, check.stderr).toBe(result === "success" ? 0 : 1);
@@ -202,6 +270,8 @@ describe("CI concurrency", () => {
   });
 
   it.each(requiredRuntimeJobs)("accepts %s skipped only when static left it out", (job) => {
+    requireFinalGate();
+    requireSelection();
     const others = SELECTABLE_JOBS.filter((name) => name !== job);
     expect(runGate(gateNeeds(others)).status).toBe(0);
     for (const result of ["success", "failure", "cancelled"]) {
@@ -210,6 +280,11 @@ describe("CI concurrency", () => {
   });
 
   it("accepts every required job skipped on a docs-only PR, and nothing else", () => {
+    // This repo runs every lane on every docs-only change: ci-scope.mjs knows
+    // the docs-only scope but ci.yml wires no selection job to apply it. The
+    // gate that would accept the empty selection is missing too.
+    requireFinalGate();
+    requireSelection();
     expect(runGate(gateNeeds([])).status).toBe(0);
     for (const result of ["success", "failure", "cancelled"]) {
       expect(runGate({ ...gateNeeds([]), vitest: { result } }).status).toBe(1);
@@ -217,6 +292,8 @@ describe("CI concurrency", () => {
   });
 
   it("rejects failed preflight and missing or malformed selection", () => {
+    requireFinalGate();
+    requireSelection();
     for (const result of ["failure", "cancelled", "skipped"]) {
       expect(runGate({ ...gateNeeds([]), static: { result, outputs: { jobs: "[]" } } }).status).toBe(1);
     }
@@ -227,6 +304,7 @@ describe("CI concurrency", () => {
   });
 
   it("always starts the workflow and validates selection and docs before fanout", () => {
+    requireSelection();
     expect(workflow.on.pull_request).toBeNull();
     expect(workflow.jobs.static.if).toBeUndefined();
     expect(workflow.jobs.static.steps[0].with["fetch-depth"]).toBe(0);
@@ -287,11 +365,11 @@ describe("CI concurrency", () => {
   });
 
   it("keeps the redundant Windows workflow available only for manual debugging", () => {
-    const smoke = parse(readFileSync(new URL("../.github/workflows/shared-terminal-smoke.yml", import.meta.url), "utf8"));
-    expect(smoke.on).toEqual({ workflow_dispatch: null });
-    const commands = smoke.jobs.windows.steps.map((step: { run?: string }) => step.run);
-    expect(commands).toContain("node --test electron/shared-computer-access.node-test.mjs");
-    expect(commands).toContain("pnpm exec vitest run server/shared-computers.e2e.test.ts");
+    // Adapted: the redundant standalone Windows packaging workflow here is
+    // package-win.yml (shared-terminal-smoke.yml was never imported); it must
+    // stay manual-only so the release lane owns Windows packaging.
+    const smoke = parse(readFileSync(new URL("../.github/workflows/package-win.yml", import.meta.url), "utf8"));
+    expect(Object.keys(smoke.on)).toEqual(["workflow_dispatch"]);
   });
 });
 
@@ -317,7 +395,6 @@ describe("CI on Boat", () => {
     timeout: interpolate(String(workflow.jobs.static["timeout-minutes"]), context),
   });
   const boat = { runsOn: "boat-xlarge", name: "typecheck + lint + Linux tests (Boat)", timeout: 45 };
-  const github = (timeout: number) => ({ runsOn: "ubuntu-latest", name: "typecheck + lint", timeout });
 
   it.each([
     ["the owner's pull request", {}],
@@ -339,8 +416,12 @@ describe("CI on Boat", () => {
     ["for a push a bot made", { event: "push", actor: "github-actions[bot]" }, 45],
     ["for the nightly run", { event: "schedule" }, 45],
     ["for a manual run, the release lane among them", { event: "workflow_dispatch" }, 45],
-  ])("keeps every job on GitHub's runners %s", (_, run, timeout) => {
-    expect(routed(runContext(run))).toEqual(github(timeout));
+  ])("keeps every job on GitHub's runners %s", () => {
+    // Adapted: no Boat/self-hosted routing exists in this repo at all, so the
+    // protection collapses to a universal invariant that already covers every
+    // context named above: no job in any workflow resolves to anything but a
+    // GitHub-hosted runner label.
+    expect(jobsOffGitHubRunners()).toEqual([]);
   });
 
   it("does the Linux work in the static job only where ci-scope moved it there, without Boat's extra rights or desktop", () => {
