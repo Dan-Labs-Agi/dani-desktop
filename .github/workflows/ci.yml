@@ -9,6 +9,8 @@ on:
 # least privilege: CI only reads the checkout, it never writes back
 permissions:
   contents: read
+  # install-probe jobs download this repo's own workflow-run artifacts
+  actions: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -253,3 +255,193 @@ jobs:
             android/app/build/test-results
           if-no-files-found: warn
           retention-days: 7
+
+  install-probe-old-windows:
+    name: startup timing probe - published Windows x64
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PROBE_PORT: "8799"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the published v0.1.58 Windows artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          curl -sL -o old-portable.zip https://github.com/somdipto/dani-desktop/releases/download/v0.1.58/DaniBot-Windows-Portable.zip
+          curl -sL -o old-setup.exe https://github.com/somdipto/dani-desktop/releases/download/v0.1.58/DaniBot-0.1.58-setup.exe
+      - name: Time portable extraction and silent NSIS install
+        shell: bash
+        run: |
+          set -euo pipefail
+          start=$(date +%s%3N); mkdir -p old-app && tar -xf old-portable.zip -C old-app; end=$(date +%s%3N)
+          echo "portable_extract_ms=$((end-start))" | tee results/install-timings.txt
+          ms=$(powershell -NoProfile -Command "[int](Measure-Command { Start-Process -FilePath .\old-setup.exe -ArgumentList '/S' -Wait }).TotalMilliseconds")
+          echo "nsis_silent_install_ms=$ms" | tee -a results/install-timings.txt
+      - name: Probe cold launch (published build)
+        shell: bash
+        env:
+          PROBE_EXE: "old-app/Dani Bot.exe"
+          PROBE_OUT: "results/probe-old-windows-cold.json"
+          PROBE_LOG: "results/probe-old-windows-cold.log"
+          PROBE_BOOTSTRAP: "1"
+        run: node scripts/install-timing-probe.mjs
+      - name: Probe warm relaunch (published build)
+        shell: bash
+        env:
+          PROBE_EXE: "old-app/Dani Bot.exe"
+          PROBE_OUT: "results/probe-old-windows-warm.json"
+          PROBE_LOG: "results/probe-old-windows-warm.log"
+          PROBE_BOOTSTRAP: "1"
+        run: node scripts/install-timing-probe.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-probe-old-windows
+          path: results/
+          if-no-files-found: error
+
+  install-probe-old-mac-intel:
+    name: startup timing probe - published macOS Intel
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    env:
+      PROBE_PORT: "8799"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the published v0.1.58 Intel dmg
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          curl -sL -o old.dmg https://github.com/somdipto/dani-desktop/releases/download/v0.1.58/DaniBot-0.1.58-x64.dmg
+      - name: Time dmg mount and app copy (install phase)
+        run: |
+          set -euo pipefail
+          start=$(date +%s%3N); hdiutil attach -nobrowse -mountpoint /tmp/oldmnt old.dmg >/dev/null; end=$(date +%s%3N)
+          echo "dmg_attach_ms=$((end-start))" | tee results/install-timings.txt
+          start=$(date +%s%3N); cp -R "/tmp/oldmnt/Dani Bot.app" /tmp/old.app; end=$(date +%s%3N)
+          echo "app_copy_ms=$((end-start))" | tee -a results/install-timings.txt
+          hdiutil detach /tmp/oldmnt >/dev/null
+      - name: Probe cold launch (published build)
+        env:
+          PROBE_EXE: "/tmp/old.app/Contents/MacOS/Dani Bot"
+          PROBE_OUT: "results/probe-old-mac-intel-cold.json"
+          PROBE_LOG: "results/probe-old-mac-intel-cold.log"
+          PROBE_BOOTSTRAP: "1"
+        run: node scripts/install-timing-probe.mjs
+      - name: Probe warm relaunch (published build)
+        env:
+          PROBE_EXE: "/tmp/old.app/Contents/MacOS/Dani Bot"
+          PROBE_OUT: "results/probe-old-mac-intel-warm.json"
+          PROBE_LOG: "results/probe-old-mac-intel-warm.log"
+          PROBE_BOOTSTRAP: "1"
+        run: node scripts/install-timing-probe.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-probe-old-mac-intel
+          path: results/
+          if-no-files-found: error
+
+  install-probe-new-windows:
+    name: startup timing probe - current Windows x64 build
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PROBE_PORT: "8799"
+      ARTIFACT_RUN_ID: "41567356622"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the current build's Windows artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          artifact_id=$(curl -s -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/$ARTIFACT_RUN_ID/artifacts?per_page=100" \
+            | jq -r '.artifacts[] | select(.name=="windows-release") | .id')
+          curl -sL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" -o windows-release.zip
+          mkdir -p windows-release && unzip -q windows-release.zip -d windows-release
+      - name: Time portable extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          start=$(date +%s%3N); mkdir -p new-app && tar -xf windows-release/DaniBot-Windows-Portable.zip -C new-app; end=$(date +%s%3N)
+          echo "portable_extract_ms=$((end-start))" | tee results/install-timings.txt
+      - name: Probe cold launch (current build)
+        shell: bash
+        env:
+          PROBE_EXE: "new-app/Dani Bot.exe"
+          PROBE_OUT: "results/probe-new-windows-cold.json"
+          PROBE_LOG: "results/probe-new-windows-cold.log"
+        run: node scripts/install-timing-probe.mjs
+      - name: Probe warm relaunch (current build)
+        shell: bash
+        env:
+          PROBE_EXE: "new-app/Dani Bot.exe"
+          PROBE_OUT: "results/probe-new-windows-warm.json"
+          PROBE_LOG: "results/probe-new-windows-warm.log"
+        run: node scripts/install-timing-probe.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-probe-new-windows
+          path: results/
+          if-no-files-found: error
+
+  install-probe-new-mac-intel:
+    name: startup timing probe - current macOS Intel build
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    env:
+      PROBE_PORT: "8799"
+      ARTIFACT_RUN_ID: "41567356622"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the current build's macOS artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          artifact_id=$(curl -s -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/$ARTIFACT_RUN_ID/artifacts?per_page=100" \
+            | jq -r '.artifacts[] | select(.name=="macos-release") | .id')
+          curl -sL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" -o macos-release.zip
+          mkdir -p macos-release && unzip -q macos-release.zip -d macos-release
+      - name: Time portable extraction
+        run: |
+          set -euo pipefail
+          start=$(date +%s%3N); mkdir -p new-app && unzip -q macos-release/DaniBot-Intel-Portable.zip -d new-app; end=$(date +%s%3N)
+          echo "portable_extract_ms=$((end-start))" | tee results/install-timings.txt
+      - name: Probe cold launch (current build)
+        env:
+          PROBE_EXE: "new-app/Dani Bot.app/Contents/MacOS/Dani Bot"
+          PROBE_OUT: "results/probe-new-mac-intel-cold.json"
+          PROBE_LOG: "results/probe-new-mac-intel-cold.log"
+        run: node scripts/install-timing-probe.mjs
+      - name: Probe warm relaunch (current build)
+        env:
+          PROBE_EXE: "new-app/Dani Bot.app/Contents/MacOS/Dani Bot"
+          PROBE_OUT: "results/probe-new-mac-intel-warm.json"
+          PROBE_LOG: "results/probe-new-mac-intel-warm.log"
+        run: node scripts/install-timing-probe.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-probe-new-mac-intel
+          path: results/
+          if-no-files-found: error
