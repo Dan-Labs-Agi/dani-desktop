@@ -109,7 +109,11 @@ jobs:
   tests-complete:
     name: CI tests complete
     needs: test
-    if: (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only)
+    # always(): without it GitHub skips this job when a shard leg fails,
+    # which would hide the failure behind a skipped check instead of
+    # failing one named result. The dispatch conditions stay, so probe-only
+    # runs still skip it.
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only) }}
     runs-on: ubuntu-latest
     steps:
       # Aggregation only: propagates any shard's failure or cancellation to
