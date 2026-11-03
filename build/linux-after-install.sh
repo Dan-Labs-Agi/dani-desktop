@@ -176,6 +176,77 @@ install_browser_apparmor_profile() {
   # restriction would change unrelated applications' security settings.
   "$APPARMOR_PARSER" -r "$target"
 }
+install_main_apparmor_profile() {
+  profile=$APP_ROOT/resources/apparmor-profile
+  if [ -L "$profile" ] || [ ! -f "$profile" ] || [ "$(stat -c '%h' -- "$profile")" != 1 ]; then
+    echo "Dani Bot main AppArmor profile is missing or unsafe: $profile" >&2
+    exit 1
+  fi
+  if [ "$TEST_MODE" -eq 0 ]; then chown root:root -- "$profile"; fi
+  chmod 0644 -- "$profile"
+  restricted=0
+  if [ -f "$USERNS_RESTRICTION" ]; then
+    # dash's read builtin reads one byte at a time. Numeric procfs sysctls
+    # return EOF on the next read, before the newline, so set -e aborts the
+    # install even after reading a valid digit. Read the value in one buffer.
+    if ! restricted=$(cat -- "$USERNS_RESTRICTION"); then
+      echo "Dani Bot could not read the main user-namespace restriction." >&2
+      exit 1
+    fi
+    case "$restricted" in
+      0|1) ;;
+      *)
+        echo "Dani Bot main user-namespace restriction is invalid; refusing unsafe sandbox setup." >&2
+        exit 1
+        ;;
+    esac
+  fi
+
+  if [ ! -d "$APPARMOR_DIR" ] || [ ! -x "$APPARMOR_PARSER" ]; then
+    if [ "$restricted" = 1 ]; then
+      echo "Dani Bot needs apparmor and apparmor_parser to configure the main sandbox on this host." >&2
+      exit 1
+    fi
+    return
+  fi
+  # Hosts without the AppArmor 4 ABI cannot parse this optional allowlist.
+  # Skip it only when the user-namespace restriction is also off, where
+  # Chrome's normal sandbox already works. A restricted host still fails
+  # closed below when the policy cannot be loaded.
+  if [ ! -f "$APPARMOR_DIR/abi/4.0" ] && [ "$restricted" != 1 ]; then
+    return
+  fi
+  # The policy directory belongs to the OS: validate it, never chmod it.
+  if [ -L "$APPARMOR_DIR" ] || [ "$(stat -c '%U:%G:%a' -- "$APPARMOR_DIR")" != "$EXPECTED_OWNER:755" ]; then
+    echo "Dani Bot AppArmor policy directory is unsafe: $APPARMOR_DIR" >&2
+    exit 1
+  fi
+  target=$APPARMOR_DIR/danibot
+  if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then
+    echo "Dani Bot AppArmor profile target is unsafe: $target" >&2
+    exit 1
+  fi
+  if [ "$TEST_MODE" -eq 0 ]; then
+    install -o root -g root -m 0644 -- "$profile" "$target"
+  else
+    install -m 0644 -- "$profile" "$target"
+  fi
+  # Image builders stage policy for the target's next boot, not the host kernel.
+  if [ "$TEST_MODE" -eq 0 ] && [ -x /usr/bin/ischroot ] && /usr/bin/ischroot; then return; fi
+  # Installed AppArmor tools do not mean the kernel module is enabled. Keep
+  # policy for a future boot, but do not fail installation on an unrestricted
+  # host booted with AppArmor disabled. A restricted host still fails closed.
+  if [ ! -x "$APPARMOR_STATUS" ] || ! "$APPARMOR_STATUS" --enabled >/dev/null 2>&1; then
+    if [ "$restricted" = 1 ]; then
+      echo "Dani Bot cannot load its main sandbox policy while AppArmor restrictions are active but AppArmor is unavailable." >&2
+      exit 1
+    fi
+    return
+  fi
+  # Replace only our profile. Reloading all profiles or weakening the global
+  # restriction would change unrelated applications' security settings.
+  "$APPARMOR_PARSER" -r "$target"
+}
 
 CUA_ROOT=$APP_ROOT/resources/cua-linux-x64
 repair_directory "$APP_ROOT"
@@ -188,3 +259,4 @@ BROWSER_ROOT=$APP_ROOT/resources/browser-engine
 repair_directory "$BROWSER_ROOT"
 secure_browser_tree
 install_browser_apparmor_profile
+install_main_apparmor_profile

@@ -466,6 +466,12 @@ try {
   );
   requireFile(desktopFile);
   requireFile(scalableIcon);
+  const debAppArmorProfile = path.join(debResources, "apparmor-profile");
+  requireFile(debAppArmorProfile);
+  const debProfile = readFileSync(debAppArmorProfile, "utf8");
+  for (const expected of ['profile danibot "/opt/Dani Bot/danibot" flags=(unconfined)', "userns,"]) {
+    if (!debProfile.includes(expected)) fail(`DEB AppArmor profile is missing ${JSON.stringify(expected)}`);
+  }
   const desktop = readFileSync(desktopFile, "utf8");
   for (const expected of [
     "Name=Dani Bot",
