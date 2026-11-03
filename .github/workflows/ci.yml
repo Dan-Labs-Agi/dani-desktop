@@ -706,6 +706,21 @@ jobs:
             echo "content-changed or unverifiable, sensitive-named files (count only): $changed_sensitive"
             echo "files added by the new build (count only): $added"
           } > results/upgrade-diff.txt
+      - name: Record candidate asar provenance
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          ASAR=$(find new-app -name app.asar 2>/dev/null | head -1 || true)
+          {
+            echo "asar: ${ASAR:-not found}"
+            if [ -n "$ASAR" ]; then
+              shasum -a 256 "$ASAR" 2>/dev/null || sha256sum "$ASAR"
+              for m in checkCredentialAvailable 'startup: server fork begin' 'the credential store did not answer in time'; do
+                if grep -q -F "$m" "$ASAR"; then echo "marker PRESENT: $m"; else echo "marker MISSING: $m"; fi
+              done
+            fi
+          } > results/provenance.txt
       - name: Capture app logs and system evidence
         if: always()
         shell: bash
@@ -846,6 +861,21 @@ jobs:
             echo "content-changed or unverifiable, sensitive-named files (count only): $changed_sensitive"
             echo "files added by the new build (count only): $added"
           } > results/upgrade-diff.txt
+      - name: Record candidate asar provenance
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          ASAR=$(find new-app -name app.asar 2>/dev/null | head -1 || true)
+          {
+            echo "asar: ${ASAR:-not found}"
+            if [ -n "$ASAR" ]; then
+              shasum -a 256 "$ASAR" 2>/dev/null || sha256sum "$ASAR"
+              for m in checkCredentialAvailable 'startup: server fork begin' 'the credential store did not answer in time'; do
+                if grep -q -F "$m" "$ASAR"; then echo "marker PRESENT: $m"; else echo "marker MISSING: $m"; fi
+              done
+            fi
+          } > results/provenance.txt
       - name: Capture app logs and system evidence
         if: always()
         shell: bash
