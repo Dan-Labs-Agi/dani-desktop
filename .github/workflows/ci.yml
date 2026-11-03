@@ -600,7 +600,7 @@ jobs:
     env:
       DANI_PROFILE_PROBE: "1"
       PROBE_PORT: "8799"
-      ARTIFACT_RUN_ID: "41625636597"
+      ARTIFACT_RUN_ID: "41678102710"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -682,6 +682,7 @@ jobs:
         run: |
           set -euo pipefail
           powershell -NoProfile -Command "Expand-Archive -Path .\branch-release\DaniBot-Windows-Portable.zip -DestinationPath .\new-app"
+          PROBE_ASAR="new-app/resources/app.asar" node scripts/verify-profile-probe-artifact.mjs
           node scripts/install-timing-probe.mjs
       - name: Probe warm relaunch of the branch build
         shell: bash
@@ -788,7 +789,7 @@ jobs:
     env:
       DANI_PROFILE_PROBE: "1"
       PROBE_PORT: "8799"
-      ARTIFACT_RUN_ID: "41625636597"
+      ARTIFACT_RUN_ID: "41678102710"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -861,6 +862,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p new-app && unzip -q branch-release/DaniBot-Intel-Portable.zip -d new-app
+          PROBE_ASAR="new-app/Dani Bot.app/Contents/Resources/app.asar" node scripts/verify-profile-probe-artifact.mjs
           PROBE_EXE="new-app/Dani Bot.app/Contents/MacOS/Dani Bot" \
           PROBE_OUT="results/probe-upgrade-mac-cold.json" \
           PROBE_LOG="results/probe-upgrade-mac-cold.log" \
