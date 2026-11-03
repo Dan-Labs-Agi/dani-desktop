@@ -148,6 +148,7 @@
   "server.reports.when.minutes": "in about {count} minutes",
   "server.reports.when.soon": "as soon as it can",
   "server.reports.refused": "The Dani team's server refused this bug report, so nothing was sent: {detail}.",
+  "server.reports.disabled": "This build does not send bug reports anywhere, so nothing was sent.",
   "server.reports.full": "Not sent: {count} bug reports are already waiting to go to the report server. Type @devs again once they have gone.",
   "server.reports.dropped": "A bug report from this conversation could not reach the report server for a week, so it was dropped. Type @devs again to send a new one.",
   "server.reports.fixed": "Fixed in {version}. Want to try again?",

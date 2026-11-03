@@ -24,7 +24,7 @@ import { writeFileAtomic } from "../atomic.ts";
 import { startDueTimer } from "../due-timer.ts";
 import type { ProviderSnapshot } from "../contracts.ts";
 import { buildDevsReport, contactAddress, environmentSecrets, redactReportText, type BotSummary, type DevsReportPayload, type ReportedBot } from "../devs-report.ts";
-import { BUG_REPORT_STATUS_MAX_IDS, type ReportStatusAnswer, type ReportStatusQuestion, type SendOutcome } from "../devs-report-send.ts";
+import { DISABLED_REPORT_DETAIL, BUG_REPORT_STATUS_MAX_IDS, type ReportStatusAnswer, type ReportStatusQuestion, type SendOutcome } from "../devs-report-send.ts";
 import { DEVS_REPORT_PATH } from "../drivers/agents-devs-tools.ts";
 import type { json as sendJson } from "../harness/http.ts";
 import { personKey } from "../person-key.ts";
@@ -152,7 +152,7 @@ const droppedLine = (language: string | undefined) => serverLine(language, "serv
 /** A bot reply that repeats the failure line word for word has passed it on; the line itself is the marker. */
 
 /** Rides on the turn that answers a @devs message. */
-const TURN_NOTE = "\n\n[From Dani Bot, not the person: this message tags @devs, so it is a bug report for the Dani team, Dani Bot's developers. Dani Bot files it itself, with the app's own diagnostics, and tells the person what became of it; there is no report tool for you to call. Leave passwords, keys, tokens and file contents out of your reply, and help with the problem if you can.]";
+const TURN_NOTE = "\n\n[From Dani Bot, not the person: this message tags @devs, so it is a bug report for the Dani team, Dani Bot's developers. Dani Bot handles the report itself, with the app's own diagnostics, and tells the person whether it was sent; there is no report tool for you to call. Leave passwords, keys, tokens and file contents out of your reply, and help with the problem if you can.]";
 
 const iso = (at: number) => new Date(at).toISOString();
 const firstLine = (text: string | undefined) => (text ?? "").split("\n").map((line) => line.trim()).find(Boolean) ?? "";
@@ -347,7 +347,10 @@ export function createDevsReports(deps: DevsReportsDeps) {
       track(entry, outcome.id, payload, person, entry.words);
       return { ok: true, line: sentLine(outcome.id, contact, language), marker: outcome.id };
     }
-    if (!outcome.retry) { const line = refusedLine(outcome.detail, language); return { ok: false, line, marker: line }; }
+    if (!outcome.retry) {
+      const line = outcome.detail === DISABLED_REPORT_DETAIL ? serverLine(language, "server.reports.disabled") : refusedLine(outcome.detail, language);
+      return { ok: false, line, marker: line };
+    }
     if (outbox.length >= MAX_OUTBOX) { const line = fullLine(language); return { ok: false, line, marker: line }; }
     outbox.push({ messageId: entry.messageId, threadId: entry.threadId, payload, firstAt: now(), attempts: 1,
       nextAt: now() + (outcome.retryAfterMs ?? RETRY_MS[0]), ...(person ? { person } : {}) });
