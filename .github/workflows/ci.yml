@@ -530,6 +530,57 @@ jobs:
           path: results/
           if-no-files-found: error
 
+  capture-locked-signins-ui:
+    name: UI capture - locked sign-ins notice (Linux xvfb, candidate build)
+    if: github.event_name == 'workflow_dispatch' && inputs.upgrade_only != true && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      ARTIFACT_RUN_ID: "41615256955"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: sudo apt-get update && sudo apt-get install -y xvfb dbus-x11 zstd
+      - name: Download the current build's Linux artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          artifact_id=$(curl -s -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/$ARTIFACT_RUN_ID/artifacts?per_page=100" \
+            | jq -r '.artifacts[] | select(.name=="linux-release") | .id')
+          curl -sL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" -o linux-release.zip
+          mkdir -p linux-release && unzip -q linux-release.zip -d linux-release
+      - name: Extract the candidate deb without installing it
+        run: |
+          set -euo pipefail
+          mkdir -p candidate && cd candidate
+          ar x ../linux-release/danibot-amd64.deb
+          tar -xf data.tar.*
+          find opt -maxdepth 3 -type f -name 'danibot' | head -1 > ../candidate-exe.txt
+          cat ../candidate-exe.txt
+      - name: Capture the locked sign-ins notice
+        run: |
+          set -euo pipefail
+          exe="candidate/$(cat candidate-exe.txt)"
+          test -x "$exe" || chmod +x "$exe"
+          xvfb-run -a --server-args="-screen 0 1600x1000x24" \
+            node scripts/capture-product-pages.mjs --exe "$exe" --out shots \
+            --seed-unreadable-credentials \
+            --steps "+^Next$|^You$|^Apps$" || true
+          ls -la shots/ || true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: ui-capture-locked-signins
+          path: shots
+          if-no-files-found: warn
+
   install-probe-upgrade-windows:
     name: upgrade-over-data probe - branch Windows x64
     if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
