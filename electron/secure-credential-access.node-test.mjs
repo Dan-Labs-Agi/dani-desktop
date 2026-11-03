@@ -87,6 +87,20 @@ test("a hung availability probe fails a save within budget instead of hanging", 
   assert.deepEqual(r.ops.filter((o) => o.startsWith("writeFile") || o.startsWith("rename") || o.startsWith("encrypt")), []);
 });
 
+test("retry after a hung availability probe reads the real keys once and recovers once", async () => {
+  const r = rig();
+  let probes = 0;
+  const access = r.with({
+    store: { isAvailable: () => (++probes === 1 ? new Promise(() => {}) : Promise.resolve(true)) },
+  });
+  assert.equal((await access.read()).status, "unavailable");
+  const retry = await access.read();
+  assert.equal(retry.status, "ok");
+  assert.deepEqual(retry.credentials, { composioApiKey: "ak_live" });
+  assert.equal(probes, 2);
+  assert.deepEqual(r.ops.filter((o) => o === "recovered"), ["recovered"]);
+});
+
 test("retry after a timeout reads the real keys once, recovers once, and saves again", async () => {
   const r = rig();
   let calls = 0;
