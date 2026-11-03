@@ -24,7 +24,10 @@ permissions:
   actions: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # PR runs group per PR number so ci-stop-closed.yml cancels exactly that
+  # PR's runs; other events group per event+ref so a dispatch never
+  # supersedes a pending push run, and same-ref pushes still serialize.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.event_name, github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -92,6 +95,12 @@ jobs:
           # ACL is present. Production fails closed there through the tested
           # browser-platform gate; keep probing the upstream regression below.
           OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
+          OMB_VITEST_RETRY_LOG: ${{ runner.temp }}/vitest-retries.jsonl
+      - name: Report retried flakes
+        if: ${{ !cancelled() }}
+        run: node scripts/testing/ci-retry-summary.mjs
+        env:
+          OMB_VITEST_RETRY_LOG: ${{ runner.temp }}/vitest-retries.jsonl
       - name: Probe upstream Electron Windows sandbox regression
         if: matrix.os == 'windows-latest'
         continue-on-error: true
@@ -907,3 +916,37 @@ jobs:
           name: install-probe-upgrade-mac-intel
           path: results/
           if-no-files-found: warn
+
+  gate:
+    name: CI
+    # !cancelled(): a cancelled or failed lane must fail this gate, never skip
+    # it into a green-looking check. Probe-only dispatches are gated by their
+    # own probe jobs instead, matching tests-complete.
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only) }}
+    needs: [detect-optional-jobs, sdd, test, tests-complete, control-plane, package-linux, ios, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail closed on every required lane
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module -e 'const needs = JSON.parse(process.env.NEEDS);
+          const fail = (m) => { console.error("gate: " + m); process.exit(1); };
+          const det = needs["detect-optional-jobs"];
+          if (!det || det.result !== "success") fail("detect-optional-jobs " + (det ? det.result : "missing"));
+          const flags = det.outputs ?? {};
+          for (const j of ["sdd", "ios", "android"]) {
+            if (flags[j] !== "true" && flags[j] !== "false") fail("detect-optional-jobs output " + j + " missing or malformed: " + JSON.stringify(flags[j]));
+          }
+          for (const j of ["test", "tests-complete", "control-plane", "package-linux"]) {
+            const r = needs[j] && needs[j].result;
+            if (r !== "success") fail(j + " " + (r ?? "missing"));
+          }
+          for (const j of ["sdd", "ios", "android"]) {
+            const r = needs[j] && needs[j].result;
+            if (flags[j] === "true" && r !== "success") fail(j + " selected but " + (r ?? "missing"));
+            if (flags[j] === "false" && r !== "skipped") fail(j + " unselected but " + (r ?? "missing"));
+          }
+          console.log("gate: every required lane green at " + process.env.SHA);'

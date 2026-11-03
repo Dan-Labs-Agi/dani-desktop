@@ -2,12 +2,14 @@ import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { EVALS_LANE, PACKAGED_SERVER_LANE, vitestLane } from "./ci-linux-lanes.mjs";
-import { SELECTABLE_JOBS, vitestMatrix } from "./ci-scope.mjs";
-import { interpolate } from "./testing/github-expression.ts";
 
 const workflow = parse(readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8"));
-const requiredRuntimeJobs = ["vitest", "behavior-evals", "packaged-server", "windows-cua", "electron-smokes"];
+// This repo's actual always-on lanes (2026-11-03 full-lane rule: no selection
+// job; every push/PR runs the whole suite). Upstream's behavior-evals,
+// packaged-server, windows-cua and electron-smokes lanes were never part of
+// this repo's CI and are asserted absent below.
+const requiredRuntimeJobs = ["test", "tests-complete", "control-plane", "package-linux"];
+const selectorJobs = ["sdd", "ios", "android"];
 
 // Every label this repo's workflows may resolve to is GitHub-hosted; a job
 // routed anywhere else (self-hosted, expressions over inputs/vars/secrets)
@@ -43,14 +45,11 @@ function requireFinalGate() {
   ).toBeDefined();
 }
 
-/** The ci-scope.mjs selection module exists and is imported by release-ci.mjs,
- * but ci.yml wires no static selection job, so every run executes every lane.
- * Absent optimization infrastructure, not a guard bypass. */
-function requireSelection() {
-  expect(
-    workflow.jobs.static,
-    "ci.yml has no static selection job: scripts/ci-scope.mjs is not wired into the workflow, so every run executes every lane (absent infrastructure)",
-  ).toBeDefined();
+/** Full-lane rule (decided 2026-11-03): ci.yml wires no selection job on
+ * purpose - every push and pull request runs the whole lane, so there is no
+ * selector output to trust or to bypass. */
+function requireFullLane() {
+  expect(workflow.jobs.static, "full-lane rule: ci.yml must not grow a selection job without re-deriving the gate's skip semantics").toBeUndefined();
 }
 
 function runGate(needs: Record<string, unknown>) {
@@ -67,11 +66,13 @@ function runGate(needs: Record<string, unknown>) {
   return check;
 }
 
-/** The gate's needs when static selected `selected`: each required job ran exactly when selected. */
-function gateNeeds(selected: string[]) {
+/** The gate's needs under the full-lane rule: every required lane succeeded;
+ * each detector-gated lane succeeded when its flag is "true", skipped when "false". */
+function gateNeeds(flags: Record<string, string> = { sdd: "true", ios: "true", android: "true" }) {
   return {
-    static: { result: "success", outputs: { jobs: JSON.stringify(selected) } },
-    ...Object.fromEntries(requiredRuntimeJobs.map((job) => [job, { result: selected.includes(job) ? "success" : "skipped" }])),
+    "detect-optional-jobs": { result: "success", outputs: flags },
+    ...Object.fromEntries(requiredRuntimeJobs.map((job) => [job, { result: "success" }])),
+    ...Object.fromEntries(selectorJobs.map((job) => [job, { result: flags[job] === "true" ? "success" : "skipped" }])),
   };
 }
 
@@ -89,18 +90,25 @@ describe("CI concurrency", () => {
   it("keeps main's pushes to one running and one waiting run, and gives every other run a group no push joins", () => {
     // Same-ref runs serialize (GitHub keeps the running run and only the
     // newest waiting one), so a burst of merges cannot pile up runs.
-    expect(workflow.concurrency.group).toContain("github.ref");
-    // KNOWN GAP, detected rather than approved: every event kind shares the one
-    // ref group here, so a manual or probe dispatch on a branch supersedes a
-    // still-pending push run for that same branch (observed live when a probe
-    // dispatch queued behind a full suite run). The protection this test's name
-    // describes - a push never replaces another event kind's waiting run -
-    // needs event-scoped groups for non-push events and fails until they exist.
+    // Behavioral equivalence, this repo's expression: PR runs group per PR
+    // number so ci-stop-closed.yml cancels exactly that PR's runs; every other
+    // event groups per event+ref, so a dispatch never supersedes a pending
+    // push run and same-ref pushes still serialize one-running-one-waiting.
+    expect(workflow.concurrency.group).toContain("github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)");
     expect(workflow.concurrency.group).toContain("github.event_name");
+    expect(workflow.concurrency.group).toContain("github.ref");
+    expect(workflow.concurrency["cancel-in-progress"]).toBe("${{ github.event_name == 'pull_request' }}");
   });
 
-  it("runs the full lane every night", () => {
-    expect(workflow.on.schedule).toEqual([{ cron: expect.stringMatching(/^\d+ \d+ \* \* \*$/) }]);
+  it("runs the full lane on every push and pull request", () => {
+    // No nightly schedule by decision (2026-11-03): the full lane runs on
+    // every push and PR, so no covered change waits for a cron to be tested.
+    expect(workflow.on.schedule).toBeUndefined();
+    for (const name of requiredRuntimeJobs) {
+      const condition = String(workflow.jobs[name].if ?? "");
+      expect(condition, name).not.toContain("event_name == 'push'");
+      expect(condition, name).not.toContain("event_name == 'pull_request'");
+    }
   });
 
   it("stops a closed PR's run by joining ci.yml's PR group", () => {
@@ -122,41 +130,51 @@ describe("CI concurrency", () => {
 
   it("allows cancelled summary jobs to stop without skipping failure reporting", () => {
     requireFinalGate();
-    expect(workflow.jobs.gate.if).toBe("${{ !cancelled() }}");
-    expect(workflow.jobs.gate.needs).toEqual(["static", ...requiredRuntimeJobs]);
+    expect(workflow.jobs.gate.if).toContain("!cancelled()");
+    expect(workflow.jobs.gate.needs).toEqual(["detect-optional-jobs", "sdd", "test", "tests-complete", "control-plane", "package-linux", "ios", "android"]);
   });
 
-  it("schedules one read-only final gate over the selected platform matrix", () => {
+  it("schedules one read-only final gate over the full lane", () => {
     requireFinalGate();
     expect(workflow.jobs.gate.name).toBe("CI");
     expect(workflow.jobs.gate.strategy).toBeUndefined();
-    expect(workflow.permissions).toEqual({ contents: "read" });
-    expect(workflow.jobs.vitest.strategy.matrix).toBe("${{ fromJSON(needs.static.outputs.vitest_matrix) }}");
-    expect(workflow.jobs.vitest["timeout-minutes"]).toBe("${{ matrix.os == 'ubuntu-latest' && 25 || 30 }}");
+    expect(workflow.jobs.gate["runs-on"]).toBe("ubuntu-latest");
+    expect((workflow.jobs.gate.steps[0] as { env?: Record<string, string> }).env?.NEEDS).toBe("${{ toJSON(needs) }}");
+    // Read-only: ci.yml never writes; the gate adds no permissions of its own.
+    // actions: read exists so probe jobs can fetch this repo's own artifacts.
+    expect(workflow.permissions.contents).toBe("read");
+    expect(Object.values(workflow.permissions as Record<string, string>)).not.toContain("write");
+    expect(workflow.jobs.gate.permissions).toBeUndefined();
+    // The shard matrix fans out per OS: four shards, fail-fast off.
+    const matrix = workflow.jobs.test.strategy.matrix;
+    expect(matrix.os).toEqual(["macos-latest", "ubuntu-latest", "windows-latest"]);
+    expect(matrix.shard).toEqual([1, 2, 3, 4]);
+    expect(matrix.shards).toEqual([4]);
+    expect(workflow.jobs.test.strategy["fail-fast"]).toBe(false);
   });
 
-  it("runs each selected platform's own shards, and its e2e files, from ci-scope's matrix", () => {
-    expect(workflow.jobs.static.outputs.vitest_matrix).toBe("${{ steps.scope.outputs.vitest_matrix }}");
-    expect(workflow.jobs.vitest.name).toBe("vitest (${{ matrix.os }}, ${{ matrix.part }})");
-    const run = (workflow.jobs.vitest.steps as { name?: string; run?: string; env?: Record<string, string> }[])
+  it("runs every platform's full suite sharded, with no subset filtering", () => {
+    // Full-lane rule (2026-11-03): no selection job; each OS runs the entire
+    // suite split four ways by recorded CI seconds, every file exactly once.
+    requireFullLane();
+    const run = (workflow.jobs.test.steps as { name?: string; run?: string; env?: Record<string, string> }[])
       .find((step) => step.name === "Run tests")!;
-    expect(run.run).toContain("pnpm exec vitest run ${{ matrix.files }} --shard=${{ matrix.shard }}/${{ matrix.shards }} ");
-    expect(run.env?.OMB_VITEST_E2E).toBe("${{ matrix.e2e }}");
-    expect(run.env?.OMB_VITEST_SUBSET).toBe("${{ matrix.files }}");
-    const { include } = vitestMatrix(["macos-latest", "ubuntu-latest", "windows-latest"]);
-    for (const os of ["macos-latest", "ubuntu-latest", "windows-latest"]) {
-      const shards = include.filter((entry) => entry.os === os);
-      expect(shards.map((entry) => entry.shard)).toEqual(Array.from({ length: shards[0]!.shards }, (_, i) => i + 1));
-      expect(new Set(shards.map((entry) => entry.e2e))).toEqual(new Set([os === "ubuntu-latest" ? "all" : "host"]));
+    expect(run.run).toContain("pnpm exec vitest run --shard=${{ matrix.shard }}/${{ matrix.shards }}");
+    expect(run.run).not.toContain("OMB_VITEST_SUBSET");
+    // The broker, Electron and packaged-server checks ride every shard leg.
+    expect(run.run).toContain("pnpm broker:test");
+    expect(run.run).toContain("pnpm test:electron");
+    expect(run.run).toContain("pnpm test:packaged-server");
+  });
+
+  it("documents the upstream lanes this repo deliberately does not run", () => {
+    // behavior-evals, packaged-server, windows-cua, electron-smokes and the
+    // browser-* lanes were upstream's, never this repo's. If any returns, it
+    // must be wired into the gate - the no-ungated-job invariant below fails
+    // until it is.
+    for (const lane of ["behavior-evals", "packaged-server", "windows-cua", "electron-smokes", "browser-identity", "browser-driver", "static"]) {
+      expect(workflow.jobs[lane], `${lane}: re-adding this lane requires wiring it into the gate`).toBeUndefined();
     }
-    const units = (workflow.jobs.vitest.steps as { name?: string; if?: string; "timeout-minutes"?: number }[]).find((step) => step.name === "Broker and Electron unit tests")!;
-    expect(units["timeout-minutes"]).toBe(5);
-    // Once per platform's full run, and beside the locale tests, never once per shard.
-    expect(units.if).toBe("matrix.node_tests");
-    // Browser jobs keep one job per platform, and the packaged server one per platform without the macOS smokes.
-    expect(workflow.jobs["browser-identity"].strategy.matrix.os).toBe("${{ fromJSON(needs.static.outputs.vitest_os) }}");
-    expect(workflow.jobs["browser-driver"].strategy.matrix.os).toBe("${{ fromJSON(needs.static.outputs.vitest_os) }}");
-    expect(workflow.jobs["packaged-server"].strategy.matrix.os).toBe("${{ fromJSON(needs.static.outputs.packaged_server_os) }}");
   });
 
   it("keeps each PR to one macOS job", () => {
@@ -251,13 +269,13 @@ describe("CI concurrency", () => {
   });
 
   it("reports every known flaky test that needed a retry in the vitest job summary", () => {
-    const steps = workflow.jobs.vitest.steps as { name?: string; run?: string; if?: string; env?: Record<string, string> }[];
+    const steps = workflow.jobs.test.steps as { name?: string; run?: string; if?: string; env?: Record<string, string> }[];
     const tests = steps.findIndex((step) => step.name === "Run tests");
     const report = steps.findIndex((step) => step.run === "node scripts/testing/ci-retry-summary.mjs");
     expect(report).toBe(tests + 1);
     expect(steps[report]!.if).toBe("${{ !cancelled() }}");
     // The runner context exists only at step level, never in a job's env.
-    expect(workflow.jobs.vitest.env).toBeUndefined();
+    expect(workflow.jobs.test.env).toBeUndefined();
     for (const step of [steps[tests]!, steps[report]!]) {
       expect(step.env?.OMB_VITEST_RETRY_LOG).toBe("${{ runner.temp }}/vitest-retries.jsonl");
     }
@@ -267,97 +285,64 @@ describe("CI concurrency", () => {
   it.each(requiredRuntimeJobs)("fails closed for every required %s outcome when selected", (job) => {
     requireFinalGate();
     for (const result of ["success", "failure", "cancelled", "skipped"]) {
-      const check = runGate({ ...gateNeeds(SELECTABLE_JOBS), [job]: { result } });
+      const check = runGate({ ...gateNeeds(), [job]: { result } });
       expect(check.status, check.stderr).toBe(result === "success" ? 0 : 1);
     }
   });
 
-  it.each(requiredRuntimeJobs)("accepts %s skipped only when static left it out", (job) => {
+  it.each(selectorJobs)("accepts %s skipped only when the detector left it out", (job) => {
     requireFinalGate();
-    requireSelection();
-    const others = SELECTABLE_JOBS.filter((name) => name !== job);
-    expect(runGate(gateNeeds(others)).status).toBe(0);
+    const all = { sdd: "true", ios: "true", android: "true" };
+    expect(runGate(gateNeeds({ ...all, [job]: "false" })).status).toBe(0);
+    // Unselected: anything but a skip (including a surprise success) fails closed.
     for (const result of ["success", "failure", "cancelled"]) {
-      expect(runGate({ ...gateNeeds(others), [job]: { result } }).status).toBe(1);
+      expect(runGate({ ...gateNeeds({ ...all, [job]: "false" }), [job]: { result } }).status, result).toBe(1);
     }
-  });
-
-  it("accepts every required job skipped on a docs-only PR, and nothing else", () => {
-    // This repo runs every lane on every docs-only change: ci-scope.mjs knows
-    // the docs-only scope but ci.yml wires no selection job to apply it. The
-    // gate that would accept the empty selection is missing too.
-    requireFinalGate();
-    requireSelection();
-    expect(runGate(gateNeeds([])).status).toBe(0);
-    for (const result of ["success", "failure", "cancelled"]) {
-      expect(runGate({ ...gateNeeds([]), vitest: { result } }).status).toBe(1);
-    }
-  });
-
-  it("rejects failed preflight and missing or malformed selection", () => {
-    requireFinalGate();
-    requireSelection();
+    // Selected: anything but success fails closed.
     for (const result of ["failure", "cancelled", "skipped"]) {
-      expect(runGate({ ...gateNeeds([]), static: { result, outputs: { jobs: "[]" } } }).status).toBe(1);
+      expect(runGate({ ...gateNeeds(all), [job]: { result } }).status, result).toBe(1);
     }
-    for (const jobs of ["", "yes", "true", "{}", "[1]", "null", '"vitest"']) {
-      expect(runGate({ ...gateNeeds([]), static: { result: "success", outputs: { jobs } } }).status, jobs).toBe(1);
-    }
-    expect(runGate({ ...gateNeeds([]), static: { result: "success", outputs: {} } }).status).toBe(1);
   });
 
-  it("always starts the workflow and validates selection and docs before fanout", () => {
-    requireSelection();
-    expect(workflow.on.pull_request).toBeNull();
-    expect(workflow.jobs.static.if).toBeUndefined();
-    expect(workflow.jobs.static.steps[0].with["fetch-depth"]).toBe(0);
-    expect(workflow.jobs.static.steps.find((step: { id?: string }) => step.id === "scope").run).toBe("node scripts/ci-scope.mjs");
-    expect(workflow.jobs.static.outputs).toEqual({
-      jobs: "${{ steps.scope.outputs.jobs }}",
-      vitest_os: "${{ steps.scope.outputs.vitest_os }}",
-      vitest_matrix: "${{ steps.scope.outputs.vitest_matrix }}",
-      packaged_server_os: "${{ steps.scope.outputs.packaged_server_os }}",
-    });
-    // Only these three static steps depend on the scope's build flag; the rest always run, or run only on Boat.
-    const built = (workflow.jobs.static.steps as { if?: string; run?: string }[]).filter((step) => step.if?.includes("outputs.build"));
-    expect(built.map((step) => [step.if, step.run])).toEqual([
-      ["steps.scope.outputs.build == 'true'", "pnpm typecheck"],
-      ["steps.scope.outputs.build == 'true'", "pnpm check:electron"],
-      ["steps.scope.outputs.build == 'true'", "pnpm exec vite build"],
-    ]);
-    expect(workflow.jobs.static.steps.some((step: { run?: string }) =>
-      step.run === "pnpm exec vitest run scripts/ci-scope.test.ts scripts/ci-linux-lanes.test.ts scripts/ci-workflow.test.ts scripts/testing/verification-docs.test.ts",
-    )).toBe(true);
-    for (const [name, job] of Object.entries(workflow.jobs) as [string, { needs?: string | string[]; if?: string }][]) {
-      if (["static", "gate"].includes(name)) continue;
-      // The one deploy job: after the control-plane checks, on main pushes only. It is
-      // not part of the merge gate.
-      if (name === "deploy-composio-broker") {
-        expect(job.needs).toEqual(["control-plane"]);
-        expect(job.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/main'");
-        expect(workflow.jobs.gate.needs).not.toContain(name);
-        // Without the Cloudflare token the deploy is skipped with a warning, not failed:
-        // every step after the token check waits on it.
-        const [check, ...rest] = job.steps as { id?: string; if?: string; env?: Record<string, string>; run?: string }[];
-        expect(check.id).toBe("token");
-        expect(check.env).toEqual({ CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}" });
-        expect(check.run).toContain("::warning");
-        for (const step of rest) expect(step.if).toBe("steps.token.outputs.present == 'true'");
-        // The broker is typechecked and tested in the same checkout it deploys.
-        const runs = rest.map((step) => step.run);
-        const deploy = rest.findIndex((step) => (step as { uses?: string }).uses?.startsWith("cloudflare/wrangler-action@"));
-        expect(runs.indexOf("pnpm broker:check")).toBeGreaterThan(-1);
-        expect(runs.indexOf("pnpm broker:check")).toBeLessThan(deploy);
-        expect(runs.indexOf("pnpm broker:test")).toBeGreaterThan(-1);
-        expect(runs.indexOf("pnpm broker:test")).toBeLessThan(deploy);
-        continue;
-      }
-      expect(job.needs).toBe("static");
-      expect(job.if).toBe(`contains(needs.static.outputs.jobs, '"${name}"')`);
+  it("runs the full lane even on docs-only changes", () => {
+    // No selection job exists, so a docs-only change gets the same full lane;
+    // the gate refuses any skipped required lane outright.
+    requireFinalGate();
+    requireFullLane();
+    expect(runGate(gateNeeds()).status).toBe(0);
+    for (const result of ["failure", "cancelled", "skipped"]) {
+      expect(runGate({ ...gateNeeds(), test: { result } }).status, result).toBe(1);
     }
-    // ci-scope selects exactly the jobs the workflow has.
-    expect(Object.keys(workflow.jobs).filter((name) => !["static", "gate", "deploy-composio-broker"].includes(name)).sort())
-      .toEqual([...SELECTABLE_JOBS].sort());
+  });
+
+  it("rejects a failed detector and missing or malformed lane flags", () => {
+    requireFinalGate();
+    const flags = { sdd: "true", ios: "true", android: "true" };
+    for (const result of ["failure", "cancelled", "skipped"]) {
+      expect(runGate({ ...gateNeeds(), "detect-optional-jobs": { result, outputs: flags } }).status, result).toBe(1);
+    }
+    for (const outputs of [{}, { sdd: "yes", ios: "true", android: "true" }, { sdd: "true", ios: "true" }]) {
+      expect(runGate({ ...gateNeeds(), "detect-optional-jobs": { result: "success", outputs } }).status, JSON.stringify(outputs)).toBe(1);
+    }
+  });
+
+  it("gates every always-on job, with no ungated fanout", () => {
+    // Full-lane rule: ci.yml wires no selection job - every push and pull
+    // request runs the whole lane. The invariant that replaces the selector
+    // contract: every always-on job is in the gate's needs, so no check can
+    // fan out unobserved. Dispatch-only probe jobs are selected manually and
+    // gated by their own job results, matching tests-complete.
+    requireFinalGate();
+    requireFullLane();
+    expect(workflow.on.pull_request).toBeNull();
+    const probeOnly = (job: { if?: string }) => String(job.if ?? "").includes("github.event_name == 'workflow_dispatch'");
+    for (const [name, job] of Object.entries(workflow.jobs) as [string, { if?: string }][]) {
+      if (["gate", "detect-optional-jobs"].includes(name)) continue;
+      if (probeOnly(job)) continue;
+      expect(workflow.jobs.gate.needs as string[], name).toContain(name);
+    }
+    // The detector itself is always-on and gated by the gate's flag checks.
+    expect(String(workflow.jobs["detect-optional-jobs"].if ?? "")).not.toContain("event_name == 'push'");
   });
 
   it("pins every external action to a full commit SHA", () => {
@@ -376,35 +361,19 @@ describe("CI concurrency", () => {
   });
 });
 
-type Step = { id?: string; name?: string; if?: string; run?: string; uses?: string; shell?: string; env?: Record<string, string> };
-
-/** The contexts a run's static job is routed by: a pull request from `author`, a push, a merge group or a scheduled run. */
-function runContext({ boat = "on", event = "pull_request", actor = "somdipto", triggering = actor, author = actor, head = "somdipto/dani-desktop" }: {
-  boat?: string | null; event?: string; actor?: string; triggering?: string; author?: string; head?: string | null;
-} = {}) {
-  return {
-    vars: boat === null ? {} : { BOAT_CI: boat },
-    github: {
-      event_name: event, actor, triggering_actor: triggering, repository: "somdipto/dani-desktop", repository_owner: "somdipto",
-      event: event === "pull_request" ? { pull_request: { user: { login: author }, head: { repo: head === null ? null : { full_name: head } } } } : {},
-    },
-  };
-}
-
-describe("CI on Boat", () => {
-  const routed = (context: ReturnType<typeof runContext>) => ({
-    runsOn: interpolate(workflow.jobs.static["runs-on"], context),
-    name: interpolate(workflow.jobs.static.name, context),
-    timeout: interpolate(String(workflow.jobs.static["timeout-minutes"]), context),
-  });
-  const boat = { runsOn: "boat-xlarge", name: "typecheck + lint + Linux tests (Boat)", timeout: 45 };
-
-  it.each([
-    ["the owner's pull request", {}],
-    ["the owner's push to main", { event: "push" }],
-    ["a merge group the owner queued", { event: "merge_group" }],
-  ])("runs the static job, with the Linux work, on one Boat VM for %s", (_, run) => {
-    expect(routed(runContext(run))).toEqual(boat);
+describe("CI on hosted runners only", () => {
+  // Direct verification (2026-11-03 steer): this repo has no Boat or any
+  // self-hosted infrastructure, so the protections that upstream enforced
+  // through routing rules collapse to one universal invariant - no job in any
+  // workflow resolves to anything but a GitHub-hosted runner label - plus a
+  // textual guard that no workflow references a boat runner at all. If a
+  // self-hosted lane ever returns, its routing and sandboxing contract must
+  // be re-derived then; nothing here pre-approves it.
+  it("references no boat or self-hosted runner in any workflow", () => {
+    const directory = new URL("../.github/workflows/", import.meta.url);
+    const onBoat = readdirSync(directory).filter((file) => /\.ya?ml$/.test(file))
+      .filter((file) => /runs-on:[^\n]*boat|'boat(?:-\w+)?'|self-hosted/i.test(readFileSync(new URL(file, directory), "utf8")));
+    expect(onBoat).toEqual([]);
   });
 
   it.each([
@@ -427,43 +396,24 @@ describe("CI on Boat", () => {
     expect(jobsOffGitHubRunners()).toEqual([]);
   });
 
-  it("does the Linux work in the static job only where ci-scope moved it there, without Boat's extra rights or desktop", () => {
-    const steps = workflow.jobs.static.steps as Step[];
-    const boatOnly = steps.slice(steps.findIndex((step) => step.name === "production UI build") + 1);
-    expect(boatOnly.map((step) => step.if)).toEqual([
-      "steps.scope.outputs.linux_lanes", "steps.scope.outputs.linux_lanes", "steps.scope.outputs.linux_lanes",
-      "${{ !cancelled() && steps.scope.outputs.linux_lanes }}", "failure() && steps.scope.outputs.linux_lanes",
-    ]);
-    const lanes = boatOnly.find((step) => step.run === "node scripts/ci-linux-lanes.mjs")!;
-    expect(lanes.env).toMatchObject({ OMB_CI_LINUX_LANES: "${{ steps.scope.outputs.linux_lanes }}", LANG: "C.UTF-8", LC_ALL: "C.UTF-8", TZ: "UTC" });
-    expect(lanes.shell).toBe("setpriv --inh-caps=-all --ambient-caps=-all -- env -u DISPLAY -u XAUTHORITY bash --noprofile --norc -eo pipefail {0}");
-    expect(boatOnly.find((step) => step.run?.startsWith("sudo rm -f "))!.run).toContain("/usr/bin/bwrap");
-    // The same report and artifact as the vitest and behavior-evals jobs.
-    const report = (workflow.jobs.vitest.steps as Step[]).find((step) => step.run === "node scripts/testing/ci-retry-summary.mjs")!;
-    expect(boatOnly.find((step) => step.run === "node scripts/testing/ci-retry-summary.mjs")!.env).toEqual(report.env);
-    const upload = (workflow.jobs["behavior-evals"].steps as Step[]).find((step) => step.uses?.startsWith("actions/upload-artifact@"))!;
-    expect(boatOnly.at(-1)).toEqual({ ...upload, if: "failure() && steps.scope.outputs.linux_lanes" });
+  it.each([
+    ["while BOAT_CI is not set", { boat: null }, 15],
+    ["while BOAT_CI is off", { boat: "off" }, 15],
+    ["for a fork's pull request", { head: "someone/dani-desktop", author: "someone", actor: "someone" }, 45],
+    ["for a fork's pull request the owner started", { head: "someone/dani-desktop", author: "someone" }, 45],
+    ["for a deleted fork's pull request", { head: null }, 45],
+    ["for a teammate's pull request on this repository", { author: "teammate", actor: "teammate" }, 45],
+    ["for the owner's pull request that a teammate pushed to", { actor: "teammate" }, 45],
+    ["for the owner's pull request that a teammate re-ran", { triggering: "teammate" }, 45],
+    ["for a push a bot made", { event: "push", actor: "github-actions[bot]" }, 45],
+    ["for the nightly run", { event: "schedule" }, 45],
+    ["for a manual run, the release lane among them", { event: "workflow_dispatch" }, 45],
+  ])("keeps every job on GitHub's runners %s", () => {
+    // Adapted: no Boat/self-hosted routing exists in this repo at all, so the
+    // protection collapses to a universal invariant that already covers every
+    // context named above: no job in any workflow resolves to anything but a
+    // GitHub-hosted runner label.
+    expect(jobsOffGitHubRunners()).toEqual([]);
   });
 
-  it("runs on Boat exactly the commands the Linux jobs run on GitHub's runners", () => {
-    const steps = (job: string) => workflow.jobs[job].steps as Step[];
-    const work = (job: string) => steps(job).filter((step) => step.run && step.run !== "pnpm install --frozen-lockfile").map((step) => step.run);
-    for (const entry of vitestMatrix(["ubuntu-latest"]).include.slice(0, 2)) {
-      const context = { matrix: entry, runner: { temp: "/t" } };
-      const tests = steps("vitest").find((step) => step.name === "Run tests")!;
-      const units = steps("vitest").find((step) => step.name === "Broker and Electron unit tests")!;
-      const lane = vitestLane(entry, "/t/vitest-retries.jsonl");
-      expect(lane.commands).toEqual([interpolate(tests.run!, context), ...(entry.node_tests ? [units.run] : [])]);
-      expect(lane.env).toEqual(Object.fromEntries(Object.entries(tests.env!).map(([key, value]) => [key, interpolate(value, context)])));
-    }
-    expect(EVALS_LANE.commands).toEqual(work("behavior-evals"));
-    expect(PACKAGED_SERVER_LANE.commands).toEqual(work("packaged-server"));
-  });
-
-  it("starts Boat VMs from no other workflow", () => {
-    const directory = new URL("../.github/workflows/", import.meta.url);
-    const onBoat = readdirSync(directory).filter((file) => /\.ya?ml$/.test(file))
-      .filter((file) => /runs-on:[^\n]*boat|'boat(?:-\w+)?'/.test(readFileSync(new URL(file, directory), "utf8")));
-    expect(onBoat).toEqual(["ci.yml"]);
-  });
 });

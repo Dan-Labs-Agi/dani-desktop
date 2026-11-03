@@ -1,0 +1,22 @@
+name: Stop CI for closed PRs
+
+# A closed (merged or abandoned) PR's in-flight CI keeps burning minutes for a
+# result nobody can use. Joining the PR's own ci.yml concurrency group with
+# cancel-in-progress stops exactly that PR's runs and nothing else: the group
+# is keyed by PR number, never github.ref, so a merge cannot cancel main's CI.
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  stop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo "PR closed; this PR's superseded CI runs were cancelled via the shared concurrency group"
