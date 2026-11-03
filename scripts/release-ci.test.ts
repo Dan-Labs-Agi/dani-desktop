@@ -8,7 +8,7 @@ type Step = { status?: string; conclusion?: string | null };
 type Job = { name: string; conclusion: string | null; steps?: Step[] };
 type Run = {
   id: number; event: string; status: string; head_branch: string; head_sha: string; created_at: string;
-  run_attempt?: number;
+  run_attempt?: number; conclusion?: string | null; path?: string;
 };
 
 const started: Step[] = [{ status: "completed", conclusion: "success" }];
@@ -48,7 +48,7 @@ function fakeGitHub(polls: Array<{ runs: Run[]; jobs?: Record<number, Job[]> }>)
 }
 
 const run = (id: number, event: string, status: string, head_branch = "main", minute = 0, extra: Partial<Run> = {}): Run =>
-  ({ id, event, status, head_branch, head_sha: SHA, created_at: `2026-10-02T10:${String(minute).padStart(2, "0")}:00Z`, run_attempt: 1, ...extra });
+  ({ id, event, status, head_branch, head_sha: SHA, conclusion: status === "completed" ? "success" : null, path: ".github/workflows/ci.yml", created_at: `2026-10-02T10:${String(minute).padStart(2, "0")}:00Z`, run_attempt: 1, ...extra });
 
 describe("what a CI run proves", () => {
   it("is green only when the gate passed and every platform's every vitest shard ran and passed", () => {
@@ -209,5 +209,21 @@ describe("GitHub calls", () => {
     const no = githubApi({ token: "t", repository: "o/r", fetchImpl: (async () => { forbidden++; return new Response(null, { status: 403 }); }) as typeof fetch, retryDelaysMs: [1, 1], sleep: async () => {} });
     await expect(no.runsForCommit(SHA)).rejects.toThrow("HTTP 403");
     expect(forbidden).toBe(1);
+  });
+});
+
+
+describe("release workflow identity and completion", () => {
+  it.each([
+    { conclusion: "cancelled" },
+    { conclusion: null },
+    { path: ".github/workflows/other.yml" },
+  ])("rejects a green gate in an unproven workflow %j", async (extra) => {
+    const { options } = fakeGitHub([{ runs: [run(99, "push", "completed", "main", 0, extra)], jobs: { 99: green() } }]);
+    expect(await waitForReleaseCi(options)).toMatchObject({ ok: false });
+  });
+  it("rejects a failed workflow even if a gate appears green", async () => {
+    const { options } = fakeGitHub([{ runs: [run(99, "push", "completed", "main", 0, { conclusion: "failure" })], jobs: { 99: green() } }]);
+    expect(await waitForReleaseCi(options)).toMatchObject({ ok: false, reason: expect.stringContaining("workflow failed") });
   });
 });
