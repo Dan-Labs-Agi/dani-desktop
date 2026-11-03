@@ -233,14 +233,14 @@ linux:
       Keywords: AI;Agents;Chat;Productivity;
 
 deb:
-  # package.json "name" (dani-desktop) is the fpm default; the published
-  # package is danibot, matching docs/linux-desktop.md and the verifier.
-  packageName: danibot
   packageCategory: utils
   priority: optional
   # Add the narrow browser policy's parser without replacing Electron's
   # default shared-library dependencies.
   fpm: ["--depends", "apparmor"]
+  # Lets the main executable's Chromium sandbox create user namespaces on
+  # AppArmor-restricted hosts (Ubuntu 24.04+); the hooks stage and load it.
+  appArmorProfile: build/linux-danibot-main.apparmor
   # dpkg can preserve legacy directory modes during an upgrade. This
   # idempotent hook repairs only the exact package-owned CUA path.
   afterInstall: build/linux-after-install.sh

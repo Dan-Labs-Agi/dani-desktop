@@ -1,0 +1,8 @@
+abi <abi/4.0>,
+include <tunables/global>
+
+# Only the packaged, root-owned executable can create its Chromium sandbox.
+# Never widen this to a home directory or the portable AppImage mount path.
+profile danibot "/opt/Dani Bot/danibot" flags=(unconfined) {
+  userns,
+}

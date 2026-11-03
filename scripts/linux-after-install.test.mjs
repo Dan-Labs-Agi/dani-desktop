@@ -9,6 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const hook = path.join(root, "build", "linux-after-install.sh");
 const removeHook = path.join(root, "build", "linux-after-remove.sh");
 const browserPolicy = path.join(root, "build", "linux-danibot-browser.apparmor");
+const mainPolicy = path.join(root, "build", "linux-danibot-main.apparmor");
 const temporaryDirectories = [];
 
 function fixture() {
@@ -34,6 +35,7 @@ function fixture() {
   fs.writeFileSync(path.join(chromeRoot, "chrome_crashpad_handler"), "fixture", { mode: 0o775 });
   fs.writeFileSync(path.join(chromeRoot, "icudtl.dat"), "fixture", { mode: 0o664 });
   fs.copyFileSync(browserPolicy, path.join(resources, "danibot-browser.apparmor"));
+  fs.copyFileSync(mainPolicy, path.join(resources, "apparmor-profile"));
   const systemRoot = path.join(appRoot, "test-system");
   const apparmorDir = path.join(systemRoot, "apparmor.d");
   // Model the primary target host: Ubuntu 24.04 with the AppArmor 4 ABI.
@@ -45,7 +47,7 @@ function fixture() {
   const apparmorStatus = path.join(systemRoot, "apparmor_status");
   fs.writeFileSync(apparmorStatus, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   fs.writeFileSync(path.join(systemRoot, "apparmor_restrict_unprivileged_userns"), "1\n");
-  fs.writeFileSync(path.join(systemRoot, "apparmor-profiles"), "danibot-browser (unconfined)\n");
+  fs.writeFileSync(path.join(systemRoot, "apparmor-profiles"), "danibot-browser (unconfined)\ndanibot (unconfined)\n");
   return { appRoot, resources, cuaRoot, chromiumSandbox, browserRoot, chromeRoot, systemRoot, apparmorDir, parser, apparmorStatus };
 }
 
@@ -73,6 +75,13 @@ describe("Linux DEB sandbox policy", () => {
   it("allows user namespaces only for the exact installed browser executable", () => {
     const policy = fs.readFileSync(browserPolicy, "utf8").replace(/^\s*#.*$/gm, "");
     expect(policy).toContain('profile danibot-browser "/opt/Dani Bot/resources/browser-engine/chrome/chrome-headless-shell-linux64/chrome-headless-shell" flags=(unconfined)');
+    expect(policy).toContain("userns,");
+    expect(policy).not.toMatch(/\*|@\{HOME\}|\/home\/|\/tmp\//);
+  });
+
+  it("allows user namespaces only for the exact installed main executable", () => {
+    const policy = fs.readFileSync(mainPolicy, "utf8").replace(/^\s*#.*$/gm, "");
+    expect(policy).toContain('profile danibot "/opt/Dani Bot/danibot" flags=(unconfined)');
     expect(policy).toContain("userns,");
     expect(policy).not.toMatch(/\*|@\{HOME\}|\/home\/|\/tmp\//);
   });
@@ -126,6 +135,8 @@ describe.skipIf(process.platform !== "linux")("Linux DEB upgrade hook", () => {
       expect(fs.lstatSync(path.join(chromeRoot, "icudtl.dat")).mode & 0o777).toBe(0o644);
       expect(fs.readFileSync(path.join(apparmorDir, "danibot-browser"), "utf8")).toBe(fs.readFileSync(browserPolicy, "utf8"));
       expect(result.stdout).toContain(`profile operation: -r ${apparmorDir}/danibot-browser`);
+      expect(fs.readFileSync(path.join(apparmorDir, "danibot"), "utf8")).toBe(fs.readFileSync(mainPolicy, "utf8"));
+      expect(result.stdout).toContain(`profile operation: -r ${apparmorDir}/danibot`);
     }
   });
 
@@ -174,6 +185,14 @@ describe.skipIf(process.platform !== "linux")("Linux DEB upgrade hook", () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("browser resource is missing or unsafe");
     expect(fs.lstatSync(external).mode & 0o777).toBe(0o666);
+  });
+
+  it("fails closed when the main sandbox policy is not staged in the package", () => {
+    const { appRoot, resources } = fixture();
+    fs.unlinkSync(path.join(resources, "apparmor-profile"));
+    const result = runHook(appRoot);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("main AppArmor profile is missing or unsafe");
   });
 
   it("fails closed if the restricted host cannot load AppArmor policy", () => {
@@ -277,6 +296,8 @@ describe.skipIf(process.platform !== "linux")("Linux DEB upgrade hook", () => {
     expect(removed.status, removed.stderr).toBe(0);
     expect(removed.stdout).toContain(`profile operation: -R ${profile}`);
     expect(fs.existsSync(profile)).toBe(false);
+    expect(removed.stdout).toContain(`profile operation: -R ${apparmorDir}/danibot`);
+    expect(fs.existsSync(path.join(apparmorDir, "danibot"))).toBe(false);
     expect(fs.readFileSync(unrelated, "utf8")).toBe("unrelated policy");
     expect(runRemoveHook(appRoot, "purge").status).toBe(0);
   });

@@ -37,28 +37,34 @@ if [ "$TEST_MODE" -eq 0 ]; then
   fi
 fi
 
-profile=$APPARMOR_DIR/danibot-browser
-if [ ! -e "$profile" ] && [ ! -L "$profile" ]; then exit 0; fi
-if [ -L "$APPARMOR_DIR" ] || [ -L "$profile" ] || [ ! -f "$profile" ]; then
-  echo "Dani Bot AppArmor profile is unsafe; refusing to remove it: $profile" >&2
-  exit 1
-fi
-if [ "$TEST_MODE" -eq 0 ] && [ -x /usr/bin/ischroot ] && /usr/bin/ischroot; then
-  : # Removing from an image must not change the host's loaded profiles.
-elif [ -x "$APPARMOR_STATUS" ] && ! "$APPARMOR_STATUS" --enabled >/dev/null 2>&1; then
-  : # No live policy exists when AppArmor is disabled; remove the staged file.
-elif [ -r "$APPARMOR_PROFILES" ] && ! grep -q '^danibot-browser ' "$APPARMOR_PROFILES"; then
-  : # Already unloaded; purge must also work after an earlier removal.
-elif [ -x "$APPARMOR_PARSER" ]; then
-  # A profile may already be unloaded (for example during purge after remove).
-  # Keep the policy file if unloading genuinely fails so an administrator can
-  # inspect/retry the exact rule instead of leaving an invisible kernel rule.
-  if ! "$APPARMOR_PARSER" -R "$profile"; then
-    echo "Dani Bot could not unload its browser AppArmor profile: $profile" >&2
+remove_apparmor_profile() {
+  name=$1
+  profile=$APPARMOR_DIR/$name
+  if [ ! -e "$profile" ] && [ ! -L "$profile" ]; then return 0; fi
+  if [ -L "$APPARMOR_DIR" ] || [ -L "$profile" ] || [ ! -f "$profile" ]; then
+    echo "Dani Bot AppArmor profile is unsafe; refusing to remove it: $profile" >&2
     exit 1
   fi
-elif [ -r "$APPARMOR_PROFILES" ]; then
-  echo "Dani Bot needs apparmor_parser to unload its browser profile: $profile" >&2
-  exit 1
-fi
-rm -- "$profile"
+  if [ "$TEST_MODE" -eq 0 ] && [ -x /usr/bin/ischroot ] && /usr/bin/ischroot; then
+    : # Removing from an image must not change the host's loaded profiles.
+  elif [ -x "$APPARMOR_STATUS" ] && ! "$APPARMOR_STATUS" --enabled >/dev/null 2>&1; then
+    : # No live policy exists when AppArmor is disabled; remove the staged file.
+  elif [ -r "$APPARMOR_PROFILES" ] && ! grep -q "^$name " "$APPARMOR_PROFILES"; then
+    : # Already unloaded; purge must also work after an earlier removal.
+  elif [ -x "$APPARMOR_PARSER" ]; then
+    # A profile may already be unloaded (for example during purge after remove).
+    # Keep the policy file if unloading genuinely fails so an administrator can
+    # inspect/retry the exact rule instead of leaving an invisible kernel rule.
+    if ! "$APPARMOR_PARSER" -R "$profile"; then
+      echo "Dani Bot could not unload its $name AppArmor profile: $profile" >&2
+      exit 1
+    fi
+  elif [ -r "$APPARMOR_PROFILES" ]; then
+    echo "Dani Bot needs apparmor_parser to unload its $name profile: $profile" >&2
+    exit 1
+  fi
+  rm -- "$profile"
+}
+
+remove_apparmor_profile danibot-browser
+remove_apparmor_profile danibot
