@@ -86,16 +86,22 @@ jobs:
           code() { curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "$@"; }
           body() { curl -sk --max-time 10 "$@"; }
           H=https://localhost
+          echo "smoke 1: public descriptor"
           grep -q '"environmentId"' <<<"$(body $H/.well-known/openmausbot/environment)"   # descriptor is public
+          echo "smoke 2: health probe"
           test "$(code $H/api/health)" = 200                                     # health is a public probe
           grep -q openmausbot <<<"$(body $H/api/health)"
+          echo "smoke 3: closed before pairing"
           test "$(code $H/api/bots)" = 403                                       # nothing else before pairing
           grep -q 'pair this device' <<<"$(body $H/api/bots)"
+          echo "smoke 4: pair page shell"
           grep -qi '<html' <<<"$(body $H/pair)"                                    # the UI shell is served so /pair can load
+          echo "smoke 5: http redirect"
           test "$(code http://localhost/)" = 308                                   # HTTP redirects to HTTPS
           # Minting a pairing code is an owner action. The server prints its
           # per-launch owner capability on boot; that line is the distribution
           # channel (security epic-9-B), so read it from the logs.
+          echo "smoke 6: pairing"
           owner=$(docker compose -f deploy/docker-compose.yml logs omb | sed -n 's/.*\[owner\] DANI_OWNER_TOKEN=//p' | tail -1 | tr -d '\r')
           test -n "$owner"
           pairing=$(docker compose -f deploy/docker-compose.yml exec -T -e DANI_OWNER_TOKEN="$owner" omb node dist-server/pair-cli.js --label ci)
@@ -107,18 +113,22 @@ jobs:
           grep -qi 'set-cookie: dani_session_' <<<"$paired"                        # cookie session
           grep -qi 'Secure' <<<"$paired"                                          # over TLS the cookie is Secure
           grep -qi 'HttpOnly' <<<"$paired"
+          echo "smoke 7: paired session"
           test "$(code -b "$jar" $H/api/health)" = 200                              # paired: the API answers
           grep -q openmausbot <<<"$(body -b "$jar" $H/api/health)"
           test "$(code -b "$jar" -H 'Origin: https://evil.example' -X POST -d '{}' $H/api/bots)" = 403   # cookie is same-origin only
           test "$(code -b "$jar" -H 'Origin: https://localhost' $H/api/auth/session)" = 200
           grep -q '"via":"cookie"' <<<"$(body -b "$jar" $H/api/auth/session)"
           grep -q '"label":"ci"' <<<"$(body -b "$jar" $H/api/auth/sessions)"        # listed for revocation
+          echo "smoke 8: hooks"
           grep -q error <<<"$(body -X POST $H/hooks/wh_nope)"                      # hook path reaches the receiver without a session
           # The event stream never ends, so curl's own --max-time exit (28) is expected;
           # the proof is that bytes arrived within the window (a buffering proxy sends none).
+          echo "smoke 9: event stream"
           sse=$( (curl -sk -b "$jar" -N --max-time 4 $H/api/events || true) | head -c 64 )
           test -n "$sse"                                                           # SSE streams, not buffered
           grep -q '"baseUrl":"https://localhost"' <<<"$(body -b "$jar" $H/api/webhooks)"   # OMB_WEBHOOK_PUBLIC_URL is advertised
+          echo "smoke 10: webhooks advertised, still closed"
           test "$(code $H/api/bots)" = 403                                       # and without the cookie it is still closed
           docker compose -f deploy/docker-compose.yml down -v
 
