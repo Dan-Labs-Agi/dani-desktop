@@ -1,3 +1,4 @@
+import { profileProbeEvidence } from "./profile-probe-evidence.mjs";
 import { app, autoUpdater as nativeAutoUpdater, BrowserWindow, Tray, WebContentsView, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, powerMonitor, powerSaveBlocker, safeStorage, screen, session, shell, systemPreferences, utilityProcess, nativeTheme } from "electron";
 import { createRequire } from "node:module";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -362,6 +363,12 @@ let desktopRemoteAccess = null;
 let desktopCompanionRelay = null;
 
 const CREDENTIALS_FILE = path.join(app.getPath("userData"), "credentials.bin");
+// Synthetic upgrade probes request direct runtime path/read evidence. Off in
+// normal launches; no values from real settings or credential stores are read.
+if (process.env.DANI_PROFILE_PROBE === "1") {
+  console.log("DANI_PROFILE_EVIDENCE " + JSON.stringify(profileProbeEvidence({ enabled: true, userData: app.getPath("userData") })));
+}
+
 
 /** True when the store could not be read, which is not the same as nothing saved. */
 let credentialStoreUnavailable = false;
