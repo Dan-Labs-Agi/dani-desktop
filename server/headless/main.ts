@@ -23,10 +23,10 @@ export const VERB_HELP: Record<string, string> = {
   models: "danibot models\n  The engines and the models each offers (use them as INSTANCE/MODEL).",
   messages: `danibot messages TARGET [--limit 30]\n  The latest messages of a conversation (at most 200).
   ${T}`,
-  send: `openmausbot send TARGET (TEXT | --text TEXT | --message-file FILE | -) [--send-id ID] [--dry-run]
+  send: `danibot send TARGET (TEXT | --text TEXT | --message-file FILE | -) [--send-id ID] [--dry-run]
   Send one message and return at once. The same --send-id never sends twice.
   ${T}`,
-  "send-channel": "openmausbot send-channel --channel ID (TEXT | --text TEXT) [--task ID] [--dry-run]\n  The same as send, for a room named by id.",
+  "send-channel": "danibot send-channel --channel ID (TEXT | --text TEXT) [--task ID] [--dry-run]\n  The same as send, for a room named by id.",
   run: `danibot run TARGET (TEXT | --message-file FILE | -) [--task new|current|ID] [--title T]
                 [--wait job|turn|none] [--timeout 30m] [--on-input exit|wait|stop] [--on-timeout leave|stop]
                 [--strict] [--export DIR [--force]]
