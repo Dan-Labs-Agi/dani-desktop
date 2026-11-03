@@ -43,7 +43,7 @@ jobs:
       - run: python3 docs/dani-sdd-kit/scripts/check_kit.py
 
   test:
-    name: typecheck + test (${{ matrix.os }})
+    name: typecheck + test (${{ matrix.os }}, shard ${{ matrix.shard }}/${{ matrix.shards }})
     if: (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only)
     strategy:
       fail-fast: false
@@ -51,6 +51,11 @@ jobs:
         # The harness and pure desktop capabilities stay portable across all
         # supported host platforms. POSIX-only process tests self-skip.
         os: [macos-latest, ubuntu-latest, windows-latest]
+        # Recorded CI seconds (scripts/testing/vitest-shard-weights.json) put
+        # one leg's vitest at 82-114 min per OS, over the 60-minute job
+        # ceiling; four shards land each leg near 45 minutes with overhead.
+        shard: [1, 2, 3, 4]
+        shards: [4]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -76,7 +81,11 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=7168
         run: pnpm typecheck
       - name: Run tests
-        run: pnpm test
+        # vitest runs this OS's full set split four ways by recorded CI
+        # seconds (DurationSequencer); every file runs exactly once across
+        # the OS's four shards, and the broker, Electron and packaged-server
+        # checks are unchanged in each shard. No subset filtering, same env.
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/${{ matrix.shards }} && pnpm broker:test && pnpm test:electron && pnpm test:packaged-server
         env:
           # Electron 43 currently exits with EXCEPTION_BREAKPOINT before ready
           # on GitHub's Windows runners even after Chromium's required sandbox
@@ -96,6 +105,17 @@ jobs:
       - name: production UI build
         if: matrix.os == 'ubuntu-latest'
         run: pnpm build
+
+  tests-complete:
+    name: CI tests complete
+    needs: test
+    if: (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only)
+    runs-on: ubuntu-latest
+    steps:
+      # Aggregation only: propagates any shard's failure or cancellation to
+      # one named result. needs.test.result is failure when any matrix leg
+      # failed, so every test on every OS still decides this check.
+      - run: test "${{ needs.test.result }}" = "success"
 
   control-plane:
     name: control-plane check + workerd tests + dry run
