@@ -285,13 +285,12 @@ jobs:
           curl -sL -o old-portable.zip https://github.com/somdipto/dani-desktop/releases/download/v0.1.58/DaniBot-Windows-Portable.zip
           curl -sL -o old-setup.exe https://github.com/somdipto/dani-desktop/releases/download/v0.1.58/DaniBot-0.1.58-setup.exe
       - name: Time portable extraction and silent NSIS install
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          start=$(date +%s%3N); mkdir -p old-app && tar -xf old-portable.zip -C old-app; end=$(date +%s%3N)
-          echo "portable_extract_ms=$((end-start))" | tee results/install-timings.txt
-          ms=$(powershell -NoProfile -Command "[int](Measure-Command { Start-Process -FilePath .\old-setup.exe -ArgumentList '/S' -Wait }).TotalMilliseconds")
-          echo "nsis_silent_install_ms=$ms" | tee -a results/install-timings.txt
+          $m = Measure-Command { Expand-Archive -Path .\old-portable.zip -DestinationPath .\old-app }
+          "portable_extract_ms=$([int]$m.TotalMilliseconds)" | Tee-Object -FilePath results/install-timings.txt
+          $n = Measure-Command { Start-Process -FilePath .\old-setup.exe -ArgumentList '/S' -Wait }
+          "nsis_silent_install_ms=$([int]$n.TotalMilliseconds)" | Tee-Object -FilePath results/install-timings.txt -Append
       - name: Probe cold launch (published build)
         shell: bash
         env:
