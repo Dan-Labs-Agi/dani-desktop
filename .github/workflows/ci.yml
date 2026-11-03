@@ -514,8 +514,9 @@ jobs:
           echo "existing app data at $data"
           (cd "$data" && find . -type f -printf '%s|%p\n' | sort) > results/inventory-old.txt
           echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
-          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 sha256sum) > results/checksums-old.txt
           wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
+          mkdir -p "$RUNNER_TEMP/upgradecmp"
+          (cd "$data" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/upgradecmp/sums-old.txt"
       - name: Probe cold launch of the branch build over existing data
         shell: bash
         env:
@@ -545,20 +546,45 @@ jobs:
           done
           [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
           (cd "$data" && find . -type f -printf '%s|%p\n' | sort) > results/inventory-new.txt
-          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 sha256sum) > results/checksums-new.txt
           missing=$(comm -23 results/inventory-old.txt results/inventory-new.txt || true)
           if [ -n "$missing" ]; then
             { echo "MISSING AFTER UPGRADE:"; echo "$missing"; } > results/upgrade-diff.txt
             echo "upgrade dropped pre-existing files (see upgrade-diff.txt)"; exit 1
           fi
-          changed=$(join -j 2 -o 1.1,1.2,2.2 <(sort -k2 results/checksums-old.txt) <(sort -k2 results/checksums-new.txt) | awk '$2 != $3 {print $1}' || true)
-          added=$(comm -13 <(cut -d'|' -f2 results/inventory-old.txt) <(cut -d'|' -f2 results/inventory-new.txt) || true)
+          # Content comparison stays on the runner; only counts and allowlisted safe names reach the artifact.
+          work="$RUNNER_TEMP/upgradecmp"
+          (cd "$data" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$work/sums-new.txt"
+          oldcount=$(wc -l < results/inventory-old.txt | tr -d ' ')
+          identical=0; changed_sensitive=0; : > "$work/changed-safe.txt"
+          while IFS='|' read -r size rel; do
+            oldhash=$(grep -F "  $rel" "$work/sums-old.txt" 2>/dev/null | awk '{print $1}')
+            newhash=$(grep -F "  $rel" "$work/sums-new.txt" | awk '{print $1}')
+            if [ -n "$oldhash" ] && [ "$oldhash" = "$newhash" ]; then
+              identical=$((identical+1))
+            else
+              case "$rel" in
+                ./probe-marker.txt|./window-state.json) echo "$rel" >> "$work/changed-safe.txt" ;;
+                *) changed_sensitive=$((changed_sensitive+1)) ;;
+              esac
+            fi
+          done < results/inventory-old.txt
+          added=$(comm -13 <(cut -d'|' -f2 results/inventory-old.txt) <(cut -d'|' -f2 results/inventory-new.txt) | wc -l | tr -d ' ')
           {
-            echo "all $(wc -l < results/inventory-old.txt | tr -d ' ') pre-existing files present after upgrade (name+size)"
-            echo "content-identical non-credential files: $(comm -12 <(sort results/checksums-old.txt) <(sort results/checksums-new.txt) | wc -l | tr -d ' ')"
-            echo "content-changed pre-existing files:"; echo "${changed:-none}"
-            echo "files added by the new build:"; echo "${added:-none}"
+            echo "all $oldcount pre-existing files present after upgrade (name+size)"
+            echo "content-identical pre-existing files: $identical"
+            echo "content-changed, safe-named files: $(wc -l < "$work/changed-safe.txt" | tr -d ' ')"
+            cat "$work/changed-safe.txt"
+            echo "content-changed or unverifiable, sensitive-named files (count only): $changed_sensitive"
+            echo "files added by the new build (count only): $added"
           } > results/upgrade-diff.txt
+      - name: Redact token-shaped strings from logs before upload
+        if: always()
+        shell: bash
+        run: |
+          for f in results/*.log; do
+            [ -f "$f" ] || continue
+            sed -i -E 's/omb_sess_[A-Za-z0-9_-]+/[redacted]/g; s/(Bearer|api[_-]?key|token)[=: ]+[A-Za-z0-9._~-]{8,}/\1=[redacted]/gi' "$f" || true
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -621,8 +647,9 @@ jobs:
           echo "existing app data at $data"
           (cd "$data" && find . -type f -exec ls -l {} + | awk '{print $5"|"$9}' | sort) > results/inventory-old.txt
           echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
-          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 shasum -a 256) > results/checksums-old.txt
           wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
+          mkdir -p "$RUNNER_TEMP/upgradecmp"
+          (cd "$data" && find . -type f -print0 | sort -z | xargs -0 shasum -a 256) > "$RUNNER_TEMP/upgradecmp/sums-old.txt"
       - name: Probe cold launch of the branch build over existing data
         run: |
           set -euo pipefail
@@ -649,20 +676,45 @@ jobs:
           done
           [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
           (cd "$data" && find . -type f -exec ls -l {} + | awk '{print $5"|"$9}' | sort) > results/inventory-new.txt
-          (cd "$data" && find . -type f ! -name '*.bin' ! -name '*credential*' ! -name '*key*' -print0 | sort -z | xargs -0 shasum -a 256) > results/checksums-new.txt
           missing=$(comm -23 results/inventory-old.txt results/inventory-new.txt || true)
           if [ -n "$missing" ]; then
             { echo "MISSING AFTER UPGRADE:"; echo "$missing"; } > results/upgrade-diff.txt
             echo "upgrade dropped pre-existing files (see upgrade-diff.txt)"; exit 1
           fi
-          changed=$(join -j 2 -o 1.1,1.2,2.2 <(sort -k2 results/checksums-old.txt) <(sort -k2 results/checksums-new.txt) | awk '$2 != $3 {print $1}' || true)
-          added=$(comm -13 <(cut -d'|' -f2 results/inventory-old.txt) <(cut -d'|' -f2 results/inventory-new.txt) || true)
+          # Content comparison stays on the runner; only counts and allowlisted safe names reach the artifact.
+          work="$RUNNER_TEMP/upgradecmp"
+          (cd "$data" && find . -type f -print0 | sort -z | xargs -0 shasum -a 256) > "$work/sums-new.txt"
+          oldcount=$(wc -l < results/inventory-old.txt | tr -d ' ')
+          identical=0; changed_sensitive=0; : > "$work/changed-safe.txt"
+          while IFS='|' read -r size rel; do
+            oldhash=$(grep -F "  $rel" "$work/sums-old.txt" 2>/dev/null | awk '{print $1}')
+            newhash=$(grep -F "  $rel" "$work/sums-new.txt" | awk '{print $1}')
+            if [ -n "$oldhash" ] && [ "$oldhash" = "$newhash" ]; then
+              identical=$((identical+1))
+            else
+              case "$rel" in
+                ./probe-marker.txt|./window-state.json) echo "$rel" >> "$work/changed-safe.txt" ;;
+                *) changed_sensitive=$((changed_sensitive+1)) ;;
+              esac
+            fi
+          done < results/inventory-old.txt
+          added=$(comm -13 <(cut -d'|' -f2 results/inventory-old.txt) <(cut -d'|' -f2 results/inventory-new.txt) | wc -l | tr -d ' ')
           {
-            echo "all $(wc -l < results/inventory-old.txt | tr -d ' ') pre-existing files present after upgrade (name+size)"
-            echo "content-identical non-credential files: $(comm -12 <(sort results/checksums-old.txt) <(sort results/checksums-new.txt) | wc -l | tr -d ' ')"
-            echo "content-changed pre-existing files:"; echo "${changed:-none}"
-            echo "files added by the new build:"; echo "${added:-none}"
+            echo "all $oldcount pre-existing files present after upgrade (name+size)"
+            echo "content-identical pre-existing files: $identical"
+            echo "content-changed, safe-named files: $(wc -l < "$work/changed-safe.txt" | tr -d ' ')"
+            cat "$work/changed-safe.txt"
+            echo "content-changed or unverifiable, sensitive-named files (count only): $changed_sensitive"
+            echo "files added by the new build (count only): $added"
           } > results/upgrade-diff.txt
+      - name: Redact token-shaped strings from logs before upload
+        if: always()
+        shell: bash
+        run: |
+          for f in results/*.log; do
+            [ -f "$f" ] || continue
+            sed -i -E 's/omb_sess_[A-Za-z0-9_-]+/[redacted]/g; s/(Bearer|api[_-]?key|token)[=: ]+[A-Za-z0-9._~-]{8,}/\1=[redacted]/gi' "$f" || true
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
