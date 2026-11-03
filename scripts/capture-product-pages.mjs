@@ -149,8 +149,10 @@ async function shoot(name, note = "") {
 const click = (pattern) => evaluate(`(() => {
   const re = new RegExp(${JSON.stringify(pattern)}, "i");
   const label = (el) => (el.getAttribute("aria-label") || el.textContent || "").trim().replace(/\\s+/g, " ");
+  // Actually on screen: sized and inside the viewport, so an off-canvas control cannot pass the journey.
+  const onScreen = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth; };
   const el = [...document.querySelectorAll("button,[role=button],[role=tab],a[href],[role=menuitem]")]
-    .find((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && re.test(label(e)); });
+    .find((e) => onScreen(e) && re.test(label(e)));
   if (!el) return false;
   el.click();
   return label(el);
