@@ -26,8 +26,15 @@ if ([hardDeath, bundled, sessionBlocked].filter(Boolean).length > 1) {
 if (signalShutdown && !bundled) {
   throw new Error("signal-shutdown smoke requires the bundled runtime mode");
 }
+// The packaged Linux binary takes electron-builder.yml's executableName;
+// read the contract instead of hardcoding a product name.
+const builderConfig = readFileSync(path.join(root, "electron-builder.yml"), "utf8").replace(/\r\n/g, "\n");
+const packagedExecutableName = builderConfig.match(/^\s*executableName:\s*(\S+)\s*$/m)?.[1];
+if (!packagedExecutableName) {
+  throw new Error("[smoke-linux-package] electron-builder.yml no longer names the Linux executable");
+}
 const executable = path.resolve(
-  process.env.OMB_SMOKE_EXECUTABLE ?? path.join(root, "release", "linux-unpacked", "openmausbot"),
+  process.env.OMB_SMOKE_EXECUTABLE ?? path.join(root, "release", "linux-unpacked", packagedExecutableName),
 );
 if (!existsSync(executable)) throw new Error(`[smoke-linux-package] missing executable: ${executable}`);
 
