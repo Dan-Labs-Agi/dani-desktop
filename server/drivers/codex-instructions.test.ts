@@ -12,7 +12,7 @@ describe("Codex effective developer instructions", () => {
   it("preserves native rules after bot rules, including when bot rules are removed", () => {
     const config = { developer_instructions: "Native rules." };
     expect(codexDeveloperInstructions(config, "Bot rules.")).toBe("Bot rules.\n\nNative rules.");
-    expect(codexDeveloperInstructions(config, "")).toBe("No OpenMausBot bot-specific instructions remain.\n\nNative rules.");
+    expect(codexDeveloperInstructions(config, "")).toBe("No Dani Bot bot-specific instructions remain.\n\nNative rules.");
     expect(codexDeveloperInstructions({}, "Bot rules.")).toBe("Bot rules.");
     expect(codexDeveloperInstructions({ developer_instructions: null }, "")).toBe("");
   });
@@ -37,7 +37,7 @@ describe("Codex instruction receipts", () => {
     await syncCodexInstructions(key, "native", "", "", true, request);
     await syncCodexInstructions(key, "native", "", "", true, request);
     expect(request).toHaveBeenCalledTimes(2);
-    expect(request.mock.calls[1][1].items[0].content[0].text).toContain("No OpenMausBot bot-specific instructions remain.");
+    expect(request.mock.calls[1][1].items[0].content[0].text).toContain("No Dani Bot bot-specific instructions remain.");
   });
 
   it("adopts an existing native session once without replaying user history", async () => {
