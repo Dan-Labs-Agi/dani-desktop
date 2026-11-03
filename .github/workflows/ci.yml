@@ -2,6 +2,12 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      install_probe:
+        description: "Run only the packaged install/startup timing probe jobs"
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main, prod]
   pull_request:
@@ -21,7 +27,7 @@ jobs:
     name: spec traceability and negative fixtures
     # The SDD kit documents are not part of the current tree; run only when they return.
     needs: detect-optional-jobs
-    if: needs.detect-optional-jobs.outputs.sdd == 'true'
+    if: (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (needs.detect-optional-jobs.outputs.sdd == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -33,6 +39,7 @@ jobs:
 
   test:
     name: typecheck + test (${{ matrix.os }})
+    if: github.event_name != 'workflow_dispatch' || !inputs.install_probe
     strategy:
       fail-fast: false
       matrix:
@@ -87,6 +94,7 @@ jobs:
 
   control-plane:
     name: control-plane check + workerd tests + dry run
+    if: github.event_name != 'workflow_dispatch' || !inputs.install_probe
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -105,6 +113,7 @@ jobs:
 
   package-linux:
     name: package + smoke (Ubuntu 24.04 x64)
+    if: github.event_name != 'workflow_dispatch' || !inputs.install_probe
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -172,6 +181,7 @@ jobs:
   # evaluation time), so a small job checks out and reports what exists.
   detect-optional-jobs:
     name: Detect optional jobs
+    if: github.event_name != 'workflow_dispatch' || !inputs.install_probe
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -192,7 +202,7 @@ jobs:
     name: Swift tests + iOS build
     # This repo does not contain the iOS package yet; run only when it appears.
     needs: detect-optional-jobs
-    if: needs.detect-optional-jobs.outputs.ios == 'true'
+    if: (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (needs.detect-optional-jobs.outputs.ios == 'true')
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
@@ -222,7 +232,7 @@ jobs:
     name: Kotlin tests + Android build
     # This repo does not contain a Gradle project yet; run only when it appears.
     needs: detect-optional-jobs
-    if: needs.detect-optional-jobs.outputs.android == 'true'
+    if: (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (needs.detect-optional-jobs.outputs.android == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -258,7 +268,7 @@ jobs:
 
   install-probe-old-windows:
     name: startup timing probe - published Windows x64
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: windows-latest
     timeout-minutes: 40
     env:
@@ -306,7 +316,7 @@ jobs:
 
   install-probe-old-mac-intel:
     name: startup timing probe - published macOS Intel
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: macos-15-intel
     timeout-minutes: 40
     env:
@@ -350,7 +360,7 @@ jobs:
 
   install-probe-new-windows:
     name: startup timing probe - current Windows x64 build
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: windows-latest
     timeout-minutes: 40
     env:
@@ -401,7 +411,7 @@ jobs:
 
   install-probe-new-mac-intel:
     name: startup timing probe - current macOS Intel build
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci-validate-4c2157b2'
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: macos-15-intel
     timeout-minutes: 40
     env:
