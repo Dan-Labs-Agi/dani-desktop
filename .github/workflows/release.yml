@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: false
+      ship_without_ci:
+        description: "Skip waiting for this commit's CI gate; recovery escape hatch only"
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -31,6 +36,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci:
+    name: Wait for the commit's CI gate
+    needs: prepare
+    runs-on: ubuntu-latest
+    # release-ci.mjs waits up to 170 minutes for the commit's gate.
+    timeout-minutes: 180
+    permissions:
+      # re-run failed jobs + dispatch the release-lane CI run
+      actions: write
+      # create/update/delete the release-ci/v<version> branch
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/release-ci.mjs
+            scripts/ci-scope.mjs
+      - run: node scripts/release-ci.mjs
+        if: ${{ !inputs.ship_without_ci }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+
   prepare:
     name: Pin release commit
     runs-on: ubuntu-latest
@@ -252,7 +282,7 @@ jobs:
 
   release:
     name: Create draft release
-    needs: [prepare, linux, windows, macos]
+    needs: [prepare, ci, linux, windows, macos]
     # Release hold: an ordinary branch push only validates the packaging above.
     # Tags and draft releases are created only by a v* tag push or an explicit
     # manual dispatch, after the required checks have passed.

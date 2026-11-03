@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { VITEST_SHARDS } from "./ci-scope.mjs";
 import { githubApi, judgeRun, waitForReleaseCi } from "./release-ci.mjs";
 
 const SHA = "a".repeat(40);
@@ -18,13 +17,15 @@ type Run = {
 type Commit = { tree: string; parents: string[]; files: string[] };
 
 const started: Step[] = [{ status: "completed", conclusion: "success" }];
+// ci.yml's actual test job naming and shard counts (pinned to the workflow by scripts/ci-workflow.test.ts).
+const SHARD_COUNTS: Record<string, number> = { "macos-latest": 4, "ubuntu-latest": 4, "windows-latest": 4 };
 const vitest = (os: string, conclusion: string | null, steps: Step[] = started, shard = 1): Job =>
-  ({ name: `vitest (${os}, shard ${shard}/${VITEST_SHARDS[os as keyof typeof VITEST_SHARDS]})`, conclusion, steps });
+  ({ name: `typecheck + test (${os}, shard ${shard}/${SHARD_COUNTS[os]})`, conclusion, steps });
 const shards = (os: string): Job[] =>
-  Array.from({ length: VITEST_SHARDS[os as keyof typeof VITEST_SHARDS] }, (_, i) => vitest(os, "success", started, i + 1));
+  Array.from({ length: SHARD_COUNTS[os] }, (_, i) => vitest(os, "success", started, i + 1));
 const gate = (conclusion: string | null): Job => ({ name: "CI", conclusion, steps: started });
 /** Every platform's every vitest shard ran and passed, and so did the gate: the full lane. */
-const green = (): Job[] => [gate("success"), ...Object.keys(VITEST_SHARDS).flatMap(shards)];
+const green = (): Job[] => [gate("success"), ...Object.keys(SHARD_COUNTS).flatMap(shards)];
 /** A push to main or a merge group: the gate and every Linux shard passed, nothing else ran. */
 const mainLane = (): Job[] => [gate("success"), ...shards("ubuntu-latest")];
 /** A docs- or version-only run: the gate passes with vitest skipped. */
@@ -95,7 +96,7 @@ describe("what a CI run proves", () => {
 
   it("is partial when only some platforms' shards ran, as on a push to main or in a merge group", () => {
     expect(judgeRun(mainLane())).toBe("partial");
-    expect(judgeRun(green().filter((job) => job.name !== "vitest (macos-latest, shard 4/4)"))).toBe("partial");
+    expect(judgeRun(green().filter((job) => job.name !== "typecheck + test (macos-latest, shard 4/4)"))).toBe("partial");
     expect(judgeRun([...mainLane(), ...shards("windows-latest")])).toBe("partial");
   });
 
@@ -124,7 +125,7 @@ describe("release CI gate", () => {
     expect(calls).toEqual([]);
   });
 
-  it.each(["workflow_dispatch", "schedule"])("waits for a %s run that is still going, then passes", async (event) => {
+  it.each(["workflow_dispatch", "push"])("waits for a %s run that is still going, then passes", async (event) => {
     const { calls, options } = fakeGitHub([
       { runs: [run(1, event, "queued")] },
       { runs: [run(1, event, "in_progress")] },
@@ -188,7 +189,7 @@ describe("release CI gate", () => {
 });
 
 describe("a run of Linux's shards alone is no proof", () => {
-  it.each(["push", "merge_group"])("starts CI in the lane after the commit's green %s run", async (event) => {
+  it.each(["push", "workflow_dispatch"])("starts CI in the lane after the commit's green %s run", async (event) => {
     const { calls, options } = fakeGitHub([
       { runs: [run(1, event, "completed")], jobs: { 1: mainLane() } },
       { runs: [run(1, event, "completed"), run(2, "workflow_dispatch", "completed", "release-ci/v0.1.94", 5)], jobs: { 1: mainLane(), 2: green() } },
@@ -197,14 +198,15 @@ describe("a run of Linux's shards alone is no proof", () => {
     expect(calls).toEqual(LANE);
   });
 
-  it("starts the lane at once instead of waiting for a push's run that is still going", async () => {
+  it("waits for the commit's in-progress full-lane push run instead of starting the lane", async () => {
+    // Full-lane rule: a push run covers every platform, so it is real proof
+    // worth waiting for - the lane exists only for commits with no usable run.
     const { calls, options } = fakeGitHub([
       { runs: [run(1, "push", "in_progress")] },
-      { runs: [run(1, "push", "in_progress"), run(2, "workflow_dispatch", "in_progress", "release-ci/v0.1.94", 5)] },
-      { runs: [run(1, "push", "completed"), run(2, "workflow_dispatch", "completed", "release-ci/v0.1.94", 5)], jobs: { 1: mainLane(), 2: green() } },
+      { runs: [run(1, "push", "completed")], jobs: { 1: green() } },
     ]);
-    expect(await waitForReleaseCi(options)).toEqual({ ok: true, runId: 2, via: "commit" });
-    expect(calls).toEqual(LANE);
+    expect(await waitForReleaseCi(options)).toEqual({ ok: true, runId: 1, via: "commit" });
+    expect(calls).toEqual([]);
   });
 
   it("still stops on the commit's red push run", async () => {
@@ -226,7 +228,7 @@ describe("a run of Linux's shards alone is no proof", () => {
     const { calls, options } = fakeGitHub([{
       runs: [
         run(1, "push", "completed"),
-        run(8, "schedule", "completed", "main", 0, { head_sha: OTHER, head_commit: { tree_id: TREE } }),
+        run(8, "workflow_dispatch", "completed", "main", 0, { head_sha: OTHER, head_commit: { tree_id: TREE } }),
       ],
       jobs: { 1: mainLane(), 8: green() },
     }]);
@@ -296,14 +298,14 @@ describe("a version-only bump reuses its parent's CI", () => {
 
   it("passes on a green run on the parent's tree", async () => {
     const { options } = fakeGitHub([{
-      runs: [run(6, "merge_group", "completed", "gh-readonly-queue/main/pr-1", 0, { head_sha: OTHER, head_commit: { tree_id: PARENT_TREE } })],
+      runs: [run(6, "push", "completed", "main", 0, { head_sha: OTHER, head_commit: { tree_id: PARENT_TREE } })],
       jobs: { 6: green() },
     }], versionBump);
     expect(await waitForReleaseCi(options)).toEqual({ ok: true, runId: 6, via: "parent" });
   });
 
   it("waits for the parent's nightly run that is still going", async () => {
-    const parentRun = (status: string) => run(5, "schedule", status, "main", 0, { head_sha: PARENT });
+    const parentRun = (status: string) => run(5, "push", status, "main", 0, { head_sha: PARENT });
     const { calls, options } = fakeGitHub([
       { runs: [run(1, "push", "completed"), parentRun("in_progress")], jobs: { 1: scoped() } },
       { runs: [run(1, "push", "completed"), parentRun("in_progress")], jobs: { 1: scoped() } },
@@ -406,7 +408,6 @@ describe("a runner that never came", () => {
   it.each([
     ["push", "main"],
     ["workflow_dispatch", "main"],
-    ["merge_group", "gh-readonly-queue/main/pr-1"],
   ])("never re-runs a %s run on %s in its own queue: it starts CI in the lane", async (event, branch) => {
     // A re-run of main's run would join main's concurrency group and cancel
     // the newest merge's waiting run.
@@ -472,14 +473,12 @@ describe("GitHub calls", () => {
     const api = githubApi({ token: "t", repository: "o/r", fetchImpl: fetchImpl as typeof fetch });
     expect(await api.commit(SHA)).toEqual({ tree: TREE, parents: [PARENT], files: ["package.json"] });
     expect(JSON.parse((await api.fileAt("package.json", SHA))!).version).toBe("0.1.94");
-    expect(await api.recentRuns()).toHaveLength(4);
+    expect(await api.recentRuns()).toHaveLength(2);
     await api.rerunFailedJobs(42);
     expect(requests).toEqual([
       `GET /commits/${SHA}`,
       `GET /contents/package.json?ref=${SHA}`,
       "GET /actions/workflows/ci.yml/runs?status=completed&event=push&per_page=100",
-      "GET /actions/workflows/ci.yml/runs?status=completed&event=merge_group&per_page=100",
-      "GET /actions/workflows/ci.yml/runs?status=completed&event=schedule&per_page=100",
       "GET /actions/workflows/ci.yml/runs?status=completed&event=workflow_dispatch&per_page=100",
       "POST /actions/runs/42/rerun-failed-jobs",
     ]);
