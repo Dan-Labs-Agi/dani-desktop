@@ -70,6 +70,7 @@ export function WelcomeFlow({
   const [beat, setBeat] = useState<BeatId>(() => resumeBeat(beats, initialBeat ?? (keepsDraft ? readWelcomeDraft()?.beat : undefined)));
   const root = useRef<HTMLDivElement>(null);
   const finishing = useRef(false);
+  const returnFocus = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const record = useRef(state.config?.onboarding);
   record.current = state.config?.onboarding;
 
@@ -94,8 +95,23 @@ export function WelcomeFlow({
       if (!replay && !embedded) markWelcomeFinished();
       if (keepsDraft) clearWelcomeDraft();
       onDone(botId);
+      if (reason === "skipped") {
+        const overlay = root.current;
+        requestAnimationFrame(() => {
+          const previous = returnFocus.current;
+          if (previous?.isConnected && previous !== document.body && !overlay?.contains(previous)) {
+            previous.focus({ preventScroll: true });
+            return;
+          }
+          const target = [...document.querySelectorAll<HTMLElement>(FOCUSABLE)].find((el) => {
+            const rect = el.getBoundingClientRect();
+            return !overlay?.contains(el) && rect.width > 0 && rect.height > 0;
+          });
+          target?.focus({ preventScroll: true });
+        });
+      }
       try {
-        const patch = replay ? completionPatch() : firstRunPatch(record.current, new Date());
+        const patch = replay || reason === "skipped" ? completionPatch() : firstRunPatch(record.current, new Date());
         const config = await api("/api/config", { method: "PUT", body: JSON.stringify(patch), signal: AbortSignal.timeout(10_000) });
         dispatch({ type: "configStatus", config });
       } catch {
@@ -140,7 +156,7 @@ export function WelcomeFlow({
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (beat === "meet" && event.key === "Escape") {
       event.preventDefault();
-      next();
+      void finish("skipped", null);
       return;
     }
     if (beat === "meet" && event.key === "Enter" && event.target === root.current) {
@@ -169,7 +185,7 @@ export function WelcomeFlow({
       {chief ? (
         <ChiefIntro replay={replay} onLeave={fadeScrim} onDone={(botId) => void finish("completed", botId)} />
       ) : (
-        <MeetScreen hosted={hosted} onNext={next} />
+        <MeetScreen hosted={hosted} onNext={next} onLater={() => void finish("skipped", null)} />
       )}
     </div>
   );

@@ -21,7 +21,13 @@ process.env.OMB_COMPANION_DIR = join(home, ".openmausbot-companion");
 Object.defineProperty(globalThis.navigator, "language", { value: "en", configurable: true });
 
 // Windows will not remove a directory holding an open SQLite database: close it before the reset.
-const { closeMessageDb } = await import("../message-db.ts");
+// happy-dom suites never open the server database. Keep its Node-only import
+// out of the client bundler, while retaining cleanup for every server suite.
+let closeMessageDb = () => {};
+if (typeof window === "undefined") {
+  const serverDbModule = "../message-db.ts";
+  ({ closeMessageDb } = await import(/* @vite-ignore */ serverDbModule));
+}
 afterEach(closeMessageDb);
 
 // Windows holds a live process's cwd, and a just-killed CLI lets go a beat after the kill returns.
