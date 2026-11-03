@@ -16,6 +16,8 @@ const opt = (name, fallback) => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : fallback;
 };
+const required = [];
+for (let i = 0; i < args.length - 1; i += 1) if (args[i] === "--require") required.push(args[i + 1]);
 const exe = path.resolve(opt("--exe", "release/linux-unpacked/danibot"));
 const out = path.resolve(opt("--out", "shots"));
 const port = Number(opt("--port", 9333));
@@ -176,11 +178,28 @@ try {
         hit = await click(pattern);
       }
       if (!hit) {
-        if (!repeat || round === 0) { record.push({ name: `step-${n}`, note: `NOT REACHED: no visible control matching /${pattern}/` }); console.log(`[capture] not reached: ${pattern}`); }
+        if (!repeat || round === 0) {
+          record.push({ name: `step-${n}`, note: `NOT REACHED: no visible control matching /${pattern}/` });
+          console.log(`[capture] not reached: ${pattern}`);
+          if (!repeat) process.exitCode = 1;
+        }
         break;
       }
       await shoot(`${String(n).padStart(2, "0")}-${pattern.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`, `clicked "${hit}"`);
       n += 1;
+    }
+  }
+  for (const pattern of required) {
+    let found = false;
+    for (let attempt = 0; attempt < 20 && !found; attempt += 1) {
+      found = await evaluate(`Boolean(document.body && new RegExp(${JSON.stringify(pattern)}, "i").test(document.body.innerText))`);
+      if (!found) await sleep(500);
+    }
+    record.push({ name: "require", note: found ? `REQUIRED PRESENT: /${pattern}/` : `REQUIRED MISSING: /${pattern}/` });
+    console.log(`[capture] require /${pattern}/: ${found ? "present" : "MISSING"}`);
+    if (!found) {
+      await shoot(`required-missing-${required.indexOf(pattern) + 1}`, `required state missing: /${pattern}/`);
+      process.exitCode = 1;
     }
   }
 } finally {

@@ -572,8 +572,10 @@ jobs:
           xvfb-run -a --server-args="-screen 0 1600x1000x24" \
             node scripts/capture-product-pages.mjs --exe "$exe" --out shots \
             --seed-unreadable-credentials \
-            --steps "+^Next$|^You$|^Apps$" || true
-          ls -la shots/ || true
+            --steps "^Connect apps$" \
+            --require "Saved sign-ins couldn't be unlocked" \
+            --require "Try again"
+          ls -la shots/
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
