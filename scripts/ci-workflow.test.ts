@@ -160,15 +160,18 @@ describe("CI concurrency", () => {
   });
 
   it("keeps each PR to one macOS job", () => {
-    const macosJobs = Object.entries(workflow.jobs as Record<string, { "runs-on": string; strategy?: { matrix?: { os?: unknown } } }>)
+    const macosJobs = Object.entries(workflow.jobs as Record<string, { "runs-on": string; if?: string; strategy?: { matrix?: { os?: unknown } } }>)
+      // Dispatch-gated probe jobs never run on pull requests (their condition
+      // requires workflow_dispatch), whatever runner label they carry, so
+      // they cannot add a macOS lane to a PR and are outside this protection.
+      .filter(([, job]) => !(job.if ?? "").includes("github.event_name == 'workflow_dispatch'"))
       .filter(([, job]) => job["runs-on"] === "macos-latest" || JSON.stringify(job.strategy?.matrix?.os ?? "").includes("macos"))
       .map(([name]) => name);
     // Adapted: this repo's pull-request path runs two deliberate macOS lanes -
     // the iOS build and the macOS leg of the test matrix (upstream had only
     // Electron smokes; this product ships an iOS app). The protection stands:
     // every PR-path macOS job is named here, so a third cannot slip in
-    // unnoticed. The dispatch-gated probe jobs run on macos-15-intel and never
-    // on pull requests, so they are outside this filter.
+    // unnoticed.
     expect(macosJobs.sort()).toEqual(["ios", "test"]);
   });
 
