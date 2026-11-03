@@ -333,9 +333,9 @@ jobs:
       - name: Time dmg mount and app copy (install phase)
         run: |
           set -euo pipefail
-          start=$(date +%s%3N); hdiutil attach -nobrowse -mountpoint /tmp/oldmnt old.dmg >/dev/null; end=$(date +%s%3N)
+          start=$(python3 -c 'import time; print(int(time.time()*1000))'); hdiutil attach -nobrowse -mountpoint /tmp/oldmnt old.dmg >/dev/null; end=$(python3 -c 'import time; print(int(time.time()*1000))')
           echo "dmg_attach_ms=$((end-start))" | tee results/install-timings.txt
-          start=$(date +%s%3N); cp -R "/tmp/oldmnt/Dani Bot.app" /tmp/old.app; end=$(date +%s%3N)
+          start=$(python3 -c 'import time; print(int(time.time()*1000))'); cp -R "/tmp/oldmnt/Dani Bot.app" /tmp/old.app; end=$(python3 -c 'import time; print(int(time.time()*1000))')
           echo "app_copy_ms=$((end-start))" | tee -a results/install-timings.txt
           hdiutil detach /tmp/oldmnt >/dev/null
       - name: Probe cold launch (published build)
@@ -384,11 +384,10 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" -o windows-release.zip
           mkdir -p windows-release && unzip -q windows-release.zip -d windows-release
       - name: Time portable extraction
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          start=$(date +%s%3N); mkdir -p new-app && tar -xf windows-release/DaniBot-Windows-Portable.zip -C new-app; end=$(date +%s%3N)
-          echo "portable_extract_ms=$((end-start))" | tee results/install-timings.txt
+          $m = Measure-Command { Expand-Archive -Path .\windows-release\DaniBot-Windows-Portable.zip -DestinationPath .\new-app }
+          "portable_extract_ms=$([int]$m.TotalMilliseconds)" | Tee-Object -FilePath results/install-timings.txt
       - name: Probe cold launch (current build)
         shell: bash
         env:
@@ -436,7 +435,7 @@ jobs:
       - name: Time portable extraction
         run: |
           set -euo pipefail
-          start=$(date +%s%3N); mkdir -p new-app && unzip -q macos-release/DaniBot-Intel-Portable.zip -d new-app; end=$(date +%s%3N)
+          start=$(python3 -c 'import time; print(int(time.time()*1000))'); mkdir -p new-app && unzip -q macos-release/DaniBot-Intel-Portable.zip -d new-app; end=$(python3 -c 'import time; print(int(time.time()*1000))')
           echo "portable_extract_ms=$((end-start))" | tee results/install-timings.txt
       - name: Probe cold launch (current build)
         env:
