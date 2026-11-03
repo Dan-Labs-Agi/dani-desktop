@@ -24,7 +24,7 @@ Object.defineProperty(globalThis.navigator, "language", { value: "en", configura
 // happy-dom suites never open the server database. Keep its Node-only import
 // out of the client bundler, while retaining cleanup for every server suite.
 let closeMessageDb = () => {};
-if (typeof window === "undefined") {
+if (!("window" in globalThis)) {
   const serverDbModule = "../message-db.ts";
   ({ closeMessageDb } = await import(/* @vite-ignore */ serverDbModule));
 }
