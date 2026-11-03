@@ -32,10 +32,11 @@ mkdirSync(home, { recursive: true });
 // read back, so the launch takes the real unavailable-store path and the
 // product shows its actual locked-sign-ins notice. The bytes are garbage on
 // purpose; nothing about a real store or a real person's data is touched.
-if (process.argv.includes("--seed-unreadable-credentials")) {
-  const userData = path.join(sandbox, "config", "Dani Bot");
-  mkdirSync(userData, { recursive: true });
-  writeFileSync(path.join(userData, "credentials.bin"), Buffer.from("not-a-real-credential-store"));
+const seedUnreadable = process.argv.includes("--seed-unreadable-credentials");
+const seedDir = path.join(sandbox, "config", "Dani Bot");
+if (seedUnreadable) {
+  mkdirSync(seedDir, { recursive: true });
+  writeFileSync(path.join(seedDir, "credentials.bin"), Buffer.from("not-a-real-credential-store"));
 }
 const child = spawn(exe, [`--remote-debugging-port=${port}`, "--password-store=basic", "--no-sandbox"], {
   env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(sandbox, "config"), XDG_SESSION_TYPE: "x11" },
@@ -75,6 +76,18 @@ async function appTarget() {
 }
 await pageTarget();
 const target = await appTarget();
+// A seeded store the app never reads fails every --require later with no hint why.
+// Assert the boot probe actually classified it before spending the run on screenshots.
+if (seedUnreadable) {
+  const origin = new URL(target.url).origin;
+  const state = await (await fetch(`${origin}/api/connectors/connected`)).json();
+  if (state.credentialStore !== "unavailable") {
+    throw new Error(
+      `seeded unreadable credentials at ${path.join(seedDir, "credentials.bin")} but the app reported ` +
+      `credentialStore=${JSON.stringify(state.credentialStore)}; the seed path does not match the app's userData dir`,
+    );
+  }
+}
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
 let seq = 0;
