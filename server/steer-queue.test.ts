@@ -894,7 +894,7 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
     const queued = await api("POST", `/api/bots/${bot.id}/messages`, body);
     expect(queued.body).toMatchObject({ queued: true, queueId: expect.any(String) });
     const receipt = () => {
-      const database = new DatabaseSync(join(home, ".openmausbot", "messages.db"), { readOnly: true });
+      const database = new DatabaseSync(join(home, ".danibot", "messages.db"), { readOnly: true });
       try { return database.prepare("SELECT status FROM chat_followups WHERE id = ?").get(queued.body.queueId); }
       finally { database.close(); }
     };
