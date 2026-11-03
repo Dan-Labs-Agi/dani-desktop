@@ -1,6 +1,6 @@
 # Manual Windows Defender verification: builds the installer with EXACTLY the
 # release lane's Windows toolchain (scripts/ci-workflow.test.ts pins step
-# parity), so a Defender submission covers the bytes a release would ship.
+# parity), so a Defender check covers the bytes a release would ship. Build only: no upload or submission step is wired or authorized.
 name: Windows Defender check
 
 on:
@@ -31,10 +31,3 @@ jobs:
         run: node scripts/prepare-cloudflared.mjs
       - name: Build Windows packages
         run: pnpm package:win
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: windows-defender-check
-          path: |
-            release/DaniBot-*.exe
-          if-no-files-found: error
-          retention-days: 7

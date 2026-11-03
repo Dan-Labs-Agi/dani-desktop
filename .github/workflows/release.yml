@@ -14,11 +14,6 @@ on:
         required: false
         type: boolean
         default: false
-      ship_without_ci:
-        description: "Skip waiting for this commit's CI gate; recovery escape hatch only"
-        required: false
-        type: boolean
-        default: false
   push:
     branches:
       - main
@@ -42,24 +37,21 @@ jobs:
     runs-on: ubuntu-latest
     # release-ci.mjs waits up to 170 minutes for the commit's gate.
     timeout-minutes: 180
+    # Read-only wait: reads this commit's CI runs and their jobs. No branch,
+    # dispatch, or re-run mutations - an unproven commit fails the release.
     permissions:
-      # re-run failed jobs + dispatch the release-lane CI run
-      actions: write
-      # create/update/delete the release-ci/v<version> branch
-      contents: write
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: |
             scripts/release-ci.mjs
-            scripts/ci-scope.mjs
       - run: node scripts/release-ci.mjs
-        if: ${{ !inputs.ship_without_ci }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ needs.prepare.outputs.sha }}
-          VERSION: ${{ needs.prepare.outputs.version }}
 
   prepare:
     name: Pin release commit
@@ -286,7 +278,7 @@ jobs:
     # Release hold: an ordinary branch push only validates the packaging above.
     # Tags and draft releases are created only by a v* tag push or an explicit
     # manual dispatch, after the required checks have passed.
-    if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && needs.prepare.outputs.published != 'true' && !inputs.build_only
+    if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && needs.prepare.outputs.published != 'true' && !inputs.build_only && needs.ci.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

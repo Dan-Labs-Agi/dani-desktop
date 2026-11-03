@@ -161,6 +161,26 @@ describe("CI concurrency", () => {
     expect(workflow.jobs.gate["timeout-minutes"]).toBe(5);
     // A cancelled dependency surfaces as a gate failure, never a pass.
     expect(runGate({ ...gateNeeds(), "control-plane": { result: "cancelled" } }).status).toBe(1);
+  });
+
+  it("models the gate's workflow-level outcomes: no skipped gate can read as success", () => {
+    // GitHub auto-skips a job whose needs failed or were cancelled unless its
+    // `if` contains a status check function. The gate's `if` must contain one
+    // (cancelled()), so a failed/cancelled need makes the gate EXECUTE and its
+    // script fail closed (exit 1 above) - the conclusion is "failure", never a
+    // silent "skipped". Outcome matrix this pins:
+    //   need failed/cancelled  -> gate runs, exits 1   -> conclusion failure
+    //   whole run cancelled    -> gate is cancelled    -> conclusion cancelled
+    //   probe dispatch inputs  -> gate is skipped on purpose (release-ci.mjs
+    //                             verdict "no gate job" excludes such runs)
+    // Only "success" is a proof, and both release layers demand exactly it:
+    // release.yml's draft requires needs.ci.result == 'success' and
+    // release-ci.mjs's judgeRun maps cancelled/skipped/missing-gate to
+    // non-green verdicts (covered in scripts/release-ci.test.ts).
+    expect(workflow.jobs.gate.if).toMatch(/cancelled\(\)/);
+    const release = parse(readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"));
+    expect(release.jobs.release.if).toContain("needs.ci.result == 'success'");
+    expect(release.jobs.release.needs).toContain("ci");
     expect(workflow.jobs.gate.needs).toEqual(["detect-optional-jobs", "sdd", "test", "tests-complete", "control-plane", "package-linux", "ios", "android"]);
   });
 
@@ -253,14 +273,25 @@ describe("CI concurrency", () => {
     ).toBe(true);
     expect(release.jobs.release.needs).toContain("ci");
     expect(release.jobs.ci.needs).toBe("prepare");
-    expect(release.jobs.ci.permissions).toEqual({ actions: "write", contents: "write" });
+    // Read-only wait: two GETs, so actions:read + contents:read (checkout)
+    // suffice. No branch, dispatch, or re-run scope - a release job must not
+    // be able to mutate CI state to make a commit look proven.
+    expect(release.jobs.ci.permissions).toEqual({ actions: "read", contents: "read" });
     const wait = release.jobs.ci.steps.find((step: { run?: string }) => step.run === "node scripts/release-ci.mjs");
-    expect(wait.if).toBe("${{ !inputs.ship_without_ci }}");
-    expect(wait.env).toMatchObject({ SHA: "${{ needs.prepare.outputs.sha }}", VERSION: "${{ needs.prepare.outputs.version }}" });
+    // Always runs: no dispatch input may skip the full-green gate.
+    expect(wait.if).toBeUndefined();
+    expect(JSON.stringify(release.on?.workflow_dispatch?.inputs ?? {})).not.toContain("ship_without_ci");
+    expect(wait.env).toMatchObject({ SHA: "${{ needs.prepare.outputs.sha }}" });
+    const script = readFileSync(new URL("./release-ci.mjs", import.meta.url), "utf8");
     // The script reads ci.yml's gate by its job name.
-    expect(readFileSync(new URL("./release-ci.mjs", import.meta.url), "utf8")).toContain(`job.name === "${workflow.jobs.gate.name}"`);
-    // The release lane is a branch, so its runs get their own concurrency group.
-    expect(workflow.on).toHaveProperty("workflow_dispatch");
+    expect(script).toContain(`job.name === "${workflow.jobs.gate.name}"`);
+    // Read-only by construction: no mutation endpoint may appear in it.
+    for (const mutation of ["/git/refs", "/dispatches", "rerun-failed-jobs"]) {
+      expect(script, `release-ci.mjs must not call ${mutation}`).not.toContain(mutation);
+    }
+    // The draft cannot succeed on a skipped, failed, cancelled, or missing
+    // gate: its condition demands the ci job's exact "success" result.
+    expect(release.jobs.release.if).toContain("needs.ci.result == 'success'");
   });
 
   it("checks out every module the release gate imports", () => {
@@ -269,7 +300,6 @@ describe("CI concurrency", () => {
     const sparse = (checkout.with["sparse-checkout"] as string).split("\n").map((line) => line.trim()).filter(Boolean);
     const imports = [...readFileSync(new URL("./release-ci.mjs", import.meta.url), "utf8").matchAll(/^import .* from "\.\/([^"]+)";$/gm)]
       .map((match) => `scripts/${match[1]}`);
-    expect(imports).toContain("scripts/ci-scope.mjs");
     expect(sparse.sort()).toEqual(["scripts/release-ci.mjs", ...imports].sort());
   });
 
@@ -282,6 +312,8 @@ describe("CI concurrency", () => {
     expect(toolchainToInstaller(check.jobs.check.steps).at(-1)?.run).toBe("pnpm package:win");
     expect(toolchainToInstaller(check.jobs.check.steps)).toEqual(toolchainToInstaller(release.jobs.windows.steps));
     expect(check.jobs.check["runs-on"]).toBe(release.jobs.windows["runs-on"]);
+    // Manual build only: no upload or submission step is wired.
+    expect(JSON.stringify(check)).not.toContain("upload-artifact");
   });
 
   it("lets the scope read the previous commit's CI and a pull request's labels, and nothing more", () => {
