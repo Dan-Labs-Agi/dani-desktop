@@ -481,34 +481,53 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" -o branch-release.zip
           mkdir -p branch-release && unzip -q branch-release.zip -d branch-release
       - name: Run the published build to create existing app data
-        shell: pwsh
+        shell: bash
         run: |
-          Expand-Archive -Path .\old-portable.zip -DestinationPath .\old-app
-          $env:PROBE_EXE = ".\old-app\Dani Bot.exe"
-          $env:PROBE_OUT = "results\probe-upgrade-windows-oldseed.json"
-          $env:PROBE_LOG = "results\probe-upgrade-windows-oldseed.log"
-          $env:PROBE_BOOTSTRAP = "1"
-          $env:PROBE_BUDGET_MIN = "2"
-          node scripts/install-timing-probe.mjs
-      - name: Inventory existing app data and plant a marker
-        shell: pwsh
+          set -euo pipefail
+          powershell -NoProfile -Command "Expand-Archive -Path .\old-portable.zip -DestinationPath .\old-app"
+      - name: Probe the published build briefly
+        shell: bash
+        env:
+          PROBE_EXE: "old-app/Dani Bot.exe"
+          PROBE_OUT: "results/probe-upgrade-windows-oldseed.json"
+          PROBE_LOG: "results/probe-upgrade-windows-oldseed.log"
+          PROBE_BOOTSTRAP: "1"
+          PROBE_BUDGET_MIN: "2"
+        run: node scripts/install-timing-probe.mjs
+      - name: Locate existing app data, inventory it and plant a marker
+        shell: bash
         run: |
-          $data = Join-Path $env:APPDATA "dani-desktop"
-          if (!(Test-Path $data)) { throw "published build created no app data at $data" }
-          Get-ChildItem -Recurse -File $data | ForEach-Object { "{0}|{1}" -f ($_.FullName.Substring($data.Length)), $_.Length } | Sort-Object | Out-File -Encoding utf8 results\inventory-old.txt
-          "synthetic upgrade marker - not user data" | Out-File -Encoding utf8 (Join-Path $data "probe-marker.txt")
-          (Get-Content results\inventory-old.txt | Measure-Object -Line).Lines | Out-File results\inventory-old-count.txt
+          set -euo pipefail
+          data=""
+          for try in $(seq 1 12); do
+            for candidate in "$APPDATA/dani-desktop" "$APPDATA/Dani Bot"; do
+              if [ -d "$candidate" ]; then data="$candidate"; break; fi
+            done
+            [ -n "$data" ] && break
+            sleep 5
+          done
+          if [ -z "$data" ]; then
+            echo "published build created no app data; APPDATA contains:"
+            ls -la "$APPDATA" || true
+            exit 1
+          fi
+          echo "existing app data at $data"
+          (cd "$data" && find . -type f -printf '%s|%p\n' | sort) > results/inventory-old.txt
+          echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
+          wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
       - name: Probe cold launch of the branch build over existing data
-        shell: pwsh
+        shell: bash
+        env:
+          PROBE_EXE: "new-app/Dani Bot.exe"
+          PROBE_OUT: "results/probe-upgrade-windows-cold.json"
+          PROBE_LOG: "results/probe-upgrade-windows-cold.log"
+          PROBE_EXPECT_NO_BOOTSTRAP: "1"
         run: |
-          Expand-Archive -Path .\branch-release\DaniBot-Windows-Portable.zip -DestinationPath .\new-app
-          $env:PROBE_EXE = ".\new-app\Dani Bot.exe"
-          $env:PROBE_OUT = "results\probe-upgrade-windows-cold.json"
-          $env:PROBE_LOG = "results\probe-upgrade-windows-cold.log"
-          $env:PROBE_EXPECT_NO_BOOTSTRAP = "1"
+          set -euo pipefail
+          powershell -NoProfile -Command "Expand-Archive -Path .\branch-release\DaniBot-Windows-Portable.zip -DestinationPath .\new-app"
           node scripts/install-timing-probe.mjs
       - name: Probe warm relaunch of the branch build
-        shell: pwsh
+        shell: bash
         env:
           PROBE_EXE: "new-app/Dani Bot.exe"
           PROBE_OUT: "results/probe-upgrade-windows-warm.json"
@@ -516,16 +535,21 @@ jobs:
           PROBE_EXPECT_NO_BOOTSTRAP: "1"
         run: node scripts/install-timing-probe.mjs
       - name: Verify old data preserved
-        shell: pwsh
+        shell: bash
         run: |
-          $data = Join-Path $env:APPDATA "dani-desktop"
-          if (!(Test-Path (Join-Path $data "probe-marker.txt"))) { throw "upgrade lost the planted marker" }
-          Get-ChildItem -Recurse -File $data | ForEach-Object { "{0}|{1}" -f ($_.FullName.Substring($data.Length)), $_.Length } | Sort-Object | Out-File -Encoding utf8 results\inventory-new.txt
-          $old = Get-Content results\inventory-old.txt
-          $new = Get-Content results\inventory-new.txt
-          $missing = $old | Where-Object { $new -notcontains $_ }
-          if ($missing) { "MISSING AFTER UPGRADE:" | Out-File results\upgrade-diff.txt; $missing | Out-File -Append results\upgrade-diff.txt; throw "upgrade dropped $($missing.Count) pre-existing files (see upgrade-diff.txt)" }
-          "all $($old.Count) pre-existing files present after upgrade" | Out-File results\upgrade-diff.txt
+          set -euo pipefail
+          data=""
+          for candidate in "$APPDATA/dani-desktop" "$APPDATA/Dani Bot"; do
+            if [ -f "$candidate/probe-marker.txt" ]; then data="$candidate"; break; fi
+          done
+          [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
+          (cd "$data" && find . -type f -printf '%s|%p\n' | sort) > results/inventory-new.txt
+          missing=$(comm -23 results/inventory-old.txt results/inventory-new.txt || true)
+          if [ -n "$missing" ]; then
+            { echo "MISSING AFTER UPGRADE:"; echo "$missing"; } > results/upgrade-diff.txt
+            echo "upgrade dropped pre-existing files (see upgrade-diff.txt)"; exit 1
+          fi
+          echo "all $(wc -l < results/inventory-old.txt | tr -d ' ') pre-existing files present after upgrade" > results/upgrade-diff.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -567,11 +591,25 @@ jobs:
           PROBE_LOG="results/probe-upgrade-mac-oldseed.log" \
           PROBE_BOOTSTRAP=1 PROBE_BUDGET_MIN=2 \
           node scripts/install-timing-probe.mjs
-      - name: Inventory existing app data and plant a marker
+          sleep 5
+      - name: Locate existing app data, inventory it and plant a marker
         run: |
           set -euo pipefail
-          data="$HOME/Library/Application Support/dani-desktop"
-          test -d "$data" || { echo "published build created no app data at $data"; exit 1; }
+          support="$HOME/Library/Application Support"
+          data=""
+          for try in $(seq 1 12); do
+            for candidate in "$support/dani-desktop" "$support/Dani Bot"; do
+              if [ -d "$candidate" ]; then data="$candidate"; break; fi
+            done
+            [ -n "$data" ] && break
+            sleep 5
+          done
+          if [ -z "$data" ]; then
+            echo "published build created no app data; Application Support contains:"
+            ls -la "$support" || true
+            exit 1
+          fi
+          echo "existing app data at $data"
           (cd "$data" && find . -type f -exec ls -l {} + | awk '{print $5"|"$9}' | sort) > results/inventory-old.txt
           echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
           wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
@@ -594,8 +632,12 @@ jobs:
       - name: Verify old data preserved
         run: |
           set -euo pipefail
-          data="$HOME/Library/Application Support/dani-desktop"
-          test -f "$data/probe-marker.txt" || { echo "upgrade lost the planted marker"; exit 1; }
+          support="$HOME/Library/Application Support"
+          data=""
+          for candidate in "$support/dani-desktop" "$support/Dani Bot"; do
+            if [ -f "$candidate/probe-marker.txt" ]; then data="$candidate"; break; fi
+          done
+          [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
           (cd "$data" && find . -type f -exec ls -l {} + | awk '{print $5"|"$9}' | sort) > results/inventory-new.txt
           missing=$(comm -23 results/inventory-old.txt results/inventory-new.txt || true)
           if [ -n "$missing" ]; then
