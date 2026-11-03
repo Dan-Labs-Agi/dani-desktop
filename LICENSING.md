@@ -47,3 +47,4 @@ mascot are trademarks of Supamaus Software Private Limited; the Apache License
 does not grant trademark rights (section 6),
 so a product built on OpenMausBot needs its own name unless a partner agreement
 says otherwise.
+

@@ -49,3 +49,4 @@ Vercel will build the Next.js docs app, publish every push to `main`, and create
 preview URLs for documentation pull requests. Keep `openmausbot.com` on the
 existing marketing project and add a Docs link there after the new domain is
 live.
+

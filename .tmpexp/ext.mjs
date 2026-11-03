@@ -18,3 +18,4 @@ export const windowsPathDestinations = {
   enter: { resourceDestinationString: enterDestination, definitionDestinationString: enterDestination },
   exit: { characterEscapeValue: exitCharacterEscapeValue },
 };
+

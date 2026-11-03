@@ -118,3 +118,4 @@ manual noVNC access from another device needs a separate authenticated relay.
   recipe does not migrate them. For side-by-side operation, use separate data
   roots and different app/webhook/proxy ports; never share a live data directory.
 - For acceptance checks, follow the [isolated verification recipe](../../docs/verification/podman-self-hosting.md).
+

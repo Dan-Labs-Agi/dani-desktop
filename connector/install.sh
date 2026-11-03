@@ -345,3 +345,4 @@ case "${1:-}" in
     ;;
   *) install_connector "$@" ;;
 esac
+

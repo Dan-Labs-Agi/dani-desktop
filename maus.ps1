@@ -10,3 +10,4 @@ if (-not (Test-Path -LiteralPath $dockerPath)) {
 }
 & $dockerPath compose --project-directory $PSScriptRoot -f (Join-Path $PSScriptRoot 'compose.yaml') @ComposeArgs
 exit $LASTEXITCODE
+

@@ -306,3 +306,4 @@ lists every source file over 1,000 lines and only lets a count go down, and
 `scripts/testing/index-route-ratchet.test.ts` counts the route guards left in
 index.ts. A move changes no behaviour (review it with
 `git diff --color-moved=dimmed-zebra`); a behaviour change is its own PR.
+
