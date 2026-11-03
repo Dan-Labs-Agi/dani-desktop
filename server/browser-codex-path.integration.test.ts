@@ -52,7 +52,7 @@ describe.skipIf(process.platform === "win32")("Codex browser turns with a minima
     browser = join(bin, "agent-browser");
     // The fake provider records MCP configuration without starting a browser.
     // Preparation checks that the acknowledged close really removed it.
-    writeFileSync(browser, "#!/bin/sh\nif [ \"$1\" = session ]; then printf '%s\\n' '{\"success\":true,\"data\":{\"sessions\":[]}}'; fi\nexit 0\n", { mode: 0o755 });
+    writeFileSync(browser, "#!/bin/sh\nif [ \"$1\" = --version ]; then printf '%s\\n' 'agent-browser 0.37.0'; exit 0; fi\nif [ \"$1\" = session ]; then printf '%s\\n' '{\"success\":true,\"data\":{\"sessions\":[]}}'; fi\nexit 0\n", { mode: 0o755 });
     writeFileSync(join(data, "config.json"), JSON.stringify({
       features: { browser: true },
       instances: Object.fromEntries(["default", "absolute"].map((id) => [id, {
@@ -79,7 +79,7 @@ describe.skipIf(process.platform === "win32")("Codex browser turns with a minima
       child.once("exit", () => { clearTimeout(timer); reject(new Error(`Fixture exited: ${stderr}`)); });
       child.stdout!.on("data", (chunk) => {
         output += chunk;
-        if (output.includes(`openmausbot server on ${base}`)) { clearTimeout(timer); resolve(); }
+        if (output.includes(`danibot server on ${base}`)) { clearTimeout(timer); resolve(); }
       });
     });
     events = await openSse(`${base}/api/events`);
