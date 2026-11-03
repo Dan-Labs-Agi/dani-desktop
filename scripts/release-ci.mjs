@@ -81,8 +81,10 @@ export async function waitForReleaseCi({ api, sha, sleep = (ms) => new Promise((
   };
 
   while (now() - started < maxWaitMs) {
+    // Verify the exact revision in the returned data itself: never trust the
+    // head_sha query filter alone to keep another commit's run out.
     const runs = (await api.runsForCommit(sha))
-      .filter((run) => RELEASE_EVENTS.has(run.event))
+      .filter((run) => run.head_sha === sha && RELEASE_EVENTS.has(run.event))
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
     let live = null;
