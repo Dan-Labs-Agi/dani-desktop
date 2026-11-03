@@ -77,7 +77,8 @@ import {
   withoutDesktopCompanionAccess,
 } from "./desktop-companion-client.mjs";
 import { isKnownSkin, skinChrome } from "./skin-overlay.cjs";
-import { CREDENTIAL_CALL_TIMEOUT_MS, encryptSecureDocument, readSecureCredentials } from "./secure-credentials.mjs";
+import { createSecureCredentialAccess } from "./secure-credential-access.mjs";
+import { CREDENTIAL_CALL_TIMEOUT_MS } from "./secure-credentials.mjs";
 import { createControlPlaneClient } from "./control-plane-client.mjs";
 import {
   companionAccountCleanupPending,
@@ -368,27 +369,35 @@ let credentialStoreUnavailable = false;
 /** Chosen wait budget for one OS credential call; tunable, never an OS guarantee. */
 const credentialCallTimeoutMs = () => Number(process.env.OMB_CREDENTIAL_CALL_TIMEOUT_MS) || CREDENTIAL_CALL_TIMEOUT_MS;
 
-/** Every read attempt (launch, then each user "try again") owns a generation;
- * only the newest may apply its result, so a timed-out attempt's late
- * resolution can never mutate state behind a newer one. */
-let credentialReadGeneration = 0;
-let credentialWriteAttempts = 0;
-
-async function loadSecureCredentials() {
-  const generation = ++credentialReadGeneration;
-  const result = await readSecureCredentials({
+/** Every store attempt - boot read, user "try again", every write - is
+ * serialized through this one coordinator, so no attempt can interleave with
+ * or land behind another. See electron/secure-credential-access.mjs. */
+const secureCredentialAccess = createSecureCredentialAccess({
+  store: {
     exists: () => fs.existsSync(CREDENTIALS_FILE),
     isAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
     readFile: () => fs.readFileSync(CREDENTIALS_FILE),
     decrypt: (buffer) => safeStorage.decryptStringAsync(buffer),
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    timeoutMs: credentialCallTimeoutMs(),
-  });
-  if (generation !== credentialReadGeneration) return null;
-  credentialStoreUnavailable = result.status === "unavailable";
-  if (credentialStoreUnavailable) {
-    slog(`credential store unreadable after retries (${result.error}); saved keys are not loaded this launch`);
-  }
+    encrypt: (text) => safeStorage.encryptStringAsync(text),
+  },
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  timeoutMs: credentialCallTimeoutMs(),
+  fs: {
+    mkdir: () => fs.mkdirSync(path.dirname(CREDENTIALS_FILE), { recursive: true }),
+    writeFile: (file, data) => fs.writeFileSync(file, data, { mode: 0o600 }),
+    rename: (from, to) => fs.renameSync(from, to),
+    unlink: (file) => fs.unlinkSync(file),
+  },
+  storeFile: CREDENTIALS_FILE,
+  tmpFile: (attempt) => `${CREDENTIALS_FILE}.${process.pid}.${attempt}.tmp`,
+  onUnavailable: (error) => {
+    slog(`credential store unreadable after retries (${error}); saved keys are not loaded this launch`);
+  },
+});
+
+async function loadSecureCredentials() {
+  const result = await secureCredentialAccess.read();
+  credentialStoreUnavailable = secureCredentialAccess.isUnavailable();
   return result.credentials;
 }
 
@@ -397,27 +406,7 @@ async function saveSecureCredentials(credentials) {
   if (credentialStoreUnavailable) {
     throw new Error("The operating-system credential store could not be read this launch");
   }
-  if (!(await safeStorage.isAsyncEncryptionAvailable())) {
-    throw new Error("The operating-system credential store is unavailable");
-  }
-  const attempt = ++credentialWriteAttempts;
-  const encrypted = await encryptSecureDocument({
-    encrypt: () => safeStorage.encryptStringAsync(JSON.stringify(credentials)),
-    timeoutMs: credentialCallTimeoutMs(),
-  });
-  if (attempt !== credentialWriteAttempts) {
-    throw new Error("A newer credential write superseded this one before it finished");
-  }
-  fs.mkdirSync(path.dirname(CREDENTIALS_FILE), { recursive: true });
-  // Uniquely this attempt's file: cleanup can never remove another attempt's.
-  const temporary = `${CREDENTIALS_FILE}.${process.pid}.${attempt}.tmp`;
-  try {
-    fs.writeFileSync(temporary, encrypted, { mode: 0o600 });
-    fs.renameSync(temporary, CREDENTIALS_FILE);
-  } catch (error) {
-    try { fs.unlinkSync(temporary); } catch { /* the attempt's own file may not exist */ }
-    throw error;
-  }
+  await secureCredentialAccess.save(credentials);
 }
 
 async function secureComposioConfig() {
@@ -2875,27 +2864,21 @@ ipcMain.handle("credential:set", localOnly("credential:set", (_event, name, valu
   saveWorkspaceCredential(name, value),
 ));
 
-// The key-availability state's "try again": re-read the store under a new
-// generation. On success the launch's writable state is rebuilt once from
-// the real document - boot's migration and registration already ran (or were
-// correctly skipped) and never run a second time here.
+// The key-availability state's "try again": re-read the store through the
+// same serial coordinator as every other attempt. On success the writable
+// state is rebuilt once from the real document - boot's migration and
+// registration already ran (or were correctly skipped) and never run a
+// second time here. The server child keeps its spawn environment, so saved
+// sign-ins reach app/server features only after the person chooses to
+// relaunch; the UI offers that and nothing ever restarts on its own.
 ipcMain.handle("credential-store:retry", localOnly("credential-store:retry", async () => {
-  const generation = ++credentialReadGeneration;
-  const result = await readSecureCredentials({
-    exists: () => fs.existsSync(CREDENTIALS_FILE),
-    isAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
-    readFile: () => fs.readFileSync(CREDENTIALS_FILE),
-    decrypt: (buffer) => safeStorage.decryptStringAsync(buffer),
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    timeoutMs: credentialCallTimeoutMs(),
-  });
-  if (generation !== credentialReadGeneration) return { status: "superseded" };
-  if (result.status === "empty") return { status: "ok" };
-  if (result.status !== "ok") return { status: result.status };
-  credentialStoreUnavailable = false;
-  secureCredentialState = createSecureCredentialState(result.credentials, saveSecureCredentials, { writable: true });
+  const result = await secureCredentialAccess.read();
+  credentialStoreUnavailable = secureCredentialAccess.isUnavailable();
+  if (result.status === "superseded") return { status: "superseded" };
+  if (result.status !== "ok" && result.status !== "empty") return { status: result.status };
+  secureCredentialState = secureCredentialAccess.state();
   secureCredentials = secureCredentialState.read();
-  return { status: "ok" };
+  return { status: "ok", requiresRelaunch: true };
 }));
 
 ipcMain.handle("approvals:set-trusted-mode", localOnly("approvals:set-trusted-mode", (_event, botId, mode, options) => {
@@ -3020,9 +3003,8 @@ app.whenReady().then(async () => {
     await secureWorkspaceConfig();
   }
   // From here on every credential writer must go through this serialized state.
-  secureCredentialState = createSecureCredentialState(secureCredentials, saveSecureCredentials, {
-    writable: !credentialStoreUnavailable,
-  });
+  secureCredentialState = secureCredentialAccess.state()
+    ?? createSecureCredentialState(secureCredentials, saveSecureCredentials, { writable: false });
   secureCredentials = secureCredentialState.read();
   if (app.isPackaged) await ensurePhoneSecretIdentity();
   desktopRemoteAccess = desktopCompanionAccess(secureCredentials);
