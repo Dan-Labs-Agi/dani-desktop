@@ -23,7 +23,16 @@ function jobsOffGitHubRunners(): string[] {
     const doc = parse(readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), "utf8"));
     for (const [name, job] of Object.entries(doc.jobs ?? {}) as [string, { "runs-on"?: unknown; strategy?: { matrix?: { os?: unknown } } }][]) {
       const runsOn = job["runs-on"];
-      if (typeof runsOn !== "string") continue;
+      // An array or non-string runs-on resolves labels we cannot see inline;
+      // treat it as an offender rather than skipping it silently.
+      if (Array.isArray(runsOn)) {
+        for (const label of runsOn as string[]) if (!GITHUB_HOSTED.has(label)) offenders.push(`${file}::${name} -> ${label}`);
+        continue;
+      }
+      if (typeof runsOn !== "string") {
+        offenders.push(`${file}::${name} -> unverifiable runs-on`);
+        continue;
+      }
       const labels = /^\$\{\{\s*matrix\.os\s*\}\}$/.test(runsOn)
         ? (Array.isArray(job.strategy?.matrix?.os) ? job.strategy!.matrix!.os as string[] : [`unverifiable matrix.os in ${name}`])
         : [runsOn];
@@ -111,6 +120,23 @@ describe("CI concurrency", () => {
     }
   });
 
+  it("scopes every event kind to its own run group", () => {
+    // The ci.yml expression reduces to ci-pr-<n> for pull_request runs and
+    // ci-<event>-<ref> for everything else, so a dispatch or a stop run can
+    // never cancel a push's run and a push can never cancel a dispatch's.
+    const group = workflow.concurrency.group as string;
+    expect(group).toBe("ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.event_name, github.ref) }}");
+    const reduced = (event: string, ref: string, pr?: number) =>
+      event === "pull_request" ? `ci-pr-${pr}` : `ci-${event}-${ref}`;
+    const groups = [
+      reduced("pull_request", "refs/pull/7/merge", 7),
+      reduced("push", "refs/heads/main"),
+      reduced("workflow_dispatch", "refs/heads/main"),
+      reduced("push", "refs/heads/prod"),
+    ];
+    expect(new Set(groups).size).toBe(groups.length);
+  });
+
   it("stops a closed PR's run by joining ci.yml's PR group", () => {
     const stop = parse(readFileSync(new URL("../.github/workflows/ci-stop-closed.yml", import.meta.url), "utf8"));
     expect(stop.on).toEqual({ pull_request: { types: ["closed"] } });
@@ -131,6 +157,10 @@ describe("CI concurrency", () => {
   it("allows cancelled summary jobs to stop without skipping failure reporting", () => {
     requireFinalGate();
     expect(workflow.jobs.gate.if).toContain("!cancelled()");
+    // Bounded: the gate itself can never wait indefinitely.
+    expect(workflow.jobs.gate["timeout-minutes"]).toBe(5);
+    // A cancelled dependency surfaces as a gate failure, never a pass.
+    expect(runGate({ ...gateNeeds(), "control-plane": { result: "cancelled" } }).status).toBe(1);
     expect(workflow.jobs.gate.needs).toEqual(["detect-optional-jobs", "sdd", "test", "tests-complete", "control-plane", "package-linux", "ios", "android"]);
   });
 
@@ -221,7 +251,7 @@ describe("CI concurrency", () => {
       JSON.stringify(release.jobs).includes("release-ci.mjs"),
       "release.yml has no step running scripts/release-ci.mjs: a release drafts without waiting for its commit's CI",
     ).toBe(true);
-    expect(release.jobs.assemble.needs).toContain("ci");
+    expect(release.jobs.release.needs).toContain("ci");
     expect(release.jobs.ci.needs).toBe("prepare");
     expect(release.jobs.ci.permissions).toEqual({ actions: "write", contents: "write" });
     const wait = release.jobs.ci.steps.find((step: { run?: string }) => step.run === "node scripts/release-ci.mjs");
