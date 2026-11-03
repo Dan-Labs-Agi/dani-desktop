@@ -21,7 +21,7 @@ export function assertManifest(entries = assets) {
   let bytes = 0;
   for (const asset of entries) {
     if (!asset.path || paths.has(asset.path)) throw new Error(`duplicate or empty speech-model path: ${asset.path}`);
-    if (!/^https:\/\//.test(asset.url)) throw new Error(`speech model must use HTTPS: ${asset.path}`);
+    if (!asset.url.startsWith("https://")) throw new Error(`speech model must use HTTPS: ${asset.path}`);
     if (!/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error(`invalid SHA-256 for ${asset.path}`);
     if (!Number.isSafeInteger(asset.bytes) || asset.bytes <= 0) throw new Error(`invalid size for ${asset.path}`);
     paths.add(asset.path); bytes += asset.bytes;
