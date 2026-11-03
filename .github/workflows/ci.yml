@@ -3,6 +3,10 @@ name: CI
 on:
   workflow_dispatch:
     inputs:
+      upgrade_only:
+        description: "Run only the two upgrade-over-data probe jobs"
+        required: false
+        default: "false"
       install_probe:
         description: "Run only the packaged install/startup timing probe jobs"
         required: false
@@ -268,7 +272,7 @@ jobs:
 
   install-probe-old-windows:
     name: startup timing probe - published Windows x64
-    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
+    if: github.event_name == 'workflow_dispatch' && inputs.upgrade_only != true && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: windows-latest
     timeout-minutes: 40
     env:
@@ -315,7 +319,7 @@ jobs:
 
   install-probe-old-mac-intel:
     name: startup timing probe - published macOS Intel
-    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
+    if: github.event_name == 'workflow_dispatch' && inputs.upgrade_only != true && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: macos-15-intel
     timeout-minutes: 40
     env:
@@ -359,7 +363,7 @@ jobs:
 
   install-probe-new-windows:
     name: startup timing probe - current Windows x64 build
-    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
+    if: github.event_name == 'workflow_dispatch' && inputs.upgrade_only != true && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: windows-latest
     timeout-minutes: 40
     env:
@@ -409,7 +413,7 @@ jobs:
 
   install-probe-new-mac-intel:
     name: startup timing probe - current macOS Intel build
-    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
+    if: github.event_name == 'workflow_dispatch' && inputs.upgrade_only != true && (github.ref == 'refs/heads/ci-validate-4c2157b2' || inputs.install_probe)
     runs-on: macos-15-intel
     timeout-minutes: 40
     env:
@@ -557,8 +561,8 @@ jobs:
           oldcount=$(wc -l < results/inventory-old.txt | tr -d ' ')
           identical=0; changed_sensitive=0; : > "$work/changed-safe.txt"
           while IFS='|' read -r size rel; do
-            oldhash=$(grep -F "  $rel" "$work/sums-old.txt" 2>/dev/null | awk '{print $1}')
-            newhash=$(grep -F "  $rel" "$work/sums-new.txt" | awk '{print $1}')
+            oldhash=$(awk -v r="$rel" '{ h=$1; sub(/^[0-9a-f]+ [ *]/, ""); if ($0 == r) print h }' "$work/sums-old.txt")
+            newhash=$(awk -v r="$rel" '{ h=$1; sub(/^[0-9a-f]+ [ *]/, ""); if ($0 == r) print h }' "$work/sums-new.txt")
             if [ -n "$oldhash" ] && [ "$oldhash" = "$newhash" ]; then
               identical=$((identical+1))
             else
@@ -687,8 +691,8 @@ jobs:
           oldcount=$(wc -l < results/inventory-old.txt | tr -d ' ')
           identical=0; changed_sensitive=0; : > "$work/changed-safe.txt"
           while IFS='|' read -r size rel; do
-            oldhash=$(grep -F "  $rel" "$work/sums-old.txt" 2>/dev/null | awk '{print $1}')
-            newhash=$(grep -F "  $rel" "$work/sums-new.txt" | awk '{print $1}')
+            oldhash=$(awk -v r="$rel" '{ h=$1; sub(/^[0-9a-f]+ [ *]/, ""); if ($0 == r) print h }' "$work/sums-old.txt")
+            newhash=$(awk -v r="$rel" '{ h=$1; sub(/^[0-9a-f]+ [ *]/, ""); if ($0 == r) print h }' "$work/sums-new.txt")
             if [ -n "$oldhash" ] && [ "$oldhash" = "$newhash" ]; then
               identical=$((identical+1))
             else
