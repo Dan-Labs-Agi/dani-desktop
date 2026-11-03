@@ -9,6 +9,11 @@ on:
         description: "Commit, tag, or branch to release (defaults to the selected branch)"
         required: false
         type: string
+      build_only:
+        description: "Build and verify packages only; never create a draft release"
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -251,7 +256,7 @@ jobs:
     # Release hold: an ordinary branch push only validates the packaging above.
     # Tags and draft releases are created only by a v* tag push or an explicit
     # manual dispatch, after the required checks have passed.
-    if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && needs.prepare.outputs.published != 'true'
+    if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && needs.prepare.outputs.published != 'true' && !inputs.build_only
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
