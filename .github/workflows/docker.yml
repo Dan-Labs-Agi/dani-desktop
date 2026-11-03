@@ -103,7 +103,6 @@ jobs:
           # alone carries the authority.
           echo "smoke 6: pairing"
           pairing=$(docker compose -f deploy/docker-compose.yml exec -T omb node dist-server/pair-cli.js --label ci)
-          echo "$pairing"
           pcode=$(grep -o 'code=[A-Z2-9-]*' <<<"$pairing" | head -1 | cut -d= -f2)
           test -n "$pcode"
           jar=$(mktemp)
