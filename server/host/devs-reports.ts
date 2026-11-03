@@ -152,7 +152,7 @@ const droppedLine = (language: string | undefined) => serverLine(language, "serv
 /** A bot reply that repeats the failure line word for word has passed it on; the line itself is the marker. */
 
 /** Rides on the turn that answers a @devs message. */
-const TURN_NOTE = "\n\n[From Dani Bot, not the person: this message tags @devs, so it is a bug report for the Dani team, Dani Bot's developers. Call report_bug once, first: what the person says went wrong; what you saw yourself in this conversation (errors, failed tools, stuck steps), or that you saw nothing unusual; and steps to reproduce. Leave out passwords, keys, tokens and file contents; Dani Bot adds the app's own diagnostics. Then tell the person, word for word, the line report_bug returns, and help with the problem if you can.]";
+const TURN_NOTE = "\n\n[From Dani Bot, not the person: this message tags @devs, so it is a bug report for the Dani team, Dani Bot's developers. Dani Bot files it itself, with the app's own diagnostics, and tells the person what became of it; there is no report tool for you to call. Leave passwords, keys, tokens and file contents out of your reply, and help with the problem if you can.]";
 
 const iso = (at: number) => new Date(at).toISOString();
 const firstLine = (text: string | undefined) => (text ?? "").split("\n").map((line) => line.trim()).find(Boolean) ?? "";
