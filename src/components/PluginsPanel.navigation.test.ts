@@ -5,7 +5,8 @@ import type { Bot, InstanceInfo } from "@/state/store";
 import { api } from "@/state/store";
 
 // PluginsPanel's own state, seeded by call order: effects never run under server rendering, so the catalog is placed as
-// a finished fetch would leave it.
+// a finished fetch would leave it. Index 8 is the credential-unlock state;
+// every later slot follows that state, including pending URLs and inventory phase.
 const fixture = vi.hoisted(() => ({
   surface: "apps" as "apps" | "mcp",
   dispatch: vi.fn(),
@@ -65,14 +66,14 @@ import { MASCOT_BODIES } from "../../shared/mascot-bodies";
 const CARDS = 0;
 const CONFIGURED = 3;
 const STATUS = 6;
-const PHASE = 13;
-const HIGHLEVEL_CONNECTED = 21;
-const X_CONNECTED = 22;
-const CATEGORY = 20;
-const POSTIZ_CONNECTED = 23;
+const PHASE = 14;
+const HIGHLEVEL_CONNECTED = 22;
+const X_CONNECTED = 23;
+const CATEGORY = 21;
+const POSTIZ_CONNECTED = 24;
 const MODE = 4;
-const SEARCH = 15;
-const TAB = 16;
+const SEARCH = 16;
+const TAB = 17;
 
 type Node = ReactElement<{ children?: ReactNode; "aria-pressed"?: boolean; "data-apps-filter"?: string; onClick?: () => void; [key: string]: unknown }>;
 function nodes(value: ReactNode): Node[] {
@@ -126,7 +127,7 @@ describe("Apps pop-up", () => {
     expect(fixture.dispatch).not.toHaveBeenCalled();
   });
   it("counts Whop among connected apps", () => {
-    fixture.overrides.set(18, true);
+    fixture.overrides.set(19, true);
     const { html } = render();
     expect(html).toContain("2 connected");
   });
@@ -140,16 +141,16 @@ describe("Apps pop-up", () => {
     expect(render().html).toContain("2 connected");
   });
   it("hides HighLevel from the Connected tab until it is connected, and from a search that does not name it", () => {
-    fixture.overrides.set(16, "connected");
+    fixture.overrides.set(17, "connected");
     fixture.overrides.set(HIGHLEVEL_CONNECTED, false);
     const wrapper = (tree: Node[]) => tree.find((node) => node.props["data-native-card"] === "highlevel")!;
     expect(wrapper(render().nodes).props.className).toBe("hidden");
     fixture.overrides.set(HIGHLEVEL_CONNECTED, true);
     expect(wrapper(render().nodes).props.className).toBe("contents");
-    fixture.overrides.set(16, "marketplace");
-    fixture.overrides.set(15, "growably");
+    fixture.overrides.set(17, "marketplace");
+    fixture.overrides.set(16, "growably");
     expect(wrapper(render().nodes).props.className).toBe("contents");
-    fixture.overrides.set(15, "zendesk");
+    fixture.overrides.set(16, "zendesk");
     expect(wrapper(render().nodes).props.className).toBe("hidden");
   });
   it("shows the Postiz card in the grid and under Social, with a Social pill, and counts it once connected", () => {
@@ -204,7 +205,7 @@ describe("Apps pop-up", () => {
   it("keeps a safe explicit authorization link and reopens without creating another account", async () => {
     const url = "https://auth.example.test/flow";
     fixture.overrides.set(STATUS, { gmail: { connected: false, pending: true } });
-    fixture.overrides.set(8, { gmail: { url, createdAt: Date.now() } });
+    fixture.overrides.set(9, { gmail: { url, createdAt: Date.now() } });
     const page = { opener: {}, closed: false, location: { replace: vi.fn() }, close: vi.fn() };
     const open = vi.fn(() => page);
     vi.stubGlobal("window", { open });
@@ -225,8 +226,8 @@ describe("Apps pop-up", () => {
   });
 
   it("reserves before requesting authorization and closes its blank when the panel closes", async () => {
-    fixture.overrides.set(9, "gmail");
-    fixture.overrides.set(10, "work");
+    fixture.overrides.set(10, "gmail");
+    fixture.overrides.set(11, "work");
     let resolve!: (value: unknown) => void;
     vi.mocked(api).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
     const page = { opener: {}, closed: false, location: { replace: vi.fn() }, close: vi.fn() };
@@ -247,7 +248,7 @@ describe("Apps pop-up", () => {
 
   it("renews an expired retained link without reusing its occupied account alias", async () => {
     fixture.overrides.set(STATUS, { gmail: { connected: false, pending: true, status: "INITIALIZING", accounts: [{ id: "ca_old", alias: "work", status: "INITIALIZING" }] } });
-    fixture.overrides.set(8, { gmail: { url: "https://auth.example.test/old", createdAt: Date.now() - 600_000 } });
+    fixture.overrides.set(9, { gmail: { url: "https://auth.example.test/old", createdAt: Date.now() - 600_000 } });
     vi.mocked(api).mockClear();
     vi.mocked(api).mockImplementationOnce(async (_path, request) => {
       if (request?.body) throw new Error("That account alias is already in use");
@@ -311,8 +312,8 @@ describe("Apps pop-up", () => {
       vi.stubGlobal("window", { open: () => page });
       const connectApp = async (slug: string) => {
         fixture.overrides.set(CARDS, [card(slug)]);
-        fixture.overrides.set(9, slug);
-        fixture.overrides.set(10, "work");
+        fixture.overrides.set(10, slug);
+        fixture.overrides.set(11, "work");
         vi.mocked(api).mockReset();
         vi.mocked(api).mockResolvedValueOnce({ url: `https://auth.example.test/${slug}` });
         const form = render().nodes.find((node) => node.type === "form")!;
@@ -349,8 +350,8 @@ describe("Apps pop-up", () => {
       const page = { opener: {}, closed: false, location: { replace: vi.fn() }, close: vi.fn() };
       vi.stubGlobal("window", { open: () => page });
       fixture.overrides.set(CARDS, [card("slack")]);
-      fixture.overrides.set(9, "slack");
-      fixture.overrides.set(10, "home");
+      fixture.overrides.set(10, "slack");
+      fixture.overrides.set(11, "home");
       vi.mocked(api).mockReset();
       vi.mocked(api).mockResolvedValueOnce({ url: "https://auth.example.test/slack" });
       const form = render().nodes.find((node) => node.type === "form")!;
@@ -484,15 +485,15 @@ describe("Apps pop-up", () => {
   });
 
   it("drops a selected category when a filter is chosen, so the MCP section comes back", () => {
-    fixture.overrides.set(20, "Design");
+    fixture.overrides.set(21, "Design");
     expect(render().html).not.toContain("MCP inventory");
     chip(render().nodes, "mcp").props.onClick!();
-    expect(fixture.overrides.get(20)).toBeNull();
+    expect(fixture.overrides.get(21)).toBeNull();
     expect(render().html).toContain("MCP inventory");
   });
 
   it("shows only connected apps, and no MCP section, under Connected", () => {
-    fixture.overrides.set(16, "connected");
+    fixture.overrides.set(17, "connected");
     const { html, nodes: tree } = render();
     expect(chip(tree, "connected").props["aria-pressed"]).toBe(true);
     expect(html).toContain('data-app-tile="slack"');
@@ -524,13 +525,13 @@ describe("Apps pop-up", () => {
     expect([...design.html.matchAll(/<h3 id="[^"]*"[^>]*>([^<]*)/g)].map((match) => match[1])).toEqual(["Design"]);
     expect(chip(design.nodes, "all").props["aria-pressed"]).toBe(false);
     expect(design.nodes.find((node) => node.props["data-apps-category"] === "Design")!.props["aria-pressed"]).toBe(true);
-    fixture.overrides.set(20, null);
+    fixture.overrides.set(21, null);
     const again = render();
     expect(again.html.match(/>View all</g)).toHaveLength(1);
     const sections = again.nodes.filter((node) => node.props.viewAll);
     expect(sections.map((node) => node.props.title)).toEqual(["Productivity"]);
     (sections[0]!.props.viewAll as { onClick: () => void }).onClick();
-    expect(fixture.overrides.get(20)).toBe("Productivity");
+    expect(fixture.overrides.get(21)).toBe("Productivity");
   });
 
   it("pairs the search with an MCP servers pill and puts the connected count, with app icons, in the header", () => {
@@ -540,7 +541,7 @@ describe("Apps pop-up", () => {
     expect(indicator.props["aria-pressed"]).toBe(false);
     expect(html).toContain("1 connected");
     indicator.props.onClick!();
-    expect(fixture.overrides.get(16)).toBe("connected");
+    expect(fixture.overrides.get(17)).toBe("connected");
   });
 
   it("caps the unsearched catalog so the MCP servers stay a short scroll away", () => {
@@ -555,7 +556,7 @@ describe("Apps pop-up", () => {
     fixture.bots = [bot("scout", { composio: false })];
     fixture.overrides.set(7, true);
     let { html } = render();
-    expect(html).toContain("Showing what was connected last time");
+    expect(html).toContain("Saved sign-ins couldn&#x27;t be unlocked. Your saved data hasn&#x27;t been changed.");
     fixture.overrides.set(7, false);
     ({ html } = render());
     expect(html).toContain("Not every bot can use these apps.");
