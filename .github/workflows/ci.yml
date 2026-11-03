@@ -922,7 +922,7 @@ jobs:
     # !cancelled(): a cancelled or failed lane must fail this gate, never skip
     # it into a green-looking check. Probe-only dispatches are gated by their
     # own probe jobs instead, matching tests-complete.
-    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only) }}
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only) }}
     needs: [detect-optional-jobs, sdd, test, tests-complete, control-plane, package-linux, ios, android]
     runs-on: ubuntu-latest
     timeout-minutes: 5

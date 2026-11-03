@@ -37,7 +37,7 @@ function fakeGitHub(polls: Array<{ runs: Run[]; jobs?: Record<number, Job[]> }>)
   let clock = 0;
   const state = () => polls[Math.min(poll, polls.length - 1)]!;
   const api = {
-    async runsForCommit(sha: string) { return state().runs.filter((run) => run.head_sha === sha); },
+    async runsForCommit() { return state().runs; },
     async runJobs(runId: number) { return state().jobs?.[runId] ?? []; },
   };
   const options = {
@@ -136,11 +136,11 @@ describe("only the exact commit can prove the release", () => {
     expect(await waitForReleaseCi(options)).toEqual({ ok: true, runId: 2 });
   });
 
-  it("never counts a green run on another commit, even one with the same tree", async () => {
-    // Exact-revision proof: generated/build/version-dependent behavior is
-    // pinned to the released commit, so a same-tree or version-parent run
-    // proves nothing. The api only ever returns this commit's runs, and no
-    // commit/tree/parent lookup exists to widen that.
+  it("never counts a green run on another commit, even one the head_sha query returns", async () => {
+    // Exact-revision proof is validated in the returned data, not trusted to
+    // the query filter: a green run the endpoint hands back under another
+    // commit's sha - same tree, version parent, or a filter surprise - is
+    // discarded here. No commit/tree/parent lookup exists to widen that.
     const { options } = fakeGitHub([{ runs: [run(8, "push", "completed", "main", 0, { head_sha: OTHER })], jobs: { 8: green() } }]);
     expect(await waitForReleaseCi(options)).toMatchObject({ ok: false, reason: expect.stringContaining("within 10 minutes") });
   });

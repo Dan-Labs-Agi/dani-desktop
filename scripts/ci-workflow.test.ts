@@ -156,7 +156,10 @@ describe("CI concurrency", () => {
 
   it("allows cancelled summary jobs to stop without skipping failure reporting", () => {
     requireFinalGate();
-    expect(workflow.jobs.gate.if).toContain("!cancelled()");
+    // always(): the gate EXECUTES whatever happened to its needs - a failed
+    // or cancelled dependency can never auto-skip it into silence.
+    expect(workflow.jobs.gate.if).toContain("always()");
+    expect(workflow.jobs.gate.if).not.toContain("!cancelled()");
     // Bounded: the gate itself can never wait indefinitely.
     expect(workflow.jobs.gate["timeout-minutes"]).toBe(5);
     // A cancelled dependency surfaces as a gate failure, never a pass.
@@ -164,20 +167,22 @@ describe("CI concurrency", () => {
   });
 
   it("models the gate's workflow-level outcomes: no skipped gate can read as success", () => {
-    // GitHub auto-skips a job whose needs failed or were cancelled unless its
-    // `if` contains a status check function. The gate's `if` must contain one
-    // (cancelled()), so a failed/cancelled need makes the gate EXECUTE and its
-    // script fail closed (exit 1 above) - the conclusion is "failure", never a
-    // silent "skipped". Outcome matrix this pins:
+    // The gate's `if` is always() && probe-dispatch exclusions: GitHub
+    // auto-skips a job whose needs failed or were cancelled unless its `if`
+    // contains a status check function, and always() is the one that cannot
+    // itself evaluate false because of a cancellation. So a failed/cancelled
+    // need makes the gate EXECUTE and its script fail closed (exit 1 above) -
+    // the conclusion is "failure", never a silent "skipped". Outcome matrix:
     //   need failed/cancelled  -> gate runs, exits 1   -> conclusion failure
-    //   whole run cancelled    -> gate is cancelled    -> conclusion cancelled
+    //   whole run cancelled    -> GitHub cancels the gate's queued/running job
+    //                             regardless of if     -> conclusion cancelled
     //   probe dispatch inputs  -> gate is skipped on purpose (release-ci.mjs
     //                             verdict "no gate job" excludes such runs)
-    // Only "success" is a proof, and both release layers demand exactly it:
-    // release.yml's draft requires needs.ci.result == 'success' and
-    // release-ci.mjs's judgeRun maps cancelled/skipped/missing-gate to
-    // non-green verdicts (covered in scripts/release-ci.test.ts).
-    expect(workflow.jobs.gate.if).toMatch(/cancelled\(\)/);
+    // Every non-success outcome is blocked, distinctly: release.yml's draft
+    // requires needs.ci.result == 'success', and release-ci.mjs's judgeRun
+    // maps failure -> red, cancelled -> cancelled, skipped -> skipped, missing
+    // gate -> "no gate job", each non-green (scripts/release-ci.test.ts).
+    expect(workflow.jobs.gate.if).toMatch(/^\$\{\{ always\(\) && /);
     const release = parse(readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8"));
     expect(release.jobs.release.if).toContain("needs.ci.result == 'success'");
     expect(release.jobs.release.needs).toContain("ci");
