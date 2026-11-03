@@ -249,6 +249,31 @@ describe("what the person is told, in their language", () => {
     expect(fx.notices("scout-main")).toEqual(["notice: An den Berichtsserver gesendet (Bericht report-2), nachdem ein früherer Versuch nicht durchkam."]);
     fx.stop();
   });
+
+  it("a reply that names Dani or repeats only part of the line has not passed it on, so the person still gets the notice", async () => {
+    const waiting = "Noch nicht gesendet: der Berichtsserver war nicht erreichbar. Der Bericht ist gespeichert und wird so bald wie möglich von selbst gesendet, du musst ihn also nicht noch einmal senden.";
+    const brandOnly = fixture({ outcomes: [{ ok: false, retry: true, why: "offline" }], lineLanguage: german });
+    brandOnly.person("scout-main", "@devs offline", ada);
+    brandOnly.busy.add("scout-main");
+    brandOnly.reports.note("scout-main", true);
+    await brandOnly.call("scout", "scout-main", { went_wrong: "offline" });
+    brandOnly.bot("scout-main", "Dani weiß Bescheid, ich schaue mir das an.", { turnId: "t1", turnSucceeded: true });
+    brandOnly.busy.delete("scout-main");
+    await brandOnly.settle();
+    expect(brandOnly.notices("scout-main")).toEqual([`notice: ${waiting}`]);
+    brandOnly.stop();
+
+    const partial = fixture({ outcomes: [{ ok: false, retry: true, why: "offline" }], lineLanguage: german });
+    partial.person("scout-main", "@devs offline", ada);
+    partial.busy.add("scout-main");
+    partial.reports.note("scout-main", true);
+    await partial.call("scout", "scout-main", { went_wrong: "offline" });
+    partial.bot("scout-main", waiting.split(".")[0] + ".", { turnId: "t1", turnSucceeded: true });
+    partial.busy.delete("scout-main");
+    await partial.settle();
+    expect(partial.notices("scout-main")).toEqual([`notice: ${waiting}`]);
+    partial.stop();
+  });
 });
 
 describe("a report that cannot go yet", () => {
