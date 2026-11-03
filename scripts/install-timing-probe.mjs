@@ -91,9 +91,21 @@ if (terminal.kind === "budget-exhausted" && process.platform !== "win32") {
     const post = spawnSync("lsof", ["-nP", `-iTCP:${port}`], { encoding: "utf8" });
     if (post.stdout?.trim()) logs.push(`[probe] connections on :${port} at budget exhaustion\n${post.stdout}`);
     if (process.platform === "darwin" && child.pid) {
-      const sample = spawnSync("sample", [String(child.pid), "3", "-mayDie"], { encoding: "utf8", timeout: 20_000 });
-      const text = `${sample.stdout ?? ""}${sample.stderr ?? ""}`.trim();
-      if (text) logs.push(`[probe] stack sample of pid ${child.pid}\n${text.split("\n").slice(0, 200).join("\n")}`);
+      // A process parked in a keychain prompt makes sample(1) itself hang past
+      // its preamble; passwordless sudo on the runner attaches where the
+      // user-space call cannot. SecurityAgent in the table is the ACL-prompt
+      // signature, so name it explicitly when present.
+      const agent = spawnSync("pgrep", ["-fl", "SecurityAgent"], { encoding: "utf8" });
+      if (agent.stdout?.trim()) logs.push(`[probe] SecurityAgent alive at budget exhaustion (keychain ACL prompt pending)\n${agent.stdout.trim()}`);
+      for (const cmd of [["sample", [String(child.pid), "3", "-mayDie"]], ["sudo", ["-n", "sample", String(child.pid), "3", "-mayDie"]]]) {
+        const sample = spawnSync(cmd[0], cmd[1], { encoding: "utf8", timeout: 30_000 });
+        const text = `${sample.stdout ?? ""}${sample.stderr ?? ""}`.trim();
+        const hasReport = /Call graph|Sample analysis/i.test(text);
+        if (text && (hasReport || cmd[0] === "sudo" || sample.error?.code !== "ETIMEDOUT")) {
+          logs.push(`[probe] stack sample of pid ${child.pid} (${cmd[0]}${hasReport ? "" : ", no report"})\n${text.split("\n").slice(0, 200).join("\n")}`);
+          if (hasReport) break;
+        }
+      }
     }
   } catch { /* diagnostics are best-effort */ }
 }
