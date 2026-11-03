@@ -1,6 +1,5 @@
 {
   "name": "dani-desktop",
-  "productName": "Dani Bot",
   "private": true,
   "version": "0.1.139",
   "description": "A local-first chat app for running a team of AI agents.",
