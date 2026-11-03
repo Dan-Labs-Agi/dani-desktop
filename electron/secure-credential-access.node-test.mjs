@@ -78,6 +78,15 @@ test("a hung boot read ends unavailable, blocks writes, and never touches the di
   assert.equal(r.written(), undefined);
 });
 
+test("a hung availability probe fails a save within budget instead of hanging", async () => {
+  // The probe behind a system prompt can wait as indefinitely as a read; a save
+  // must refuse inside the budget and never touch the disk.
+  const r = rig();
+  const access = r.with({ store: { isAvailable: () => new Promise(() => {}) } });
+  await assert.rejects(access.save({ k: "v" }), /credential store is unavailable/);
+  assert.deepEqual(r.ops.filter((o) => o.startsWith("writeFile") || o.startsWith("rename") || o.startsWith("encrypt")), []);
+});
+
 test("retry after a timeout reads the real keys once, recovers once, and saves again", async () => {
   const r = rig();
   let calls = 0;

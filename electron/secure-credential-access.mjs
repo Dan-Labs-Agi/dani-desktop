@@ -1,5 +1,6 @@
 import {
   CREDENTIAL_CALL_TIMEOUT_MS,
+  checkCredentialAvailable,
   encryptSecureDocument,
   readSecureCredentials,
 } from "./secure-credentials.mjs";
@@ -44,7 +45,7 @@ export function createSecureCredentialAccess({
       if (unavailable) {
         throw new Error("The operating-system credential store is unavailable, and the saved data has not been changed");
       }
-      if (!(await isAvailable())) {
+      if (!(await checkCredentialAvailable({ isAvailable, timeoutMs }))) {
         throw new Error("The operating-system credential store is unavailable");
       }
       const attempt = ++writeAttempts;

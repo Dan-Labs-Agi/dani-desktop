@@ -64,6 +64,19 @@ describe("readSecureCredentials", () => {
     expect(result.status).toBe("unavailable");
   });
 
+  it("says UNAVAILABLE when the availability probe itself never answers (prompt-gated store)", async () => {
+    // The probe is an OS credential call too: behind a system prompt it can wait
+    // as indefinitely as a read, so a hung probe must end the read within budget.
+    const isAvailable = vi.fn().mockImplementation(() => new Promise(() => {}));
+    const decrypt = vi.fn();
+    const result = await readSecureCredentials(deps({ isAvailable, decrypt, timeoutMs: 25 }));
+    expect(result.status).toBe("unavailable");
+    expect(result.timedOut).toBe(true);
+    expect(result.error).toBe(CREDENTIAL_CALL_TIMED_OUT);
+    expect(decrypt).not.toHaveBeenCalled();
+    expect(isAvailable).toHaveBeenCalledTimes(1);
+  });
+
   it("says UNAVAILABLE for a file it cannot parse, rather than pretending it is empty", async () => {
     const decrypt = vi.fn().mockResolvedValue("not json");
     const result = await readSecureCredentials(deps({ decrypt }));
