@@ -598,6 +598,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     env:
+      DANI_PROFILE_PROBE: "1"
       PROBE_PORT: "8799"
       ARTIFACT_RUN_ID: "41625636597"
     steps:
@@ -650,11 +651,26 @@ jobs:
             exit 1
           fi
           echo "existing app data at $data"
+          # Record which directory the published build itself created, and every
+          # top-level name under APPDATA (names only), so later steps compare the
+          # candidate against the profile the published build actually used.
+          basename "$data" > results/old-profile-dir.txt
+          printf '%s\n' "$data" > results/old-profile-path.txt
           (cd "$data" && find . -type f -printf '%s|%p\n' | LC_ALL=C sort) > results/inventory-old.txt
           echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
           wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
           mkdir -p "$RUNNER_TEMP/upgradecmp"
           (cd "$data" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/upgradecmp/sums-old.txt"
+      - name: Capture published profile logs before candidate launch
+        shell: bash
+        run: |
+          set -eu
+          for n in "Dani Bot" "dani-desktop"; do
+            if [ -d "$APPDATA/$n/logs" ]; then
+              mkdir -p "results/published-logs/$n"
+              cp -R "$APPDATA/$n/logs/." "results/published-logs/$n/"
+            fi
+          done
       - name: Probe cold launch of the branch build over existing data
         shell: bash
         env:
@@ -680,11 +696,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          data=""
-          for candidate in "$APPDATA/dani-desktop" "$APPDATA/Dani Bot"; do
-            if [ -f "$candidate/probe-marker.txt" ]; then data="$candidate"; break; fi
-          done
-          [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
+          data="$APPDATA/$(cat results/old-profile-dir.txt)"
+          [ -f "$data/probe-marker.txt" ] || { echo "upgrade lost the planted marker"; exit 1; }
           (cd "$data" && find . -type f -printf '%s|%p\n' | LC_ALL=C sort) > results/inventory-new.txt
           missing=$(LC_ALL=C comm -23 <(cut -d'|' -f2- results/inventory-old.txt | LC_ALL=C sort) <(cut -d'|' -f2- results/inventory-new.txt | LC_ALL=C sort) || true)
           if [ -n "$missing" ]; then
@@ -717,6 +730,10 @@ jobs:
             echo "content-changed or unverifiable, sensitive-named files (count only): $changed_sensitive"
             echo "files added by the new build (count only): $added"
           } > results/upgrade-diff.txt
+      - name: Assert the candidate used the prior profile directory
+        shell: bash
+        run: |
+          node scripts/verify-upgrade-profile.mjs results/old-profile-path.txt results/probe-upgrade-windows-cold.log results/profile-use.json
       - name: Record candidate asar provenance
         if: always()
         shell: bash
@@ -737,9 +754,17 @@ jobs:
         shell: bash
         run: |
           set -u
-          mkdir -p results/app-logs
-          for d in "$APPDATA/Dani Bot/logs" "$APPDATA/dani-desktop/logs"; do
-            [ -d "$d" ] && cp -R "$d/." results/app-logs/ 2>/dev/null || true
+          for n in "Dani Bot" "dani-desktop"; do
+            if [ -d "$APPDATA/$n" ]; then
+              (cd "$APPDATA/$n" && find . -type f | LC_ALL=C sort) > "results/profile-names-$n.txt"
+            else
+              echo absent > "results/profile-names-$n.txt"
+            fi
+          done
+          # One folder per directory so old and candidate logs never overwrite each other.
+          for n in "Dani Bot" "dani-desktop"; do
+            mkdir -p "results/app-logs/$n"
+            if [ -d "$APPDATA/$n/logs" ]; then cp -R "$APPDATA/$n/logs/." "results/app-logs/$n/" 2>/dev/null || true; fi
           done
       - name: Redact token-shaped strings from logs before upload
         if: always()
@@ -761,6 +786,7 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 40
     env:
+      DANI_PROFILE_PROBE: "1"
       PROBE_PORT: "8799"
       ARTIFACT_RUN_ID: "41625636597"
     steps:
@@ -808,11 +834,29 @@ jobs:
             exit 1
           fi
           echo "existing app data at $data"
+          basename "$data" > results/old-profile-dir.txt
+          printf '%s\n' "$data" > results/old-profile-path.txt
           (cd "$data" && find . -type f -exec stat -f '%z|%N' {} + | LC_ALL=C sort) > results/inventory-old.txt
           echo "synthetic upgrade marker - not user data" > "$data/probe-marker.txt"
           wc -l < results/inventory-old.txt | tr -d ' ' > results/inventory-old-count.txt
           mkdir -p "$RUNNER_TEMP/upgradecmp"
           (cd "$data" && find . -type f -print0 | sort -z | xargs -0 shasum -a 256) > "$RUNNER_TEMP/upgradecmp/sums-old.txt"
+      - name: Capture published profile logs before candidate launch
+        shell: bash
+        run: |
+          set -eu
+          for n in "Dani Bot" "dani-desktop"; do
+            if [ -d "$HOME/Library/Application Support/$n/logs" ]; then
+              mkdir -p "results/published-logs/$n"
+              cp -R "$HOME/Library/Application Support/$n/logs/." "results/published-logs/$n/"
+            fi
+          done
+          for n in "Dani Bot" "dani-desktop"; do
+            if [ -d "$HOME/Library/Logs/$n" ]; then
+              mkdir -p "results/published-system-logs/$n"
+              cp -R "$HOME/Library/Logs/$n/." "results/published-system-logs/$n/"
+            fi
+          done
       - name: Probe cold launch of the branch build over existing data
         run: |
           set -euo pipefail
@@ -835,11 +879,8 @@ jobs:
         run: |
           set -euo pipefail
           support="$HOME/Library/Application Support"
-          data=""
-          for candidate in "$support/dani-desktop" "$support/Dani Bot"; do
-            if [ -f "$candidate/probe-marker.txt" ]; then data="$candidate"; break; fi
-          done
-          [ -n "$data" ] || { echo "upgrade lost the planted marker"; exit 1; }
+          data="$support/$(cat results/old-profile-dir.txt)"
+          [ -f "$data/probe-marker.txt" ] || { echo "upgrade lost the planted marker"; exit 1; }
           (cd "$data" && find . -type f -exec stat -f '%z|%N' {} + | LC_ALL=C sort) > results/inventory-new.txt
           missing=$(LC_ALL=C comm -23 <(cut -d'|' -f2- results/inventory-old.txt | LC_ALL=C sort) <(cut -d'|' -f2- results/inventory-new.txt | LC_ALL=C sort) || true)
           if [ -n "$missing" ]; then
@@ -872,6 +913,10 @@ jobs:
             echo "content-changed or unverifiable, sensitive-named files (count only): $changed_sensitive"
             echo "files added by the new build (count only): $added"
           } > results/upgrade-diff.txt
+      - name: Assert the candidate used the prior profile directory
+        shell: bash
+        run: |
+          node scripts/verify-upgrade-profile.mjs results/old-profile-path.txt results/probe-upgrade-mac-cold.log results/profile-use.json
       - name: Record candidate asar provenance
         if: always()
         shell: bash
@@ -892,10 +937,23 @@ jobs:
         shell: bash
         run: |
           set -u
-          mkdir -p results/app-logs
+          for n in "Dani Bot" "dani-desktop"; do
+            if [ -d "$HOME/Library/Application Support/$n" ]; then
+              (cd "$HOME/Library/Application Support/$n" && find . -type f | LC_ALL=C sort) > "results/profile-names-$n.txt"
+            else
+              echo absent > "results/profile-names-$n.txt"
+            fi
+          done
+          # One folder per source directory so old and candidate logs never overwrite each other.
+          i=0
           for d in "$HOME/Library/Logs/Dani Bot" "$HOME/Library/Logs/dani-desktop" \
                    "$HOME/Library/Application Support/Dani Bot/logs" "$HOME/Library/Application Support/dani-desktop/logs"; do
-            [ -d "$d" ] && cp -R "$d/." results/app-logs/ 2>/dev/null || true
+            i=$((i+1))
+            if [ -d "$d" ]; then
+              mkdir -p "results/app-logs/$i"
+              echo "$d" > "results/app-logs/$i/SOURCE.txt"
+              cp -R "$d/." "results/app-logs/$i/" 2>/dev/null || true
+            fi
           done
           { echo "== old (published) app =="; codesign -dv --verbose=4 "old-app/Dani Bot.app" 2>&1 || true
             echo; echo "== new (branch) app =="; codesign -dv --verbose=4 "new-app/Dani Bot.app" 2>&1 || true; } > results/codesign-compare.txt
@@ -919,7 +977,7 @@ jobs:
 
   gate:
     name: CI
-    # !cancelled(): a cancelled or failed lane must fail this gate, never skip
+    # always(): a cancelled or failed lane must fail this gate, never skip
     # it into a green-looking check. Probe-only dispatches are gated by their
     # own probe jobs instead, matching tests-complete.
     if: ${{ always() && (github.event_name != 'workflow_dispatch' || !inputs.install_probe) && (github.event_name != 'workflow_dispatch' || !inputs.upgrade_only) }}

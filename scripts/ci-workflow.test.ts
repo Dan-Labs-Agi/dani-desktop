@@ -484,3 +484,21 @@ describe("CI on hosted runners only", () => {
   });
 
 });
+
+
+describe("upgrade probes require actual prior-profile use", () => {
+  it.each(["install-probe-upgrade-windows", "install-probe-upgrade-mac-intel"])("fails unproven use and keeps logs separate: %s", (name) => {
+    const job = workflow.jobs[name];
+    expect(job.env.DANI_PROFILE_PROBE).toBe("1");
+    const steps = job.steps as Array<{ name?: string; run?: string }>;
+    const save = steps.findIndex((step) => step.name === "Capture published profile logs before candidate launch");
+    const cold = steps.findIndex((step) => step.name === "Probe cold launch of the branch build over existing data");
+    expect(save).toBeGreaterThan(-1);
+    expect(save).toBeLessThan(cold);
+    const verify = steps.find((step) => step.name === "Assert the candidate used the prior profile directory")!;
+    expect(verify.run).toContain("node scripts/verify-upgrade-profile.mjs results/old-profile-path.txt");
+    const capture = steps.find((step) => step.name === "Capture app logs and system evidence")!;
+    expect(capture.run).not.toContain('cp -R "$d/." results/app-logs/');
+    expect(capture.run).toContain("profile-names-");
+  });
+});
