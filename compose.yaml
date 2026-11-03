@@ -64,3 +64,4 @@ volumes:
     name: ${OMB_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-openmausbot}_data}
   caddy_data:
   caddy_config:
+

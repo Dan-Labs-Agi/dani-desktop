@@ -342,3 +342,4 @@ Set `OMB_LOOPBACK_TRUST=service` to act as a shared workspace. Send a
 - Write in plain language. Reports go privately to the contact in this
   enrollment, which is the address in `SECURITY.md`. Do not open public
   issues or pull requests for vulnerabilities.
+

@@ -765,3 +765,4 @@ only its tunnel connector token, which can run that one remotely managed tunnel.
 The public companion service still enforces its own pairing and application
 authentication; the tunnel is transport, not user authentication. This control
 plane does not collect marketing consent.
+

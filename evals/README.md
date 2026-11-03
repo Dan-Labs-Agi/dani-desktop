@@ -70,3 +70,4 @@ The skill bench measures one fixture skill against its own prompts through the s
     node --experimental-strip-types evals/runners/run-skill-bench.ts [--fixture bench-triage-handoff] [--replicates 2]
 
 The alpha report gives per-arm pass rates, duration and estimated tokens (chars/4 over evidence turns; the scripted provider makes no API calls) with mean and standard deviation, a delta-per-assertion table, and two flags: non-discriminating assertions (identical verdicts in both arms — controls, not effects) and high-variance assertions (verdicts that flip across replicates of the same prompt and arm, assessable from two replicates on). `evals/skill-bench/fixtures/` holds bench fixtures; `evals/skill-bench/triggers/` holds the trigger-eval sets (should-trigger / should-not-trigger with train and held-out splits, plus near misses) that a later router slice validates against — data only, no router code.
+

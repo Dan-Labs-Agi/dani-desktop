@@ -25,3 +25,4 @@ name, a type, an extracted function, one shared helper. A rule ("never X",
 rule that guards correctness; fix the code.
 
 More specific `AGENTS.md` files override this note within their directories.
+
