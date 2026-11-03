@@ -33,6 +33,15 @@ async function boundedCredentialCall(call, timeoutMs) {
   return { timedOut: false, ...raced, settled: () => settled };
 }
 
+/** The availability probe is an OS credential call as well and can wait behind
+ * the same system prompt, so it gets the same budget; a timed-out or failed
+ * probe answers "not available" and the caller's unavailable path applies. */
+export async function checkCredentialAvailable({ isAvailable, timeoutMs = CREDENTIAL_CALL_TIMEOUT_MS }) {
+  const probe = await boundedCredentialCall(() => isAvailable(), timeoutMs);
+  if (probe.timedOut || !probe.ok) return false;
+  return probe.value === true;
+}
+
 /** Encrypt one document with the same bounded wait as reads. A timed-out
  * write attempt throws before any file operation, so nothing partial is
  * ever renamed over the real store. */
@@ -64,7 +73,15 @@ export async function readSecureCredentials({
   for (let attempt = 0; attempt <= delays.length; attempt++) {
     if (attempt > 0) await sleep(delays[attempt - 1]);
     try {
-      if (!(await isAvailable())) {
+      // The availability probe is an OS credential call too: on a store gated
+      // by a system prompt it can wait as indefinitely as a read, so it gets
+      // the same budget. A timed-out probe is treated as "unavailable".
+      const probe = await boundedCredentialCall(() => isAvailable(), timeoutMs);
+      if (probe.timedOut) {
+        return { status: "unavailable", credentials: {}, error: CREDENTIAL_CALL_TIMED_OUT, timedOut: true, settled: probe.settled };
+      }
+      if (!probe.ok) throw probe.error;
+      if (!probe.value) {
         lastError = "the operating-system credential store is unavailable";
         continue;
       }
