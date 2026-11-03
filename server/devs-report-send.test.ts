@@ -5,7 +5,7 @@ import { askReportStatus, bugReportEndpoint, bugReportsHomeSignature, bugReportS
 
 const PAYLOAD: DevsReportPayload = {
   installId: "4b7c1f2e-0a9d-4c2b-9f1e-6d5a4b3c2d1e", source: "bot", description: "it broke", appVersion: "0.1.128", platform: "darwin arm64, desktop app",
-  diagnostics: "OpenMausBot @devs report", contactEmail: "ada@example.com", contact: "ada@example.com",
+  diagnostics: "Dani Bot @devs report", contactEmail: "ada@example.com", contact: "ada@example.com",
 };
 
 function endpoint(...answers: Array<Response | Error>) {
@@ -47,6 +47,12 @@ describe("sending a @devs report", () => {
     expect(await send(answer(400, { error: "description must be 1 to 10,000 characters of text." })))
       .toEqual({ ok: false, retry: false, why: "refused", detail: "description must be 1 to 10,000 characters of text." });
     expect(await send(answer(413, { error: "The bug report is larger than 600 KB." }))).toMatchObject({ ok: false, retry: false, why: "refused" });
+  });
+
+  it("refuses locally, without any network call, when no endpoint is configured in this build", async () => {
+    const { sent, fetcher } = endpoint(answer(201, { id: "never" }));
+    expect(await sendDevsReport("", PAYLOAD, fetcher)).toEqual({ ok: false, retry: false, why: "refused", detail: "Bug reports are not sent anywhere from this build." });
+    expect(sent).toHaveLength(0);
   });
 
   it("never posts a body over the endpoint's 600 KB", async () => {

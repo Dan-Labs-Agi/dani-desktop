@@ -100,7 +100,7 @@ describe("a message that tags @devs", () => {
     fx.busy.add("scout-main");
     const note = fx.reports.note("scout-main", true);
     expect(note).toContain("tags @devs");
-    expect(note).toContain("report_bug");
+    expect(note).toContain("no report tool");
     fx.store.appendMessage("scout-main", { role: "bot", kind: "activity", tool: { name: "Bash", ok: false, output: "exit code 127: convert: not found" } });
     const answer = await fx.call("scout", "scout-main", { went_wrong: "Pictures never load", you_saw: "Bash failed with exit code 127", steps: "1. Attach a picture" });
     expect(answer.status).toBe(200);
@@ -356,7 +356,7 @@ describe("a group chat", () => {
     const fx = fixture();
     fx.person("room", "@devs the room is stuck");
     fx.busy.add("room");
-    expect(fx.reports.note("room", true)).toContain("report_bug");
+    expect(fx.reports.note("room", true)).toContain("no report tool");
     expect((await fx.call("rover", "room", { went_wrong: "The room is stuck" })).status).toBe(200);
     expect(fx.reports.note("room", true)).toBe("");
     expect((await fx.call("scout", "room", { went_wrong: "The room is stuck" })).body.text).toMatch(/^Already sent as report report-1/);
