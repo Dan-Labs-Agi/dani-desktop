@@ -21,6 +21,11 @@ assert.equal(result.status,0, 'NSIS install failed: '+result.stderr);
 const executable = path.join(install, 'Dani Bot.exe');
 assert.ok(fs.existsSync(executable),'installer did not install expected app');
 assert.ok(fs.existsSync(path.join(install,'resources/server/index.js')),'installed packaged server missing');
+// A separate process runs the exact service against the installed resources so
+// public redacted UI status can be paired with the real failing integrity stage.
+const diag=spawnSync(process.execPath, [path.resolve('dist-native/runtime-diagnosis.mjs'),path.join(install,'resources')], {env:process.env,encoding:'utf8',timeout:240000});
+console.log(diag.stdout);console.error(diag.stderr);
+assert.equal(diag.status,0,'isolated runtime diagnosis process failed');
 let launched;
 function stop() {
   if (launched) spawnSync('taskkill', ['/PID', String(launched.pid), '/T', '/F'], {encoding:'utf8'});
@@ -52,6 +57,7 @@ async function runtime(page, retry) {
     if(status.state==='blocked-error' || (status.state==='repairable-error' && status.error?.code!=='not-activated')) break;
     await sleep(1000);
   }
+  await capture(page,'FAILURE');
   throw Error('installed runtime did not verify: '+JSON.stringify(status));
 }
 async function capture(page,label) {

@@ -116,6 +116,8 @@ jobs:
       - name: install isolated native smoke tools
         shell: pwsh
         run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - name: build isolated installed-resource diagnosis
+        run: node scripts/build-runtime-diagnosis.mjs
       - name: real NSIS install, launch, repair, and relaunch
         shell: pwsh
         run: node scripts/verify-windows-installer.cjs
