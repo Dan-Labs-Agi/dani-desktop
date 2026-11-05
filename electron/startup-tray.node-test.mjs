@@ -201,11 +201,24 @@ test("startup and tray show Dani branding without changing the retained tray ide
   assert.match(html, /<title>Dani Bot<\/title>/);
   assert.match(html, /<h1>Dani Bot<\/h1>/);
   assert.doesNotMatch(html, /OpenMaus/);
-  assert.deepEqual(readFileSync(iconPath), readFileSync(new URL("../build/icon-1024.png", import.meta.url)));
+  assert.equal(readFileSync(iconPath).readUInt32BE(16), 1024, "approved master resolution retained");
   const { trayInstance, splash, tray } = fixture();
   assert.equal(splash.window.options.title, "Dani Bot");
   assert.equal(trayInstance.tooltip, "Dani Bot");
   assert.deepEqual(trayInstance.menu.filter(row => row.label).map(row => row.label), ["Open Dani Bot", "Quit Dani Bot"]);
   assert.equal(trayInstance.guid, "889af657-21b5-4ec9-b5d0-cb798cbdfd30");
   splash.dispose(); tray.destroy();
+});
+
+
+test("startup icon has a transparent matte corner rather than opaque white", async () => {
+  const {readFileSync}=await import('node:fs');
+  const {inflateSync}=await import('node:zlib');
+  const png=readFileSync(new URL('./resources/app-icon.png',import.meta.url));
+  assert.equal(png[25],6,'startup icon must retain RGBA transparency');
+  const chunks=[];
+  for(let i=8;i<png.length;) {const size=png.readUInt32BE(i);if(png.toString('ascii',i+4,i+8)==='IDAT') chunks.push(png.subarray(i+8,i+8+size));i+=12+size;}
+  const raw=inflateSync(Buffer.concat(chunks));
+  // First-row/first-pixel predictors are all zero for PNG filters 0..4.
+  assert.equal(raw[4],0,'top-left alpha must be transparent');
 });
