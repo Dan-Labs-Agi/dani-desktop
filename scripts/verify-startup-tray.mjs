@@ -26,6 +26,9 @@ if (!process.versions.electron) {
   console.log(`Startup/tray evidence: ${output}`);
   assert.equal(code, 0, "Electron fixture failed");
   assert.equal(JSON.parse(readFileSync(join(output, "receipt.json"), "utf8")).passed, true);
+  const image = readFileSync(join(output, "startup-screen.png")).toString("base64");
+  for(let i=0;i<image.length;i+=32000) console.log("STARTUP_SCREENSHOT_CHUNK:"+image.slice(i,i+32000));
+  console.log("STARTUP_SCREENSHOT_END");
 } else {
   assert.ok(process.argv.includes(flag));
   const output = process.argv[process.argv.indexOf(flag) + 1];
@@ -61,7 +64,7 @@ if (!process.versions.electron) {
     await delay(150);
     mkdirSync(output, { recursive: true });
     writeFileSync(join(output, "startup-screen.png"), (await active.webContents.capturePage()).toPNG());
-    assert.equal(await active.webContents.executeJavaScript("document.querySelector('h1').textContent"), "OpenMaus Bot");
+    assert.equal(await active.webContents.executeJavaScript("document.querySelector('h1').textContent"), "Dani Bot");
     assert.equal(await active.webContents.executeJavaScript("typeof process"), "undefined");
     // Exercise the actual renderer close button.
     await active.webContents.executeJavaScript("document.querySelector('button').click()");

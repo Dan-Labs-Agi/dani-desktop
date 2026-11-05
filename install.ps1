@@ -1,6 +1,6 @@
-# Dani Bot - first-run install: one command from nothing to a running app.
+# Dani Bot - source-build helper: creates an installer artifact; does not install or launch the app.
 #
-#   irm https://raw.githubusercontent.com/somdipto/dani-desktop/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/Dan-Labs-Agi/dani-desktop/main/install.ps1 | iex
 #
 # Idempotent: re-running reuses the existing checkout, dependencies and build
 # cache, and completes whatever an interrupted run left unfinished.
@@ -8,7 +8,7 @@
 param([switch]$CheckOnly)
 
 $ErrorActionPreference = "Stop"
-$RepoUrl = "https://github.com/somdipto/dani-desktop"
+$RepoUrl = "https://github.com/Dan-Labs-Agi/dani-desktop"
 $Branch = "main"
 $Dest = if ($env:DANI_INSTALL_DIR) { $env:DANI_INSTALL_DIR } else { "dani-desktop" }
 $DataDir = if ($env:DANI_DATA_DIR) { $env:DANI_DATA_DIR } else { Join-Path $HOME ".danibot" }
@@ -25,12 +25,8 @@ function Check-Prereqs {
   if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Fail "Node.js is not installed" "install Node 24 or newer from https://nodejs.org and re-run this command" }
   $major = [int](node -p "process.versions.node.split('.')[0]")
   if ($major -lt 24) { Fail "Node $(node -v) is too old" "install Node 24 or newer from https://nodejs.org and re-run this command" }
-  if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-    if (Get-Command corepack -ErrorAction SilentlyContinue) {
-      try { corepack enable; corepack prepare pnpm@latest --activate } catch { }
-    }
-  }
-  if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) { Fail "pnpm is not installed" "run: npm install -g pnpm   (or: corepack enable) and re-run this command" }
+  if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) { Fail "pnpm is not installed" "install the packageManager version from package.json (pnpm 10.33.0); prerequisite checks do not install tools and re-run this command" }
+  if ((pnpm --version) -ne "10.33.0") { Fail "pnpm version does not match packageManager (10.33.0)" "use pnpm 10.33.0 for this source helper" }
   Write-Host "prerequisites ok: git $(git --version), node $(node -v), pnpm $(pnpm --version)"
 }
 
@@ -43,8 +39,10 @@ if ($inCheckout) {
 } elseif (Test-Path "$Dest\.git") {
   Write-Host "reusing existing checkout at $Dest (idempotent re-run)"
   Set-Location $Dest
-  git fetch origin "+refs/heads/${Branch}:refs/remotes/origin/${Branch}" --quiet 2>$null; git merge --ff-only "origin/$Branch" --quiet 2>$null
-  if ($LASTEXITCODE -ne 0) { Write-Host "note: checkout is not fast-forwardable; continuing with what is here" }
+  git fetch origin "+refs/heads/${Branch}:refs/remotes/origin/${Branch}" --quiet
+  if ($LASTEXITCODE -ne 0) { Fail "checkout fetch failed; refusing to package stale source" "review the fetch error before retrying" }
+  git merge --ff-only "origin/$Branch" --quiet
+  if ($LASTEXITCODE -ne 0) { Fail "checkout update failed; refusing to package stale source" "review local changes before retrying" }
 } else {
   Write-Host "cloning $RepoUrl ($Branch) into $Dest"
   git clone --branch $Branch --single-branch $RepoUrl $Dest
@@ -52,7 +50,7 @@ if ($inCheckout) {
   Set-Location $Dest
 }
 
-pnpm install
+pnpm install --frozen-lockfile
 if ($LASTEXITCODE -ne 0) { Fail "dependency install did not complete" "re-run the same command - pnpm resumes from its cache; if a registry error persists, check your network" }
 pnpm package:win
 if ($LASTEXITCODE -ne 0) { Fail "the Windows package build did not complete" "re-run the same command" }
