@@ -82,9 +82,11 @@ let releaseTimer: ReturnType<typeof setTimeout> | null = null;
 let lastFrame = -Infinity;
 let animationTime = 0;
 let unavailable = false;
+let failureReason: string | null = null;
 let listening = false;
 
 function failRendering(reason: string) {
+  failureReason = reason;
   for (const instance of instances.values()) {
     setReady(instance, false);
     instance.onFailure(reason);
@@ -147,6 +149,7 @@ function ensureStage() {
     };
     const onRestored = () => {
       unavailable = false;
+      failureReason = null;
       thumbnails.clear();
       invalidate();
     };
@@ -376,6 +379,7 @@ function startListening() {
   if (listening) return;
   listening = true;
   unavailable = false;
+  failureReason = null;
   motionPreference =
     typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
   motionPreference?.addEventListener("change", invalidate);
@@ -412,6 +416,7 @@ function stopListening() {
   listening = false;
   releaseStage();
   unavailable = false;
+  failureReason = null;
   lastFrame = -Infinity;
 }
 
@@ -420,6 +425,9 @@ export function registerAvatar(instance: AvatarInstance) {
   releaseTimer = null;
   startListening();
   instances.set(instance.element, instance);
+  // A new dialog can mount while the shared stage is still failed. Do not
+  // leave its avatar loading when no new frame can ever be scheduled.
+  if (unavailable && failureReason) instance.onFailure(failureReason);
   if (observer) observer.observe(instance.element);
   else instance.visible = inViewport(instance.element);
   requestFrame();
