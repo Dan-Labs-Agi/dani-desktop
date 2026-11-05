@@ -8,7 +8,7 @@ import { ManagedRuntimeService, managedRuntimeTarget } from "./managed-runtime.t
 import { removeTempDir } from "./testing/cleanup.ts";
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) removeTempDir(root); delete process.env.DANI_MANAGED_HERMES_EXECUTABLE; });
-async function fixture(mutateDuringProbe = false) {
+async function fixture(mutateDuringProbe = false, mutateOnRecovery = false) {
   const root = mkdtempSync(join(tmpdir(), "runtime-retry-")); roots.push(root);
   const payload = join(root, "payload"); const resourcesRoot = join(root, "resources"); const dataDir = join(root, "data");
   const win = process.platform === "win32";
@@ -20,6 +20,9 @@ async function fixture(mutateDuringProbe = false) {
     NOTICE: "notice\n", "SBOM.cdx.json": "{}\n",
   };
   if (mutateDuringProbe) files[probeRel] += win ? 'echo pollution>>"%~dp0..\\NOTICE"\n' : 'echo pollution >> "$(dirname "$0")/../NOTICE"\n';
+  if (mutateOnRecovery) files[probeRel] += win
+    ? `if exist "${join(root, "mutate")}" echo pollution>>"%~dp0..\\NOTICE"\n`
+    : `if [ -f '${join(root, "mutate")}' ]; then echo pollution >> "$(dirname "$0")/../NOTICE"; fi\n`;
   for (const [rel, text] of Object.entries(files)) { const file = join(payload, rel); mkdirSync(join(file, ".."), { recursive: true }); writeFileSync(file, text); chmodSync(file, 0o755); }
   const runtime = join(resourcesRoot, "managed-runtimes"); mkdirSync(join(runtime, "archives"), { recursive: true }); mkdirSync(join(runtime, "manifests"));
   const target = managedRuntimeTarget(); const archive = join(runtime, "archives", `hermes-runtime-payload-${target}.tar.gz`);
@@ -31,6 +34,17 @@ async function fixture(mutateDuringProbe = false) {
   return { root, dataDir, resourcesRoot, pointer, executableRelPath, archive, service: new ManagedRuntimeService({ resourcesRoot, dataDir, startModelRoute: async () => {} }) };
 }
 describe("verified runtime retry", () => {
+  it("does not declare recovered runtime ready when its probe changes verified bytes", async () => {
+    const f = await fixture(false, true); await f.service.install("hermes");
+    const pointer = readFileSync(f.pointer, "utf8");
+    writeFileSync(join(f.root, "mutate"), "trigger only on recovery");
+    const recovered = new ManagedRuntimeService({ resourcesRoot: f.resourcesRoot, dataDir: f.dataDir, startModelRoute: async () => {} });
+    await recovered.initialize();
+    expect(recovered.executable("hermes")).toBeNull();
+    expect(recovered.bootstrapStatus().error?.code).toBe("verification-failed");
+    expect(readFileSync(f.pointer, "utf8")).toBe(pointer);
+    await recovered.stop();
+  });
   it("refuses to activate a tree changed by its readiness probe", async () => {
     const f = await fixture(true);
     await expect(f.service.install("hermes")).rejects.toMatchObject({ code: "verification-failed" });
