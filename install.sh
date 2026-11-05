@@ -1,14 +1,14 @@
 #!/bin/sh
-# Dani Bot - first-run install: one command from nothing to a running app.
+# Dani Bot - source-build helper: creates an installer artifact; does not install or launch the app.
 #
-#   curl -fsSL https://raw.githubusercontent.com/somdipto/dani-desktop/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/Dan-Labs-Agi/dani-desktop/main/install.sh | sh
 #
 # Idempotent: re-running reuses the existing checkout, dependencies and build
 # cache, and completes whatever an interrupted run left unfinished.
 #   --check   verify prerequisites only, change nothing (CI uses this).
 set -eu
 
-REPO_URL="https://github.com/somdipto/dani-desktop"
+REPO_URL="https://github.com/Dan-Labs-Agi/dani-desktop"
 BRANCH="main"
 DEST="${DANI_INSTALL_DIR:-dani-desktop}"
 DATA_DIR="${DANI_DATA_DIR:-${HOME:-/tmp}/.danibot}"
@@ -29,14 +29,8 @@ check_prereqs() {
   command -v git >/dev/null 2>&1 || fail "git is not installed" "install git (macOS: xcode-select --install; Ubuntu: sudo apt install git; Windows: https://git-scm.com) and re-run this command"
   command -v node >/dev/null 2>&1 || fail "Node.js is not installed" "install Node 24 or newer from https://nodejs.org and re-run this command"
   [ "$(node_major)" -ge 24 ] || fail "Node $(node -v 2>/dev/null || echo '?') is too old" "install Node 24 or newer from https://nodejs.org and re-run this command"
-  if ! command -v pnpm >/dev/null 2>&1; then
-    # Node 24 ships corepack; enabling it provides pnpm without a global npm install.
-    if command -v corepack >/dev/null 2>&1; then
-      corepack enable >/dev/null 2>&1 || true
-      corepack prepare pnpm@latest --activate >/dev/null 2>&1 || true
-    fi
-  fi
-  command -v pnpm >/dev/null 2>&1 || fail "pnpm is not installed" "run: npm install -g pnpm   (or: corepack enable) and re-run this command"
+  command -v pnpm >/dev/null 2>&1 || fail "pnpm is not installed" "install the packageManager version from package.json (pnpm 10.33.0); prerequisite checks do not install tools and re-run this command"
+  [ "$(pnpm --version)" = "10.33.0" ] || fail "pnpm version does not match packageManager (10.33.0)" "use pnpm 10.33.0 for this source helper"
   say "prerequisites ok: git $(git --version | awk '{print $3}'), node $(node -v), pnpm $(pnpm --version)"
 }
 
@@ -52,8 +46,8 @@ prepare_checkout() {
   if [ -d "$DEST/.git" ]; then
     say "reusing existing checkout at $DEST (idempotent re-run)"
     cd "$DEST"
-    git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" --quiet 2>/dev/null && git merge --ff-only "origin/$BRANCH" --quiet 2>/dev/null \
-      || say "note: checkout is not fast-forwardable; continuing with what is here"
+    git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" --quiet && git merge --ff-only "origin/$BRANCH" --quiet \
+      || fail "checkout update failed; refusing to package stale source" "review the fetch/merge error and local changes before retrying"
   else
     say "cloning $REPO_URL ($BRANCH) into $DEST"
     git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$DEST" \
@@ -63,7 +57,7 @@ prepare_checkout() {
 }
 
 build_and_package() {
-  pnpm install || fail "dependency install did not complete" "re-run the same command - pnpm resumes from its cache; if a registry error persists, check your network"
+  pnpm install --frozen-lockfile || fail "dependency install did not complete" "re-run the same command - pnpm resumes from its cache; if a registry error persists, check your network"
   case "$(uname -s)" in
     Darwin)
       pnpm package:mac || fail "the macOS package build did not complete" "re-run the same command; Swift/Xcode command line tools are required (xcode-select --install)"

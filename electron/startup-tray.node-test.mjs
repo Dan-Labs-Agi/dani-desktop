@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { createStartupScreen } from "./startup-screen.mjs";
+import { readFileSync } from "node:fs";
+import { createStartupScreen, startupScreenHtml } from "./startup-screen.mjs";
 import { createSystemTray } from "./system-tray.mjs";
 
 const iconPath = fileURLToPath(new URL("./resources/app-icon.png", import.meta.url));
@@ -192,4 +193,19 @@ test("the loading screen says what the app waits on, before its page has loaded 
   splash.dispose();
   splash.status("Opening My Cloud…");
   assert.equal(ran.length, 2, "nothing after it is gone");
+});
+
+
+test("startup and tray show Dani branding without changing the retained tray identity", () => {
+  const html = startupScreenHtml(iconPath);
+  assert.match(html, /<title>Dani Bot<\/title>/);
+  assert.match(html, /<h1>Dani Bot<\/h1>/);
+  assert.doesNotMatch(html, /OpenMaus/);
+  assert.deepEqual(readFileSync(iconPath), readFileSync(new URL("../build/icon-1024.png", import.meta.url)));
+  const { trayInstance, splash, tray } = fixture();
+  assert.equal(splash.window.options.title, "Dani Bot");
+  assert.equal(trayInstance.tooltip, "Dani Bot");
+  assert.deepEqual(trayInstance.menu.filter(row => row.label).map(row => row.label), ["Open Dani Bot", "Quit Dani Bot"]);
+  assert.equal(trayInstance.guid, "889af657-21b5-4ec9-b5d0-cb798cbdfd30");
+  splash.dispose(); tray.destroy();
 });
