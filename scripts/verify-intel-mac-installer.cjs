@@ -21,7 +21,9 @@ console.log(JSON.stringify({event:'intel-candidate',source:process.env.GITHUB_SH
 const mount=path.join(temp,'mounted');fs.mkdirSync(mount,{recursive:true});
 let result=spawnSync('hdiutil',['attach',installer,'-nobrowse','-mountpoint',mount],{encoding:'utf8',timeout:120000});
 assert.equal(result.status,0,result.stderr);
-fs.cpSync(path.join(mount,'Dani Bot.app'),path.join(install,'Dani Bot.app'),{recursive:true});
+result=spawnSync('codesign',['--verify','--deep','--strict',path.join(mount,'Dani Bot.app')],{encoding:'utf8'});assert.equal(result.status,0,'mounted DMG signature: '+result.stderr);
+// Finder-style bundle copy preserves framework-relative symlinks and metadata.
+result=spawnSync('/usr/bin/ditto',[path.join(mount,'Dani Bot.app'),path.join(install,'Dani Bot.app')],{encoding:'utf8',timeout:120000});assert.equal(result.status,0,result.stderr);
 result=spawnSync('hdiutil',['detach',mount],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
 const bundle=path.join(install,'Dani Bot.app');
 const executable=path.join(bundle,'Contents/MacOS/Dani Bot');
