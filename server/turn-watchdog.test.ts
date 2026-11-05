@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { RuntimeEvent } from "./contracts.ts";
 import { EngineMemory } from "./engine-memory.ts";
@@ -321,5 +321,58 @@ describe("a Stop that wins against a provider dispatch", () => {
     // The stall handler cancels the dispatch after the sweep dropped the turn: that must not watch it again.
     r.dog.eventsDiscarded("t1");
     expect(r.dog.watching("t1")).toBe(false);
+  });
+});
+
+
+describe("watchdog suspended timer", () => {
+  it("preserves pre-suspend silence, grants bounded recovery time, then stops a genuine stall", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const stopped: string[] = [];
+    const dog = new TurnWatchdog({ stallMs: 60_000, toolStallMs: 120_000, checkMs: 5_000,
+      onStall: turn => stopped.push(turn.threadId) });
+    try {
+      dog.watch("sleeping", "bot"); dog.start();
+      vi.advanceTimersByTime(30_000);
+      vi.setSystemTime(150_000); // the process had no timer or provider event opportunity
+      vi.advanceTimersByTime(5_000);
+      expect(stopped).toEqual([]);
+      // Recovery is finite even if the process repeatedly fails to run its timer.
+      vi.setSystemTime(300_000); vi.advanceTimersByTime(5_000);
+      expect(stopped).toEqual(["sleeping"]);
+    } finally { dog.stop(); vi.useRealTimers(); }
+  });
+  it("does not forgive an ordinary silent interval", () => {
+    vi.useFakeTimers(); vi.setSystemTime(0);
+    const stopped: string[] = [];
+    const dog = new TurnWatchdog({ stallMs: 10_000, toolStallMs: 20_000, checkMs: 1_000,
+      onStall: turn => stopped.push(turn.threadId) });
+    try { dog.watch("quiet", "bot"); dog.start(); vi.advanceTimersByTime(10_000); expect(stopped).toEqual(["quiet"]); }
+    finally { dog.stop(); vi.useRealTimers(); }
+  });
+});
+
+
+describe("suspension credit boundaries", () => {
+  it("does not erase silence accumulated before suspension", () => {
+    let now = 0;
+    const stopped: string[] = [];
+    const dog = new TurnWatchdog({ stallMs: 10_000, toolStallMs: 50_000, checkMs: 1_000,
+      now: () => now, onStall: turn => stopped.push(turn.threadId) });
+    dog.watch("already-quiet", "bot"); now = 60_001;
+    dog.sweep(50_000);
+    expect(stopped).toEqual(["already-quiet"]);
+  });
+  it("resets a settled turn's budget and ignores invalid compensation", () => {
+    let now = 0;
+    const stopped: string[] = [];
+    const dog = new TurnWatchdog({ stallMs: 10_000, toolStallMs: 50_000, checkMs: 1_000,
+      now: () => now, onStall: turn => stopped.push(turn.threadId) });
+    dog.watch("fresh", "bot"); now = 28_800_000; dog.sweep(28_800_000);
+    dog.settle("fresh"); dog.watch("fresh", "bot"); now = 57_600_000; dog.sweep(28_800_000);
+    expect(stopped).toEqual([]);
+    now = 57_610_001; dog.sweep(Infinity);
+    expect(stopped).toEqual(["fresh"]);
   });
 });

@@ -33,6 +33,7 @@ export class TurnWatchdog {
   private turns = new Map<string, WatchedTurn>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private opts: TurnWatchdogOptions;
+  private suspensionUsed = new Set<string>();
 
   // No parameter properties: Node's type-stripping cannot transform them.
   constructor(opts: TurnWatchdogOptions) {
@@ -45,7 +46,15 @@ export class TurnWatchdog {
 
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => this.sweep(), this.opts.checkMs);
+    let previousTick = Date.now();
+    this.timer = setInterval(() => {
+      const tick = Date.now();
+      const elapsed = tick - previousTick;
+      previousTick = tick;
+      // A suspended process cannot receive provider events. Only forgive the
+      // excess over a normal interval, and only on a distinctly delayed tick.
+      this.sweep(elapsed > this.opts.checkMs * 3 ? elapsed - this.opts.checkMs : 0);
+    }, this.opts.checkMs);
     this.timer.unref?.();
   }
 
@@ -53,10 +62,12 @@ export class TurnWatchdog {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.turns.clear();
+    this.suspensionUsed.clear();
   }
 
   watch(threadId: string, botId: string): void {
     const at = this.now();
+    this.suspensionUsed.delete(threadId);
     this.turns.set(threadId, { threadId, botId, startedAt: at, lastEventAt: at, waitingOnHuman: false, waitingOnComputer: false,
       runningTools: new Set() });
   }
@@ -86,6 +97,7 @@ export class TurnWatchdog {
 
   settle(threadId: string): void {
     this.turns.delete(threadId);
+    this.suspensionUsed.delete(threadId);
   }
 
   /** A Stop that discards the turn's later events leaves no way for a tool or a wait to report its end: watch the teardown as a fresh silent turn. */
@@ -110,13 +122,21 @@ export class TurnWatchdog {
     return false;
   }
 
-  sweep(): void {
+  /** One delayed timer per watched turn gets recovery time, even after a
+   * long sleep. Repeated delayed timers cannot hide a silent turn forever. */
+  sweep(suspendedMs = 0): void {
     const at = this.now();
     for (const turn of this.turns.values()) {
+      if (Number.isFinite(suspendedMs) && suspendedMs > 0 && !this.suspensionUsed.has(turn.threadId)) {
+        const credit = Math.min(suspendedMs, Math.max(0, at - turn.lastEventAt));
+        turn.lastEventAt += credit;
+        this.suspensionUsed.add(turn.threadId);
+      }
       if (parked(turn)) continue;
       const silentMs = turn.runningTools.size > 0 ? Math.max(this.opts.stallMs, this.opts.toolStallMs) : this.opts.stallMs;
       if (at - turn.lastEventAt < silentMs) continue;
       this.turns.delete(turn.threadId);
+      this.suspensionUsed.delete(turn.threadId);
       this.opts.onStall(turn, silentMs);
     }
   }
