@@ -101,6 +101,9 @@ async function capture(page,label) {
   const oldNotice=path.join(data,'managed-runtimes/hermes',active.installation,manifest.noticeRelPath);
   assert.ok(fs.existsSync(oldNotice),'expected legal notice missing');
   const original=fs.readFileSync(oldNotice);
+  // Signed payload files are read-only on Windows. Only the disposable old
+  // activation gets write permission so this test can simulate disk damage.
+  fs.chmodSync(oldNotice,0o600);
   fs.writeFileSync(oldNotice,Buffer.concat([original,Buffer.from('\nsynthetic damage')]));
   ui=await open();
   const repaired=await runtime(ui.page,true);
