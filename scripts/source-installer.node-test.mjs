@@ -74,6 +74,7 @@ function git { Add-Content ${quote(log)} ('git '+($args -join ' ')); $global:LAS
 function node {if($args[0] -eq '-p') {Write-Output '24'} else {Write-Output 'v24.0.0'} }
 function pnpm { Add-Content ${quote(log)} ('pnpm '+($args -join ' ')); $global:LASTEXITCODE=0; if($args[0] -eq '--version') {Write-Output '${scenario==='wrong'?'99.0.0':pinned}'} }
 & ${quote(path.join(root,'install.ps1'))} ${['fetch','merge'].includes(scenario)?'':'-CheckOnly'}
+exit $LASTEXITCODE
 `;
     const file=path.join(dir,'fixture.ps1');writeFileSync(file,script);
     const result=spawnSync('pwsh',['-NoProfile','-File',file],{encoding:'utf8',timeout:20000});
