@@ -29,6 +29,7 @@ result=spawnSync('codesign',['--verify','--deep','--strict',bundle],{encoding:'u
 result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes('x86_64'));
 assert.ok(fs.existsSync(path.join(bundle,'Contents/Resources/server/index.js')));
 let launched;
+const graphicsFailures=[];
 function stop() {if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
   launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:'ignore',detached:true});
@@ -36,7 +37,17 @@ async function open() {
     try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
       for(let j=0;j<90;j++) {
         const page=browser.contexts().flatMap(c=>c.pages()).find(p=> /^http:\/\/127\.0\.0\.1:\d+/.test(p.url()));
-        if(page) {await page.waitForLoadState('domcontentloaded'); return {browser,page};}
+        if(page) {
+          page.on('pageerror', error=>console.log('MAIN_RENDERER_ERROR',error.message));
+          page.on('console', message=>{if(['error','warning'].includes(message.type())) console.log('MAIN_RENDERER_CONSOLE',message.type(),message.text().slice(0,2000));});
+          await page.waitForLoadState('domcontentloaded');
+          try {
+            const cdp=await browser.newBrowserCDPSession();
+            console.log('MAIN_GPU_INFO',JSON.stringify(await cdp.send('SystemInfo.getInfo')));
+            await cdp.detach();
+          } catch(error) { console.log('MAIN_GPU_DIAGNOSTIC_ERROR',error.message); }
+          return {browser,page};
+        }
         await sleep(1000);
       }
       throw Error('packaged UI not reachable');
@@ -58,6 +69,12 @@ async function inspect(page,label) {
  assert.ok(body.trim().length>10,'packaged renderer empty');
  console.log(JSON.stringify({event:label,health:status,visibleText:body.slice(0,2200),url:page.url()}));
  await capture(page,label);
+ const graphics=await page.evaluate(()=>({
+   avatars:[...document.querySelectorAll('[data-robot-renderer]')].map(element=>({renderer:element.getAttribute('data-robot-renderer'),error:element.getAttribute('data-robot-error'),role:element.getAttribute('data-robot-role')})),
+   webgl2:Boolean(document.createElement('canvas').getContext('webgl2')),
+ }));
+ console.log('MAIN_GRAPHICS_STATUS',label,JSON.stringify(graphics));
+ graphicsFailures.push(...graphics.avatars.filter(avatar=>avatar.renderer!=='webgl').map(avatar=>({label,...avatar})));
 }
 (async()=>{
  stop();let ui=await open();await inspect(ui.page,'INSTALLED');
@@ -77,4 +94,6 @@ async function inspect(page,label) {
  assert.equal(fs.readFileSync(path.join(data,'synthetic-preserved-marker.txt'),'utf8'),'preserve synthetic data');
  assert.equal(await ui.page.locator('[data-welcome]').count(),0,'completed welcome reopened on relaunch');
  console.log('MAIN_INSTALLED_RELAUNCH_PASS');await ui.browser.close();
+ assert.equal(graphicsFailures.length,0,'installed avatar rendering incomplete: '+JSON.stringify(graphicsFailures));
+ console.log('MAIN_INSTALLED_GRAPHICS_PASS');
 })().catch(e=>{console.error(e.stack);process.exitCode=1}).finally(()=>stop());
