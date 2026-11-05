@@ -83,7 +83,7 @@ describe("recovered installation startup", () => {
     const visit = (dir: string) => {
       for (const name of readdirSync(dir).sort()) {
         const p = join(dir, name);
-        const rel = relative(root, p).replaceAll("\\\\", "/");
+        const rel = relative(root, p).replaceAll("\\", "/");
         const info = lstatSync(p);
         if (info.isDirectory()) visit(p);
         else if (info.isFile()) hash.update(`${rel}\0${info.size}\0${digestFile(p)}\n`);
@@ -121,6 +121,7 @@ describe("recovered installation startup", () => {
       for (let i = 0; i < 100 && routeStarts === 0; i++) await new Promise(r => setTimeout(r, 10));
       for (let i = 0; i < 100 && !service.bootstrapStatus().readiness.taskReady; i++) await new Promise(r => setTimeout(r, 10));
       const status = service.bootstrapStatus();
+      expect(status.error, "seeded recovered fixture must pass real manifest/hash/probe checks").toBeNull();
       expect(routeStarts).toBe(1);
       expect(taskReadyCalls).toBe(1);
       expect(status.readiness.runtime).toMatchObject({ state: "ready", hermes: true, opencode: true });
