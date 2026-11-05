@@ -103,6 +103,30 @@ describe("recovered installation startup", () => {
     }));
   };
 
+  it("joins a recovered route startup when the renderer posts bootstrap during readiness", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "managed-recovery-race-"));
+    let releaseRoute!: () => void;
+    const gate = new Promise<void>(r => { releaseRoute = r; });
+    let routeStarts = 0;
+    try {
+      const resourcesRoot=join(tmp,"res"), dataDir=join(tmp,"data");
+      for(const kind of ["hermes","opencode"] as const) seedInstallation(resourcesRoot,dataDir,kind);
+      const pointer=readFileSync(join(dataDir,"managed-runtimes/hermes/current.json"),"utf8");
+      const service=new ManagedRuntimeService({resourcesRoot,dataDir,startModelRoute:async()=>{routeStarts++;await gate;}});
+      await service.initialize();
+      const pending=service.startBootstrap();
+      expect(pending.state).toBe("installing");
+      await new Promise(r=>setTimeout(r,50));
+      expect(service.bootstrapStatus().error).toBeNull();
+      expect(routeStarts).toBe(1);
+      releaseRoute();
+      for(let i=0;i<100&&!service.bootstrapStatus().readiness.taskReady;i++)await new Promise(r=>setTimeout(r,10));
+      expect(service.bootstrapStatus().state).toBe("ready");
+      expect(readFileSync(join(dataDir,"managed-runtimes/hermes/current.json"),"utf8")).toBe(pointer);
+      await service.stop();
+    } finally {releaseRoute();removeTempDir(tmp);}
+  });
+
   it("starts the model route after fresh-boot recovery instead of stalling on checking", async () => {
     const tmp = mkdtempSync(join(tmpdir(), "managed-recovery-"));
     try {
