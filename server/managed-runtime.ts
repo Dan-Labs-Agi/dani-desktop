@@ -426,7 +426,10 @@ export class ManagedRuntimeService {
       this.setPhase(kind, "activate");
       const kindRoot = join(this.installRoot, kind); await mkdir(kindRoot, { recursive: true });
       const manifestDigest = createHash("sha256").update(JSON.stringify(entry)).digest("hex");
-      const installation = `${entry.version}-${manifestDigest.slice(0, 12)}`;
+      // A retry must never adopt an older directory merely because its name
+      // matches this manifest. Keep old activations intact for rollback and
+      // publish only this newly verified/probed tree via the atomic pointer.
+      const installation = `${entry.version}-${manifestDigest.slice(0, 12)}-${randomUUID()}`;
       const finalRoot = join(kindRoot, installation); const staging = join(kindRoot, `.staging-${randomUUID()}`);
       await rm(staging, { recursive: true, force: true }); await mkdir(staging, { recursive: true });
       try {
@@ -439,12 +442,14 @@ export class ManagedRuntimeService {
           const info = await lstat(safeJoin(staging, relPath));
           if (!info.isFile() || info.isSymbolicLink()) throw Object.assign(new Error("runtime legal metadata is missing"), { code: "verification-failed" });
         }
+        const treeSha256 = await digestTree(staging);
         this.setPhase(kind, "probe");
         await this.probe(kind, stagedExecutable, entry, staging);
-        if (!existsSync(finalRoot)) await rename(staging, finalRoot);
-        if (await inspectExtracted(finalRoot) !== entry.unpackedSize) throw Object.assign(new Error("existing activation size mismatch"), { code: "verification-failed" });
+        if (await inspectExtracted(staging) !== entry.unpackedSize || await digestTree(staging) !== treeSha256) {
+          throw Object.assign(new Error("runtime changed during readiness probe"), { code: "verification-failed" });
+        }
+        await rename(staging, finalRoot);
         const executable = safeJoin(finalRoot, entry.executableRelPath);
-        const treeSha256 = await digestTree(finalRoot);
         writeFileAtomic(this.pointer(kind), `${JSON.stringify({ schemaVersion: 1, version: entry.version, installation, executable: entry.executableRelPath, treeSha256 })}\n`, { mode: 0o600 });
         this.active[kind] = executable;
         if (kind === "hermes") process.env.DANI_MANAGED_HERMES_EXECUTABLE = executable;
