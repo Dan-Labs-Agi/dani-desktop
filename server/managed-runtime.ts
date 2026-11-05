@@ -309,16 +309,22 @@ export class ManagedRuntimeService {
     this.run[kind] = task; return task;
   }
   startBootstrap(): RuntimeBootstrapStatus {
+    // The renderer posts while recovery is still starting its route. Join that
+    // run instead of reactivating good runtimes and stopping the same children.
+    if (this.modelRouteRun) {
+      this.status = this.statusValue("installing", "probe");
+      return this.bootstrapStatus();
+    }
+    if (this.status.state === "ready") return this.bootstrapStatus();
     if (!this.bootstrapRun) {
       this.status = this.statusValue("installing", "verify-bundled");
-      this.bootstrapRun = Promise.all([this.install("hermes"), this.install("opencode")])
+      const installs = (["hermes", "opencode"] as const).map(kind =>
+        this.active[kind] ? Promise.resolve() : this.install(kind));
+      this.bootstrapRun = Promise.all(installs)
         .then(async () => {
-          // Keep bootstrap non-ready until product state has adopted the managed
-          // executable and exact model. Otherwise a fresh UI can dispatch its
-          // quiz against the empty selection captured at server boot.
-          await this.routeStarter();
-          await this.taskReadyHandler?.();
-          this.refreshReadyStatus();
+          // One shared route-start lifecycle for fresh activation and recovery.
+          this.ensureModelRoute();
+          await this.modelRouteRun;
         })
         .catch(error => {
           const code = this.errorCode(error, "activation-failed");

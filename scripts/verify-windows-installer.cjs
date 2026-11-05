@@ -53,7 +53,13 @@ async function runtime(page, retry) {
   let status;
   for(let i=0;i<300;i++) {
     status=await page.evaluate(async()=> (await fetch('/api/runtime/bootstrap')).json());
-    if(status.state==='ready' && status.readiness?.taskReady && status.readiness?.runtime?.hermes && status.readiness?.runtime?.opencode) return status;
+    if(status.state==='ready' && status.readiness?.taskReady && status.readiness?.runtime?.hermes && status.readiness?.runtime?.opencode) {
+      // Require stable readiness, then let the real renderer leave preparation.
+      await sleep(3500);
+      const stable=await page.evaluate(async()=> (await fetch('/api/runtime/bootstrap')).json());
+      if(stable.state==='ready' && stable.readiness?.taskReady && !stable.error) return stable;
+      status=stable;
+    }
     if(status.state==='blocked-error' || (status.state==='repairable-error' && status.error?.code!=='not-activated')) break;
     await sleep(1000);
   }
@@ -62,6 +68,7 @@ async function runtime(page, retry) {
 }
 async function capture(page,label) {
   // Log evidence only, no Actions artifact or cache storage. Synthetic profile only.
+  await page.waitForTimeout(2000);
   const png=await page.screenshot();
   const b64=png.toString('base64');
   for(let i=0;i<b64.length;i+=32000) console.log('SCREENSHOT_'+label+'_CHUNK:'+b64.slice(i,i+32000));
