@@ -11,6 +11,7 @@ import {
   bindHermesScreenshotCompat,
   hermesAcpModelId,
   hermesSpawnEnv,
+  hermesLaunch,
   hermesConfiguredModel,
   hermesSpawnArgs,
   HERMES_PINNED_VERSION,
@@ -260,5 +261,22 @@ describe("hermesSpawnEnv", () => {
     const source: Record<string, string | undefined> = { PATH: "/usr/bin" };
     hermesSpawnEnv(source);
     expect(source.PYTHONDONTWRITEBYTECODE).toBeUndefined();
+  });
+});
+
+describe("managed Windows launch",()=> {
+  it("uses bundled Python for version, catalog and turns rather than spawning a batch file",()=> {
+    const env={DANI_MANAGED_HERMES_EXECUTABLE:"/sealed/payload/bin/hermes-acp.cmd"};
+    const old=process.env.DANI_MANAGED_HERMES_EXECUTABLE;
+    delete process.env.DANI_MANAGED_HERMES_EXECUTABLE;
+    try {
+      for(const args of [["--version"],[],["--check"]]) {
+        const launch=hermesLaunch("hermes",args,env,"win32");
+        expect(launch.command).toBe(join("/sealed/payload","runtime","python.exe"));
+        expect(launch.args).toEqual(["-m","acp_adapter",...args]);
+        expect(launch.env.PYTHONPATH).toBe(join("/sealed/payload","app")+";"+join("/sealed/payload","vendor"));
+        expect(launch.env.HERMES_DISABLE_LAZY_INSTALLS).toBe("1");
+      }
+    } finally {if(old!==undefined)process.env.DANI_MANAGED_HERMES_EXECUTABLE=old;}
   });
 });
