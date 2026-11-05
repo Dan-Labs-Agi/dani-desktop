@@ -13,6 +13,10 @@ await build({entryPoints:['scripts/diagnose-installed-runtime.ts'],bundle:true,p
  let contents=readFileSync(args.path,'utf8');
  contents=contents.replace('async function extractArchive(',snapshot+'async function extractArchive(');
  contents=contents.replace('new Error("runtime unpacked size mismatch")','new Error(`runtime unpacked size mismatch actual=${unpacked} expected=${entry.unpackedSize}`)');
+ contents=contents.replaceAll('} catch (error) {', '} catch (error) { console.error("DIAGNOSTIC_SERVICE_ERROR",error);');
+ contents=contents.replace('await waitForReady(`${bridgeUrl}/ready`, 30_000);', `this.opencodeServer.stderr?.on('data',d=>console.error('DIAGNOSTIC_OPENCODE',d.toString()));
+ this.bridge.stderr?.on('data',d=>console.error('DIAGNOSTIC_BRIDGE',d.toString()));
+ await waitForReady(\`\${bridgeUrl}/ready\`, 30_000);`);
  contents=contents.replace('await this.probe(kind, stagedExecutable, entry, staging);',`const beforeProbe=await diagnosticSnapshot(staging);
  await this.probe(kind, stagedExecutable, entry, staging);
  const afterProbe=await diagnosticSnapshot(staging);
