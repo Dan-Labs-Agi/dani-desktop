@@ -60,9 +60,19 @@ async function inspect(page,label) {
 }
 (async()=>{
  stop();let ui=await open();await inspect(ui.page,'INSTALLED');
+ await ui.page.locator('[data-welcome-later]').click();
+ await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
+ await capture(ui.page,'CHIEF');
+ await ui.page.locator('[data-chief-create]').click();
+ await ui.page.locator('[data-welcome]').waitFor({state:'detached',timeout:15000});
+ await inspect(ui.page,'ONBOARDED');
+ const onboarding=await ui.page.evaluate(async()=>{const r=await fetch('/api/config');const c=await r.json();return {code:r.status,onboarding:c.onboarding}});
+ console.log('MAIN_ONBOARDING_CONFIG',JSON.stringify(onboarding));
+ assert.equal(onboarding.code,200);assert.ok(onboarding.onboarding?.completedAt,'onboarding completion missing');
  fs.writeFileSync(path.join(data,'synthetic-preserved-marker.txt'),'preserve synthetic data');
  await ui.browser.close();stop();await sleep(3000);
  ui=await open();await inspect(ui.page,'RELAUNCHED');
  assert.equal(fs.readFileSync(path.join(data,'synthetic-preserved-marker.txt'),'utf8'),'preserve synthetic data');
+ assert.equal(await ui.page.locator('[data-welcome]').count(),0,'completed welcome reopened on relaunch');
  console.log('MAIN_INSTALLED_RELAUNCH_PASS');await ui.browser.close();
 })().catch(e=>{console.error(e.stack);process.exitCode=1}).finally(()=>stop());
