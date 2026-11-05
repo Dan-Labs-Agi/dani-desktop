@@ -7,6 +7,9 @@ const assert = require('node:assert/strict');
 const {chromium} = require(path.join(process.env.RUNNER_TEMP, 'smoke-tools/node_modules/playwright-core'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const temp = path.join(process.env.RUNNER_TEMP, 'dani-installed-verification');
+// Isolate appData as well as product data. Only this disposable profile is read.
+process.env.APPDATA=path.join(temp,'appdata');
+process.env.LOCALAPPDATA=path.join(temp,'localappdata');
 fs.mkdirSync(temp, {recursive:true});
 const install = path.join(temp, 'app');
 const data = path.join(temp, 'profile');
@@ -64,6 +67,11 @@ async function runtime(page, retry) {
     await sleep(1000);
   }
   await capture(page,'FAILURE');
+  const logfile=path.join(process.env.APPDATA,'Dani Bot/logs/server.log');
+  if(fs.existsSync(logfile)) {
+    const lines=fs.readFileSync(logfile,'utf8').split('\n');
+    console.log('SYNTHETIC_PROFILE_SERVER_ERRORS',lines.filter(l=>/error|failed|exit|model|route/i.test(l)).map(l=>l.replace(/(token|key|secret)[:=][^\s,]+/gi,'$1=[redacted]')).slice(-35).join('\n'));
+  }
   throw Error('installed runtime did not verify: '+JSON.stringify(status));
 }
 async function capture(page,label) {

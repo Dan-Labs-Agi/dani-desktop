@@ -31,6 +31,13 @@ jobs:
       - name: clean build outputs
         shell: bash
         run: rm -rf dist dist-server release
+      - name: trace real bundled model-route startup before packaging
+        shell: pwsh
+        run: |
+          pnpm stage:runtimes
+          node scripts/build-runtime-diagnosis.mjs
+          node dist-native/runtime-diagnosis.mjs dist-native
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: pnpm package:win
       - name: report what was built
         shell: bash
