@@ -44,7 +44,8 @@ async function open() {
   }
 }
 async function capture(page,label) {
- const png=await page.screenshot();const b64=png.toString('base64');
+ await page.waitForTimeout(1500);
+ const png=await page.screenshot({animations:'disabled'});const b64=png.toString('base64');
  for(let i=0;i<b64.length;i+=32000) console.log('MAIN_'+label+'_SCREENSHOT_CHUNK:'+b64.slice(i,i+32000));
  console.log('MAIN_'+label+'_SCREENSHOT_END');
 }
@@ -63,6 +64,7 @@ async function inspect(page,label) {
  await ui.page.locator('[data-welcome-later]').click();
  await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
  await capture(ui.page,'CHIEF');
+ await ui.page.waitForTimeout(1000); // Respect the real Chief intro's accidental-click guard.
  await ui.page.locator('[data-chief-create]').click();
  await ui.page.locator('[data-welcome]').waitFor({state:'detached',timeout:15000});
  await inspect(ui.page,'ONBOARDED');
