@@ -99,3 +99,23 @@ describe("streamed tool calls without an index (Gemini's OpenAI-compatible endpo
     expect(() => calls.add([whole("call_32", "f")], true)).toThrow(/invalid tool-call index/);
   });
 });
+
+
+describe("opaque tool-call metadata", () => {
+  it.each([false, true])("keeps signed metadata through completion (streaming=%s)", streaming => {
+    const calls = new ChatToolCalls();
+    const extra_content = { google: { thought_signature: "synthetic-signed-call" } };
+    calls.add([{ ...completeCall, ...(streaming ? { index: 0 } : {}), extra_content }], streaming);
+    expect(calls.finish("tool_calls", false)[0]).toMatchObject({ extra_content });
+  });
+  it("counts replaced metadata once and refuses oversized metadata", () => {
+    const calls = new ChatToolCalls();
+    calls.add([{ index: 0, ...completeCall }], true);
+    for (let i = 0; i < 4; i++) calls.add([{ index: 0, extra_content: { google: { thought_signature: "x".repeat(100_000) } } }], true);
+    expect(calls.finish("tool_calls", false)).toHaveLength(1);
+    expect(() => calls.add([{ index: 0, extra_content: { google: { thought_signature: "x".repeat(256_001) } } }], true)).toThrow(/size limit/);
+  });
+  it.each(["bad", 4, [], true])("rejects malformed metadata %s", extra_content => {
+    expect(() => new ChatToolCalls().add([{ ...completeCall, extra_content }], false)).toThrow(/metadata/);
+  });
+});

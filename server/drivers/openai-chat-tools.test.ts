@@ -794,6 +794,7 @@ describe.each<Provider>(["openai-compat", "grok", "minimax"])("%s structured too
 
 describe("structured tool execution boundaries", () => {
   it.each(["JSON", "SSE"] as const)("preserves opaque reasoning details and their original order through %s tool continuation", async (format) => {
+    const extra_content = { google: { thought_signature: "synthetic-call-signature" } };
     const details = [
       { type: "reasoning.text", id: "trace-text", format: "fixture-format", index: 2, text: "Opaque reasoning text", signature: "synthetic-text-signature" },
       { type: "reasoning.encrypted", id: "trace-encrypted", format: "fixture-format", index: 1, data: "synthetic-encrypted-segment-a" },
@@ -806,14 +807,14 @@ describe("structured tool execution boundaries", () => {
         response.end(JSON.stringify({ choices: [{
           message: {
             role: "assistant", content: null, reasoning: "Synthetic reasoning.", reasoning_details: details,
-            tool_calls: [{ id: "call_write", type: "function", function: toolCall().function }],
+            tool_calls: [{ id: "call_write", type: "function", function: toolCall().function, extra_content }],
           },
           finish_reason: "tool_calls",
         }] }));
       } else {
         sse(response, [
           chunk({ reasoning: "Synthetic ", reasoning_details: details.slice(0, 2) }),
-          chunk({ reasoning: "reasoning.", reasoning_details: details.slice(2), content: null, tool_calls: [toolCall()] }, "tool_calls"),
+          chunk({ reasoning: "reasoning.", reasoning_details: details.slice(2), content: null, tool_calls: [{ ...toolCall(), extra_content }] }, "tool_calls"),
         ]);
       }
     });
@@ -823,6 +824,7 @@ describe("structured tool execution boundaries", () => {
     const assistant = f.requests[1].messages.find((message) => message.role === "assistant");
     expect(assistant).toMatchObject({ content: null, reasoning_content: "Synthetic reasoning." });
     expect(assistant?.reasoning_details).toEqual(details);
+    expect(assistant?.tool_calls?.[0]).toMatchObject({ extra_content });
     expect(f.recorder.events.filter((event) => event.type === "item.completed" && event.itemType === "assistant_text")).toEqual([
       expect.objectContaining({ text: "The operation is complete." }),
     ]);

@@ -3,6 +3,8 @@ export interface ChatToolCall {
   id: string;
   type: "function";
   function: { name: string; arguments: string };
+  /** Opaque provider signatures must return with the matching tool call. */
+  extra_content?: Record<string, unknown>;
 }
 
 /** Calls one model reply may carry (its index bound). */
@@ -65,6 +67,15 @@ export class ChatToolCalls {
           call.function[field] += fn[field];
           if (field === "arguments") this.argumentChars += fn[field].length;
         }
+      }
+      if (!omitted(delta.extra_content)) {
+        const metadata = object(delta.extra_content);
+        if (!metadata) throw new ChatProtocolError("provider returned invalid tool-call metadata");
+        // Deltas can repeat or replace opaque metadata. Charge the retained
+        // value, not every retransmission, within the existing reply budget.
+        this.argumentChars -= call.extra_content ? JSON.stringify(call.extra_content).length : 0;
+        call.extra_content = metadata;
+        this.argumentChars += JSON.stringify(metadata).length;
       }
       if (call.function.name.length > 64 || this.argumentChars > MAX_ARGUMENT_CHARS) {
         throw new ChatProtocolError("provider tool calls exceeded the size limit");
