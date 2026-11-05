@@ -23,27 +23,27 @@ function fixture(t, { pnpm = true, version = pinned, gitFailure = false, mergeFa
   const calls = () => { try { return readFileSync(log, 'utf8'); } catch { return ''; } };
   return { dir, run, calls };
 }
-test('check-only with missing pnpm fails without Corepack mutation or checkout', t => {
+test('check-only with missing pnpm fails without Corepack mutation or checkout', { skip: process.platform === 'win32' }, t => {
   const f = fixture(t, { pnpm: false }); const result = f.run('--check');
   assert.equal(result.status, 1); assert.match(result.stderr, /pnpm is not installed/);
   assert.doesNotMatch(f.calls(), /MUTATION|clone|fetch|merge|install/);
 });
-test('check-only with pinned pnpm succeeds and only reads versions', t => {
+test('check-only with pinned pnpm succeeds and only reads versions', { skip: process.platform === 'win32' }, t => {
   const f = fixture(t); const result = f.run('--check');
   assert.equal(result.status, 0, result.stderr); assert.doesNotMatch(f.calls(), /MUTATION|clone|fetch|merge|install/);
 });
-test('incorrect pnpm is rejected before source changes', t => {
+test('incorrect pnpm is rejected before source changes', { skip: process.platform === 'win32' }, t => {
   const f = fixture(t, { version: '99.0.0' }); const result = f.run('--check');
   assert.equal(result.status, 1); assert.match(result.stderr, /does not match packageManager/);
   assert.doesNotMatch(f.calls(), /clone|fetch|merge|install/);
 });
-test('failed fetch stops instead of silently building stale checkout', t => {
+test('failed fetch stops instead of silently building stale checkout', { skip: process.platform === 'win32' }, t => {
   const f = fixture(t, { gitFailure: true }); mkdirSync(path.join(f.dir, 'checkout', '.git'), { recursive: true });
   const result = f.run(); assert.equal(result.status, 1); assert.match(result.stderr, /refusing to package stale source/);
   assert.doesNotMatch(f.calls(), /merge|pnpm install|pnpm package/);
 });
 
-test('failed fast-forward merge stops instead of building stale checkout', t => {
+test('failed fast-forward merge stops instead of building stale checkout', { skip: process.platform === 'win32' }, t => {
   const f = fixture(t, { mergeFailure: true }); mkdirSync(path.join(f.dir, 'checkout', '.git'), { recursive: true });
   const result = f.run(); assert.equal(result.status, 1); assert.match(result.stderr, /refusing to package stale source/);
   assert.match(f.calls(), /git fetch/); assert.match(f.calls(), /git merge/);
@@ -58,3 +58,32 @@ test('both platform helpers use pinned manager and frozen lockfile without autom
   }
   assert.match(ps, /git fetch[^\n]+\n\s+if \(\$LASTEXITCODE -ne 0\)/);
 });
+
+// Windows exercises the real PowerShell helper with inert in-process commands.
+for (const scenario of ['missing', 'pinned', 'wrong', 'fetch', 'merge']) {
+  test('PowerShell helper safely handles '+scenario, {skip: process.platform !== 'win32'}, t => {
+    const dir=mkdtempSync(path.join(os.tmpdir(),'dani-powershell-test-'));
+    t.after(()=>rmSync(dir,{recursive:true,force:true}));
+    const checkout=path.join(dir,'checkout');mkdirSync(path.join(checkout,'.git'),{recursive:true});
+    const log=path.join(dir,'calls');
+    const quote=value=>"'"+value.replaceAll("'","''")+"'";
+    const script=`$env:DANI_INSTALL_DIR=${quote(checkout)}
+Set-Location ${quote(dir)}
+function Get-Command { param($Name,$ErrorAction) if($Name -eq 'pnpm' -and ${scenario==='missing'?'$true':'$false'}) {return $null}; return @{Name=$Name} }
+function git { Add-Content ${quote(log)} ('git '+($args -join ' ')); $global:LASTEXITCODE=0; if(($args[0] -eq 'fetch' -and ${scenario==='fetch'?'$true':'$false'}) -or ($args[0] -eq 'merge' -and ${scenario==='merge'?'$true':'$false'})) {$global:LASTEXITCODE=1}; if($args[0] -eq '--version') {Write-Output 'git version 2'} }
+function node {if($args[0] -eq '-p') {Write-Output '24'} else {Write-Output 'v24.0.0'} }
+function pnpm { Add-Content ${quote(log)} ('pnpm '+($args -join ' ')); $global:LASTEXITCODE=0; if($args[0] -eq '--version') {Write-Output '${scenario==='wrong'?'99.0.0':pinned}'} }
+& ${quote(path.join(root,'install.ps1'))} ${['fetch','merge'].includes(scenario)?'':'-CheckOnly'}
+`;
+    const file=path.join(dir,'fixture.ps1');writeFileSync(file,script);
+    const result=spawnSync('pwsh',['-NoProfile','-File',file],{encoding:'utf8',timeout:20000});
+    assert.equal(result.error,undefined,String(result.error));
+    assert.equal(result.status,scenario==='pinned'?0:1,result.stdout+result.stderr);
+    const calls=(()=>{try{return readFileSync(log,'utf8')}catch{return ''}})();
+    assert.doesNotMatch(calls,/pnpm install|pnpm package|clone|MUTATION/);
+    if(scenario==='fetch') {assert.match(calls,/git fetch/);assert.doesNotMatch(calls,/git merge/)}
+    if(scenario==='merge') assert.match(calls,/git merge/);
+    if(scenario==='missing') assert.match(result.stdout,/pnpm is not installed/);
+    if(scenario==='wrong') assert.match(result.stdout,/does not match packageManager/);
+  });
+}
