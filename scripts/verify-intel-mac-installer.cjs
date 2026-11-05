@@ -31,6 +31,9 @@ result=spawnSync('codesign',['--verify','--deep','--strict',bundle],{encoding:'u
 result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes('x86_64'),'not an Intel app');
 const resources=path.join(bundle,'Contents/Resources');
 assert.ok(fs.existsSync(path.join(resources,'server/index.js')),'installed packaged server missing');
+// Synthetic diagnostic bundle stays outside the signed app.
+const diag=spawnSync(process.execPath,[path.resolve('dist-native/runtime-diagnosis.mjs'),resources],{env:process.env,encoding:'utf8',timeout:300000});
+console.log(diag.stdout);console.error(diag.stderr);assert.equal(diag.status,0,'isolated diagnosis process failed');
 let launched;
 function stop() {
   if(launched)try{process.kill(-launched.pid,'SIGKILL');}catch{}
