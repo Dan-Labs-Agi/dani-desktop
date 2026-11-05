@@ -239,6 +239,16 @@ describe("hermesSpawnArgs", () => {
 describe("Hermes release pin",()=>{it("pins a traceable upstream release",()=>{expect(HERMES_PINNED_VERSION).toBe("0.21.4");expect(HERMES_PINNED_RELEASE).toBe("https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.21");expect(HermesAgentDriver.install?.docsUrl).toContain("hermes-agent.nousresearch.com")})});
 
 describe("hermesSpawnEnv", () => {
+  it("seals managed dependency installation, including inherited durable-target overrides", () => {
+    const env = hermesSpawnEnv({DANI_MANAGED_HERMES_EXECUTABLE:"/managed/hermes-acp",HERMES_DISABLE_LAZY_INSTALLS:"0",HERMES_LAZY_INSTALL_TARGET:"/managed/runtime"});
+    expect(env.HERMES_DISABLE_LAZY_INSTALLS).toBe("1");
+    expect(env.HERMES_LAZY_INSTALL_TARGET).toBe("");
+  });
+  it("preserves external user-managed dependency policy", () => {
+    const env = hermesSpawnEnv({HERMES_DISABLE_LAZY_INSTALLS:"0",HERMES_LAZY_INSTALL_TARGET:"/user/extensions"});
+    expect(env.HERMES_DISABLE_LAZY_INSTALLS).toBe("0");
+    expect(env.HERMES_LAZY_INSTALL_TARGET).toBe("/user/extensions");
+  });
   it("suppresses Python bytecode writes so the verified managed tree stays pristine", () => {
     const env = hermesSpawnEnv({ PATH: "/usr/bin", HOME: "/home/u" });
     expect(env.PYTHONDONTWRITEBYTECODE).toBe("1");

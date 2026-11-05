@@ -13,6 +13,7 @@ import { parse as parseYaml } from "yaml";
 import type { ModelCatalog } from "../../contracts.ts";
 import { decodeInjectId, hostApiKey, INJECT_SEP, localHost, mergeLocalInject } from "../local-inject.ts";
 import { createAcpDriver, type AcpSupport } from "./core.ts";
+import { managedHermesEnv } from "../../managed-hermes-env.ts";
 import { classifyHermesError } from "../../hermes-provider-policy.ts";
 
 export const HERMES_PINNED_VERSION = "0.21.4";
@@ -44,7 +45,9 @@ export function bindHermesScreenshotCompat(
  * after every restart. Every hermes spawn therefore suppresses bytecode
  * writes, matching the managed-runtime probe. */
 export function hermesSpawnEnv(env: Record<string, string | undefined>): NodeJS.ProcessEnv {
-  return { ...env, PYTHONDONTWRITEBYTECODE: "1" } as NodeJS.ProcessEnv;
+  return env.DANI_MANAGED_HERMES_EXECUTABLE
+    ? managedHermesEnv(env)
+    : { ...env, PYTHONDONTWRITEBYTECODE: "1" } as NodeJS.ProcessEnv;
 }
 
 function hermesHome(env: Record<string, string | undefined>): string {
