@@ -21,10 +21,19 @@ const lastUser = (request: ChatRequest) => {
 
 it("says in words that a turn nobody stopped was cut off, and retries the room request a client abort stopped", async () => {
   const requests: ChatRequest[] = [];
+  const unknownPaths: string[] = [];
   const upstream = createServer(async (req, res) => {
     if (req.url === "/v1/models") {
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ data: [{ id: "fixture-model" }] }));
+      return;
+    }
+    // Discovery probes /api/version to detect a local model host. It is not
+    // a chat request and has no JSON body. Keep unexpected routes observable
+    // instead of turning an empty GET into an unhandled async rejection.
+    if (req.method !== "POST" || req.url !== "/v1/chat/completions") {
+      unknownPaths.push(`${req.method} ${req.url}`);
+      res.writeHead(404).end();
       return;
     }
     let body = "";
@@ -123,6 +132,7 @@ it("says in words that a turn nobody stopped was cut off, and retries the room r
     const resent = lastUser(requests.slice(before).at(-1)!);
     expect(resent).toContain("Read the brief.");
     expect(resent).toContain("brief.txt");
+    expect(unknownPaths.every(path => path === "GET /api/version")).toBe(true);
   } finally {
     await fixture.close();
     upstream.closeAllConnections();
