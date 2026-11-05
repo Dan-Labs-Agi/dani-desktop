@@ -19,6 +19,10 @@ async function fixture(mutateDuringProbe = false, mutateOnRecovery = false) {
     [probeRel]: win ? '@echo off\necho {"result":{"agentInfo":{"name":"hermes-agent","version":"test"}}}\necho PROBE RESULT: PASS (hermes-agent test, ACP initialize)\n' : '#!/bin/sh\necho \'{"result":{"agentInfo":{"name":"hermes-agent","version":"test"}}}\'\necho \'PROBE RESULT: PASS (hermes-agent test, ACP initialize)\'\n',
     NOTICE: "notice\n", "SBOM.cdx.json": "{}\n",
   };
+  // Mirrors upstream lazy-deps policy: a writable target overrides the disable flag.
+  files[probeRel] = win
+    ? '@echo off\nif not "%HERMES_DISABLE_LAZY_INSTALLS%"=="1" exit /b 9\nif not "%HERMES_LAZY_INSTALL_TARGET%"=="" exit /b 9\n' + files[probeRel]
+    : '#!/bin/sh\n[ "$HERMES_DISABLE_LAZY_INSTALLS" = 1 ] && [ -z "$HERMES_LAZY_INSTALL_TARGET" ] || exit 9\n' + files[probeRel];
   if (mutateDuringProbe) files[probeRel] += win ? 'echo pollution>>"%~dp0..\\NOTICE"\n' : 'echo pollution >> "$(dirname "$0")/../NOTICE"\n';
   if (mutateOnRecovery) files[probeRel] += win
     ? `if exist "${join(root, "mutate")}" echo pollution>>"%~dp0..\\NOTICE"\n`

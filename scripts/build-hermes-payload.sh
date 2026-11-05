@@ -86,8 +86,8 @@ if [ "$ACTUAL_COMMIT" != "$HERMES_COMMIT" ]; then
 fi
 echo "    pin verified: $ACTUAL_COMMIT"
 
-echo "==> [2/10] frozen HASHED resolution: uv.lock, core + acp extra"
-(cd "$WORK/src" && uv export --frozen --no-dev --extra acp -o "$WORK/req-hashes.txt")
+echo "==> [2/10] frozen HASHED resolution: uv.lock, core + acp + bedrock extras (import-time optional provider)"
+(cd "$WORK/src" && uv export --frozen --no-dev --extra acp --extra bedrock -o "$WORK/req-hashes.txt")
 
 echo "==> [3/10] structural target filter (whole stanzas, hashes preserved)"
 # shellcheck disable=SC2086
@@ -168,6 +168,9 @@ cat > "$PAYLOAD/bin/hermes" <<'LAUNCHER_SH'
 PAYLOAD_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export PYTHONPATH="$PAYLOAD_ROOT/app:$PAYLOAD_ROOT/vendor"
 export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1
+export HERMES_DISABLE_LAZY_INSTALLS=1
+unset HERMES_LAZY_INSTALL_TARGET
 exec "$PAYLOAD_ROOT/runtime/bin/python3" -m hermes_cli.main "$@"
 LAUNCHER_SH
 cat > "$PAYLOAD/bin/hermes-acp" <<'LAUNCHER_SH'
@@ -175,6 +178,9 @@ cat > "$PAYLOAD/bin/hermes-acp" <<'LAUNCHER_SH'
 PAYLOAD_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export PYTHONPATH="$PAYLOAD_ROOT/app:$PAYLOAD_ROOT/vendor"
 export PYTHONNOUSERSITE=1
+export PYTHONDONTWRITEBYTECODE=1
+export HERMES_DISABLE_LAZY_INSTALLS=1
+unset HERMES_LAZY_INSTALL_TARGET
 exec "$PAYLOAD_ROOT/runtime/bin/python3" -m acp_adapter "$@"
 LAUNCHER_SH
 chmod +x "$PAYLOAD/bin/hermes" "$PAYLOAD/bin/hermes-acp"
@@ -183,6 +189,9 @@ cat > "$PAYLOAD/bin/hermes.cmd" <<'LAUNCHER_CMD'
 set "PAYLOAD_ROOT=%~dp0.."
 set "PYTHONPATH=%PAYLOAD_ROOT%\app;%PAYLOAD_ROOT%\vendor"
 set "PYTHONNOUSERSITE=1"
+set "PYTHONDONTWRITEBYTECODE=1"
+set "HERMES_DISABLE_LAZY_INSTALLS=1"
+set "HERMES_LAZY_INSTALL_TARGET="
 "%PAYLOAD_ROOT%\runtime\python.exe" -m hermes_cli.main %*
 LAUNCHER_CMD
 cat > "$PAYLOAD/bin/hermes-acp.cmd" <<'LAUNCHER_CMD'
@@ -190,6 +199,9 @@ cat > "$PAYLOAD/bin/hermes-acp.cmd" <<'LAUNCHER_CMD'
 set "PAYLOAD_ROOT=%~dp0.."
 set "PYTHONPATH=%PAYLOAD_ROOT%\app;%PAYLOAD_ROOT%\vendor"
 set "PYTHONNOUSERSITE=1"
+set "PYTHONDONTWRITEBYTECODE=1"
+set "HERMES_DISABLE_LAZY_INSTALLS=1"
+set "HERMES_LAZY_INSTALL_TARGET="
 "%PAYLOAD_ROOT%\runtime\python.exe" -m acp_adapter %*
 LAUNCHER_CMD
 cp "$SCRIPT_DIR/payload-probe/acp_probe.py" "$PAYLOAD/probe/"

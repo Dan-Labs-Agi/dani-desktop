@@ -7,6 +7,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import extractZip from "extract-zip";
 import * as tar from "tar";
 import { z } from "zod";
+import { managedHermesEnv } from "./managed-hermes-env.ts";
 import { writeFileAtomic } from "./atomic.ts";
 
 export type ManagedRuntimeKind = "hermes" | "opencode";
@@ -188,9 +189,9 @@ const productMessage = (code: string) => ({
   "model-route-failed": "Dani could not start its local model route.",
 }[code] ?? "Dani could not prepare its local runtime.");
 
-async function run(command: string, args: string[], timeoutMs: number, input?: string): Promise<{ stdout: string; stderr: string }> {
+async function run(command: string, args: string[], timeoutMs: number, input?: string, env: NodeJS.ProcessEnv = process.env): Promise<{ stdout: string; stderr: string }> {
   return await new Promise((resolveRun, reject) => {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } });
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...env, PYTHONDONTWRITEBYTECODE: "1" } });
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     const timer = setTimeout(() => { child.kill(); reject(Object.assign(new Error("runtime probe timed out"), { code: "probe-failed" })); }, timeoutMs);
     child.stdout.on("data", chunk => stdout.push(Buffer.from(chunk)));
@@ -476,14 +477,15 @@ export class ManagedRuntimeService {
       throw Object.assign(new Error("recovered runtime changed during readiness probe"), { code: "verification-failed" });
     }
   }
-  private async probe(_kind: ManagedRuntimeKind, _executable: string, entry: RuntimeEntry, root: string) {
+  private async probe(kind: ManagedRuntimeKind, _executable: string, entry: RuntimeEntry, root: string) {
     const command = safeJoin(root, entry.probe.argv[0]!);
     const info = await lstat(command);
     if (!info.isFile() || info.isSymbolicLink()) throw Object.assign(new Error("runtime probe is invalid"), { code: "probe-failed" });
     const args = entry.probe.argv.slice(1);
+    const env = kind === "hermes" ? managedHermesEnv(process.env) : process.env;
     const result = process.platform === "win32" && command.toLowerCase().endsWith(".cmd")
-      ? await run(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command, ...args], 100_000)
-      : await run(command, args, 100_000);
+      ? await run(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command, ...args], 100_000, undefined, env)
+      : await run(command, args, 100_000, undefined, env);
     const passAt = result.stdout.indexOf("PROBE RESULT:");
     const structured = (passAt < 0 ? result.stdout : result.stdout.slice(0, passAt)).trim();
     let agentVersion: unknown, agentName: unknown;
