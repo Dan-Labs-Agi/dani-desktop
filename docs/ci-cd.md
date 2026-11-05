@@ -8,7 +8,7 @@ Every pull request and push to `main` or `prod` runs the portable typecheck and 
 
 ## Releases
 
-A release starts only from a tag that exactly matches `v<package.json version>`, for example `v0.1.56`. The pipeline pins that tag's commit, builds all supported desktop targets, and publishes only after the assembler sees the complete set:
+The release workflow builds packages on branch pushes too. Its draft-release job runs only on an explicit manual dispatch or a version-tag push, and only after all platform package jobs succeed. A version tag must match `v<package.json version>`. The job creates a draft, not a published installer. See [the current CI contract](current-ci-contract.md). The required package set is:
 
 - macOS Apple silicon
 - macOS Intel

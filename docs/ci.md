@@ -1,5 +1,9 @@
 # CI job selection
 
+> Historical upstream design, not the adopted Desktop workflow. See
+> [Current Desktop CI contract](current-ci-contract.md) and `.github/workflows/ci.yml`.
+> The selectors described below are not currently wired into this repository.
+
 Every PR still runs the workflow, its `static` job and the `CI` gate: locale
 validation, lint, the CI-selection tests and the verification-documentation
 checks always run. Selection never skips the entire workflow.

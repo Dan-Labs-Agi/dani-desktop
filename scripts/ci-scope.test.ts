@@ -419,7 +419,19 @@ describe("the repository's import graph", () => {
 
   it("runs every test that reads the docs with the docs tests or in static", () => {
     const ci = parse(readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8"));
-    const inStatic = (ci.jobs.static.steps as { run?: string }[]).flatMap((step) => step.run?.startsWith("pnpm exec vitest run ") ? step.run.split(" ").slice(4) : []);
+    // Desktop runs the complete suite rather than wiring this historical
+    // selector into a static job. Both contracts must actually run docs tests.
+    const inStatic = ci.jobs.static
+      ? (ci.jobs.static.steps as { run?: string }[]).flatMap((step) => step.run?.startsWith("pnpm exec vitest run ") ? step.run.split(" ").slice(4) : [])
+      : ["scripts/testing/verification-docs.test.ts"];
+    if (!ci.jobs.static) {
+      const tests = ci.jobs.test.steps.find((step: { run?: string }) => step.run === "pnpm test");
+      expect(tests).toBeDefined();
+      expect(tests.if).toBeUndefined();
+      expect(tests["continue-on-error"]).toBeUndefined();
+      expect(JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).scripts.test).toMatch(/^vitest run &&/);
+      expect(readFileSync(join(ROOT, "vite.config.ts"), "utf8")).toContain('"scripts/**/*.test.ts"');
+    }
     expect(inStatic).toContain("scripts/testing/verification-docs.test.ts");
     // A docs path a test reads from the repository root: join(ROOT, "docs", ...), new URL("docs/...", ROOT) or read("docs/...").
     const DOCS_READ = /(?:(?:join|resolve)\(\s*ROOT\s*,\s*|new URL\(\s*|\bread\w*\(\s*)["'`]((?:apps\/docs|docs)\b[^"'`]*|[A-Z][A-Z_]+\.md)["'`]/g;
