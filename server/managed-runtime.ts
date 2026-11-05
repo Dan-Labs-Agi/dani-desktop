@@ -470,6 +470,11 @@ export class ManagedRuntimeService {
       if (!info.isFile() || info.isSymbolicLink()) throw Object.assign(new Error("runtime legal metadata is missing"), { code: "verification-failed" });
     }
     await this.probe(kind, executable, entry, root);
+    // Recovery must enforce the same post-probe integrity boundary as a
+    // fresh activation. A successful handshake cannot bless changed bytes.
+    if (await inspectExtracted(root) !== entry.unpackedSize || await digestTree(root) !== pointer.treeSha256) {
+      throw Object.assign(new Error("recovered runtime changed during readiness probe"), { code: "verification-failed" });
+    }
   }
   private async probe(_kind: ManagedRuntimeKind, _executable: string, entry: RuntimeEntry, root: string) {
     const command = safeJoin(root, entry.probe.argv[0]!);
