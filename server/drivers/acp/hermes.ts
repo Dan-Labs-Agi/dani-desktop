@@ -7,7 +7,7 @@
 import { execFile, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import type { ModelCatalog } from "../../contracts.ts";
@@ -48,6 +48,19 @@ export function hermesSpawnEnv(env: Record<string, string | undefined>): NodeJS.
   return env.DANI_MANAGED_HERMES_EXECUTABLE
     ? managedHermesEnv(env)
     : { ...env, PYTHONDONTWRITEBYTECODE: "1" } as NodeJS.ProcessEnv;
+}
+
+/** Managed Windows launchers are batch files, which CreateProcess/execFile
+ * cannot execute directly. Use the same bundled interpreter/module without a shell. */
+export function hermesLaunch(
+  cli: string, args: string[], env: Record<string, string | undefined>, platform: NodeJS.Platform = process.platform,
+): {command:string;args:string[];env:NodeJS.ProcessEnv} {
+  const managed=process.env.DANI_MANAGED_HERMES_EXECUTABLE || env.DANI_MANAGED_HERMES_EXECUTABLE;
+  if(platform === "win32" && managed && /[\\/]hermes-acp\.cmd$/i.test(managed)) {
+    const root=dirname(dirname(managed));
+    return {command:join(root,"runtime","python.exe"),args:["-m","acp_adapter",...args],env:{...managedHermesEnv(env),PYTHONPATH:join(root,"app")+";"+join(root,"vendor"),PYTHONNOUSERSITE:"1"}};
+  }
+  return {command:managed || cli,args,env:hermesSpawnEnv(env)};
 }
 
 function hermesHome(env: Record<string, string | undefined>): string {
@@ -285,7 +298,8 @@ async function fetchHermesAcpModels(
   return await new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(cli, ["acp"], { stdio: ["pipe", "pipe", "ignore"], env: hermesSpawnEnv(env) });
+      const launch=hermesLaunch(cli, hermesSpawnArgs(), env);
+      child = spawn(launch.command, launch.args, { stdio: ["pipe", "pipe", "ignore"], env: launch.env });
     } catch {
       return resolve([]);
     }
@@ -434,10 +448,7 @@ const support: AcpSupport = {
     return model;
   },
   defaultCli: "hermes",
-  resolveCommand: async (env, config) => ({
-    command: process.env.DANI_MANAGED_HERMES_EXECUTABLE || config.cli,
-    env: hermesSpawnEnv(env),
-  }),
+  resolveCommand: async (env, config) => hermesLaunch(config.cli, [], env),
   nativeSource: "hermes.acp",
   loginNote: "Hermes CLI is not installed",
   install: {
@@ -456,7 +467,8 @@ const support: AcpSupport = {
   spawnArgs: () => /(?:^|[\\/])hermes-acp(?:\.cmd)?$/i.test(process.env.DANI_MANAGED_HERMES_EXECUTABLE ?? "") ? [] : ["acp"],
   snapshot: async (env, config) => await new Promise((resolve) => {
     const cli = process.env.DANI_MANAGED_HERMES_EXECUTABLE || config.cli;
-    execFile(cli, ["--version"], { env: hermesSpawnEnv(env), timeout: 8_000 }, (error, stdout) => {
+    const launch=hermesLaunch(cli, ["--version"], env);
+    execFile(launch.command, launch.args, { env: launch.env, timeout: 8_000 }, (error, stdout) => {
       if (error) return resolve({ state: "unavailable", reason: "`hermes` CLI not found" });
       const version = String(stdout).trim();
       const compatible = new RegExp(`(?:^|\\s)v?${HERMES_PINNED_VERSION.replaceAll(".", "\\.")}(?:\\s|$|\\()`).test(version);
