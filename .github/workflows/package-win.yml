@@ -26,6 +26,6 @@ jobs:
       - run: pnpm exec vitest run server/managed-runtime-retry.test.ts server/managed-runtime.test.ts server/drivers/acp/hermes.test.ts
       - run: pnpm package:prepare
       - run: pnpm build:speech && pnpm build:recorder && pnpm build:cua
-      - run: pnpm exec electron-builder --mac --x64 --publish never
+      - run: pnpm exec electron-builder --mac --x64 --publish never -c.mac.identity=-
       - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
       - run: node scripts/verify-intel-mac-installer.cjs
