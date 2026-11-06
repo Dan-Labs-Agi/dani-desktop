@@ -2,10 +2,16 @@
 // sessions in one process (ACP keys every session request and update by sessionId), so a sharing driver links many
 // threads to one host; every other driver links exactly one.
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { engineMemory } from "../../engine-memory.ts";
 import { appendNative } from "../native.ts";
 import { acpRpcError } from "./rpc-error.ts";
+
+const folderIdentity = (folder: string): string => {
+  try { return realpathSync.native(folder); } catch { return resolve(folder); }
+};
 
 /** A catalog can contain credential-bearing native configuration, including late replies. */
 export function acpNativeIncomingLogMessage(message: any, privateResponses: ReadonlySet<number>): unknown {
@@ -118,6 +124,9 @@ export class AcpHost {
    * servers until its process exits (OpenCode 1.19.3 does). */
   opened = 0;
   retired = 0;
+  // MCP registration can be directory-scoped in the provider, even when ACP
+  // session traffic is isolated. Keep ownership after a session closes.
+  private folderOwners = new Map<string, string>();
   recycle: ReturnType<typeof setTimeout> | null = null;
   #nextId = 1;
   readonly #pending = new Map<number, Pending>();
@@ -166,12 +175,19 @@ export class AcpHost {
     });
   }
 
-  /** Room for one more thread: alive, not draining, under `limit` sessions open and `lifetime` ever opened. */
-  accepts(limit: number, lifetime: number): boolean {
-    return !this.dead && !this.draining && this.child.exitCode === null && this.links.size < limit && this.opened < lifetime;
+  /** Room for a session without reassigning another thread's folder, including retired sessions. */
+  accepts(limit: number, lifetime: number, threadId: string, folder: string): boolean {
+    folder = folderIdentity(folder);
+    const owner = this.folderOwners.get(folder);
+    return !this.dead && !this.draining && this.child.exitCode === null && this.links.size < limit && this.opened < lifetime &&
+      (owner === undefined || owner === threadId);
   }
 
-  link(threadId: string): AcpLink {
+  link(threadId: string, folder: string): AcpLink {
+    folder = folderIdentity(folder);
+    const owner = this.folderOwners.get(folder);
+    if (owner !== undefined && owner !== threadId) throw new Error("ACP folder belongs to another thread in this process");
+    this.folderOwners.set(folder, threadId);
     const link = new AcpLink(this, threadId);
     this.links.add(link);
     this.opened += 1;
