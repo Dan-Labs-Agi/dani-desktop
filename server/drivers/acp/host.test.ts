@@ -21,7 +21,7 @@ function hostWith(key: string | null) {
   const host = new AcpHost(child, key, { source: "test.acp", logMessage: (msg) => msg, keepStderr: true, unrouted: (msg) => refused.push(msg) });
   const heard = new Map<string, any[]>();
   const link = (threadId: string, sessionId: string | null) => {
-    const linked = host.link(threadId);
+    const linked = host.link(threadId, `/work/${threadId}`);
     linked.sessionId = sessionId;
     const inbox: any[] = [];
     heard.set(threadId, inbox);
@@ -71,4 +71,16 @@ describe("one ACP process for several threads", () => {
     await flush();
     expect(h.heard.get("only")).toHaveLength(2);
   });
+});
+
+
+it("reserves a folder for its original thread for the whole host lifetime", () => {
+  const h = hostWith("shared");
+  const a = h.host.link("owner", "/same");
+  expect(h.host.accepts(6, 12, "other", "/same")).toBe(false);
+  expect(() => h.host.link("other", "/same")).toThrow(/another thread/);
+  a.close();
+  expect(h.host.accepts(6, 12, "other", "/same")).toBe(false);
+  expect(h.host.accepts(6, 12, "owner", "/same")).toBe(true);
+  expect(h.host.accepts(6, 12, "other", "/different")).toBe(true);
 });

@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -113,6 +113,44 @@ describe("ACP threads sharing one agent process", () => {
     const g = await fixture({ shareProcess: false });
     await Promise.all([g.run("thread-a"), g.run("thread-b")]);
     expect(g.spawned).toHaveLength(2);
+  });
+
+  it("does not reuse a process between two threads in the same folder", async () => {
+    const f = await fixture();
+    const folder = join(f.scratch, "same-project");
+    mkdirSync(folder);
+    await f.run("a", { cwd: folder });
+    await f.run("b", { cwd: folder });
+    expect(f.spawned).toHaveLength(2);
+    await f.run("a", { cwd: folder });
+    expect(f.spawned).toHaveLength(2);
+    await f.run("c", { cwd: folder });
+    expect(f.spawned).toHaveLength(3);
+    expect((await f.run("d")).done).toMatchObject({ ok: true });
+    expect(f.spawned).toHaveLength(3);
+  });
+
+  it("keeps concurrent threads in the same folder in separate hosts", async () => {
+    const f = await fixture();
+    const folder = join(f.scratch, "concurrent");
+    mkdirSync(folder);
+    const results = await Promise.all([f.run("a", { cwd: folder }), f.run("b", { cwd: folder })]);
+    expect(results.every(result => "ok" in result.done && result.done.ok)).toBe(true);
+    expect(f.spawned).toHaveLength(2);
+  });
+
+  it("recognizes an alias of a folder and retains ownership after session reset", async () => {
+    const f = await fixture();
+    const folder = join(f.scratch, "canonical");
+    const alias = join(f.scratch, "alias");
+    mkdirSync(folder);
+    symlinkSync(folder, alias, process.platform === "win32" ? "junction" : "dir");
+    await f.run("a", { cwd: folder });
+    await f.run("keeper"); // keep the original host alive when a resets
+    await f.run("a", { cwd: folder, sessionReset: true });
+    expect(f.spawned).toHaveLength(1);
+    await f.run("b", { cwd: alias });
+    expect(f.spawned).toHaveLength(2);
   });
 
   it("on a Team Cloud never shares a process between two audiences, whose engines have homes of their own", async () => {
