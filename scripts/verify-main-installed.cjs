@@ -15,6 +15,7 @@ const install = path.join(temp, 'app');
 const data = path.join(temp, 'profile');
 fs.mkdirSync(data, {recursive:true});
 // Installers may auto-launch the app. Give that first process the same disposable profile.
+process.env.DANI_NATIVE_VERIFY='1';
 process.env.DANI_DATA_DIR=data;
 process.env.OMB_DATA_DIR=data;
 // Windows resolves its profile through OS APIs too; isolate product/app data, not USERPROFILE.
@@ -50,7 +51,7 @@ function stop() {
 }
 async function open() {
   launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe']});
-  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{launchOutput=(launchOutput+data.toString()).slice(-20000)});
+  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE'))console.log(text)});
   launched.on('error',error=>{launchOutput+='\n'+error.message});
   for(let i=0;i<120;i++) {
     try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
