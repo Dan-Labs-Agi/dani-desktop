@@ -26,12 +26,12 @@ const DELAYS = [INTRO_TIMING.first, INTRO_TIMING.line, INTRO_TIMING.line, INTRO_
 
 /** MausBot's three lines: who it is, what it does here, and that it is looking around. A MausBot that is not the Chief
  * keeps its helper's lines; a Team Cloud member's leaves their day to the team's Chief. */
-export function introLines(input: { name: string; chief: boolean; person?: string; team?: string }): string[] {
+export function introLines(input: { name: string; chief: boolean; person?: string; team?: string; version?: 2 }): string[] {
   const team = input.team ? t("helperIntro.team", { team: input.team }) : "";
   const lead = input.chief ? t("helperIntro.lead.chiefOfStaff") : input.team ? t("helperIntro.lead.member") : t("helperIntro.lead.helper");
   const hello = input.chief ? t("helperIntro.hello", { name: input.name })
     : input.person ? t("helperIntro.hi.helperNamed", { name: input.name, person: input.person }) : t("helperIntro.hi.helper", { name: input.name });
-  return [hello, [lead, team].filter(Boolean).join(" "), t("helperIntro.lookingAround")];
+  return [hello, [lead, team].filter(Boolean).join(" "), t(input.version === 2 ? "helperIntro.setup.checking" : "helperIntro.lookingAround")];
 }
 
 /** The follow-up in the viewer's language. */
@@ -39,9 +39,10 @@ export function followupLine(facts: HelperFollowupFacts): string {
   return followupText(facts, (key, params) => t(key, params), (items) => new Intl.ListFormat(activeLocale(), { style: "long", type: "conjunction" }).format(items));
 }
 
-function thinksWith(bot: Bot | undefined, instances: readonly InstanceInfo[]): HelperFollowupFacts["ai"] {
-  const works = (instance: InstanceInfo) => engineReady(instance) && !freeFallback(instance);
+export function thinksWith(bot: Bot | undefined, instances: readonly InstanceInfo[]): HelperFollowupFacts["ai"] {
+  const works = (instance: InstanceInfo) => instance.driverKind !== "dani-free" && engineReady(instance) && !freeFallback(instance);
   if (instances.some((instance) => instance.instanceId === bot?.modelSelection.instanceId && works(instance)) || instances.some(works)) return "own";
+  if (instances.some((instance) => instance.driverKind === "dani-free" && engineReady(instance))) return "unverified";
   return instances.some((instance) => engineReady(instance) && freeFallback(instance)) ? "backup" : "none";
 }
 
@@ -116,7 +117,7 @@ export function SimpleHelperIntro({ botId, threadId, message, answered, followup
   const bot = state.bots.find((candidate) => candidate.id === botId);
   const team = bot?.defaultBot?.person ? state.config?.team?.name : undefined;
   const person = greetingName(state.config?.profile?.name) || undefined;
-  const lines = introLines({ name: bot?.name ?? "MausBot", chief: Boolean(bot?.chiefOfStaff), person, team });
+  const lines = introLines({ name: bot?.name ?? "MausBot", chief: Boolean(bot?.chiefOfStaff), person, team, version: message.helperIntroVersion });
   const look = useLookAround(!answered);
   const ai = thinksWith(bot, state.instances);
 
@@ -136,13 +137,13 @@ export function SimpleHelperIntro({ botId, threadId, message, answered, followup
     asked.current = true;
     void api<{ message?: Message }>(`/api/bots/${encodeURIComponent(botId)}/helper-followup`, {
       method: "POST",
-      body: JSON.stringify({ threadId, ai, apps: look.apps ?? [] }),
+      body: JSON.stringify({ threadId, ai, apps: look.apps ?? [], ...(message.helperIntroVersion === 2 ? { version: 2, appsKnown: look.apps !== null } : {}) }),
     }).then((answer) => (answer.message?.helperFollowup ? setPosted(answer.message.helperFollowup) : setUnsaved(true)), () => setUnsaved(true));
-  }, [first, look.settled, look.apps, followup, botId, threadId, ai]);
+  }, [first, look.settled, look.apps, followup, botId, threadId, ai, message.helperIntroVersion]);
 
   // An intro from before follow-ups were written says what it sees, without saving it.
   const local: HelperFollowupFacts | null = look.settled && (unsaved || !(first || due))
-    ? { ai, apps: look.apps ?? [], bots: state.bots.filter((candidate) => !candidate.hidden && !candidate.defaultBot).length, routines: 0 }
+    ? { ai, ...(message.helperIntroVersion === 2 ? { version: 2 as const, appsKnown: look.apps !== null, countsKnown: false } : {}), apps: look.apps ?? [], bots: state.bots.filter((candidate) => !candidate.hidden && !candidate.defaultBot).length, routines: 0 }
     : null;
   const facts = followup?.helperFollowup ?? posted ?? local;
   const { shown, staged } = useArrival(first || due, ai !== "none", facts !== null);

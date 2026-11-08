@@ -7378,5 +7378,16 @@
   "botAccess.overview.botCount.other": "{count} bots",
   "botAccess.overview.noBotsForPerson": "{name} has no bots yet.",
   "botAccess.overview.allPeople": "All people",
-  "botAccess.overview.toastRemoved": "{bot}: removed {name}"
+  "botAccess.overview.toastRemoved": "{bot}: removed {name}",
+  "helperIntro.setup.checking": "I'll check this app's local setup: connected apps, other bots and enabled routines. This does not check your inbox or tasks.",
+  "helperIntro.setup.summary": "Local setup check: {bots}, {routines}.",
+  "helperIntro.setup.apps": "Connected apps listed here: {apps}.",
+  "helperIntro.setup.noApps": "No connected apps are listed here.",
+  "helperIntro.setup.unknownApps": "I couldn't confirm the connected-app list.",
+  "helperIntro.setup.unverified": "Dani Free tools are installed. A live model conversation has not been verified.",
+  "helperIntro.setup.provider": "A model provider is configured. This setup check did not run a model conversation.",
+  "helperIntro.setup.noAi": "No model provider is ready in this app's setup.",
+  "helperIntro.setup.backup": "A backup model is listed in setup. This check did not run a model conversation.",
+  "helperIntro.setup.scope": "I haven't checked your inbox or unfinished tasks, and this check does not start ongoing monitoring.",
+  "helperIntro.setup.unknownCounts": "I couldn't confirm the bot and routine counts."
 }

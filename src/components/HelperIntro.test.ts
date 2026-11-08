@@ -46,7 +46,7 @@ vi.mock("@/lib/setup-import", () => ({
   detectSetupWithin: () => { f.detect(); return { found: Promise.resolve(f.found), cancel: () => {} }; },
 }));
 const { HelperIntro } = await import("./HelperIntro");
-const { followupLine, INTRO_TIMING, introLines } = await import("./SimpleHelperIntro");
+const { followupLine, INTRO_TIMING, introLines, thinksWith } = await import("./SimpleHelperIntro");
 const { chipAction, setupAction } = await import("./HelperSetup");
 const { SIMPLE_BOT_BUBBLE } = await import("./chat-bubble");
 
@@ -287,5 +287,25 @@ describe("in Advanced mode", () => {
     expect(setupAction("apps")).toEqual({ type: "togglePlugins", open: true, surface: "apps" });
     expect(setupAction("phone")).toMatchObject({ type: "toggleAppSettings", section: "companion", phonePairing: true });
     expect(setupAction("cloud")).toEqual({ type: "openCloudAdd", source: "app_onboarding" });
+  });
+});
+
+
+describe("truthful setup-only intro v2", () => {
+  it("never treats installed Dani Free as verified AI", () => {
+    const free: InstanceInfo = { ...claude(true), driverKind: "dani-free", instanceId: "dani-free" };
+    expect(thinksWith(maus({ modelSelection: { instanceId: "dani-free", model: "m" } }), [free])).toBe("unverified");
+    const text = followupLine({ version: 2, ai: "unverified", apps: [], bots: 0, routines: 0 });
+    expect(text).toContain("Local setup check");
+    expect(text).toContain("A live model conversation has not been verified");
+    expect(text).not.toMatch(/nothing's waiting|There's no unfinished work|thinking with/);
+    expect(introLines({ name: "Dani", chief: true, version: 2 })[2]).toContain("local setup");
+  });
+  it("does not turn unavailable inventory into an all-clear or rewrite legacy copy", () => {
+    const text = followupLine({ version: 2, ai: "unverified", apps: [], appsKnown: false, countsKnown: false, bots: 0, routines: 0 });
+    expect(text).toContain("couldn't confirm the connected-app list");
+    expect(text).toContain("couldn't confirm the bot and routine counts");
+    expect(text).not.toContain("no other bots");
+    expect(followupLine({ ai: "own", apps: [], bots: 0, routines: 0 })).toContain("nothing's waiting");
   });
 });
