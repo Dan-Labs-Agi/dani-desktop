@@ -44,7 +44,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
-      DANI_EVIDENCE_DIR: ${{ runner.temp }}/built-evidence
+      DANI_EVIDENCE_DIR: built-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -86,7 +86,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
-      DANI_EVIDENCE_DIR: ${{ runner.temp }}/downloaded-evidence
+      DANI_EVIDENCE_DIR: downloaded-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
