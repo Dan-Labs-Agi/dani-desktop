@@ -23,8 +23,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag=v0.1.139-preview.1
-          release_id=$(gh api "repos/$GH_REPO/releases?per_page=100" --jq '.[] | select(.tag_name == "v0.1.139-preview.1" and .draft == true and (.assets | length) == 0) | .id')
+          tag=v0.1.139-preview.2
+          release_id=$(gh api "repos/$GH_REPO/releases?per_page=100" --jq '.[] | select(.tag_name == "v0.1.139-preview.2" and .draft == true and (.assets | length) == 0) | .id')
           if gh release view "$tag" --json isDraft >/dev/null 2>&1 && [ -z "$release_id" ]; then
             echo 'A nonempty or published preview exists; refuse replacement.' >&2
             exit 1

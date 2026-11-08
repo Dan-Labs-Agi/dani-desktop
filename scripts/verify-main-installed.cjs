@@ -63,6 +63,8 @@ async function inspect(page,label) {
  const status=await page.evaluate(async()=>{const r=await fetch('/api/health');return {code:r.status,body:await r.json()}});
  assert.equal(status.code,200,'packaged server health unavailable');
  assert.equal(status.body.app,'openmausbot','expected retained health wire identity');
+ const skin=await page.evaluate(()=>document.documentElement.dataset.skin);
+ assert.equal(skin,'midnight','fresh installer must retain the approved dark Dani design');
  const body=await page.locator('body').innerText();
  assert.ok(body.trim().length>10,'packaged renderer empty');
  console.log(JSON.stringify({event:label,health:status,visibleText:body.slice(0,2200),url:page.url()}));
