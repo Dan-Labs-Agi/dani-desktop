@@ -1,1 +1,3 @@
 `background.svg` is the macOS install window art (720 × 440 pt, drawn around the `dmg.contents` icon centres in `electron-builder.yml`); after editing it, run `node build/dmg/render.mjs` to rewrite `build/background.png` and `build/background@2x.png`.
+
+The background uses the unchanged crowned Dani from `electron/resources/app-icon.png`, with the Finder icon centres and label area kept clear. Do not restore the previous shape/triangle cast. Platform and web icons come from that same transparent source; run `node scripts/render-dani-icons.mjs` after an explicitly approved source change, then `node --test electron/dani-brand-assets.node-test.mjs` to check the asset contract. This does not build or publish an installer.
