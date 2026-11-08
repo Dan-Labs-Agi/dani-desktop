@@ -222,6 +222,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/release-staging.mjs upload v${{ needs.prepare.outputs.version }} ${{ needs.prepare.outputs.sha }} macos
 
+  checks:
+    name: Release regression gate
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OMB_AI_CHECKS: '0'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/release-pipeline.node-test.mjs
+      - run: pnpm exec vitest run server/dani-free-runtime-lifecycle.test.ts server/dani-free-runtime.test.ts server/drivers/dani-free.test.ts server/dani-free-setup.test.ts server/engine-standalone.test.ts server/routes/instances.test.ts server/tested-ai.test.ts
+
   download_check:
     name: Download and install exact staged bytes (${{ matrix.os }})
     if: github.event_name != 'pull_request'
@@ -267,7 +289,7 @@ jobs:
   publish:
     name: Publish only after every build and exact-download install passes
     if: github.event_name != 'pull_request'
-    needs: [prepare, linux, windows, macos, download_check]
+    needs: [prepare, linux, windows, macos, download_check, checks]
     runs-on: ubuntu-latest
     permissions:
       contents: write
