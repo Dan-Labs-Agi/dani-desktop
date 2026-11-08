@@ -21,7 +21,7 @@ test('DMG artwork only embeds the approved character and keeps Finder target geo
   assert.ok(svg.includes(data)); assert.equal((svg.match(/<image /g) ?? []).length,1);
   assert.ok(!svg.includes('M288 206')); assert.ok(!svg.includes('#b88cf5'));
   assert.ok(!svg.includes('cast-front')); assert.ok(!svg.includes('cast-mid'));
-  const builder = read('electron-builder.yml').toString();
+  const builder = read('electron-builder.yml').toString().replace(/\r\n/g, '\n');
   assert.ok(builder.includes('x: 180\n      y: 206')); assert.ok(builder.includes('x: 540\n      y: 206'));
 });
 test('legacy development gallery opens only the approved character family', () => {
