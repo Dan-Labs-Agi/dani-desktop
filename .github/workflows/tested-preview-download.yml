@@ -24,12 +24,17 @@ jobs:
         run: |
           set -euo pipefail
           tag=v0.1.139-preview.1
-          if gh release view "$tag" --json isDraft > "$RUNNER_TEMP/existing.json" 2>/dev/null; then
-            echo 'A preview already exists; refuse implicit replacement.' >&2
+          release_id=$(gh api "repos/$GH_REPO/releases?per_page=100" --jq '.[] | select(.tag_name == "v0.1.139-preview.1" and .draft == true and (.assets | length) == 0) | .id')
+          if gh release view "$tag" --json isDraft >/dev/null 2>&1 && [ -z "$release_id" ]; then
+            echo 'A nonempty or published preview exists; refuse replacement.' >&2
             exit 1
           fi
           jq -n --arg tag "$tag" --arg sha "$SOURCE" '{tag_name:$tag,target_commitish:$sha,name:"Dani Desktop 0.1.139 testing preview",body:"Private test candidate. Not approved for public publication. Native install and exact-download results pending.",draft:true,prerelease:true}' > "$RUNNER_TEMP/draft.json"
-          gh api --method POST "repos/$GH_REPO/releases" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
+          if [ -n "$release_id" ]; then
+            gh api --method PATCH "repos/$GH_REPO/releases/$release_id" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
+          else
+            gh api --method POST "repos/$GH_REPO/releases" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
+          fi
           echo "sha=$SOURCE" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
   build_install:
