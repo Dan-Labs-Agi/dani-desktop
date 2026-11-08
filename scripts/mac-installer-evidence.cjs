@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
-function inspectMacInstaller({installer,mount,bundle,directory,run=spawnSync,emit=line=>fs.writeSync(1,line+"\n")}) {
+function inspectMacInstaller({installer,mount,bundle,directory,run=spawnSync,emit=console.log}) {
  fs.mkdirSync(directory,{recursive:true});
  const commands=[];
  function command(tool,args,required=true){
