@@ -15,7 +15,7 @@ protocols:
 # stranded on its installed version.
 publish:
   - provider: github
-    owner: somdipto
+    owner: Dan-Labs-Agi
     repo: dani-desktop
 
 directories:

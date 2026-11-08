@@ -24,6 +24,9 @@ assert.equal(result.status,0, 'NSIS install failed: '+result.stderr);
 const executable = path.join(install, 'Dani Bot.exe');
 assert.ok(fs.existsSync(executable),'installer did not install expected app');
 assert.ok(fs.existsSync(path.join(install,'resources/server/index.js')),'installed packaged server missing');
+const update=fs.readFileSync(path.join(install,'resources/app-update.yml'),'utf8');
+assert.match(update,/^owner: Dan-Labs-Agi$/m,'installed updater has the wrong organization');
+assert.match(update,/^repo: dani-desktop$/m,'installed updater has the wrong repository');
 let launched;
 function stop() {
   if (launched) spawnSync('taskkill', ['/PID', String(launched.pid), '/T', '/F'], {encoding:'utf8'});
