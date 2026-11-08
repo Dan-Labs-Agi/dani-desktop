@@ -24,6 +24,7 @@ assert.equal(result.status,0,result.stderr);
 result=spawnSync('codesign',['--verify','--deep','--strict',path.join(mount,'Dani Bot.app')],{encoding:'utf8'});assert.equal(result.status,0,'mounted DMG signature: '+result.stderr);
 // Finder-style bundle copy preserves framework-relative symlinks and metadata.
 result=spawnSync('/usr/bin/ditto',[path.join(mount,'Dani Bot.app'),path.join(install,'Dani Bot.app')],{encoding:'utf8',timeout:120000});assert.equal(result.status,0,result.stderr);
+require('./mac-installer-evidence.cjs').inspectMacInstaller({installer,mount,bundle:path.join(install,'Dani Bot.app'),directory:path.join(temp,'mac-installer-evidence')});
 result=spawnSync('hdiutil',['detach',mount],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
 const bundle=path.join(install,'Dani Bot.app');
 const executable=path.join(bundle,'Contents/MacOS/Dani Bot');
@@ -31,6 +32,12 @@ result=spawnSync('codesign',['--verify','--deep','--strict',bundle],{encoding:'u
 result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes(process.arch==='arm64'?'arm64':'x86_64'),'app architecture does not match host');
 const resources=path.join(bundle,'Contents/Resources');
 assert.ok(fs.existsSync(path.join(resources,'server/index.js')),'installed packaged server missing');
+for(const kind of ['hermes','opencode']) {
+ const manifest=JSON.parse(fs.readFileSync(path.join(resources,'managed-runtimes','manifests',kind+'-darwin-'+process.arch+'.manifest.json'),'utf8'));
+ assert.equal(manifest.target,'darwin-'+process.arch,'bundled runtime target mismatch');
+ console.log('INSTALLED_RUNTIME_MANIFEST',kind,manifest.target,manifest.archiveSha256);
+}
+
 // Synthetic diagnostic bundle stays outside the signed app.
 const diag=spawnSync(process.execPath,[path.resolve('dist-native/runtime-diagnosis.mjs'),resources],{env:process.env,encoding:'utf8',timeout:300000});
 console.log(diag.stdout);console.error(diag.stderr);assert.equal(diag.status,0,'isolated diagnosis process failed');

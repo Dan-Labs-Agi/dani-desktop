@@ -1,4 +1,4 @@
-name: Maintenance runtime native installers
+name: Private Intel startup repair download
 on:
   push:
     branches: [fix/v0.1.58-cross-platform-runtime-20261108]
@@ -10,18 +10,18 @@ concurrency:
   cancel-in-progress: true
 jobs:
   native:
-    name: Installed runtime (${{ matrix.target }})
+    name: Exact downloaded Intel startup repair
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-24.04, target: linux-x64, arch: x64}
-          - {os: windows-latest, target: win32-x64, arch: x64}
           - {os: macos-15-intel, target: darwin-x64, arch: x64}
-          - {os: macos-latest, target: darwin-arm64, arch: arm64}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     timeout-minutes: 90
     env:
+      GH_TOKEN: ${{ github.token }}
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       DANIBOT_CUA_ARCHES: ${{ matrix.arch }}
       DANIBOT_CUA_ARCHES_PARTIAL: "1"
@@ -40,6 +40,7 @@ jobs:
       - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec vitest run server/managed-runtime-retry.test.ts server/managed-runtime.test.ts server/drivers/acp/hermes.test.ts
+      - run: node --test scripts/mac-installer-evidence.node-test.cjs
       - run: python3 scripts/hermes_payload_recipe_test.py
         if: runner.os != 'Windows'
       - name: Linux native smoke tools
@@ -69,8 +70,13 @@ jobs:
       - name: Actual DEB install, app launch, activation, relaunch, damage recovery
         if: runner.os == 'Linux'
         run: dbus-run-session -- xvfb-run -a node scripts/verify-linux-runtime-installer.cjs
-      # Standard public-repo runner compute only. No artifact/cache storage,
-      # release, tag, draft, or deployment writes. Screenshots are in job logs.
+      - name: Stage private draft and download exact tested bytes
+        run: node scripts/stage-private-intel-download.mjs
+      - name: Verify exact downloaded DMG install, activation, relaunch and recovery
+        run: |
+          rm -rf "$RUNNER_TEMP/dani-installed-verification"
+          node scripts/verify-intel-mac-installer.cjs
+      # No public release, tag publication, Actions artifact/cache or deployment.
       - name: Record candidate installer hashes
         if: always()
         run: python3 -c "import pathlib,hashlib; [(print(p.name,hashlib.sha256(p.read_bytes()).hexdigest())) for p in pathlib.Path('release').glob('*') if p.is_file() and p.suffix in ('.exe','.deb','.dmg')]"
