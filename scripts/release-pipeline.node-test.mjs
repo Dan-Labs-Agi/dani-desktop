@@ -34,3 +34,16 @@ test('installer autolaunch inherits the disposable product data profile',()=>{
  assert.match(text,/setup reported installed without config in the explicitly isolated profile/);
  }
 });
+
+test('setup waits for the awaited status, not a truthy async predicate',async()=>{
+ const {waitDaniFreeSetup}=await import('./wait-dani-free-setup.cjs');
+ let polls=0,clock=0;
+ const status=await waitDaniFreeSetup({evaluate:async()=>++polls<3?{phase:'installing'}:{phase:'installed',modelReady:false}},{sleep:async()=>{clock+=1000},now:()=>clock});
+ assert.equal(status.phase,'installed');assert.equal(polls,3);
+ await assert.rejects(()=>waitDaniFreeSetup({evaluate:async()=>({phase:'failed',message:'locked'})}),/locked/);
+ await assert.rejects(()=>waitDaniFreeSetup({evaluate:async()=>({phase:'installing'})},{timeout:1,sleep:async()=>{clock+=1000},now:()=>clock}),/deadline/);
+ for(const file of ['verify-main-installed.cjs','verify-main-mac-installed.cjs','verify-main-linux-installed.cjs']){
+  const text=readFileSync(new URL('./'+file,import.meta.url),'utf8');assert.doesNotMatch(text,/waitForFunction\(async/);assert.match(text,/await waitDaniFreeSetup/);
+ }
+});
+test('Linux default smoke executable matches package name',()=>{const text=readFileSync(new URL('./smoke-linux-package.mjs',import.meta.url),'utf8');assert.match(text,/"linux-unpacked", "danibot"/);});

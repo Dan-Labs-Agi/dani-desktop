@@ -14,6 +14,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { StandaloneAsset, StandaloneRelease } from "./contracts.ts";
 import {
   installStandaloneEngine,
+  renameStandalonePath,
   isAppStandaloneCopy,
   plainInstallError,
   STANDALONE_DOWNLOAD_TIMEOUT_MS,
@@ -792,5 +793,29 @@ describe.skipIf(process.platform === "win32")("installing a standalone engine", 
       expect(readdirSync(binDir())).toEqual(["fake-engine"]);
       expect(pathDirs().at(-1)).toBe(binDir());
     });
+  });
+});
+
+describe("standalone activation transient handle locks", () => {
+  it("retries transient locks without deleting or changing either path", async () => {
+    for (const code of ["EPERM", "EACCES", "EBUSY"]) {
+      let calls = 0; const waits: number[] = [];
+      await renameStandalonePath("from", "to", async (from, to) => {
+        expect([from,to]).toEqual(["from","to"]);
+        if (++calls < 3) throw Object.assign(new Error(code),{code});
+      }, async ms => { waits.push(ms); });
+      expect(calls).toBe(3); expect(waits).toEqual([50,100]);
+    }
+  });
+  it("bounds retries and preserves the original persistent error", async () => {
+    const error=Object.assign(new Error("persistent lock"),{code:"EPERM"}); let calls=0;
+    await expect(renameStandalonePath("from","to",async()=>{calls++;throw error},async()=>{})).rejects.toBe(error);
+    expect(calls).toBe(6);
+  });
+  it("does not retry missing paths or unrelated errors", async () => {
+    for(const code of ["ENOENT","EXDEV","ENOTEMPTY"]){let calls=0;
+      await expect(renameStandalonePath("from","to",async()=>{calls++;throw Object.assign(new Error(code),{code})},async()=>{throw Error("must not wait")})).rejects.toMatchObject({code});
+      expect(calls).toBe(1);
+    }
   });
 });
