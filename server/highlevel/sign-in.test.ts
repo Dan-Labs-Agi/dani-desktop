@@ -12,7 +12,7 @@ import { createHighLevelRoutes } from "../routes/highlevel.ts";
 import { PASS } from "../routes/table.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { FAKE_LOCATION_ID, startFakeHighLevel, startFakeRelay, type FakeHighLevel, type FakeRelay } from "../testing/fake-highlevel.ts";
-import { HIGHLEVEL_RELAY_URL_DEFAULT, HighLevelRelayError, createHighLevelRelay, highlevelRelayUrl, type HighLevelRelay, type RelayTokens } from "./relay.ts";
+import { HighLevelRelayError, createHighLevelRelay, highlevelRelayUrl, type HighLevelRelay, type RelayTokens } from "./relay.ts";
 import { HighLevelSignIn } from "./sign-in.ts";
 import { HighLevelStore } from "./store.ts";
 import { createHighLevelService, type HighLevelService } from "./service.ts";
@@ -52,9 +52,11 @@ const until = async <T>(read: () => T, want: (value: T) => boolean, ms = 3_000):
 };
 
 describe("relay URL", () => {
-  it("defaults to accounts.openmausbot.com, accepts https or loopback http, and reads off as unavailable", () => {
-    expect(highlevelRelayUrl({})).toBe(HIGHLEVEL_RELAY_URL_DEFAULT);
-    expect(highlevelRelayUrl({ OMB_HIGHLEVEL_RELAY_URL: "" })).toBe(HIGHLEVEL_RELAY_URL_DEFAULT);
+  it("defaults off without a Dani relay, accepts explicit safe origins and fails closed", () => {
+    expect(highlevelRelayUrl({})).toBeNull();
+    expect(highlevelRelayUrl({ OMB_HIGHLEVEL_RELAY_URL: "" })).toBeNull();
+    expect(highlevelRelayUrl({ DANI_HIGHLEVEL_RELAY_URL: "https://relay.dani.invalid/" })).toBe("https://relay.dani.invalid");
+    expect(highlevelRelayUrl({ DANI_HIGHLEVEL_RELAY_URL: "off", OMB_HIGHLEVEL_RELAY_URL: "https://upstream.invalid" })).toBeNull();
     expect(highlevelRelayUrl({ OMB_HIGHLEVEL_RELAY_URL: "https://relay.example.test/" })).toBe("https://relay.example.test");
     expect(highlevelRelayUrl({ OMB_HIGHLEVEL_RELAY_URL: "http://127.0.0.1:4321" })).toBe("http://127.0.0.1:4321");
     expect(highlevelRelayUrl({ OMB_HIGHLEVEL_RELAY_URL: "http://relay.example.test" })).toBeNull();
@@ -77,7 +79,7 @@ describe("relay URL", () => {
     expect(rotated.refreshToken).not.toBe(tokens.refreshToken);
     await expect(upstream.refresh(tokens.refreshToken)).rejects.toMatchObject({ status: 401, code: "highlevel_refresh_rejected" });
     relay.unavailable = true;
-    await expect(upstream.start()).rejects.toMatchObject({ status: 503, code: "highlevel_unavailable", message: "HighLevel sign-in is not available on the OpenMausBot relay right now." });
+    await expect(upstream.start()).rejects.toMatchObject({ status: 503, code: "highlevel_unavailable", message: "HighLevel sign-in is not available on the Dani Bot relay right now." });
     relay.unavailable = false;
   });
 });
@@ -144,7 +146,7 @@ describe("sign-in flow", () => {
   it("is unavailable without a relay, and a Private Integration token still works", async () => {
     const svc = service({ OMB_HIGHLEVEL_RELAY_URL: "off" });
     expect(svc.status()).toEqual({ state: "unavailable" });
-    await expect(svc.startSignIn()).rejects.toThrow(/no OpenMausBot relay is configured/u);
+    await expect(svc.startSignIn()).rejects.toThrow(/no Dani Bot relay is configured/u);
     await expect(svc.connectWithToken("nope", FAKE_LOCATION_ID)).rejects.toThrow("Paste a Private Integration token. It starts with pit-.");
     await expect(svc.connectWithToken("pit-abcdefgh12345678", "x")).rejects.toThrow(/Enter the location id/u);
     await expect(svc.connectWithToken("pit-abcdefgh12345678", FAKE_LOCATION_ID)).rejects.toThrow(/^HighLevel did not accept this token \(401\)\./u);
@@ -251,7 +253,7 @@ describe("owner routes", () => {
     expect(JSON.stringify(connected.body)).not.toContain("pit-route");
     expect(await request(routes, "DELETE", "/api/highlevel", admin)).toEqual({ status: 200, body: { state: "signed-out" } });
     relay.unavailable = true;
-    expect(await request(routes, "POST", "/api/highlevel/sign-in", admin)).toEqual({ status: 502, body: { error: "HighLevel sign-in is not available on the OpenMausBot relay right now.", code: "highlevel_unavailable" } });
+    expect(await request(routes, "POST", "/api/highlevel/sign-in", admin)).toEqual({ status: 502, body: { error: "HighLevel sign-in is not available on the Dani Bot relay right now.", code: "highlevel_unavailable" } });
     relay.unavailable = false;
   });
 });

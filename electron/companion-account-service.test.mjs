@@ -109,9 +109,9 @@ function signedCredentials(overrides = {}) {
 }
 
 describe("Companion account service", () => {
-  it("uses the packaged hosted default and only explicit safe development origins", () => {
+  it("fails closed without a Dani hosted endpoint and accepts only explicit safe origins", () => {
     expect(resolveCompanionControlPlaneURL({ isPackaged: true, environment: {} })).toBe(
-      "https://accounts.openmausbot.com",
+      "",
     );
     expect(resolveCompanionControlPlaneURL({
       isPackaged: false,
@@ -126,6 +126,8 @@ describe("Companion account service", () => {
       environment: { OMB_CONTROL_PLANE_URL: new String("https://accounts.openmausbot.com") },
     })).toBe("");
     expect(resolveCompanionControlPlaneURL({ isPackaged: false, environment: {} })).toBe("");
+    expect(resolveCompanionControlPlaneURL({ isPackaged: true, environment: { DANI_CONTROL_PLANE_URL: "https://accounts.dani.invalid" } })).toBe("https://accounts.dani.invalid");
+    expect(resolveCompanionControlPlaneURL({ isPackaged: true, environment: { DANI_CONTROL_PLANE_URL: "invalid", OMB_CONTROL_PLANE_URL: "https://upstream.invalid" } })).toBe("");
   });
 
   it("does not coerce boxed credential fields into an account", async () => {

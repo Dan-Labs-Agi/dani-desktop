@@ -12,6 +12,7 @@ process.env.HOME = home;
 process.env.USERPROFILE = home;
 // OMB_DATA_DIR must never escape the throwaway home the suite deletes.
 delete process.env.OMB_DATA_DIR;
+delete process.env.DANI_DATA_DIR;
 // Do not let a developer's Hermes global config path leak into per-test homes.
 delete process.env.HERMES_HOME;
 // Named explicitly although homedir() already covers it: the device tests delete this directory wholesale.
