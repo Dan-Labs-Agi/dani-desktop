@@ -24,3 +24,4 @@ test('native install checks exercise the Dani Free button without starting a mod
 });
 
 test('Mac and Windows zip basenames cannot collide in release staging',()=>{const builder=readFileSync(new URL('../electron-builder.yml',import.meta.url),'utf8');assert.match(builder,/mac:\n  artifactName: DaniBot-\$\{version\}-mac-\$\{arch\}/);});
+test('approval is off until the owner decides the release audience and wording',()=>{const policy=JSON.parse(readFileSync(new URL('./release-policy.json',import.meta.url),'utf8'));assert.equal(policy.publicationApproved,false);assert.equal(policy.prerelease,true);});
