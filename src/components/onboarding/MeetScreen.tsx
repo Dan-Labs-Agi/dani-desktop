@@ -1,3 +1,4 @@
+import { DaniFreeSetup } from "./DaniFreeSetup";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUp, Check, Plus } from "lucide-react";
 import { BotAvatar } from "@/components/Avatar";
@@ -54,14 +55,14 @@ function DemoComposer({ reduced, onTyping }: { reduced: boolean; onTyping: (typi
   );
 }
 
-/** The first run's first screen: the app's name, its mascot and a composer typing one sentence, then one pill. With
- * no AI working yet the pill is the sign-in, and Next comes once the AI has answered its test message. */
+/** First run: keep the mascot/composer, with explicit local Dani Free tool setup when no AI is verified yet.
+ * Tool setup is not a live-model connection test. */
 export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => void }) {
   const { state } = useStore();
   const reduced = usePrefersReducedMotion();
   const maus = myDefaultBot(state.bots, useViewerEmail());
   // An AI counts once it answered a test message (or cannot be sent one); OpenCode's free model never does.
-  const tested = useWelcomeAi(state.instances, !hosted);
+  const tested = useWelcomeAi(state.instances, false); // Setup never sends a surprise model probe.
   const ready = aiWorks(tested);
   const known = state.instances.length > 0;
   const [asking, setAsking] = useState(false);
@@ -103,21 +104,23 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
             <Check size={14} strokeWidth={2.5} aria-hidden="true" />{t("onboarding.meet.connected", { name: tested.instance.displayName })}
           </p>
         )}
-        {signingIn ? (
+        {!hosted && !ready ? (
+          <DaniFreeSetup onNext={onNext} onOther={() => setDialog(true)} />
+        ) : signingIn ? (
           <SignInPill pill={pill} instance={recommended} waiting={tested?.state === "testing"} onDialog={() => setDialog(true)} />
         ) : (
           <button type="button" data-primary="" onClick={onNext} className={cn(PILL, asking && "animate-fade-in [animation-duration:150ms]")}>
             {t("onboarding.meet.next")}
           </button>
         )}
-        {signingIn && (
+        {hosted && signingIn && (
           <p className="mt-3 text-[13px] leading-[18px] text-ink-secondary">
             <button type="button" onClick={() => setDialog(true)} className="rounded transition-colors hover:text-ink">{t("onboarding.meet.otherWays")}</button>
             <span aria-hidden="true"> · </span>
             <button type="button" data-welcome-later="" onClick={onNext} className="rounded transition-colors hover:text-ink">{t("onboarding.meet.setupLater")}</button>
           </p>
         )}
-        {signingIn && failure && <p role="alert" className="mt-2 text-[13px] leading-[18px] text-danger">{failure}</p>}
+        {hosted && signingIn && failure && <p role="alert" className="mt-2 text-[13px] leading-[18px] text-danger">{failure}</p>}
       </div>
       {dialog && <ConnectAiDialog hosted={hosted} tested={tested} onClose={() => setDialog(false)} />}
     </div>

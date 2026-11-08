@@ -458,6 +458,17 @@ describe("testing an AI with one tiny message before a new bot's default trusts 
     expect(tested.info(instances[1]!)).toEqual({ aiTest: "failed", aiTestError: "claude isn't signed in on this computer anymore. Sign in again, then check again." });
   });
 
+  it("never starts Dani Free for an automatic background connection test", async () => {
+    instances = [ready("daniFree", "dani-free")];
+    answers.daniFree = async () => "OK";
+    refresh();
+    await settled();
+    expect(sent("daniFree")).toBe(0);
+    await wait(10 * MINUTE);
+    refresh();
+    expect(sent("daniFree")).toBe(0);
+  });
+
   it("sends nothing in the background where it is switched off, and still checks on request", async () => {
     tested = make({ background: false });
     await boot();

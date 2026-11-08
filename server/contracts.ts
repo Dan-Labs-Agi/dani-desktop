@@ -424,6 +424,8 @@ export interface StandaloneRelease {
   version: string;
   /** Every request, redirects included, must be HTTPS to one of these hosts. */
   hosts: readonly string[];
+  /** Fixed offline startup probe for a tool without --version; release bytes remain hash-pinned. */
+  startupProbe?: { args: readonly string[]; includes: string };
   /** macOS: the Apple Developer Team ID whose certificate must sign the executable. */
   macTeamId?: string;
   /** Environment for the app's own copy only, such as turning off the vendor's self-updater. */
