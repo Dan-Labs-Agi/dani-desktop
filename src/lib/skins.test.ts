@@ -63,8 +63,8 @@ describe("skins", () => {
     expect(PRIOR_INSTALL_SKIN).toBe("midnight");
   });
 
-  it("follows the computer between Daylight and Midnight by default", () => {
-    expect(DEFAULT_SKIN_CHOICE).toBe("system");
+  it("starts in approved Midnight while keeping System available", () => {
+    expect(DEFAULT_SKIN_CHOICE).toBe("midnight");
     expect(THEME_SKINS).toEqual({ light: "daylight", dark: "midnight" });
     expect(resolveSkin("system", false)).toBe("daylight");
     expect(resolveSkin("system", true)).toBe("midnight");
