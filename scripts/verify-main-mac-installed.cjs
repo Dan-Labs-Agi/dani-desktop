@@ -83,7 +83,7 @@ async function inspect(page,label) {
    const button=ui.page.locator('[data-dani-free-install]');await button.waitFor({state:'visible'});
    assert.equal(await button.innerText(),'Install Dani Free');await button.click();
    await ui.page.waitForFunction(async()=>{const r=await fetch('/api/instances/dani-free/setup');const s=await r.json();if(s.phase==='failed')throw Error(s.message);return s.phase==='installed';},null,{timeout:240000});
-   const config=await ui.page.evaluate(async()=>{const r=await fetch('/api/config');return r.json()});
+   const config=JSON.parse(fs.readFileSync(path.join(data,'config.json'),'utf8'));
    assert.equal(config.instances.daniFree.driver,'dani-free');
    assert.equal(fs.existsSync(path.join(data,'dani-free/runtime.json')),false,'install must not start a model service');
    await capture(ui.page,'FREE_INSTALLED');console.log('DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS');
