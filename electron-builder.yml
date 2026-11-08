@@ -93,6 +93,7 @@ extraResources:
     to: android-platform-tools
 
 mac:
+  artifactName: DaniBot-${version}-mac-${arch}.${ext}
   # Two single-arch artifacts rather than one universal binary: the app is
   # architecture-specific, and universal would make users download both halves.
   # electron-updater picks by filename (arm64-marked files on Apple silicon,

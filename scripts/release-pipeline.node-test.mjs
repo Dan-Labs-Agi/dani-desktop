@@ -22,3 +22,5 @@ test('native install checks exercise the Dani Free button without starting a mod
  const text=readFileSync(new URL('./'+file,import.meta.url),'utf8');assert.match(text,/DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS/);assert.match(text,/install must not start a model service/);assert.match(text,/DANI_VERIFY_FREE_INSTALL/);
  }
 });
+
+test('Mac and Windows zip basenames cannot collide in release staging',()=>{const builder=readFileSync(new URL('../electron-builder.yml',import.meta.url),'utf8');assert.match(builder,/mac:\n  artifactName: DaniBot-\$\{version\}-mac-\$\{arch\}/);});
