@@ -93,11 +93,11 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
-      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: pnpm
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
       - name: Stage pinned cloudflared for Linux
         run: node scripts/prepare-cloudflared.mjs
@@ -135,7 +135,7 @@ jobs:
     name: Windows x64 (NSIS)
     needs: prepare
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       NODE_OPTIONS: "--max-old-space-size=7168"
@@ -144,21 +144,30 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
-      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: pnpm
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
       - name: Stage pinned cloudflared for Windows
         run: node scripts/prepare-cloudflared.mjs
+      - name: Verify startup and source installer regressions
+        run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs
       - name: Build Windows packages
         run: pnpm package:win
+      - name: Install isolated native smoke tools
+        shell: pwsh
+        run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - name: Verify installed Windows onboarding and relaunch
+        shell: pwsh
+        run: node scripts/verify-main-installed.cjs
       - name: Verify release files
         shell: bash
         run: |
           set -euo pipefail
           test -f release/DaniBot-${{ needs.prepare.outputs.version }}-setup.exe
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-x64.zip
           test -f release/latest.yml
       - name: Create stable download name
         shell: bash
@@ -196,11 +205,11 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           persist-credentials: false
-      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: pnpm
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
       - name: Stage pinned cloudflared for both Mac architectures
         run: node scripts/prepare-cloudflared.mjs
@@ -321,7 +330,8 @@ jobs:
           - Built from commit \`$SHA\` on native GitHub-hosted Windows, macOS, and Linux runners.
           - Windows builds are unsigned and may show a SmartScreen warning.
           - macOS uses hardened runtime but is not signed with an Apple Developer ID or notarized, so Gatekeeper may block it.
-          - The workflow verifies that the expected packages exist. Test installers on clean machines before publishing this draft.
+          - Windows passed an isolated NSIS install, onboarding, and relaunch check on a native Windows runner.
+          - Test macOS and Linux installers on clean machines before publishing this draft.
 
           Blockmap files and \`latest.yml\`, \`latest-mac.yml\`, and \`latest-linux.yml\` are auto-update metadata, not manual downloads.
           EOF
