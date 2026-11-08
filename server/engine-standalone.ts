@@ -25,6 +25,23 @@ import type { StandaloneAsset, StandaloneRelease } from "./contracts.ts";
 import { findCliCandidates, registerFallbackPathDir, resetPathCache } from "./env-path.ts";
 import { extractZip, safeArchivePath } from "./zip-archive.ts";
 
+/** A freshly probed executable can briefly remain locked by Windows scanning.
+ * Retry only transient handle/permission errors, without deleting either path or changing permissions. */
+export async function renameStandalonePath(
+  from: string, to: string,
+  move: (from: string, to: string) => Promise<void> = rename,
+  pause: (ms: number) => Promise<void> = ms => new Promise(resolve => setTimeout(resolve, ms)),
+): Promise<void> {
+  const delays = [50, 100, 200, 400, 800];
+  for (let attempt = 0; ; attempt += 1) {
+    try { await move(from, to); return; }
+    catch (error) {
+      if (!["EPERM", "EACCES", "EBUSY"].includes(String((error as NodeJS.ErrnoException).code)) || attempt >= delays.length) throw error;
+      await pause(delays[attempt]!);
+    }
+  }
+}
+
 export const STANDALONE_DOWNLOAD_TIMEOUT_MS = 20 * 60_000;
 const STALL_TIMEOUT_MS = 60_000;
 const PROBE_TIMEOUT_MS = 30_000;
@@ -481,7 +498,7 @@ async function unpack(release: StandaloneRelease, archivePath: string, staging: 
     } else {
       const target = executableIn(staging, asset.executable);
       await mkdir(dirname(target), { recursive: true, mode: 0o700 });
-      await rename(archivePath, target);
+      await renameStandalonePath(archivePath, target);
     }
   } catch (error) {
     if (error instanceof StandaloneInstallError || typeof (error as NodeJS.ErrnoException).code === "string") throw error;
@@ -562,17 +579,17 @@ function lockedError(error: unknown): boolean {
 /** Moves `from` onto `to`. Windows will not replace a program that is running but lets it be renamed, so it steps aside. */
 async function replaceFile(from: string, to: string): Promise<void> {
   try {
-    await rename(from, to);
+    await renameStandalonePath(from, to);
     return;
   } catch (error) {
     if (process.platform !== "win32" || !lockedError(error)) throw error;
   }
   const aside = join(dirname(to), `${OLD_PREFIX}${randomUUID()}${extname(to)}`);
-  await rename(to, aside);
+  await renameStandalonePath(to, aside);
   try {
-    await rename(from, to);
+    await renameStandalonePath(from, to);
   } catch (error) {
-    await rename(aside, to).catch(() => {});
+    await renameStandalonePath(aside, to).catch(() => {});
     throw error;
   }
   await rm(aside, { force: true }).catch(() => {});
@@ -736,11 +753,11 @@ async function installOnce(release: StandaloneRelease, options: StandaloneInstal
     // Proven, so it takes the version's folder. Whatever held it (a changed or partial copy) steps aside, and comes
     // back if anything below fails.
     const aside = existsSync(versionDir) ? join(engineDir, `${OLD_PREFIX}${tag}`) : null;
-    if (aside) await rename(versionDir, aside);
+    if (aside) await renameStandalonePath(versionDir, aside);
     try {
-      await rename(staging, versionDir);
+      await renameStandalonePath(staging, versionDir);
     } catch (error) {
-      if (aside) await rename(aside, versionDir).catch(() => {});
+      if (aside) await renameStandalonePath(aside, versionDir).catch(() => {});
       throw error;
     }
     let installed: StandaloneInstalled;
@@ -749,7 +766,7 @@ async function installOnce(release: StandaloneRelease, options: StandaloneInstal
     } catch (error) {
       if (aside) {
         await removeDir(versionDir).catch(() => {});
-        await rename(aside, versionDir).catch(() => {});
+        await renameStandalonePath(aside, versionDir).catch(() => {});
       }
       throw error;
     }

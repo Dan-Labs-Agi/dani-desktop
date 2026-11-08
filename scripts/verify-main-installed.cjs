@@ -1,5 +1,6 @@
 // Main architecture, disposable Windows runner only. Exercise the installed app, not win-unpacked.
 const fs = require('node:fs');
+const {waitDaniFreeSetup}=require('./wait-dani-free-setup.cjs');
 const path = require('node:path');
 const {spawn, spawnSync} = require('node:child_process');
 const {createHash} = require('node:crypto');
@@ -93,7 +94,7 @@ async function inspect(page,label) {
  if(process.env.DANI_VERIFY_FREE_INSTALL==='1') {
    const button=ui.page.locator('[data-dani-free-install]');await button.waitFor({state:'visible'});
    assert.equal(await button.innerText(),'Install Dani Free');await button.click();
-   await ui.page.waitForFunction(async()=>{const r=await fetch('/api/instances/dani-free/setup');const s=await r.json();if(s.phase==='failed')throw Error(s.message);return s.phase==='installed';},null,{timeout:240000});
+   console.log('DANI_FREE_FINAL_STATUS',JSON.stringify(await waitDaniFreeSetup(ui.page)));
    await capture(ui.page,'FREE_INSTALLED');
    const isolatedFiles=fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:config\.json|server\.log|runtime\.json|cua-local-control\.json)$/.test(p));
    console.log('DANI_ISOLATED_PROFILE_FILES',JSON.stringify(isolatedFiles));
