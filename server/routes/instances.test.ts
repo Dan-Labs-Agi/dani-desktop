@@ -205,3 +205,23 @@ describe("a server's reply wait", () => {
   });
 });
 
+
+// Setup is separate from provider readiness and cannot be mutated in hosted mode.
+describe("Dani Free setup route", () => {
+  it("reports tool setup without claiming a verified model", async () => {
+    const { call } = await serve();
+    expect(await call("GET", "/api/instances/dani-free/setup")).toMatchObject({ modelReady: false });
+  });
+  it("blocks hosted installs and statuses", async () => {
+    const { base } = await serve({ hostedModels: true });
+    for (const method of ["GET", "POST"]) {
+      const response = await fetch(`${base}/api/instances/dani-free/setup`, { method, headers: { "content-type": "application/json" }, ...(method === "POST" ? { body: "{}" } : {}) });
+      expect(response.status).toBe(403);
+    }
+  });
+  it("rejects a browser form post before doing install work", async () => {
+    const { base } = await serve();
+    const response = await fetch(`${base}/api/instances/dani-free/setup`, { method:"POST", headers:{"content-type":"text/plain"},body:"{}" });
+    expect(response.status).toBe(415);
+  });
+});

@@ -1,3 +1,4 @@
+import { DaniFreeDriver } from "./dani-free.ts";
 import type { AnyProviderDriver } from "../contracts.ts";
 import { AntigravityDriver } from "./antigravity.ts";
 import { ClaudeDriver } from "./claude.ts";
@@ -26,6 +27,7 @@ import { MuseCodeDriver } from "./muse-code.ts";
 import { MinimaxDriver } from "./minimax.ts";
 
 export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
+  DaniFreeDriver,
   GrokDriver,
   GrokAgentDriver,
   GeminiAgentDriver,

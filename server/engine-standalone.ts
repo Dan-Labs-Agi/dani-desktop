@@ -517,7 +517,7 @@ function probeVersion(executable: string, release: StandaloneRelease): Promise<s
   const env: NodeJS.ProcessEnv = { ...cliProbeEnvironment(), ...release.runEnv };
   stripControlPlaneEnv(env as Record<string, string | undefined>);
   return new Promise((resolveProbe) => {
-    execFile(executable, ["--version"], { env, timeout: PROBE_TIMEOUT_MS, killSignal: "SIGKILL", maxBuffer: 64 * 1024, windowsHide: true, encoding: "utf8" }, (error, stdout, stderr) => {
+    execFile(executable, [...(release.startupProbe?.args ?? ["--version"])], { env, timeout: PROBE_TIMEOUT_MS, killSignal: "SIGKILL", maxBuffer: 64 * 1024, windowsHide: true, encoding: "utf8" }, (error, stdout, stderr) => {
       const lines = (text: string) => stripVTControlCharacters(text).split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
       if (error) {
         const { code, killed } = error as { code?: unknown; killed?: boolean };
@@ -525,7 +525,7 @@ function probeVersion(executable: string, release: StandaloneRelease): Promise<s
           ?? (killed ? "it did not answer in time" : typeof code === "number" ? `it stopped with exit code ${code}` : lines(stdout)[0] ?? "it could not be run");
         return resolveProbe(said.slice(0, 400));
       }
-      if (!stdout.includes(release.version)) return resolveProbe(`it reported version ${(lines(stdout)[0] ?? "nothing").slice(0, 80)}, not ${release.version}`);
+      if (!stdout.includes(release.startupProbe?.includes ?? release.version)) return resolveProbe(`it reported version ${(lines(stdout)[0] ?? "nothing").slice(0, 80)}, not ${release.version}`);
       resolveProbe(null);
     });
   });

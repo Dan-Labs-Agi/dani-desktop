@@ -1,3 +1,4 @@
+import { daniFreeSetupStatus, installDaniFreeTools } from "../dani-free-setup.ts";
 import { randomUUID } from "node:crypto";
 import { providerIconError } from "../../shared/provider-icon.ts";
 import {
@@ -79,7 +80,38 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
   };
   // One updater per executable: Claude instances can share an install, and two self-updates would race its files.
   const claudeUpdatesInFlight = new Set<string>();
+  let daniSetupTask: Promise<void> | undefined;
+  let daniRegistrationFailed = false;
+  const daniSetupStatus = () => {
+    if (daniSetupTask) return { phase: "installing", message: "Setting up Dani Free. This can take several minutes.", modelReady: false };
+    if (daniRegistrationFailed) return { phase: "failed", message: "Dani Free tools are preserved, but its connection could not be saved. Try again.", modelReady: false };
+    const setup = daniFreeSetupStatus();
+    if (setup.phase === "installed" && !Object.hasOwn(cfg.instances ?? {}, "daniFree")) return { phase: "not-installed", message: "Dani Free tools found. Finish setup to connect them to Dani Bot.", modelReady: false };
+    return setup;
+  };
+
   return async ({ req, res, url, path, method, auth, json, readBody }) => {
+    if (path === "/api/instances/dani-free/setup") {
+      if (hostedModels) return json(res, 403, { error: HOSTED_PROVIDER_SETTINGS_ERROR });
+      res.setHeader("cache-control", "no-store");
+      if (method === "GET") return json(res, 200, daniSetupStatus());
+      if (method === "POST") {
+        if (!String(req.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) return json(res, 415, { error: "content-type must be application/json" });
+        if (daniSetupTask) return json(res, 202, daniSetupStatus());
+        daniRegistrationFailed = false;
+        daniSetupTask = installDaniFreeTools().then(async (setup) => {
+          if (setup.phase !== "installed" || Object.hasOwn(cfg.instances ?? {}, "daniFree")) return;
+          // Add only our instance. Never change a saved bot's model or another provider's configuration.
+          const instances = { ...persistableInstanceConfigs(cfg), daniFree: { driver: "dani-free", displayName: "Dani Free", enabled: true, config: {} } };
+          await persistProviderInstance("daniFree", instances);
+          broadcast({ kind: "config", ...configStatus() });
+        }).catch((error) => {
+          daniRegistrationFailed = true;
+          console.error("[dani-free-setup] provider registration failed", error);
+        }).finally(() => { daniSetupTask = undefined; });
+        return json(res, 202, daniSetupStatus());
+      }
+    }
     if (method === "GET" && path === "/api/instances") {
       // Rescan PATH: Windows never pushes PATH changes into a live process, so a CLI installed since launch stays invisible.
       resetPathCache();
