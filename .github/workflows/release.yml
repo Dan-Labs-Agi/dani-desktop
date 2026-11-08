@@ -199,7 +199,7 @@ jobs:
           version=${{ needs.prepare.outputs.version }}
           for arch in arm64 x64; do
             test -f "release/DaniBot-$version-$arch.dmg"
-            test -f "release/DaniBot-$version-$arch.zip"
+            test -f "release/DaniBot-$version-mac-$arch.zip"
           done
           test -f release/latest-mac.yml
       - name: Create stable download names
@@ -209,8 +209,8 @@ jobs:
           version=${{ needs.prepare.outputs.version }}
           cp "release/DaniBot-$version-x64.dmg" release/DaniBot-Intel.dmg
           cp "release/DaniBot-$version-arm64.dmg" release/DaniBot-Silicon.dmg
-          cp "release/DaniBot-$version-x64.zip" release/DaniBot-Intel-Portable.zip
-          cp "release/DaniBot-$version-arm64.zip" release/DaniBot-Silicon-Portable.zip
+          cp "release/DaniBot-$version-mac-x64.zip" release/DaniBot-Intel-Portable.zip
+          cp "release/DaniBot-$version-mac-arm64.zip" release/DaniBot-Silicon-Portable.zip
           for file in \
             DaniBot-Intel.dmg DaniBot-Silicon.dmg \
             DaniBot-Intel-Portable.zip DaniBot-Silicon-Portable.zip; do
