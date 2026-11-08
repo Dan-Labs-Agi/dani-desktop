@@ -102,6 +102,7 @@ beforeAll(async () => {
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
       USERPROFILE: home,
+      DANI_DATA_DIR: join(home, ".openmausbot"),
       OMB_PORT: String(PORT),
       OMB_WEBHOOK_PORT: String(PORT + 1),
       OMB_STATIC_DIR: staticDir,

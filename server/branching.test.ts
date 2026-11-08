@@ -82,6 +82,7 @@ posixOnly("conversation branching e2e (fake ACP fleet)", () => {
     const env: NodeJS.ProcessEnv = {
       HOME: home,
       USERPROFILE: home,
+      DANI_DATA_DIR: join(home, ".openmausbot"),
       OMB_PORT: String(PORT),
     };
     if (process.env.PATH) env.PATH = process.env.PATH;

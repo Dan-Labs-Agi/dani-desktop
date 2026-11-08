@@ -36,6 +36,7 @@ const ENGINES: Readonly<Record<string, EngineRow>> = {
   copilotAgent: { resume: true },
   customAcp: { resume: true },
   "openai-compat": CHAT_ROW,
+  "dani-free": CHAT_ROW,
   grok: CHAT_ROW,
   minimax: CHAT_ROW,
   mistral: CHAT_ROW,

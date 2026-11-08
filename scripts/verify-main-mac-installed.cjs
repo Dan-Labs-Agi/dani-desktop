@@ -31,6 +31,7 @@ const mount=path.join(temp,'mounted');fs.mkdirSync(mount,{recursive:true});
 let result=spawnSync('hdiutil',['attach',installer,'-nobrowse','-mountpoint',mount],{encoding:'utf8',timeout:120000});assert.equal(result.status,0,result.stderr);
 result=spawnSync('codesign',['--verify','--deep','--strict',path.join(mount,'Dani Bot.app')],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
 result=spawnSync('/usr/bin/ditto',[path.join(mount,'Dani Bot.app'),path.join(install,'Dani Bot.app')],{encoding:'utf8',timeout:120000});assert.equal(result.status,0,result.stderr);
+require('./mac-installer-evidence.cjs').inspectMacInstaller({installer,mount,bundle:path.join(install,'Dani Bot.app'),directory:path.join(temp,'mac-installer-evidence')});
 result=spawnSync('hdiutil',['detach',mount],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
 const bundle=path.join(install,'Dani Bot.app');
 const executable=path.join(bundle,'Contents/MacOS/Dani Bot');

@@ -11148,11 +11148,14 @@ describe("harness HTTP API", () => {
       expect(crossStateAfterRun.bots.find((candidate: { id: string }) => candidate.id === teammate.id)
         ?.tasks.find((task: { threadId: string }) => task.threadId === teammate.threadId)?.unread).toBe(true);
 
-      // The failed run notifies the Chief in Team incidents; the fake CLI deliberately hangs there.
-      // A raw local caller must still be blocked while that other bot works.
+      // Incident delivery is asynchronous. Wait for its fake hanging turn before
+      // proving the busy-state refusal, rather than racing a still-idle Chief.
+      const readIncidentChief = async () => (await api("GET", "/api/bots?messages=0")).body.bots
+        .find((candidate: { defaultBot?: unknown; busy?: boolean }) => candidate.defaultBot && candidate.busy);
+      await expect.poll(readIncidentChief, { timeout: 5_000 }).toBeTruthy();
+      const incidentChief = await readIncidentChief();
       const move = await api("PATCH", `/api/bots/${teammate.id}`, { section: "Private routine work" });
       expect(move).toMatchObject({ status: 409, body: { error: expect.stringContaining("A bot is working right now") } });
-      const incidentChief = (await api("GET", "/api/bots?messages=0")).body.bots.find((candidate: { defaultBot?: unknown; busy?: boolean }) => candidate.defaultBot && candidate.busy);
       expect(incidentChief).toBeTruthy();
       for (const task of incidentChief.tasks.filter((task: { busy?: boolean }) => task.busy)) {
         expect((await api("POST", `/api/bots/${incidentChief.id}/interrupt`, { threadId: task.threadId })).status).toBe(200);
