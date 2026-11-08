@@ -140,6 +140,15 @@ dmg:
   # the arm64 one when both arches build (this section overrides both the
   # top-level and mac-level artifactName, so it must carry the arch itself)
   artifactName: DaniBot-${version}-${arch}.dmg
+  iconSize: 112
+  iconTextSize: 13
+  contents:
+    - x: 180
+      y: 206
+    - x: 540
+      y: 206
+      type: link
+      path: /Applications
 
 win:
   target:

@@ -12,6 +12,13 @@ await build({entryPoints:['scripts/diagnose-installed-runtime.ts'],bundle:true,p
  build.onLoad({filter:/[\\/]server[\\/]managed-runtime\.ts$/}, args=> {
  let contents=readFileSync(args.path,'utf8');
  contents=contents.replace('async function extractArchive(',snapshot+'async function extractArchive(');
+ contents=contents.replace('stdio: ["ignore", "ignore", "pipe"], windowsHide: true });', 'stdio: ["ignore", "pipe", "pipe"], windowsHide: true });');
+ contents=contents.replace('this.opencodeServer.once("exit", () => { this.setModelRouteReadiness("error"); });', `this.opencodeServer.once("exit", (code,signal) => { console.error('DIAGNOSTIC_OPENCODE_EXIT',JSON.stringify({code,signal})); this.setModelRouteReadiness("error"); });
+ this.opencodeServer.once('error',error=>console.error('DIAGNOSTIC_OPENCODE_SPAWN_ERROR',error));
+ this.opencodeServer.stdout?.on('data',d=>console.error('DIAGNOSTIC_OPENCODE_STDOUT',d.toString()));`);
+ contents=contents.replace('process.env.HERMES_HOME = hermesHome;', `process.env.HERMES_HOME = hermesHome;
+ console.error('DIAGNOSTIC_RUNTIME_PROCESS',JSON.stringify({node:process.execPath,arch:process.arch,home:process.env.HOME}));`);
+
  contents=contents.replace('throw new Error("exact free model route is not ready");', 'throw new Error("exact free model route is not ready: "+JSON.stringify({status:response.status,body}));');
  contents=contents.replace('catch { await new Promise(resolveWait => setTimeout(resolveWait, 250)); }', 'catch (error) { console.error("DIAGNOSTIC_ROUTE_REASON",String(error)); await new Promise(resolveWait => setTimeout(resolveWait, 250)); }');
  contents=contents.replace('new Error("runtime unpacked size mismatch")','new Error(`runtime unpacked size mismatch actual=${unpacked} expected=${entry.unpackedSize}`)');
