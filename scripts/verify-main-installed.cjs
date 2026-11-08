@@ -48,7 +48,13 @@ async function open() {
 }
 async function capture(page,label) {
  await page.waitForTimeout(1500);
- const png=await page.screenshot({animations:'disabled'});const b64=png.toString('base64');
+ const png=await page.screenshot({animations:'disabled'});
+ if(process.env.DANI_EVIDENCE_DIR) {
+   fs.mkdirSync(process.env.DANI_EVIDENCE_DIR,{recursive:true});
+   fs.writeFileSync(path.join(process.env.DANI_EVIDENCE_DIR,label+'.png'),png);
+   return;
+ }
+ const b64=png.toString('base64');
  for(let i=0;i<b64.length;i+=32000) console.log('MAIN_'+label+'_SCREENSHOT_CHUNK:'+b64.slice(i,i+32000));
  console.log('MAIN_'+label+'_SCREENSHOT_END');
 }

@@ -1,0 +1,123 @@
+name: Tested Windows preview download
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tested-windows-preview
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.draft.outputs.sha }}
+      tag: ${{ steps.draft.outputs.tag }}
+    steps:
+      - id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=v0.1.139-preview.1
+          if gh release view "$tag" --json isDraft > "$RUNNER_TEMP/existing.json" 2>/dev/null; then
+            echo 'A preview already exists; refuse implicit replacement.' >&2
+            exit 1
+          fi
+          jq -n --arg tag "$tag" --arg sha "$SOURCE" '{tag_name:$tag,target_commitish:$sha,name:"Dani Desktop 0.1.139 testing preview",body:"Private test candidate. Not approved for public publication. Native install and exact-download results pending.",draft:true,prerelease:true}' > "$RUNNER_TEMP/draft.json"
+          gh api --method POST "repos/$GH_REPO/releases" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
+          echo "sha=$SOURCE" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+  build_install:
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NODE_OPTIONS: --max-old-space-size=6144
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
+      DANI_EVIDENCE_DIR: ${{ runner.temp }}/built-evidence
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs electron/dani-brand-assets.node-test.mjs
+      - run: pnpm package:win
+      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - name: Install exact built NSIS, onboard, relaunch, preserve profile
+        run: node scripts/verify-main-installed.cjs
+      - name: Upload passed exact bytes directly to draft, never Actions storage
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $draft = gh release view $env:PREVIEW_TAG --json isDraft,targetCommitish | ConvertFrom-Json
+          if (!$draft.isDraft -or $draft.targetCommitish -ne '${{ needs.prepare.outputs.sha }}') { throw 'Draft identity changed' }
+          $exe = Get-Item release/DaniBot-0.1.139-setup.exe
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Set-Content -Encoding ascii release/WINDOWS-SHA256SUMS.txt
+          gh release upload $env:PREVIEW_TAG $exe.FullName release/WINDOWS-SHA256SUMS.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Installer draft upload failed' }
+          Get-ChildItem $env:DANI_EVIDENCE_DIR/*.png | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:RUNNER_TEMP ('built-' + $_.Name)) }
+          gh release upload $env:PREVIEW_TAG "$env:RUNNER_TEMP/built-INSTALLED.png" "$env:RUNNER_TEMP/built-CHIEF.png" "$env:RUNNER_TEMP/built-ONBOARDED.png" "$env:RUNNER_TEMP/built-RELAUNCHED.png"
+          if ($LASTEXITCODE -ne 0) { throw 'Evidence draft upload failed' }
+          Write-Output "EXACT_BUILT_INSTALLER_PASS sha256=$hash bytes=$($exe.Length)"
+  download_install:
+    needs: [prepare, build_install]
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
+      DANI_EVIDENCE_DIR: ${{ runner.temp }}/downloaded-evidence
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Download exact draft installer on a fresh machine and verify hash
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $draft = gh release view $env:PREVIEW_TAG --json isDraft,targetCommitish | ConvertFrom-Json
+          if (!$draft.isDraft -or $draft.targetCommitish -ne '${{ needs.prepare.outputs.sha }}') { throw 'Draft identity changed' }
+          New-Item -ItemType Directory release | Out-Null
+          gh release download $env:PREVIEW_TAG --pattern DaniBot-0.1.139-setup.exe --pattern WINDOWS-SHA256SUMS.txt --dir release
+          if ($LASTEXITCODE -ne 0) { throw 'Draft download failed' }
+          $expected = (Get-Content release/WINDOWS-SHA256SUMS.txt).Split(' ')[0]
+          $actual = (Get-FileHash release/DaniBot-0.1.139-setup.exe -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw 'Downloaded installer hash mismatch' }
+          Write-Output "EXACT_DOWNLOADED_INSTALLER_HASH $actual"
+      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - name: Install downloaded bytes, onboard, relaunch, preserve profile
+        run: node scripts/verify-main-installed.cjs
+      - name: Attach downloaded-install screenshots to private draft
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem $env:DANI_EVIDENCE_DIR/*.png | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:RUNNER_TEMP ('downloaded-' + $_.Name)) }
+          gh release upload $env:PREVIEW_TAG "$env:RUNNER_TEMP/downloaded-INSTALLED.png" "$env:RUNNER_TEMP/downloaded-CHIEF.png" "$env:RUNNER_TEMP/downloaded-ONBOARDED.png" "$env:RUNNER_TEMP/downloaded-RELAUNCHED.png"
+          if ($LASTEXITCODE -ne 0) { throw 'Evidence draft upload failed' }
+          Write-Output 'EXACT_DOWNLOADED_INSTALLER_PASS'
+      # No publish, latest.yml, Actions artifact, cache, tag push or deploy step.
