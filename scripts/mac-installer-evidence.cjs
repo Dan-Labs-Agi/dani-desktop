@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
-function inspectMacInstaller({installer,mount,bundle,directory,run=spawnSync,emit=console.log}) {
+function inspectMacInstaller({installer,mount,bundle,directory,run=spawnSync,emit=line=>fs.writeSync(1,line+"\n")}) {
  fs.mkdirSync(directory,{recursive:true});
  const commands=[];
  function command(tool,args,required=true){
@@ -13,8 +13,10 @@ function inspectMacInstaller({installer,mount,bundle,directory,run=spawnSync,emi
   return r;
  }
  function image(file,label){
-  const b64=fs.readFileSync(file).toString('base64');
-  for(let i=0;i<b64.length;i+=32000)emit('MAIN_'+label+'_SCREENSHOT_CHUNK:'+b64.slice(i,i+32000));
+  const small=file.replace(/\.png$/,'.preview.png');
+  command('/usr/bin/sips',['-Z','900',file,'--out',small]);
+  const b64=fs.readFileSync(small).toString('base64');
+  for(let i=0;i<b64.length;i+=8000)emit('MAIN_'+label+'_SCREENSHOT_CHUNK:'+b64.slice(i,i+8000));
   emit('MAIN_'+label+'_SCREENSHOT_END');
  }
  // Record acceptance independently from signature integrity. Ad-hoc signing is

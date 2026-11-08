@@ -12,6 +12,8 @@ await build({entryPoints:['scripts/diagnose-installed-runtime.ts'],bundle:true,p
  build.onLoad({filter:/[\\/]server[\\/]managed-runtime\.ts$/}, args=> {
  let contents=readFileSync(args.path,'utf8');
  contents=contents.replace('async function extractArchive(',snapshot+'async function extractArchive(');
+ contents=contents.replace('throw new Error("exact free model route is not ready");', 'throw new Error("exact free model route is not ready: "+JSON.stringify({status:response.status,body}));');
+ contents=contents.replace('catch { await new Promise(resolveWait => setTimeout(resolveWait, 250)); }', 'catch (error) { console.error("DIAGNOSTIC_ROUTE_REASON",String(error)); await new Promise(resolveWait => setTimeout(resolveWait, 250)); }');
  contents=contents.replace('new Error("runtime unpacked size mismatch")','new Error(`runtime unpacked size mismatch actual=${unpacked} expected=${entry.unpackedSize}`)');
  contents=contents.replaceAll('} catch (error) {', '} catch (error) { console.error("DIAGNOSTIC_SERVICE_ERROR",error);');
  contents=contents.replace('await waitForReady(`${bridgeUrl}/ready`, 30_000);', `this.opencodeServer.stderr?.on('data',d=>console.error('DIAGNOSTIC_OPENCODE',d.toString()));
