@@ -22,7 +22,13 @@ export function createDaniFreeRuntime(baseDir = DATA_DIR) {
   let pending: Promise<DaniFreeConnection> | undefined;
   let connection: DaniFreeConnection | undefined;
   const home = join(baseDir,'dani-free');
-  const stop = () => { child?.kill(); child = undefined; connection = undefined; pending = undefined; };
+  let cancelPending: (() => void) | undefined;
+  const stop = () => {
+    const previous = child;
+    child = undefined; connection = undefined;
+    const cancel = cancelPending; cancelPending = undefined;
+    cancel?.(); previous?.kill();
+  };
   const start = (): Promise<DaniFreeConnection> => {
     if (connection) return Promise.resolve(connection);
     if (pending) return pending;
@@ -30,13 +36,18 @@ export function createDaniFreeRuntime(baseDir = DATA_DIR) {
     const executable = join(baseDir,'tools','standalone',DANI_FREE_PROXY.engine,DANI_FREE_PROXY.version,standaloneAssetFor(DANI_FREE_PROXY)!.executable);
     pending = new Promise<DaniFreeConnection>((resolve,reject) => {
       let settled = false, buffer = '';
-      const finish = (error?: Error, result?: DaniFreeConnection) => { if(settled)return; settled=true;clearTimeout(timer);if(error){stop();reject(error);}else{connection=result;resolve(result!);} };
+      const finish = (error?: Error, result?: DaniFreeConnection) => {
+        if(settled)return; settled=true;clearTimeout(timer);cancelPending=undefined;
+        if(error){ if(child===launched){child=undefined;connection=undefined;launched.kill();} reject(error); }
+        else {connection=result;resolve(result!);}
+      };
       const timer = setTimeout(() => finish(new Error('Dani Free did not start in time.')),30_000);
       const inherited=cliProbeEnvironment();
       // Do not inherit backend credentials, custom routing, or agent control-plane tokens.
       const env: NodeJS.ProcessEnv = {};
       for (const name of ['PATH','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','SystemRoot','SYSTEMROOT','WINDIR','COMSPEC','PATHEXT','TEMP','TMP','TMPDIR','LANG','LC_ALL']) if(inherited[name]!==undefined)env[name]=inherited[name];
       const launched=child=spawn(executable,['start','--host','127.0.0.1','--port','0'],{env:{...env,DANI_FREE_HOME:home,DANI_FREE_DISABLE_OPENCODE:'1',DANI_FREE_PROBE_ON_REFRESH:'0',DANI_FREE_ENGINE_AUTOUPDATE:'0'},stdio:['ignore','pipe','pipe'],windowsHide:true});
+      cancelPending=()=>finish(new Error('Dani Free startup was cancelled.'));
       child.on('error',()=>finish(new Error('Dani Free could not start. Try setup again.')));
       child.on('exit',()=>{const wasSettled=settled;finish(new Error('Dani Free stopped before it was ready.')); if(wasSettled && child===launched)stop();});
       child.stderr?.resume();
