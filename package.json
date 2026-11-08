@@ -1,12 +1,12 @@
 {
   "name": "dani-desktop",
   "private": true,
-  "version": "0.1.58",
+  "version": "0.1.59",
   "description": "Dani Bot desktop app with the Dani Agent harness.",
-  "homepage": "https://github.com/somdipto/dani-desktop",
+  "homepage": "https://github.com/Dan-Labs-Agi/dani-desktop",
   "repository": {
     "type": "git",
-    "url": "https://github.com/somdipto/dani-desktop.git"
+    "url": "https://github.com/Dan-Labs-Agi/dani-desktop.git"
   },
   "author": {
     "name": "Dani",

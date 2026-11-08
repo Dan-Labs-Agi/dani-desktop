@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { chmod, lstat, mkdir, open, readFile, readlink, readdir, rename, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import extractZip from "extract-zip";
 import * as tar from "tar";
 import { z } from "zod";
@@ -70,6 +70,7 @@ const runtimeSchema = z.object({
 const manifestSchema = runtimeSchema.extend({ manifestVersion: z.literal(1) });
 export function parseManagedRuntimeManifest(raw: unknown) { return manifestSchema.parse(raw); }
 type RuntimeEntry = z.infer<typeof runtimeSchema>;
+const manifestDigest = (entry: RuntimeEntry) => createHash("sha256").update(JSON.stringify(entry)).digest("hex");
 
 export const safeManagedRuntimeRelativePath = (value: string) => {
   const normalized = value.replaceAll("\\", "/");
@@ -189,9 +190,9 @@ const productMessage = (code: string) => ({
   "model-route-failed": "Dani could not start its local model route.",
 }[code] ?? "Dani could not prepare its local runtime.");
 
-async function run(command: string, args: string[], timeoutMs: number, input?: string, env: NodeJS.ProcessEnv = process.env): Promise<{ stdout: string; stderr: string }> {
+async function run(command: string, args: string[], timeoutMs: number, input?: string, env: NodeJS.ProcessEnv = process.env, cwd?: string): Promise<{ stdout: string; stderr: string }> {
   return await new Promise((resolveRun, reject) => {
-    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...env, PYTHONDONTWRITEBYTECODE: "1" } });
+    const child = spawn(command, args, { cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...env, PYTHONDONTWRITEBYTECODE: "1" } });
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     const timer = setTimeout(() => { child.kill(); reject(Object.assign(new Error("runtime probe timed out"), { code: "probe-failed" })); }, timeoutMs);
     child.stdout.on("data", chunk => stdout.push(Buffer.from(chunk)));
@@ -432,11 +433,11 @@ export class ManagedRuntimeService {
       if (await digestFile(archive) !== entry.archiveSha256) throw Object.assign(new Error("runtime archive digest mismatch"), { code: "verification-failed" });
       this.setPhase(kind, "activate");
       const kindRoot = join(this.installRoot, kind); await mkdir(kindRoot, { recursive: true });
-      const manifestDigest = createHash("sha256").update(JSON.stringify(entry)).digest("hex");
+      const manifestSha256 = manifestDigest(entry);
       // A retry must never adopt an older directory merely because its name
       // matches this manifest. Keep old activations intact for rollback and
       // publish only this newly verified/probed tree via the atomic pointer.
-      const installation = `${entry.version}-${manifestDigest.slice(0, 12)}-${randomUUID()}`;
+      const installation = `${entry.version}-${manifestSha256.slice(0, 12)}-${randomUUID()}`;
       const finalRoot = join(kindRoot, installation); const staging = join(kindRoot, `.staging-${randomUUID()}`);
       await rm(staging, { recursive: true, force: true }); await mkdir(staging, { recursive: true });
       try {
@@ -457,7 +458,7 @@ export class ManagedRuntimeService {
         }
         await rename(staging, finalRoot);
         const executable = safeJoin(finalRoot, entry.executableRelPath);
-        writeFileAtomic(this.pointer(kind), `${JSON.stringify({ schemaVersion: 1, version: entry.version, installation, executable: entry.executableRelPath, treeSha256 })}\n`, { mode: 0o600 });
+        writeFileAtomic(this.pointer(kind), `${JSON.stringify({ schemaVersion: 1, version: entry.version, installation, executable: entry.executableRelPath, treeSha256, manifestSha256 })}\n`, { mode: 0o600 });
         this.active[kind] = executable;
         if (kind === "hermes") process.env.DANI_MANAGED_HERMES_EXECUTABLE = executable;
         else process.env.DANI_MANAGED_OPENCODE_EXECUTABLE = executable;
@@ -468,8 +469,9 @@ export class ManagedRuntimeService {
     const executable = this.active[kind];
     if (!executable) throw Object.assign(new Error("runtime is not activated"), { code: "not-activated" });
     const entry = this.manifestEntry(kind);
-    const pointer = JSON.parse(readFileSync(this.pointer(kind), "utf8")) as { version: string; installation: string; treeSha256: string };
+    const pointer = JSON.parse(readFileSync(this.pointer(kind), "utf8")) as { version: string; installation: string; executable: string; treeSha256: string; manifestSha256?: string };
     if (pointer.version !== entry.version) throw Object.assign(new Error("runtime version is stale"), { code: "verification-failed" });
+    if (pointer.manifestSha256 !== manifestDigest(entry) || pointer.executable !== entry.executableRelPath) throw Object.assign(new Error("runtime payload is stale"), { code: "verification-failed" });
     const root = join(this.installRoot, kind, safeManagedRuntimeRelativePath(pointer.installation));
     if (await inspectExtracted(root) !== entry.unpackedSize || await digestTree(root) !== pointer.treeSha256) throw Object.assign(new Error("managed runtime size mismatch"), { code: "verification-failed" });
     for (const relPath of [entry.noticeRelPath, entry.sbomRelPath]) {
@@ -490,7 +492,7 @@ export class ManagedRuntimeService {
     const args = entry.probe.argv.slice(1);
     const env = kind === "hermes" ? managedHermesEnv(process.env) : process.env;
     const result = process.platform === "win32" && command.toLowerCase().endsWith(".cmd")
-      ? await run(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command, ...args], 100_000, undefined, env)
+      ? await run(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", basename(command), ...args], 100_000, undefined, env, dirname(command))
       : await run(command, args, 100_000, undefined, env);
     const passAt = result.stdout.indexOf("PROBE RESULT:");
     const structured = (passAt < 0 ? result.stdout : result.stdout.slice(0, passAt)).trim();

@@ -9,7 +9,7 @@ import { removeTempDir } from "./testing/cleanup.ts";
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) removeTempDir(root); delete process.env.DANI_MANAGED_HERMES_EXECUTABLE; });
 async function fixture(mutateDuringProbe = false, mutateOnRecovery = false) {
-  const root = mkdtempSync(join(tmpdir(), "runtime-retry-")); roots.push(root);
+  const root = mkdtempSync(join(tmpdir(), "runtime retry (profile & spaces)-")); roots.push(root);
   const payload = join(root, "payload"); const resourcesRoot = join(root, "resources"); const dataDir = join(root, "data");
   const win = process.platform === "win32";
   const executableRelPath = win ? "bin/agent.cmd" : "bin/agent";
@@ -33,11 +33,61 @@ async function fixture(mutateDuringProbe = false, mutateOnRecovery = false) {
   await tar.c({ cwd: root, file: archive, gzip: true }, ["payload"]);
   const bytes = readFileSync(archive);
   const manifest = { manifestVersion: 1, name: "hermes-runtime-payload", target, version: "test", upstreamCommit: "a".repeat(40), archiveSha256: createHash("sha256").update(bytes).digest("hex"), archiveSize: bytes.length, unpackedSize: Object.values(files).reduce((n, text) => n + Buffer.byteLength(text), 0), format: "tar.gz", executableRelPath, probe: { argv: [probeRel], protocol: "acp-jsonrpc-stdio: test", expectedVersion: "test", expectedAgentName: "hermes-agent" }, noticeRelPath: "NOTICE", sbomRelPath: "SBOM.cdx.json", degradations: ["test fixture"] };
-  writeFileSync(join(runtime, "manifests", `hermes-${target}.manifest.json`), JSON.stringify(manifest));
+  const manifestPath = join(runtime, "manifests", `hermes-${target}.manifest.json`);
+  writeFileSync(manifestPath, JSON.stringify(manifest));
   const pointer = join(dataDir, "managed-runtimes", "hermes", "current.json");
-  return { root, dataDir, resourcesRoot, pointer, executableRelPath, archive, service: new ManagedRuntimeService({ resourcesRoot, dataDir, startModelRoute: async () => {} }) };
+  return { root, payload, dataDir, resourcesRoot, pointer, executableRelPath, archive, manifestPath, service: new ManagedRuntimeService({ resourcesRoot, dataDir, startModelRoute: async () => {} }) };
 }
 describe("verified runtime retry", () => {
+  it("activates and recovers runtimes under a profile path containing spaces and shell characters", async () => {
+    const f = await fixture();
+    await f.service.install("hermes");
+    const pointer = readFileSync(f.pointer, "utf8");
+    const recovered = new ManagedRuntimeService({ resourcesRoot: f.resourcesRoot, dataDir: f.dataDir, startModelRoute: async () => {} });
+    await recovered.initialize();
+    expect(recovered.executable("hermes")).toBe(f.service.executable("hermes"));
+    expect(readFileSync(f.pointer, "utf8")).toBe(pointer);
+    await recovered.stop();
+  });
+  it("replaces an activation when a corrected payload keeps the same upstream version", async () => {
+    const f = await fixture();
+    await f.service.install("hermes");
+    const first = JSON.parse(readFileSync(f.pointer, "utf8"));
+    const manifest = JSON.parse(readFileSync(f.manifestPath, "utf8"));
+    writeFileSync(join(f.payload, "NOTICE"), "corrected notice\n");
+    await tar.c({ cwd: f.root, file: f.archive, gzip: true }, ["payload"]);
+    const bytes = readFileSync(f.archive);
+    manifest.archiveSha256 = createHash("sha256").update(bytes).digest("hex");
+    manifest.archiveSize = bytes.length;
+    manifest.unpackedSize += Buffer.byteLength("corrected notice\n") - Buffer.byteLength("notice\n");
+    writeFileSync(f.manifestPath, JSON.stringify(manifest));
+    const recovered = new ManagedRuntimeService({ resourcesRoot: f.resourcesRoot, dataDir: f.dataDir, startModelRoute: async () => {} });
+    await recovered.initialize();
+    expect(recovered.executable("hermes")).toBeNull();
+    await recovered.install("hermes");
+    const next = JSON.parse(readFileSync(f.pointer, "utf8"));
+    expect(next.version).toBe(first.version);
+    expect(next.installation).not.toBe(first.installation);
+    expect(next.manifestSha256).not.toBe(first.manifestSha256);
+    expect(readFileSync(join(f.dataDir, "managed-runtimes", "hermes", next.installation, "NOTICE"), "utf8")).toBe("corrected notice\n");
+    expect(readFileSync(join(f.dataDir, "managed-runtimes", "hermes", first.installation, "NOTICE"), "utf8")).toBe("notice\n");
+    await recovered.stop();
+  });
+  it("re-verifies legacy activation pointers against the bundled payload", async () => {
+    const f = await fixture();
+    await f.service.install("hermes");
+    const first = JSON.parse(readFileSync(f.pointer, "utf8"));
+    delete first.manifestSha256;
+    writeFileSync(f.pointer, JSON.stringify(first));
+    const recovered = new ManagedRuntimeService({ resourcesRoot: f.resourcesRoot, dataDir: f.dataDir, startModelRoute: async () => {} });
+    await recovered.initialize();
+    expect(recovered.executable("hermes")).toBeNull();
+    await recovered.install("hermes");
+    const next = JSON.parse(readFileSync(f.pointer, "utf8"));
+    expect(next.installation).not.toBe(first.installation);
+    expect(next.manifestSha256).toMatch(/^[a-f0-9]{64}$/);
+    await recovered.stop();
+  });
   it("does not declare recovered runtime ready when its probe changes verified bytes", async () => {
     const f = await fixture(false, true); await f.service.install("hermes");
     const pointer = readFileSync(f.pointer, "utf8");

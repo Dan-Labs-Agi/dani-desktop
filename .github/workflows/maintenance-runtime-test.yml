@@ -1,0 +1,76 @@
+name: Maintenance runtime native installers
+on:
+  push:
+    branches: [fix/v0.1.58-cross-platform-runtime-20261108]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: maintenance-runtime-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    name: Installed runtime (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, target: linux-x64, arch: x64}
+          - {os: windows-latest, target: win32-x64, arch: x64}
+          - {os: macos-15-intel, target: darwin-x64, arch: x64}
+          - {os: macos-latest, target: darwin-arm64, arch: arm64}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      DANIBOT_CUA_ARCHES: ${{ matrix.arch }}
+      DANIBOT_CUA_ARCHES_PARTIAL: "1"
+      NODE_OPTIONS: --max-old-space-size=6144
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run server/managed-runtime-retry.test.ts server/managed-runtime.test.ts server/drivers/acp/hermes.test.ts
+      - run: python3 scripts/hermes_payload_recipe_test.py
+        if: runner.os != 'Windows'
+      - name: Linux native smoke tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y at-spi2-core dbus-x11 desktop-file-utils libxi6 libxkbcommon0 squashfs-tools x11-utils xdotool xvfb
+      - name: Build production app and native payloads
+        run: |
+          pnpm build && pnpm build:server && pnpm build:companion && pnpm build:updater && pnpm build:android-tools && pnpm build:cloudflared && pnpm build:speech-models
+          sh scripts/stage-runtimes.sh ${{ matrix.target }}
+          node scripts/build-runtime-diagnosis.mjs
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        run: pnpm exec electron-builder --win --x64 --publish never
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: pnpm build:speech && pnpm build:recorder && pnpm build:cua && pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never -c.mac.identity=-
+      - name: Package Ubuntu
+        if: runner.os == 'Linux'
+        run: pnpm build:cua:linux && pnpm exec electron-builder --linux --x64 --publish never
+      - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - name: Actual NSIS install, app launch, activation, relaunch, damage recovery
+        if: runner.os == 'Windows'
+        run: node scripts/verify-windows-installer.cjs
+      - name: Actual DMG copy, app launch, activation, relaunch, damage recovery
+        if: runner.os == 'macOS'
+        run: node scripts/verify-intel-mac-installer.cjs
+      - name: Actual DEB install, app launch, activation, relaunch, damage recovery
+        if: runner.os == 'Linux'
+        run: dbus-run-session -- xvfb-run -a node scripts/verify-linux-runtime-installer.cjs
+      # Standard public-repo runner compute only. No artifact/cache storage,
+      # release, tag, draft, or deployment writes. Screenshots are in job logs.
+      - name: Record candidate installer hashes
+        if: always()
+        run: python3 -c "import pathlib,hashlib; [(print(p.name,hashlib.sha256(p.read_bytes()).hexdigest())) for p in pathlib.Path('release').glob('*') if p.is_file() and p.suffix in ('.exe','.deb','.dmg')]"

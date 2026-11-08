@@ -22,6 +22,8 @@ esac
 ARCHIVE="$SOURCE/hermes-payload-$BUILD_TARGET-v2026.9.21.tar.gz"
 MANIFEST="$SOURCE/hermes-payload-$BUILD_TARGET-v2026.9.21.manifest.json"
 [ -f "$ARCHIVE" ] && [ -f "$MANIFEST" ]
+# A matching archive hash does not prove it contains the corrected dependency/launcher recipe.
+python3 "$(dirname "$0")/hermes_payload_recipe.py" --matches "$MANIFEST"
 STAGED_MANIFEST="$SOURCE/hermes-payload-$TARGET-v2026.9.21.staged.manifest.json"
 python3 - "$ARCHIVE" "$MANIFEST" "$STAGED_MANIFEST" "$TARGET" "$BUILD_TARGET" <<'PY'
 import hashlib, json, os, sys

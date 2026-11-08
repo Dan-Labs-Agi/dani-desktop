@@ -5,13 +5,19 @@
 #
 # Usage: scripts/stage-runtimes.sh [TARGET]
 #   TARGET: linux-x64 | darwin-arm64 | darwin-x64 | win32-x64
-#   Default: the build host's own target.
+#   Default: both macOS architectures on macOS; the host target elsewhere.
 #
 # Idempotent: payload archives already built under dist-payloads/<target>/ are
 # re-verified and reused; staging always re-verifies hashes against the
 # manifests. Builds need network access to the pinned upstream artifacts only.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [ $# -eq 0 ] && [ "$(uname -s)" = Darwin ]; then
+  sh "$ROOT/scripts/stage-runtimes.sh" darwin-arm64
+  sh "$ROOT/scripts/stage-runtimes.sh" darwin-x64
+  exit 0
+fi
 
 if [ $# -ge 1 ]; then
   TARGET="$1"
@@ -49,7 +55,8 @@ case "$TARGET" in
   win32-x64)    BUILD_TARGET=win-x64 ;;
 esac
 HM_ARCHIVE="$OUT/hermes-payload-$BUILD_TARGET-v2026.9.21.tar.gz"
-if [ ! -f "$HM_ARCHIVE" ]; then
+HM_MANIFEST="$OUT/hermes-payload-$BUILD_TARGET-v2026.9.21.manifest.json"
+if [ ! -f "$HM_ARCHIVE" ] || ! python3 "$ROOT/scripts/hermes_payload_recipe.py" --matches "$HM_MANIFEST"; then
   echo "==> building Hermes payload ($TARGET, builder target $BUILD_TARGET)"
   # Tool bootstrap for clean runners: uv and the python 'packaging' module.
   if ! command -v uv >/dev/null 2>&1; then

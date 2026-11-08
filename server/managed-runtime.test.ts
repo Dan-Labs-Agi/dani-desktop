@@ -90,17 +90,18 @@ describe("recovered installation startup", () => {
       }
     };
     visit(root);
-    writeFileSync(join(dataDir, "managed-runtimes", kind, "current.json"),
-      JSON.stringify({ schemaVersion: 1, version, installation, executable: exeRel, treeSha256: hash.digest("hex") }) + "\n");
     mkdirSync(join(resourcesRoot, "managed-runtimes", "manifests"), { recursive: true });
-    writeFileSync(join(resourcesRoot, "managed-runtimes", "manifests", `${kind}-${target}.manifest.json`), JSON.stringify({
+    const manifest = parseManagedRuntimeManifest({
       manifestVersion: 1, name: `${kind}-runtime-payload`, target, version,
       upstreamCommit: "d337b736aa1e8ebecfab043842d13e4a2d2f48a3",
       archiveSha256: "b".repeat(64), archiveSize: 100, unpackedSize: unpacked, format: "tar.gz",
       executableRelPath: exeRel,
       probe: { argv: [probeRel], protocol: "acp-jsonrpc-stdio: initialize", expectedVersion: version, expectedAgentName: `${kind}-agent` },
       noticeRelPath: "NOTICE", sbomRelPath: "SBOM.cdx.json", degradations: ["test fixture"],
-    }));
+    });
+    writeFileSync(join(resourcesRoot, "managed-runtimes", "manifests", `${kind}-${target}.manifest.json`), JSON.stringify(manifest));
+    writeFileSync(join(dataDir, "managed-runtimes", kind, "current.json"),
+      JSON.stringify({ schemaVersion: 1, version, installation, executable: exeRel, treeSha256: hash.digest("hex"), manifestSha256: createHash("sha256").update(JSON.stringify(manifest)).digest("hex") }) + "\n");
   };
 
   it("joins a recovered route startup when the renderer posts bootstrap during readiness", async () => {

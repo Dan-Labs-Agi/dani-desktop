@@ -10,6 +10,7 @@ Run AFTER the archive is built: archive hash/size are computed here, so the mani
 always describes the shipped bytes, never the intent.
 """
 import argparse, hashlib, json, os
+from hermes_payload_recipe import recipe_digest
 
 def sha256(path):
     h = hashlib.sha256()
@@ -39,6 +40,7 @@ def main():
     is_win = a.target.startswith("win")
     manifest = {
         "manifestVersion": 1,
+        "buildRecipeSha256": recipe_digest(),
         "name": "hermes-runtime-payload",
         "target": a.target,
         "version": "0.21.4",

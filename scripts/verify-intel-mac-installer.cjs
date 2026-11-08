@@ -1,4 +1,4 @@
-// Disposable Intel Mac runner only. Exercise the installed app, not win-unpacked.
+// Disposable native macOS runner only. Exercise the installed app, not win-unpacked.
 const fs = require('node:fs');
 const path = require('node:path');
 const {spawn, spawnSync} = require('node:child_process');
@@ -16,7 +16,7 @@ const data = path.join(temp, 'profile');
 fs.mkdirSync(data, {recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
 fs.writeFileSync(marker, 'preserve synthetic customer data');
-const installer=path.resolve('release',fs.readdirSync('release').find(f=>f.endsWith('-x64.dmg'))||'missing.dmg');
+const installer=path.resolve('release',fs.readdirSync('release').find(f=>f.endsWith('-'+process.arch+'.dmg'))||'missing.dmg');
 console.log(JSON.stringify({event:'intel-candidate',source:process.env.GITHUB_SHA,sha256:createHash('sha256').update(fs.readFileSync(installer)).digest('hex'),bytes:fs.statSync(installer).size}));
 const mount=path.join(temp,'mounted');fs.mkdirSync(mount,{recursive:true});
 let result=spawnSync('hdiutil',['attach',installer,'-nobrowse','-mountpoint',mount],{encoding:'utf8',timeout:120000});
@@ -28,7 +28,7 @@ result=spawnSync('hdiutil',['detach',mount],{encoding:'utf8'});assert.equal(resu
 const bundle=path.join(install,'Dani Bot.app');
 const executable=path.join(bundle,'Contents/MacOS/Dani Bot');
 result=spawnSync('codesign',['--verify','--deep','--strict',bundle],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
-result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes('x86_64'),'not an Intel app');
+result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes(process.arch==='arm64'?'arm64':'x86_64'),'app architecture does not match host');
 const resources=path.join(bundle,'Contents/Resources');
 assert.ok(fs.existsSync(path.join(resources,'server/index.js')),'installed packaged server missing');
 // Synthetic diagnostic bundle stays outside the signed app.
@@ -100,7 +100,7 @@ async function capture(page,label) {
   console.log(JSON.stringify({event:'relaunch-runtime-verified',status:recovered}));
   await capture(ui.page,'RELAUNCH');
   await ui.browser.close();stop();await sleep(3000);
-  const manifest=JSON.parse(fs.readFileSync(path.join(resources,'managed-runtimes/manifests/hermes-darwin-x64.manifest.json'),'utf8'));
+  const manifest=JSON.parse(fs.readFileSync(path.join(resources,'managed-runtimes/manifests/hermes-darwin-'+process.arch+'.manifest.json'),'utf8'));
   const oldNotice=path.join(data,'managed-runtimes/hermes',active.installation,manifest.noticeRelPath);
   assert.ok(fs.existsSync(oldNotice),'expected legal notice missing');
   const original=fs.readFileSync(oldNotice);

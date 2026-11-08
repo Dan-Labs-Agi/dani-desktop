@@ -102,7 +102,7 @@ echo "==> [4/10] standalone CPython (digest-pinned)"
 PBS_URL="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d['targets'][sys.argv[2]]['url'])" "$PBS_DIGESTS" "$TARGET")"
 PBS_SHA="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d['targets'][sys.argv[2]]['sha256'])" "$PBS_DIGESTS" "$TARGET")"
 PBS_TARBALL="$WORK/$(basename "$PBS_URL")"
-[ -f "$PBS_TARBALL" ] || curl -sL -o "$PBS_TARBALL" "$PBS_URL"
+[ -f "$PBS_TARBALL" ] || curl -fsSL -o "$PBS_TARBALL" "$PBS_URL"
 if [ "$(sha256_of "$PBS_TARBALL")" != "$PBS_SHA" ]; then
   echo "FATAL: python-build-standalone digest mismatch for $TARGET" >&2; exit 1
 fi
@@ -134,7 +134,11 @@ python3 "$SCRIPT_DIR/hermes_wheelhouse.py" --reqs "$WORK/reqs-download.txt" \
 echo "==> [7/10] install payload ONLY from the verified wheelhouse"
 uv pip install --target "$PAYLOAD/vendor" --python-platform "$UV_PLAT" \
   --python-version 3.11 --no-index --find-links "$WH" --require-hashes \
-  -r "$WORK/reqs-target.txt" 2>&1 | tail -1
+  -r "$WORK/reqs-target.txt" > "$WORK/vendor-install.log" 2>&1 || {
+  cat "$WORK/vendor-install.log" >&2
+  exit 1
+}
+tail -1 "$WORK/vendor-install.log"
 if [ "$TARGET" = win-x64 ]; then
   # uv cross-resolution evaluates nemo-relay's win32/AMD64 marker false for
   # x86_64-pc-windows-msvc; a real Windows host evaluates it true. Install it
@@ -151,7 +155,11 @@ for line in open(sys.argv[1]):
 PYEOF2
   uv pip install --target "$PAYLOAD/vendor" --python-platform "$UV_PLAT" \
     --python-version 3.11 --no-index --find-links "$WH" --require-hashes \
-    --no-deps -r "$WORK/reqs-win-supplement.txt" 2>&1 | tail -1
+    --no-deps -r "$WORK/reqs-win-supplement.txt" > "$WORK/vendor-win-install.log" 2>&1 || {
+    cat "$WORK/vendor-win-install.log" >&2
+    exit 1
+  }
+  tail -1 "$WORK/vendor-win-install.log"
 fi
 
 # Portable copy (no rsync dependency: Git Bash on Windows runners lacks it).
@@ -235,7 +243,7 @@ Hermes Runtime Payload - Third-Party Notices
    https://github.com/astral-sh/python-build-standalone
    Artifact sha256 pinned in pbs-digests.json and verified at build time.
 
-3. Python packages pinned by upstream uv.lock (core + "acp" extra),
+3. Python packages pinned by upstream uv.lock (core + "acp" + "bedrock" extras),
    installed hash-enforced from a verified wheelhouse (every installed
    artifact's sha256 checked against the locked hash set; see
    SBOM.cdx.json for per-package artifact hashes and licenses/, for full
