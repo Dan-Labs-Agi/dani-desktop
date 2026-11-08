@@ -102,9 +102,13 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
         daniSetupTask = installDaniFreeTools().then(async (setup) => {
           if (setup.phase !== "installed" || Object.hasOwn(cfg.instances ?? {}, "daniFree")) return;
           // Add only our instance. Never change a saved bot's model or another provider's configuration.
-          const instances = { ...persistableInstanceConfigs(cfg), daniFree: { driver: "dani-free", displayName: "Dani Free", enabled: true, config: {} } };
-          await persistProviderInstance("daniFree", instances);
-          broadcast({ kind: "config", ...configStatus() });
+          if (providerConfigBusy.get()) throw new Error("Provider settings are busy. Try setup again.");
+          providerConfigBusy.set(true);
+          try {
+            const instances = { ...persistableInstanceConfigs(cfg), daniFree: { driver: "dani-free", displayName: "Dani Free", enabled: true, config: {} } };
+            await persistProviderInstance("daniFree", instances);
+            broadcast({ kind: "config", ...configStatus() });
+          } finally { providerConfigBusy.set(false); }
         }).catch((error) => {
           daniRegistrationFailed = true;
           console.error("[dani-free-setup] provider registration failed", error);
