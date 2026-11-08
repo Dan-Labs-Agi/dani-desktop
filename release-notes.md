@@ -1,0 +1,1 @@
+Install Dani Free sets up verified local tools. Live free-model conversation has not been verified in this release. Existing providers and saved data are preserved. Windows is unsigned; macOS is not Developer ID signed or notarized and may be blocked by Gatekeeper.

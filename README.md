@@ -23,14 +23,14 @@ own connected apps. Talk to them like contacts. Watch them work. Approve what ma
 
 ### ⬇️ Download Dani Bot
 
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><img src="https://img.shields.io/badge/Download-macOS_Apple_Silicon-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Apple Silicon)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg"><img src="https://img.shields.io/badge/Download-macOS_Intel-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Intel)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe"><img src="https://img.shields.io/badge/Download-Windows_Installer-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (installer)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip"><img src="https://img.shields.io/badge/Download-Windows_Portable-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (portable zip)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage"><img src="https://img.shields.io/badge/Download-Linux_AppImage-b85c00?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux (AppImage)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb"><img src="https://img.shields.io/badge/Download-Linux_.deb-b85c00?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Download for Linux (deb)"></a>
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><img src="https://img.shields.io/badge/Download-macOS_Apple_Silicon-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Apple Silicon)"></a>
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Intel.dmg"><img src="https://img.shields.io/badge/Download-macOS_Intel-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Intel)"></a>
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-setup.exe"><img src="https://img.shields.io/badge/Download-Windows_Installer-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (installer)"></a>
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip"><img src="https://img.shields.io/badge/Download-Windows_Portable-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (portable zip)"></a>
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot.AppImage"><img src="https://img.shields.io/badge/Download-Linux_AppImage-b85c00?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux (AppImage)"></a>
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/danibot-amd64.deb"><img src="https://img.shields.io/badge/Download-Linux_.deb-b85c00?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Download for Linux (deb)"></a>
 
-<sub>These buttons always fetch the newest release. [All downloads and release notes →](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
+<sub>These buttons always fetch the newest release. [All downloads and release notes →](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest)</sub>
 
 <br>
 
@@ -146,8 +146,8 @@ The format stays portable: Dani Bot reads the structured YAML frontmatter for a 
 install, while Grok, Claude, ChatGPT, and people can follow the ordinary Markdown playbook. Connections
 remain off until you approve them, routines arrive paused, and packages never carry credentials,
 conversations, permissions, memory, or computer access. Browse the
-[open-source playbook repository](https://github.com/somdipto/dani-desktop) or read its
-[portable format](https://github.com/somdipto/dani-desktop).
+[open-source playbook repository](https://github.com/Dan-Labs-Agi/dani-desktop) or read its
+[portable format](https://github.com/Dan-Labs-Agi/dani-desktop).
 
 ### 🎧 Bots that talk back
 
@@ -210,15 +210,15 @@ See [MCP server setup and tool reference](docs/mcp-server.md).
 
 ## Quick start
 
-**Installers - one download per desktop OS** (stable names, always resolving to the [newest release](https://github.com/somdipto/dani-desktop/releases/latest)):
+**Installers - one download per desktop OS** (stable names, always resolving to the [newest release](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest)):
 
 | Platform | Download |
 |---|---|
-| macOS, Apple silicon | [DaniBot-Silicon.dmg](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg) |
-| macOS, Intel | [DaniBot-Intel.dmg](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg) |
-| Windows | [DaniBot-setup.exe](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe) |
-| Ubuntu, AppImage | [DaniBot.AppImage](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage) |
-| Ubuntu, .deb | [danibot-amd64.deb](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb) |
+| macOS, Apple silicon | [DaniBot-Silicon.dmg](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg) |
+| macOS, Intel | [DaniBot-Intel.dmg](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Intel.dmg) |
+| Windows | [DaniBot-setup.exe](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-setup.exe) |
+| Ubuntu, AppImage | [DaniBot.AppImage](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot.AppImage) |
+| Ubuntu, .deb | [danibot-amd64.deb](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/danibot-amd64.deb) |
 
 The Windows installer is unsigned, so SmartScreen shows an "unknown publisher" prompt on first run. First launch opens the setup wizard on every platform.
 
@@ -249,7 +249,7 @@ from the scripts it documents.
 **Or step by step, from source:**
 
 ```sh
-git clone https://github.com/somdipto/dani-desktop && cd dani-desktop
+git clone https://github.com/Dan-Labs-Agi/dani-desktop && cd dani-desktop
 pnpm install
 
 pnpm dev:server    # harness server → 127.0.0.1:8799
@@ -283,9 +283,9 @@ The Linux preview is user-initiated and never enables local bot control or Auto 
 Driver 0.19.3 runtime starts only after explicit opt-in and without its full-screen cursor overlay. On Wayland the
 app never starts it and clears legacy opt-ins while that real-seat safety gate remains unresolved. Chat, preview,
 Cloud, and Local VM remain available on both sessions. See the [Ubuntu Desktop guide](docs/linux-desktop.md) and tracking
-issues [#29](https://github.com/somdipto/dani-desktop/issues/29),
-[#345](https://github.com/somdipto/dani-desktop/issues/345), and
-[#113](https://github.com/somdipto/dani-desktop/issues/113).
+issues [#29](https://github.com/Dan-Labs-Agi/dani-desktop/issues/29),
+[#345](https://github.com/Dan-Labs-Agi/dani-desktop/issues/345), and
+[#113](https://github.com/Dan-Labs-Agi/dani-desktop/issues/113).
 
 The Linux packager downloads only the tag-pinned upstream archive during the build, verifies its size, SHA-256,
 complete member allowlist, and inner executable hashes, then packages only the CLI and cursor-theme sidecar. The
