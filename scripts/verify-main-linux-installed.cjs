@@ -14,6 +14,12 @@ fs.mkdirSync(temp, {recursive:true});
 const install = path.join(temp, 'app');
 const data = path.join(temp, 'profile');
 fs.mkdirSync(data, {recursive:true});
+// Installers may auto-launch the app. Give that first process the same disposable profile.
+process.env.DANI_DATA_DIR=data;
+process.env.OMB_DATA_DIR=data;
+process.env.HOME=path.join(temp,'home');
+process.env.USERPROFILE=process.env.HOME;
+fs.mkdirSync(process.env.HOME,{recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
 fs.writeFileSync(marker, 'preserve synthetic customer data');
 const installer=path.resolve('release',fs.readdirSync('release').find(f=>/-amd64\.deb$/.test(f))||'missing.deb');
@@ -65,10 +71,14 @@ async function inspect(page,label) {
    const button=ui.page.locator('[data-dani-free-install]');await button.waitFor({state:'visible'});
    assert.equal(await button.innerText(),'Install Dani Free');await button.click();
    await ui.page.waitForFunction(async()=>{const r=await fetch('/api/instances/dani-free/setup');const s=await r.json();if(s.phase==='failed')throw Error(s.message);return s.phase==='installed';},null,{timeout:240000});
+   await capture(ui.page,'FREE_INSTALLED');
+   const isolatedFiles=fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:config\.json|server\.log|runtime\.json|cua-local-control\.json)$/.test(p));
+   console.log('DANI_ISOLATED_PROFILE_FILES',JSON.stringify(isolatedFiles));
+   assert.ok(fs.existsSync(path.join(data,'config.json')),'setup reported installed without config in the explicitly isolated profile');
    const config=JSON.parse(fs.readFileSync(path.join(data,'config.json'),'utf8'));
    assert.equal(config.instances.daniFree.driver,'dani-free');
    assert.equal(fs.existsSync(path.join(data,'dani-free/runtime.json')),false,'install must not start a model service');
-   await capture(ui.page,'FREE_INSTALLED');console.log('DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS');
+   console.log('DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS');
  }
  await ui.page.locator('[data-welcome-later]').click();
  await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
