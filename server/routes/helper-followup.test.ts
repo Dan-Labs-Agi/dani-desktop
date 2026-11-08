@@ -76,6 +76,22 @@ describe("Dani's follow-up", () => {
     expect(store.messagesFor(maus.threadId)).toHaveLength(2);
   });
 
+  it("records an explicit setup-only unverified model result without changing old history", async () => {
+    const { store, maus, post } = await fixture();
+    const intro = structuredClone(store.messagesFor(maus.threadId)[0]);
+    expect(intro.helperIntroVersion).toBe(2);
+    expect(intro.text).toContain("local setup");
+    const result = await post({ ai: "unverified", version: 2, appsKnown: false });
+    expect(result.status).toBe(201);
+    expect(result.body.message?.helperFollowup).toEqual({ ai: "unverified", version: 2, appsKnown: false, apps: [], bots: 0, routines: 1 });
+    expect(result.body.message?.text).toContain("A live model conversation has not been verified");
+    expect(result.body.message?.text).toContain("couldn't confirm the connected-app list");
+    expect(result.body.message?.text).not.toMatch(/nothing's waiting|There's no unfinished work|thinking with/);
+    expect(store.messagesFor(maus.threadId)[0]).toEqual(intro);
+    const again = await post({ ai: "own", version: 2 });
+    expect(again.body.message).toEqual(result.body.message);
+  });
+
   it("is Dani's own person's only: never a bot's shell, nor another member on a Team Cloud", async () => {
     const place = await fixture();
     expect((await place.post({ ai: "own" }, BOT_SHELL)).status).toBe(403);

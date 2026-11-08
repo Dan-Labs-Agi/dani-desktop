@@ -24,6 +24,7 @@ export interface HelperIntroField extends HelperFollowupField {
   /** Dani's introduction. Clients that know it say it in the viewer's language with example asks; `text` is the
    * English fallback the model and older clients read. */
   helperIntro?: true;
+  helperIntroVersion?: 2;
 }
 
 export const defaultBotPerson = (bot: DefaultBotFields): string => bot.defaultBot?.person?.trim().toLowerCase() ?? "";

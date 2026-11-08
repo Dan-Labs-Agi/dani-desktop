@@ -43,9 +43,9 @@ export function helperIntroMessage(bot: Pick<BotRecord, "name" | "chiefOfStaff">
         ? "Ask me how to do anything here. I can set up bots, apps and routines with you."
         : "Ask me how to do anything here. I can set up bots, apps and routines with you, and keep an eye on your day.",
     team ? `On ${team}, I'm here for you and look after your own bots.` : "",
-    "I'm taking a look around to see if there's anything I can pick up for you. I'll follow up in a moment.",
+    "I'll check this app's local setup: connected apps, other bots and enabled routines. This does not check your inbox or tasks.",
   ].filter(Boolean).join(" ");
-  return { role: "bot", kind: "options", text: `${title} ${subtitle}`, helperIntro: true, card: { title, subtitle, options: [...HELPER_ASKS], fixedOptions: true } };
+  return { role: "bot", kind: "options", text: `${title} ${subtitle}`, helperIntro: true, helperIntroVersion: 2, card: { title, subtitle, options: [...HELPER_ASKS], fixedOptions: true } };
 }
 
 function ledger(dataDir: string): Record<string, string> {
