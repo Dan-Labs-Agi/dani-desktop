@@ -30,15 +30,18 @@ jobs:
       - run: python3 docs/dani-sdd-kit/scripts/check_kit.py
 
   test:
-    name: typecheck + test (${{ matrix.os }})
+    name: vitest (${{ matrix.os }}, shard ${{ matrix.shard }}/8)
     strategy:
       fail-fast: false
       matrix:
         # The harness and pure desktop capabilities stay portable across all
         # supported host platforms. POSIX-only process tests self-skip.
         os: [macos-latest, ubuntu-latest, windows-latest]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      OMB_AI_CHECKS: "0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -61,16 +64,19 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=7168
         run: pnpm typecheck
-      - name: Run tests
-        run: pnpm test
+      - name: Run all Vitest files in deterministic shards
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/8
         env:
           # Electron 43 currently exits with EXCEPTION_BREAKPOINT before ready
           # on GitHub's Windows runners even after Chromium's required sandbox
           # ACL is present. Production fails closed there through the tested
           # browser-platform gate; keep probing the upstream regression below.
           OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
+      - name: Run unsharded broker, Electron and packaged server checks once per OS
+        if: matrix.shard == 1
+        run: pnpm broker:test && pnpm test:electron && pnpm test:packaged-server
       - name: Probe upstream Electron Windows sandbox regression
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && matrix.shard == 1
         continue-on-error: true
         env:
           # Keep the canary honest: no --no-sandbox or sandbox-disabling flags.
@@ -80,7 +86,7 @@ jobs:
         run: pnpm exec vitest run electron/browser-closed-shadow.electron.test.mjs
       - run: pnpm check:electron
       - name: production UI build
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.shard == 1
         run: pnpm build
 
   control-plane:
@@ -222,3 +228,24 @@ jobs:
         run: |
           cd android
           ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:assembleDebug
+
+  ci:
+    name: CI
+    if: always()
+    needs: [test, control-plane, package-linux, detect-optional-jobs, sdd, ios, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every matrix shard and applicable job to pass
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module -e '
+            const jobs = JSON.parse(process.env.NEEDS_JSON);
+            const mandatory = ["test", "control-plane", "package-linux", "detect-optional-jobs"];
+            for (const name of mandatory) if (jobs[name]?.result !== "success") throw new Error(`${name}: ${jobs[name]?.result}`);
+            for (const name of ["sdd", "ios", "android"]) {
+              const expected = jobs["detect-optional-jobs"].outputs[name] === "true" ? "success" : "skipped";
+              if (jobs[name]?.result !== expected) throw new Error(`${name}: ${jobs[name]?.result}, expected ${expected}`);
+            }
+          '

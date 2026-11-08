@@ -208,10 +208,10 @@ export function laneOf(event) {
   return "full";
 }
 
-// A shard runs its files one at a time, so the slowest shard sets the run's length. Windows and macOS run only the e2e
-// files that depend on their OS, so their shards stay as short as Linux's, and macOS keeps four: the account runs five
-// macOS jobs at a time.
-export const VITEST_SHARDS = { "macos-latest": 4, "ubuntu-latest": 8, "windows-latest": 8 };
+// Eight shards keep the recorded suite plus setup within the 30-minute job cap.
+// Desktop CI runs every file on every OS; this historical selective helper
+// still describes host-only subsets for callers that explicitly request them.
+export const VITEST_SHARDS = { "macos-latest": 8, "ubuntu-latest": 8, "windows-latest": 8 };
 
 /** ci.yml's vitest matrix: every shard of every selected platform, and which e2e files that platform runs. */
 export function vitestMatrix(oses) {

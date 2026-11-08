@@ -73,10 +73,10 @@ const MAIN_JOBS = ["vitest", "behavior-evals", "packaged-server", "electron-smok
 const mainLane = () => ({ build: true, jobs: MAIN_JOBS, vitest_os: MAIN, packaged_server_os: MAIN, vitest_matrix: vitestMatrix(MAIN) });
 
 describe("vitest matrix", () => {
-  it("gives Linux and Windows eight shards each and macOS four, and only Linux every e2e file", () => {
+  it("gives every supported OS eight deterministic shards", () => {
     const { include } = vitestMatrix(["macos-latest", "ubuntu-latest", "windows-latest"]);
     const count = (os: string) => include.filter((entry) => entry.os === os).length;
-    expect([count("ubuntu-latest"), count("windows-latest"), count("macos-latest")]).toEqual([8, 8, 4]);
+    expect([count("ubuntu-latest"), count("windows-latest"), count("macos-latest")]).toEqual([8, 8, 8]);
     expect(include.find((entry) => entry.os === "windows-latest" && entry.shard === 8))
       .toEqual({ os: "windows-latest", part: "shard 8/8", shard: 8, shards: 8, files: "", e2e: "host", node_tests: false });
     expect(include.filter((entry) => entry.node_tests).map((entry) => [entry.os, entry.shard]))
@@ -425,7 +425,7 @@ describe("the repository's import graph", () => {
       ? (ci.jobs.static.steps as { run?: string }[]).flatMap((step) => step.run?.startsWith("pnpm exec vitest run ") ? step.run.split(" ").slice(4) : [])
       : ["scripts/testing/verification-docs.test.ts"];
     if (!ci.jobs.static) {
-      const tests = ci.jobs.test.steps.find((step: { run?: string }) => step.run === "pnpm test");
+      const tests = ci.jobs.test.steps.find((step: { run?: string }) => step.run === "pnpm exec vitest run --shard=${{ matrix.shard }}/8");
       expect(tests).toBeDefined();
       expect(tests.if).toBeUndefined();
       expect(tests["continue-on-error"]).toBeUndefined();

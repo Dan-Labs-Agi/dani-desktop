@@ -489,6 +489,8 @@ afterAll(async () => {
 describe("agents-proxy MCP surface", () => {
   it("describes all configuration tools as result-aware without changing credential requirements", async () => {
     const list = await rpc("tools/list");
+    // No Dani reporting endpoint is configured: never advertise upstream report delivery.
+    expect(list.result.tools.some((tool: { name: string }) => tool.name === "report_bug")).toBe(false);
     for (const tool of new Set(proposalCases.map(entry => entry.tool))) {
       const description = list.result.tools.find((entry: { name: string }) => entry.name === tool).description;
       // Routines keep their own rule until Triggers v2; everything else applies at every level.
@@ -652,7 +654,6 @@ describe("agents-proxy MCP surface", () => {
       "fill_login",
       "decide",
       "extract",
-      "report_bug",
       "memory_update",
       "retry_thread",
       "memory_log",

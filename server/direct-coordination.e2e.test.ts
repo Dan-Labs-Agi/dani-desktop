@@ -117,7 +117,7 @@ it("marks a failed one-way send so restart recovery cannot duplicate its notice"
   // The failed send reports an incident to Clive, the lead's Chief; answering it must not send the task again.
   f.plan[f.chief.id] = { steps: [{ arguments: {
     bot_ids: [f.lead.id], message: "Try the task", thread: "new", reply: "none",
-  } }], reply: "Sent", byPrompt: [{ promptIncludes: "[Incident report from OpenMausBot", plan: { reply: "Noted the failed send" } }] };
+  } }], reply: "Sent", byPrompt: [{ promptIncludes: "[Incident report from Dani Bot", plan: { reply: "Noted the failed send" } }] };
   f.plan[f.lead.id] = { fail: true };
   await f.start();
   expect((await f.wait()).status).toBe("settled");
@@ -973,11 +973,11 @@ it("gives a teammate each request once, never also as a bare assistant line", ()
 }, { FAKE_CLAUDE_MODE: "dead-session" }), 60_000);
 
 /** The Engineering lead on a loopback OpenAI-compatible engine where `answer` replies to every chat request. */
-async function onLoopbackEngine(f: any, answer: (res: ServerResponse) => void): Promise<() => Promise<void>> {
+async function onLoopbackEngine(f: any, answer: (res: ServerResponse, body: { tools?: unknown[]; messages?: Array<{ role?: string }> }) => void): Promise<() => Promise<void>> {
   const llm = createServer(async (req, res) => {
-    for await (const _ of req) {}
+    let body = ""; for await (const chunk of req) body += chunk;
     if (req.url?.endsWith("/models")) { res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ data: [{ id: "loop-model" }] })); return; }
-    answer(res);
+    answer(res, JSON.parse(body || "{}"));
   });
   await new Promise<void>(resolve => llm.listen(0, "127.0.0.1", resolve));
   const port = (llm.address() as { port: number }).port;
@@ -988,9 +988,11 @@ async function onLoopbackEngine(f: any, answer: (res: ServerResponse) => void): 
 
 it("continues a teammate's step cap in place and stops it once it makes no progress", () => fixture(async f => {
   let calls = 0;
-  const close = await onLoopbackEngine(f, res => {
-    // Never a final answer: one more tool call, every round.
-    const call = { tool_calls: [{ index: 0, id: `call_${++calls}`, type: "function", function: { name: "missing_tool", arguments: "{}" } }] };
+  const close = await onLoopbackEngine(f, (res, body) => {
+    // Setup also probes the endpoint without a turn body; it must not count as a model step.
+    if (!body.messages) { res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "fixture ready" }, finish_reason: "stop" }] })); return; }
+    // Never a final answer: distinct failed tool calls reach the step cap, rather than the duplicate-error guard.
+    const call = { tool_calls: [{ index: 0, id: `call_${++calls}`, type: "function", function: { name: `missing_tool_${calls}`, arguments: "{}" } }] };
     res.writeHead(200, { "content-type": "text/event-stream" });
     res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: call, finish_reason: "tool_calls" }] })}\n\ndata: [DONE]\n\n`);
   });

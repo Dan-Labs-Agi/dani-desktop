@@ -47,3 +47,22 @@ test('setup waits for the awaited status, not a truthy async predicate',async()=
  }
 });
 test('Linux default smoke executable matches package name',()=>{const text=readFileSync(new URL('./smoke-linux-package.mjs',import.meta.url),'utf8');assert.match(text,/"linux-unpacked", "danibot"/);});
+test('broad CI retains every OS, deterministic eight-way coverage and the secondary suites',()=>{
+ const ci=readFileSync(new URL('../.github/workflows/ci.yml',import.meta.url),'utf8');
+ assert.match(ci,/os: \[macos-latest, ubuntu-latest, windows-latest\]/);
+ assert.match(ci,/shard: \[1, 2, 3, 4, 5, 6, 7, 8\]/);
+ assert.match(ci,/fail-fast: false/);
+ assert.match(ci,/timeout-minutes: 30/);
+ assert.match(ci,/pnpm exec vitest run --shard=\$\{\{ matrix.shard \}\}\/8/);
+ assert.match(ci,/pnpm broker:test && pnpm test:electron && pnpm test:packaged-server/);
+ assert.match(ci,/if: matrix.shard == 1/);
+ assert.doesNotMatch(ci,/--passWithNoTests|--exclude|continue-on-error: true\s*\n\s*run: pnpm exec vitest run --shard/);
+});
+
+test('aggregate CI rejects missing, failed, cancelled or skipped mandatory jobs',()=>{
+ const ci=readFileSync(new URL('../.github/workflows/ci.yml',import.meta.url),'utf8');
+ assert.match(ci,/name: CI\n    if: always\(\)/);
+ assert.match(ci,/needs: \[test, control-plane, package-linux, detect-optional-jobs, sdd, ios, android\]/);
+ assert.match(ci,/jobs\[name\]\?\.result !== "success"/);
+ assert.match(ci,/outputs\[name\] === "true" \? "success" : "skipped"/);
+});
