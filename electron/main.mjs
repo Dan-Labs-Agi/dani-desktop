@@ -1173,6 +1173,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
   proc.stdout?.on("data", (d) => {
     listening.hear(String(d));
     slog(`[out] ${String(d).trimEnd()}`);
+    if (process.env.DANI_NATIVE_VERIFY === "1" && String(d).includes("DANI_NATIVE_SERVER")) console.log(String(d));
   });
   proc.stderr?.on("data", (d) => slog(`[err] ${String(d).trimEnd()}`));
   proc.on("message", (message) => {

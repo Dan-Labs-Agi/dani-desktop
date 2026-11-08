@@ -645,6 +645,7 @@ const WEBHOOK_PORT = Number(process.env.OMB_WEBHOOK_PORT || PORT + 1);
 const WEBHOOK_PUBLIC_URL = process.env.OMB_WEBHOOK_PUBLIC_URL || undefined;
 const STATIC_DIR = process.env.OMB_STATIC_DIR || null;
 
+if (process.env.DANI_NATIVE_VERIFY === "1") console.log("DANI_NATIVE_SERVER", JSON.stringify({ dataDir: DATA_DIR, requestedDaniDir: process.env.DANI_DATA_DIR, requestedLegacyDir: process.env.OMB_DATA_DIR }));
 ensureDirs();
 // Acquire before any durable identity, sessions, config or Store state is loaded.
 const dataDirLease = acquireDataDirLeaseForProcess(DATA_DIR);

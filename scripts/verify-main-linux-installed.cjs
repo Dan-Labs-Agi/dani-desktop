@@ -40,7 +40,7 @@ function reportOwnedDiagnostics(){
 function stop(){if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
   launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe'],detached:true});
-  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE'))console.log(text)});
+  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE')||text.includes('DANI_NATIVE_SERVER'))console.log(text)});
   launched.on('error',error=>{launchOutput+='\n'+error.message});
   for(let i=0;i<120;i++) {
     try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
