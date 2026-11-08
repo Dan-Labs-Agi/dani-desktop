@@ -179,6 +179,7 @@ install_browser_apparmor_profile() {
 
 CUA_ROOT=$APP_ROOT/resources/cua-linux-x64
 repair_directory "$APP_ROOT"
+repair_executable "$APP_ROOT/danibot"
 repair_directory "$APP_ROOT/resources"
 repair_directory "$CUA_ROOT"
 repair_executable "$CUA_ROOT/cua-driver"

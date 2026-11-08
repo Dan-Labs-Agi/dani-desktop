@@ -14,6 +14,7 @@ const temporaryDirectories = [];
 function fixture() {
   const appRoot = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "omb-deb-upgrade-"));
   temporaryDirectories.push(appRoot);
+  fs.writeFileSync(path.join(appRoot, "danibot"), "fixture", { mode: 0o755 });
   const resources = path.join(appRoot, "resources");
   const cuaRoot = path.join(resources, "cua-linux-x64");
   fs.mkdirSync(cuaRoot, { recursive: true, mode: 0o775 });
@@ -70,9 +71,9 @@ afterEach(() => {
 });
 
 describe("Linux DEB sandbox policy", () => {
-  it("allows user namespaces only for the exact installed browser executable", () => {
+  it("allows user namespaces only for the exact installed desktop and browser executables", () => {
     const policy = fs.readFileSync(browserPolicy, "utf8").replace(/^\s*#.*$/gm, "");
-    expect(policy).toContain('profile danibot-browser "/opt/Dani Bot/resources/browser-engine/chrome/chrome-headless-shell-linux64/chrome-headless-shell" flags=(unconfined)');
+    expect(policy).toContain('profile danibot-browser "/opt/Dani Bot/{danibot,resources/browser-engine/chrome/chrome-headless-shell-linux64/chrome-headless-shell}" flags=(unconfined)');
     expect(policy).toContain("userns,");
     expect(policy).not.toMatch(/\*|@\{HOME\}|\/home\/|\/tmp\//);
   });
@@ -346,4 +347,13 @@ it("seeds the current Electron package-name profile in Linux lifecycle smoke", (
   const text = fs.readFileSync(path.join(root, "scripts/smoke-linux-package.mjs"), "utf8");
   expect(text).toContain('["danibot", "openmausbot", "OpenMausBot", "Dani Bot"]');
   expect(text).toContain('schemaVersion: 2, linuxLocalControlEnabled: true');
+});
+
+it("rejects a redirected packaged desktop before allowing its namespace policy", () => {
+ const {appRoot}=fixture();
+ fs.unlinkSync(path.join(appRoot,"danibot"));
+ fs.symlinkSync("/bin/true",path.join(appRoot,"danibot"));
+ const result=runHook(appRoot);
+ expect(result.status).not.toBe(0);
+ expect(result.stderr).toContain("executable is missing or unsafe");
 });
