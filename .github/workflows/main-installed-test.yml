@@ -1,5 +1,7 @@
 name: Main Windows installed validation
 on:
+  pull_request:
+    branches: [main, prod]
   push:
     branches: [fix/main-installed-release-gate-20261108]
   workflow_dispatch:
@@ -10,6 +12,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     env:
+      DANI_VERIFY_FREE_INSTALL: '1'
       OMB_AI_CHECKS: '0'
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       NODE_OPTIONS: --max-old-space-size=6144
@@ -46,7 +49,13 @@ jobs:
           package-manager-cache: false
       - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/release-pipeline.node-test.mjs
       - run: pnpm exec vitest run server/dani-free-runtime-lifecycle.test.ts server/dani-free-runtime.test.ts server/drivers/dani-free.test.ts server/dani-free-setup.test.ts server/engine-standalone.test.ts server/routes/instances.test.ts server/tested-ai.test.ts
+      - name: Require an unused release version before merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: node scripts/release-staging.mjs check-version v$(node -p "require('./package.json').version") ${{ github.sha }}
       - run: pnpm exec vite build
       - run: node scripts/bundle-server.mjs
       # No artifact upload, cache, Docker, model call or publication.
