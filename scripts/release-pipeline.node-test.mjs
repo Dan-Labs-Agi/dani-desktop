@@ -25,3 +25,12 @@ test('native install checks exercise the Dani Free button without starting a mod
 
 test('Mac and Windows zip basenames cannot collide in release staging',()=>{const builder=readFileSync(new URL('../electron-builder.yml',import.meta.url),'utf8');assert.match(builder,/mac:\n  artifactName: DaniBot-\$\{version\}-mac-\$\{arch\}/);});
 test('approval is off until the owner decides the release audience and wording',()=>{const policy=JSON.parse(readFileSync(new URL('./release-policy.json',import.meta.url),'utf8'));assert.equal(policy.publicationApproved,false);assert.equal(policy.prerelease,true);});
+
+test('installer autolaunch inherits the disposable product data profile',()=>{
+ for(const file of ['verify-main-installed.cjs','verify-main-mac-installed.cjs','verify-main-linux-installed.cjs']){
+ const text=readFileSync(new URL('./'+file,import.meta.url),'utf8');
+ assert.ok(text.indexOf('process.env.DANI_DATA_DIR=data;')<text.indexOf('const installer'));
+ assert.ok(text.indexOf('process.env.OMB_DATA_DIR=data;')<text.indexOf('const installer'));
+ assert.match(text,/setup reported installed without config in the explicitly isolated profile/);
+ }
+});
