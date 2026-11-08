@@ -17,9 +17,10 @@ fs.mkdirSync(data, {recursive:true});
 // Installers may auto-launch the app. Give that first process the same disposable profile.
 process.env.DANI_DATA_DIR=data;
 process.env.OMB_DATA_DIR=data;
-process.env.HOME=path.join(temp,'home');
-process.env.USERPROFILE=process.env.HOME;
-fs.mkdirSync(process.env.HOME,{recursive:true});
+// Windows resolves its profile through OS APIs too; isolate product/app data, not USERPROFILE.
+if(process.platform!=='win32'){process.env.HOME=path.join(temp,'home');fs.mkdirSync(process.env.HOME,{recursive:true});}
+fs.mkdirSync(process.env.APPDATA,{recursive:true});
+fs.mkdirSync(process.env.LOCALAPPDATA,{recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
 fs.writeFileSync(marker, 'preserve synthetic customer data');
 const installer=path.resolve('release',fs.readdirSync('release').find(f=>f.endsWith('-'+(process.arch==='arm64'?'arm64':'x64')+'.dmg'))||'missing.dmg');
@@ -35,10 +36,20 @@ result=spawnSync('codesign',['--verify','--deep','--strict',bundle],{encoding:'u
 result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes(process.arch==='arm64'?'arm64':'x86_64'));
 assert.ok(fs.existsSync(path.join(bundle,'Contents/Resources/server/index.js')));
 let launched;
+let launchOutput='';
+function reportOwnedDiagnostics(){
+ console.error('DANI_LAUNCH_OUTPUT',launchOutput.slice(-12000));
+ for(const file of fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:server\.log|desktop-crashes\.log)$/.test(p))){
+  try{console.error('DANI_OWNED_LOG',file,fs.readFileSync(path.join(temp,file),'utf8').slice(-16000));}catch{}
+ }
+ console.error('DANI_CHILD_STATE',JSON.stringify({exitCode:launched?.exitCode,signalCode:launched?.signalCode}));
+}
 const graphicsFailures=[];
 function stop() {if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
-  launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:'ignore',detached:true});
+  launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe'],detached:true});
+  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{launchOutput=(launchOutput+data.toString()).slice(-20000)});
+  launched.on('error',error=>{launchOutput+='\n'+error.message});
   for(let i=0;i<120;i++) {
     try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
       for(let j=0;j<90;j++) {
@@ -116,4 +127,4 @@ async function inspect(page,label) {
  console.log('MAIN_INSTALLED_RELAUNCH_PASS');await ui.browser.close();
  assert.equal(graphicsFailures.length,0,'installed avatar rendering incomplete: '+JSON.stringify(graphicsFailures));
  console.log('MAIN_INSTALLED_GRAPHICS_PASS');
-})().catch(e=>{console.error(e.stack);process.exitCode=1}).finally(()=>stop());
+})().catch(e=>{console.error(e.stack);reportOwnedDiagnostics();process.exitCode=1}).finally(()=>stop());
