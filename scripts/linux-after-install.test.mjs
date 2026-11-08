@@ -324,13 +324,13 @@ describe.skipIf(process.platform !== "linux")("Linux DEB upgrade hook", () => {
   });
 
   it("rejects a test override outside the private temporary root", () => {
-    const result = runHook(root);
+    const result = runHook(path.parse(root).root);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("must stay under /tmp");
   });
 
   it("resolves the test root before applying the temporary-directory boundary", () => {
-    const escaped = path.join(fs.realpathSync(os.tmpdir()), "..", path.relative("/", root));
+    const escaped = path.join("/tmp", "..");
     const result = runHook(escaped);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("must stay under /tmp");
@@ -349,7 +349,7 @@ it("seeds the current Electron package-name profile in Linux lifecycle smoke", (
   expect(text).toContain('schemaVersion: 2, linuxLocalControlEnabled: true');
 });
 
-it("rejects a redirected packaged desktop before allowing its namespace policy", () => {
+it.skipIf(process.platform !== "linux")("rejects a redirected packaged desktop before allowing its namespace policy", () => {
  const {appRoot}=fixture();
  fs.unlinkSync(path.join(appRoot,"danibot"));
  fs.symlinkSync("/bin/true",path.join(appRoot,"danibot"));

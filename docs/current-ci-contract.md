@@ -7,7 +7,11 @@ contract. It does not change triggers, start runs, or authorize a release.
 ## Adopted automation
 
 - Pull requests, pushes to `main` and `prod`, and manual runs use the portable
-  macOS/Linux/Windows typecheck and test matrix. Required checks fail the job.
+  macOS/Linux/Windows typecheck and test matrix. Every OS runs all Vitest files
+  through eight deterministic shards, with no host-only filter. Required
+  checks fail the job. Broker, Electron and packaged-server secondary suites
+  run once per OS, in shard 1. The blocking `CI` aggregate requires every
+  shard and each applicable optional job to pass.
 - Linux validates locales, builds the full product, packages it, and checks
   installation, in-place upgrade and lifecycle behavior.
 - Optional iOS, Android and SDD jobs run only when checkout contains their
@@ -16,19 +20,24 @@ contract. It does not change triggers, start runs, or authorize a release.
 - Typechecking uses a 7 GB heap and the test job has a 30-minute limit,
   matching the November 3 fixes. A timeout is a failure, not test completion.
 - The known Windows Electron sandbox canary alone is advisory. It remains
-  separate from required tests and does not disable Chromium's sandbox.
+  separate from required tests, runs once on Windows shard 1, and does not
+  disable Chromium's sandbox.
 - CI is read-only. Existing automatic CI can use caches and failure artifacts.
   The three `verify-main-*` workflows are different: manual, read-only,
   no artifact uploads or caches, with disposable native installation checks.
-- The release workflow still builds packages on branch pushes. Its assembler
-  can create a draft only for a manual or version-tag run, and refuses to
-  replace a published release. This is not a CI-success or shipping guarantee.
+- The release workflow builds packages on main/prod pushes and manual or
+  version-tag runs. Staging is private and tied to the exact source commit;
+  it refuses an existing published release or different draft source.
+  Publication requires every native build and exact-download install gate
+  plus the owner-approved audience and notes policy. That approval remains
+  off. This is not a CI-success or shipping guarantee.
 
 ## Not adopted
 
 The imported upstream `ci-scope` matrix, Boat routing, nightly lane,
-`ci-stop-closed.yml`, aggregate `CI` gate and upstream release-CI orchestration
-are not wired into this repository's workflow. Their helper modules may still
+`ci-stop-closed.yml` and upstream release-CI orchestration are not wired into
+this repository's workflow. The current `CI` aggregate is a local all-pass
+gate for the retained portable matrix, not the upstream selective graph. Their helper modules may still
 exist in the tree. Tests must not assert that these jobs run when they do not.
 Restoring them would be an automation change, not a test repair.
 

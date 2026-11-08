@@ -9,12 +9,14 @@ type Job = { steps: Step[]; needs?: string; if?: string; permissions?: unknown; 
 const load = (name: string) => parse(readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8"));
 const workflow = load("ci.yml");
 const jobs = workflow.jobs as Record<string, Job>;
+const SHARD_TEST = "pnpm exec vitest run --shard=${{ matrix.shard }}/8";
+const SECONDARY_TESTS = "pnpm broker:test && pnpm test:electron && pnpm test:packaged-server";
 const commands = (job: Job) => job.steps.flatMap(step => step.run ? [step.run] : []);
 
 /** Required checks cannot be made advisory, conditional or omitted. */
 function requiredChecks(job: Job) {
   if (job.if || job["continue-on-error"]) return false;
-  return ["pnpm typecheck", "pnpm test", "pnpm check:electron"].every(command => {
+  return ["pnpm typecheck", SHARD_TEST, "pnpm check:electron"].every(command => {
     const step = job.steps.find(step => step.run === command);
     return step && !step.if && !step["continue-on-error"];
   });
@@ -36,7 +38,7 @@ describe("adopted portable CI contract", () => {
   });
   it.each(["omitted", "conditional", "advisory", "job-advisory"])("rejects %s required checks", mode => {
     const job: Job = structuredClone(jobs.test);
-    const step = job.steps.find(step => step.run === "pnpm test")!;
+    const step = job.steps.find(step => step.run === SHARD_TEST)!;
     if (mode === "omitted") job.steps = job.steps.filter(candidate => candidate !== step);
     if (mode === "conditional") step.if = "false";
     if (mode === "advisory") step["continue-on-error"] = true;
@@ -46,13 +48,21 @@ describe("adopted portable CI contract", () => {
   it("keeps the known Windows Electron canary separate from required tests and sandboxed", () => {
     const canary = jobs.test.steps.filter(step => step["continue-on-error"]);
     expect(canary).toHaveLength(1);
-    expect(canary[0]).toMatchObject({ if: "matrix.os == 'windows-latest'", run: "pnpm exec vitest run electron/browser-closed-shadow.electron.test.mjs", env: { OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: "0" } });
+    expect(canary[0]).toMatchObject({ if: "matrix.os == 'windows-latest' && matrix.shard == 1", run: "pnpm exec vitest run electron/browser-closed-shadow.electron.test.mjs", env: { OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: "0" } });
     expect(JSON.stringify(jobs.test)).not.toMatch(/--no-sandbox|disable-gpu-sandbox|disable-setuid-sandbox/);
-    expect(jobs.test.steps.find(step => step.run === "pnpm test")?.env?.OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE).toBe("${{ matrix.os == 'windows-latest' && '1' || '0' }}");
+    expect(jobs.test.steps.find(step => step.run === SHARD_TEST)?.env?.OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE).toBe("${{ matrix.os == 'windows-latest' && '1' || '0' }}");
   });
   it("validates translation catalogs and builds the full product on Linux", () => {
     expect(jobs.test.steps).toContainEqual(expect.objectContaining({ run: "pnpm i18n:check", if: "matrix.os == 'ubuntu-latest'" }));
-    expect(jobs.test.steps).toContainEqual(expect.objectContaining({ run: "pnpm build", if: "matrix.os == 'ubuntu-latest'" }));
+    expect(jobs.test.steps).toContainEqual(expect.objectContaining({ run: "pnpm build", if: "matrix.os == 'ubuntu-latest' && matrix.shard == 1" }));
+  });
+  it("retains every file through eight deterministic shards and once-per-OS secondary stages", () => {
+    expect((jobs.test.strategy?.matrix as { shard?: number[] } | undefined)?.shard).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    const secondary = jobs.test.steps.find(step => step.run === SECONDARY_TESTS);
+    expect(secondary).toMatchObject({ if: "matrix.shard == 1" });
+    expect(secondary?.["continue-on-error"]).toBeUndefined();
+    expect(jobs.ci.needs).toContain("test");
+    expect(jobs.ci.if).toBe("always()");
   });
   it("keeps package install, upgrade and lifecycle checks blocking", () => {
     const job = jobs["package-linux"];
@@ -103,15 +113,32 @@ describe("adopted portable CI contract", () => {
       expect(step["continue-on-error"]).toBeUndefined();
     }
   });
-  it("does not create drafts on ordinary branch pushes and refuses published replacement", () => {
+  it("keeps native phone interoperability focused on the existing Intel Mac lane", () => {
+    const native = load("verify-main-native.yml");
+    expect(native.permissions).toEqual({ contents: "read" });
+    expect(native.jobs.startup.strategy.matrix.os).toEqual(["windows-latest", "macos-15-intel"]);
+    const step = native.jobs.startup.steps.find((step: Step) => step.name === "Native CryptoKit credential interoperability");
+    expect(step).toEqual({ name: "Native CryptoKit credential interoperability", if: "matrix.os == 'macos-15-intel'",
+      run: "pnpm exec vitest run server/phone-secret.test.ts server/phone-secret-interop.test.ts" });
+  });
+  it("stages only private exact-source releases and keeps owner approval plus every native gate before publishing", () => {
     const release = load("release.yml");
-    const assembler = release.jobs.release;
-    expect(assembler.if).toBe("(github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && needs.prepare.outputs.published != 'true'");
-    const shell = commands(assembler).join("\n");
-    expect(shell).toContain('--draft');
-    expect(shell).toContain('test "$is_draft" = true');
-    expect(shell).toContain('refusing to overwrite it');
+    const publish = release.jobs.publish;
+    expect(release.on.pull_request).toBeUndefined();
+    expect(release.on.push.branches).toEqual(["main", "prod"]);
     expect(release.permissions).toEqual({ contents: "read" });
+    expect(publish.if).toBe("github.event_name != 'pull_request'");
+    expect(publish.needs).toEqual(["prepare", "linux", "windows", "macos", "download_check", "checks"]);
+    expect(publish["continue-on-error"]).toBeUndefined();
+    const staging = readFileSync(new URL("./release-staging.mjs", import.meta.url), "utf8");
+    expect(staging).toContain("'draft=true'");
+    expect(staging).toContain("!old.draft||old.target_commitish!==sha");
+    expect(staging).toContain("!release.isDraft||release.targetCommitish!==sha");
+    const publishing = readFileSync(new URL("./release-publish.mjs", import.meta.url), "utf8");
+    expect(publishing).toContain("policy.publicationApproved!==true");
+    expect(publishing).toContain("!release.isDraft||release.targetCommitish!==sha");
+    expect(JSON.parse(readFileSync(new URL("./release-policy.json", import.meta.url), "utf8")).publicationApproved).toBe(false);
+    expect(commands(publish)).toContain("node scripts/release-publish.mjs v${{ needs.prepare.outputs.version }} ${{ needs.prepare.outputs.sha }}");
   });
   it("checks delegated approval modes on the receipt's work thread, not the selected sibling", () => {
     const smoke = readFileSync(new URL("./smoke-approval-modes.cjs", import.meta.url), "utf8");

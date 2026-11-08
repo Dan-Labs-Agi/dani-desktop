@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
+import { AGENT_BROWSER_VERSION } from "./browser-engine-release.ts";
 import { openSse, type SseRecorder } from "./testing/sse.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
@@ -52,7 +53,7 @@ describe.skipIf(process.platform === "win32")("Codex browser turns with a minima
     browser = join(bin, "agent-browser");
     // The fake provider records MCP configuration without starting a browser.
     // Preparation checks that the acknowledged close really removed it.
-    writeFileSync(browser, "#!/bin/sh\nif [ \"$1\" = session ]; then printf '%s\\n' '{\"success\":true,\"data\":{\"sessions\":[]}}'; fi\nexit 0\n", { mode: 0o755 });
+    writeFileSync(browser, `#!/bin/sh\nif [ "$1" = --version ]; then echo "agent-browser ${AGENT_BROWSER_VERSION}"; exit 0; fi\nif [ "$1" = session ]; then printf '%s\\n' '{"success":true,"data":{"sessions":[]}}'; fi\nexit 0\n`, { mode: 0o755 });
     writeFileSync(join(data, "config.json"), JSON.stringify({
       features: { browser: true },
       instances: Object.fromEntries(["default", "absolute"].map((id) => [id, {
@@ -66,7 +67,7 @@ describe.skipIf(process.platform === "win32")("Codex browser turns with a minima
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        PATH: FINDER_PATH, HOME: home, OMB_DATA_DIR: data, OMB_PORT: String(port),
+        PATH: FINDER_PATH, HOME: home, DANI_DATA_DIR: data, OMB_DATA_DIR: data, OMB_PORT: String(port),
         OMB_AGENT_BROWSER_PATH: browser, VITEST: "1",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -74,12 +75,12 @@ describe.skipIf(process.platform === "win32")("Codex browser turns with a minima
     child.stderr!.on("data", (chunk) => { stderr += chunk; });
     await new Promise<void>((resolve, reject) => {
       let output = "";
-      const timer = setTimeout(() => reject(new Error(`Fixture did not listen: ${stderr}`)), 25_000);
+      const timer = setTimeout(() => reject(new Error(`Fixture did not listen: stdout=${output}; stderr=${stderr}`)), 25_000);
       child.once("error", (error) => { clearTimeout(timer); reject(error); });
       child.once("exit", () => { clearTimeout(timer); reject(new Error(`Fixture exited: ${stderr}`)); });
       child.stdout!.on("data", (chunk) => {
         output += chunk;
-        if (output.includes(`openmausbot server on ${base}`)) { clearTimeout(timer); resolve(); }
+        if (output.includes(`danibot server on ${base}`)) { clearTimeout(timer); resolve(); }
       });
     });
     events = await openSse(`${base}/api/events`);

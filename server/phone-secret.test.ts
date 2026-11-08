@@ -1,4 +1,5 @@
 import { createHash, webcrypto } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import {
   Aes256Gcm,
@@ -70,7 +71,7 @@ async function seal(
 }
 
 describe("PhoneSecretBridge", () => {
-  it("opens an envelope produced by Apple's CryptoKit HPKE implementation", async () => {
+  it("opens the existing published Dani vector also opened by CryptoKit", async () => {
     let bridge!: PhoneSecretBridge;
     const send = vi.fn((message: { requestId: string; value: string }) => {
       expect(message.value).toBe("swift-to-node-secret");
@@ -104,8 +105,8 @@ describe("PhoneSecretBridge", () => {
       messageId: "message-1",
       target: "ttsKey",
       requestKey: "credential-request-1",
-      encapsulatedKey: "BDhy_5hMSvVIy3zGSmBwBECAedYBAwwFLvbWoXCGTJyLRH1cItoQXo9NBcEG0cTQV_VwaEf5judXcsJlh2jfW7Q",
-      ciphertext: "CjM0CnBT8NYd_BHAXJRKFrbYrSw6OgMIlJLAKs8VUPSSCsa2",
+      encapsulatedKey: "BOPacYsu-__TCQ9Cl1FRwYQpyAcfFJGDNtHJKAX9iy-_Mj_WFEsqP5tJKIY1CUqgbX5FcAB_zH8fmyOMoZii1eE",
+      ciphertext: "RxDBCvPXHqpTnRc7N_OIwg-XQ5nClPouT1rwKRvuh2USFVO9",
     })).resolves.toBeUndefined();
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -152,6 +153,23 @@ describe("PhoneSecretBridge", () => {
       message: "The encrypted credential could not be verified",
     });
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("does not silently accept upstream or hybrid candidate wire domains", async () => {
+    const material = await keyMaterial();
+    const bridge = new PhoneSecretBridge(() => { throw new Error("unexpected credential save"); });
+    bridge.receive(material.message);
+    const context = baseContext(material.keyId);
+    const aad = new TextDecoder().decode(phoneSecretAAD(context));
+    for (const info of ["OpenMausBot phone credential v1", PHONE_SECRET_INFO]) {
+      const encrypted = await suite.seal({ recipientPublicKey: material.publicKey, info: new TextEncoder().encode(info) },
+        new TextEncoder().encode("synthetic-wire-mismatch"),
+        new TextEncoder().encode(aad.replace("danibot-phone-credential-v1", "openmausbot-phone-credential-v1")));
+      await expect(bridge.open({ ...context,
+        encapsulatedKey: Buffer.from(encrypted.enc).toString("base64url"),
+        ciphertext: Buffer.from(encrypted.ct).toString("base64url"),
+      })).rejects.toThrow("could not be verified");
+    }
   });
 
   it("requires the exact pinned desktop key", async () => {
@@ -240,9 +258,22 @@ describe("PhoneSecretBridge", () => {
 });
 
 describe("phoneSecretAAD", () => {
+  it("matches the already published Swift wire domain and pinned cross-language vector", () => {
+    const swift = readFileSync(new URL("../ios/Sources/CompanionCore/PhoneSecret.swift", import.meta.url), "utf8");
+    const swiftTests = readFileSync(new URL("../ios/Tests/CompanionCoreTests/PhoneSecretTests.swift", import.meta.url), "utf8");
+    expect(PHONE_SECRET_INFO).toBe("Dani Bot phone credential v1");
+    expect(swift).toContain(`public static let info = "${PHONE_SECRET_INFO}"`);
+    expect(swift).toContain('"danibot-phone-credential-v1"');
+    const nodeTests = readFileSync(new URL("./phone-secret.test.ts", import.meta.url), "utf8");
+    for (const field of ["encapsulatedKey", "ciphertext"]) {
+      const value = nodeTests.match(new RegExp(`${field}: "([^"\\n]+)"`))![1];
+      expect(swiftTests).toContain(`Data(base64URLEncoded: "${value}")`);
+    }
+  });
+
   it("has the exact stable cross-platform serialization", () => {
     expect(new TextDecoder().decode(phoneSecretAAD(baseContext("AAAAAAAAAAAAAAAAAAAAAA")))).toBe([
-      "openmausbot-phone-credential-v1",
+      "danibot-phone-credential-v1",
       "AAAAAAAAAAAAAAAAAAAAAA",
       "paired-device-1",
       "bot-1",
@@ -274,7 +305,7 @@ describe("phoneSecretAAD", () => {
   it("refuses an AI provider key from a phone, which only the computer's own app saves where Settings does", () => {
     const context = { deviceId: "paired-device-1", target: "anthropicApiKey", requestKey: "credential-request-1" };
     expect(() => assertPhoneSecretRequestMatches(context, "paired-device-1", { target: "anthropicApiKey", requestKey: "credential-request-1" }))
-      .toThrow("Paste this key in OpenMausBot on your computer, or in My Cloud: a phone cannot save it yet.");
+      .toThrow("Paste this key in Dani Bot on your computer, or in My Cloud: a phone cannot save it yet.");
     for (const target of ["composioApiKey", "customSecret"]) {
       expect(() => assertPhoneSecretRequestMatches({ ...context, target }, "paired-device-1", { target, requestKey: "credential-request-1" })).not.toThrow();
     }
@@ -284,7 +315,7 @@ describe("phoneSecretAAD", () => {
   it("refuses a 1Password token from a phone, saying where to paste it", () => {
     const context = { ...baseContext("AAAAAAAAAAAAAAAAAAAAAA"), target: "onePasswordToken" };
     expect(() => assertPhoneSecretRequestMatches(context, "paired-device-1", { target: "onePasswordToken", requestKey: "credential-request-1" }))
-      .toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/^Paste the 1Password token in OpenMausBot on your computer, or in My Cloud/u) }));
+      .toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/^Paste the 1Password token in Dani Bot on your computer, or in My Cloud/u) }));
   });
 
   it("gives an exact encrypted retry one stable desktop operation id", async () => {

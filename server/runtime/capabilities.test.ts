@@ -29,6 +29,7 @@ const EXPECTED: Record<string, EngineCapabilities> = {
   copilotAgent: bare,
   customAcp: bare,
   "openai-compat": chat,
+  "dani-free": chat,
   grok: chat,
   minimax: chat,
   mistral: chat,
@@ -51,6 +52,13 @@ describe("engineCapabilities", () => {
 
   it.each(Object.entries(EXPECTED))("%s", (kind, expected) => {
     expect(engineCapabilities(kind)).toEqual(expected);
+  });
+
+  it("classifies Dani Free as the bounded transcript-replaying chat runtime it dispatches", () => {
+    expect(BUILT_IN_DRIVERS.find(driver => driver.driverKind === "dani-free")).toBeDefined();
+    expect(engineCapabilities("dani-free")).toEqual(chat);
+    expect(engineCapabilities("dani-free").stepCap).toBe(64);
+    expect(replaysTranscriptNatively("dani-free")).toBe(true);
   });
 
   it("answers conservatively for an unknown or absent engine, Full aside: every engine runs it", () => {
@@ -89,7 +97,7 @@ describe("replaysTranscriptNatively", () => {
   const chatKinds = sources(root).flatMap((file) => {
     const text = readFileSync(file, "utf8");
     if (!text.includes("createOpenAIChatRuntime(")) return [];
-    const kind = /driverKind: "([^"]+)"/.exec(text)?.[1] ?? /DRIVER_KIND = "([^"]+)"/.exec(text)?.[1];
+    const kind = /driverKind\s*:\s*["']([^"']+)["']/.exec(text)?.[1] ?? /DRIVER_KIND = "([^"]+)"/.exec(text)?.[1];
     expect(kind, `${file} calls createOpenAIChatRuntime but declares no readable driverKind`).toBeDefined();
     return [kind!];
   });
