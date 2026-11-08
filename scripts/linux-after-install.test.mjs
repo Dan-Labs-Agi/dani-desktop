@@ -335,3 +335,15 @@ describe.skipIf(process.platform !== "linux")("Linux DEB upgrade hook", () => {
     expect(result.stderr).toContain("must stay under /tmp");
   });
 });
+
+it("quotes the installed path when removing the alternatives entry", () => {
+  const text = fs.readFileSync(removeHook, "utf8");
+  expect(text).toContain('update-alternatives --remove danibot "/opt/Dani Bot/danibot"');
+  expect(text).toContain('= "/opt/Dani Bot/danibot" ]');
+});
+
+it("seeds the current Electron package-name profile in Linux lifecycle smoke", () => {
+  const text = fs.readFileSync(path.join(root, "scripts/smoke-linux-package.mjs"), "utf8");
+  expect(text).toContain('["danibot", "openmausbot", "OpenMausBot", "Dani Bot"]');
+  expect(text).toContain('schemaVersion: 2, linuxLocalControlEnabled: true');
+});

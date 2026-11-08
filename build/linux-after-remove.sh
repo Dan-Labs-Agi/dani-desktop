@@ -31,8 +31,8 @@ fi
 # remove an unrelated file that now happens to use the same command name.
 if [ "$TEST_MODE" -eq 0 ]; then
   if command -v update-alternatives >/dev/null 2>&1; then
-    update-alternatives --remove danibot /opt/Dani Bot/danibot
-  elif [ -L /usr/bin/danibot ] && [ "$(readlink /usr/bin/danibot)" = /opt/Dani Bot/danibot ]; then
+    update-alternatives --remove danibot "/opt/Dani Bot/danibot"
+  elif [ -L /usr/bin/danibot ] && [ "$(readlink /usr/bin/danibot)" = "/opt/Dani Bot/danibot" ]; then
     rm -- /usr/bin/danibot
   fi
 fi
