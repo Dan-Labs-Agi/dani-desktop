@@ -4,7 +4,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: private-intel-candidate-dd74946
+  group: private-intel-candidate-f36ad5a
   cancel-in-progress: false
 jobs:
   build_install_download:
@@ -19,13 +19,13 @@ jobs:
       DANIBOT_CUA_ARCHES: x64
       DANIBOT_CUA_ARCHES_PARTIAL: '1'
       NODE_OPTIONS: --max-old-space-size=7168
-      CANDIDATE_SOURCE: dd74946d36d4138880ae474ea515db4b9022373a
+      CANDIDATE_SOURCE: f36ad5a776917c38c455e6beb1d285af3715e002
       CANDIDATE_TAG: v0.1.139-intel-preview.1
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: dd74946d36d4138880ae474ea515db4b9022373a
+          ref: f36ad5a776917c38c455e6beb1d285af3715e002
           persist-credentials: false
       - name: Verify exact source and unused candidate tag
         env:

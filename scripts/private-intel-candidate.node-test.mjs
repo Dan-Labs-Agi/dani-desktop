@@ -5,7 +5,7 @@ const file=readFileSync(new URL('../.github/workflows/tested-preview-download.ym
 test('private Intel candidate is opt-in, branch guarded and source pinned',()=>{
  assert.match(file,/workflow_dispatch:/);
  assert.match(file,/github.ref == 'refs\/heads\/fix\/intel-private-delivery-20261109'/);
- assert.match(file,/ref: dd74946d36d4138880ae474ea515db4b9022373a/);
+ assert.match(file,/ref: f36ad5a776917c38c455e6beb1d285af3715e002/);
  assert.match(file,/test "\$\(git rev-parse HEAD\)" = "\$CANDIDATE_SOURCE"/);
  assert.match(file,/persist-credentials: false/);
  assert.match(file,/cancel-in-progress: false/);
