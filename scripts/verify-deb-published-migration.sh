@@ -23,11 +23,27 @@ node_copy=$2
 verifier=$3
 release=$4
 mount -t tmpfs -o mode=0755,uid=0,gid=0 tmpfs /opt
-trap 'umount /opt' EXIT
+cleanup_private_opt() {
+  status=$?
+  trap - EXIT
+  # The verifier kills its own detached Electron group on exit. Give those
+  # processes time to release executable mappings before unmounting.
+  for attempt in $(seq 1 20); do
+    if umount /opt 2>"$RUNNER_TEMP/dani-private-opt-unmount.log"; then
+      printf 'DANI_PRIVATE_OPT_UNMOUNT_PASS attempt=%s\n' "$attempt"
+      exit "$status"
+    fi
+    sleep 0.5
+  done
+  cat "$RUNNER_TEMP/dani-private-opt-unmount.log" >&2
+  echo 'Private /opt cleanup failed; validation remains failed.' >&2
+  exit 32
+}
+trap cleanup_private_opt EXIT
 printf 'DANI_PRIVATE_OPT '
 stat -c '%U:%G:%a' /opt
 [ "$(stat -c '%U:%G:%a' /opt)" = root:root:755 ]
-candidate=$(find "$release" -maxdepth 1 -name '*-amd64.deb' -type f)
+candidate=$(find "$release" -maxdepth 1 -name 'DaniBot-*-amd64.deb' -type f)
 [ -n "$candidate" ]
 [ "$(printf '%s\n' "$candidate" | wc -l)" -eq 1 ]
 export DEBIAN_FRONTEND=noninteractive

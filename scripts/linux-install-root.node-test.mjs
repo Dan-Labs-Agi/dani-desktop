@@ -46,3 +46,15 @@ test('DEB extraction and migration desktop assertions follow the real builder pa
  assert.ok(!verifier.includes('path.join(extracted, "opt", "Dani Bot")'));
  assert.ok(read('scripts/verify-deb-published-migration.cjs').includes('/usr/share/applications/com.danibot.app.desktop'));
 });
+
+test('private DEB cleanup waits only for its own verifier and never ignores a busy mount',()=>{
+ for(const name of ['scripts/verify-deb-clean-opt.sh','scripts/verify-deb-published-migration.sh']){
+  const s=readFileSync(new URL('../'+name,import.meta.url),'utf8');
+  assert.match(s,/for attempt in \$\(seq 1 20\)/);
+  assert.match(s,/DANI_PRIVATE_OPT_UNMOUNT_PASS/);
+  assert.match(s,/exit 32/);
+  assert.doesNotMatch(s,/umount -[fl]|pkill|killall/);
+ }
+ const migration=readFileSync(new URL('./verify-deb-published-migration.sh',import.meta.url),'utf8');
+ assert.ok(migration.includes("-name 'DaniBot-*-amd64.deb'"));
+});
