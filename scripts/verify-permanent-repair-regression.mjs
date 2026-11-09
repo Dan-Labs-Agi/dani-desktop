@@ -4,6 +4,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
 export const files = [
+  'src/components/whats-new/TeamPicture.test.ts',
+  'server/cloud-credit.e2e.test.ts',
+  'server/cloud-lending-browser.e2e.test.ts',
+  'server/drivers/ollama-context.test.ts',
   'companion/test/proxy.test.ts',
   'src/components/RemoteComputerSection.test.ts',
   'src/components/SettingsModal.appearance.test.ts',
