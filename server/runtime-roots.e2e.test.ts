@@ -17,16 +17,16 @@ import { ownTurnText } from "./testing/room-handoff-agent.ts";
 import { withAnswer } from "./testing/your-computer.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const RERUN_NOTE = "OpenMausBot restarted while your previous turn here was running";
+const RERUN_NOTE = "Dani Bot restarted while your previous turn here was running";
 const RERUN_CHIP = "Resuming after a restart";
-const SECRET_PROVIDED = "OpenMausBot credential update: the user securely provided";
-const CONNECTED = "OpenMausBot connection update: the user securely connected";
+const SECRET_PROVIDED = "Dani Bot credential update: the user securely provided";
+const CONNECTED = "Dani Bot connection update: the user securely connected";
 const STEP_CAP_CONTINUES = "stopped at the step limit";
 const SEAT_FREE = "the computer this conversation waited for is free again";
-const SIGNED_IN = "OpenMausBot sign-in update: the person finished signing in to";
-const INTERRUPTED_OUTWARD = "Interrupted by an OpenMausBot restart after it already";
+const SIGNED_IN = "Dani Bot sign-in update: the person finished signing in to";
+const INTERRUPTED_OUTWARD = "Interrupted by a Dani Bot restart after it already";
 const SETTLED = "Your downstream room requests have settled.";
-const REPORT_FROM_MIRA = "[OpenMausBot report from @Mira";
+const REPORT_FROM_MIRA = "[Dani Bot report from @Mira";
 
 const jsonl = (path: string): any[] => existsSync(path)
   ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
@@ -659,7 +659,7 @@ it("T10 parks a teammate's turn on its credential card, tells the Chief at once,
   const brief = "T10-BRIEF: set up the Grok model for the export; ask for the key you need.";
   f.script(f.clive.id,
     { key: "C0", match: ["T10-JOB"], steps: [{ arguments: { bot_ids: [mira.id], message: brief } }], reply: "C0: Mira is on it." },
-    { key: "C-WAITS", match: ["[OpenMausBot note from @Mira", "T10-JOB"], reply: "C-WAITS: Mira waits on the key; nothing else is open." },
+    { key: "C-WAITS", match: ["[Dani Bot note from @Mira", "T10-JOB"], reply: "C-WAITS: Mira waits on the key; nothing else is open." },
     { key: "C1", match: [SETTLED, REPORT_FROM_MIRA, "T10-RESULT"], reply: "T10-FINAL: the export model is set up." });
   f.script(mira.id,
     { key: "M2", match: ["T10-BRIEF", SECRET_PROVIDED], reply: "T10-RESULT: the key is in and the export runs." },

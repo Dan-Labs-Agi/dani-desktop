@@ -770,7 +770,7 @@ describe("internal mcp_server route, below Full access", () => {
     for (const full of [true, false]) {
       const { post, signIns, lines, decided } = fixture({ full, servers: { linear } });
       expect(await post({ action: "sign_in", name: "linear" })).toEqual({ status: 202, body: {
-        text: "A Sign in card for linear is now visible to the person. End this turn and wait; OpenMausBot resumes you when they finish.",
+        text: "A Sign in card for linear is now visible to the person. End this turn and wait; Dani Bot resumes you when they finish.",
       } });
       expect(signIns).toEqual([{ name: "linear", url: linear.url }]);
       expect(lines).toEqual(["Asked to sign in to MCP server linear"]);
@@ -858,8 +858,8 @@ describe("a card answered after OpenMausBot restarts", () => {
     await respond("allow");
     expect(stored("notes")).toMatchObject({ args: ["-y", "notes-mcp"], env: { NOTES_TOKEN: "saved-token" } });
     expect(probe).not.toHaveBeenCalled();
-    expect(card()).toMatchObject({ expired: true, held: "OpenMausBot restarted, so this request expired.", mcpRequest: { result: { state: "expired" } } });
-    expect(answers[0]).toContain("OpenMausBot restarted, so this request expired. Ask again if you still need it.");
+    expect(card()).toMatchObject({ expired: true, held: "Dani Bot restarted, so this request expired.", mcpRequest: { result: { state: "expired" } } });
+    expect(answers[0]).toContain("Dani Bot restarted, so this request expired. Ask again if you still need it.");
     for (const sent of [fresh, "sk-live-9", "fresh-token", "saved-token"]) expect(JSON.stringify(chat), sent).not.toContain(sent);
   });
 

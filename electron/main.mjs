@@ -1173,6 +1173,7 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
   proc.stdout?.on("data", (d) => {
     listening.hear(String(d));
     slog(`[out] ${String(d).trimEnd()}`);
+    if (process.env.DANI_NATIVE_VERIFY === "1" && String(d).includes("DANI_NATIVE_SERVER")) console.log(String(d));
   });
   proc.stderr?.on("data", (d) => slog(`[err] ${String(d).trimEnd()}`));
   proc.on("message", (message) => {
@@ -2934,6 +2935,14 @@ app.whenReady().then(async () => {
       );
     }
     bootDataDir = boot.dataDir;
+  }
+  if (process.env.DANI_NATIVE_VERIFY === "1") {
+    console.log("DANI_NATIVE_PROFILE", JSON.stringify({
+      requestedDaniDir: process.env.DANI_DATA_DIR,
+      requestedLegacyDir: process.env.OMB_DATA_DIR,
+      home: app.getPath("home"), userData: app.getPath("userData"),
+      logs: app.getPath("logs"), bootDataDir,
+    }));
   }
   if (app.isPackaged) {
     try {

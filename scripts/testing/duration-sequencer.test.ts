@@ -28,7 +28,7 @@ function context(index: number, count: number, log: (line: string) => void = () 
 /** Each CI platform's files, weights and shard count, as ci-scope.mjs and ci.yml run them. */
 const CI_PLATFORMS = Object.entries(VITEST_SHARDS).map(([os, count]) => {
   const platform = RUNNER_PLATFORMS[os as keyof typeof RUNNER_PLATFORMS] as NodeJS.Platform;
-  return { os, platform, count, files: os === "ubuntu-latest" ? FILES : FILES.filter((file) => !isPortableE2e(file)) };
+  return { os, platform, count, files: FILES };
 });
 
 async function split(Sequencer: TestSequencerConstructor, files: readonly string[], count: number) {

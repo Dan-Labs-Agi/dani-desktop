@@ -96,7 +96,7 @@ export function phoneSecretAAD(context: Pick<
   "keyId" | "deviceId" | "botId" | "threadId" | "messageId" | "target" | "requestKey"
 >): Uint8Array {
   const fields = [
-    "openmausbot-phone-credential-v1",
+    "danibot-phone-credential-v1",
     context.keyId,
     context.deviceId,
     context.botId,

@@ -241,7 +241,8 @@ export function createTestedAi(deps: TestedAiDeps) {
    * to look after. One miss waits for its retry; two hand over to the next AI. */
   const sweep = () => {
     if (!background || fixed()) return;
-    const own = lastInstances.filter((instance) => readyToRun(instance, deps.context) && hasModel(instance)
+    // Dani Free is lazy and can use a rate-limited free pool. Discovery must not send surprise model calls.
+    const own = lastInstances.filter((instance) => instance.driverKind !== "dani-free" && readyToRun(instance, deps.context) && hasModel(instance)
       && deps.context.company?.(instance.instanceId) !== true);
     for (const instance of rankAis(own)) {
       if (running.has(instance.instanceId)) return;

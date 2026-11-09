@@ -1,5 +1,6 @@
 // Main architecture, disposable Windows runner only. Exercise the installed app, not win-unpacked.
 const fs = require('node:fs');
+const {waitDaniFreeSetup}=require('./wait-dani-free-setup.cjs');
 const path = require('node:path');
 const {spawn, spawnSync} = require('node:child_process');
 const {createHash} = require('node:crypto');
@@ -14,6 +15,14 @@ fs.mkdirSync(temp, {recursive:true});
 const install = path.join(temp, 'app');
 const data = path.join(temp, 'profile');
 fs.mkdirSync(data, {recursive:true});
+// Installers may auto-launch the app. Give that first process the same disposable profile.
+process.env.DANI_NATIVE_VERIFY='1';
+process.env.DANI_DATA_DIR=data;
+process.env.OMB_DATA_DIR=data;
+// Windows resolves its profile through OS APIs too; isolate product/app data, not USERPROFILE.
+if(process.platform!=='win32'){process.env.HOME=path.join(temp,'home');fs.mkdirSync(process.env.HOME,{recursive:true});}
+fs.mkdirSync(process.env.APPDATA,{recursive:true});
+fs.mkdirSync(process.env.LOCALAPPDATA,{recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
 fs.writeFileSync(marker, 'preserve synthetic customer data');
 const installer = path.resolve('release', fs.readdirSync('release').find(f => /^DaniBot-.*-setup\.exe$/.test(f)) || 'missing-installer.exe');
@@ -28,13 +37,23 @@ const update=fs.readFileSync(path.join(install,'resources/app-update.yml'),'utf8
 assert.match(update,/^owner: Dan-Labs-Agi$/m,'installed updater has the wrong organization');
 assert.match(update,/^repo: dani-desktop$/m,'installed updater has the wrong repository');
 let launched;
+let launchOutput='';
+function reportOwnedDiagnostics(){
+ console.error('DANI_LAUNCH_OUTPUT',launchOutput.slice(-12000));
+ for(const file of fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:server\.log|desktop-crashes\.log)$/.test(p))){
+  try{console.error('DANI_OWNED_LOG',file,fs.readFileSync(path.join(temp,file),'utf8').slice(-16000));}catch{}
+ }
+ console.error('DANI_CHILD_STATE',JSON.stringify({exitCode:launched?.exitCode,signalCode:launched?.signalCode}));
+}
 function stop() {
   if (launched) spawnSync('taskkill', ['/PID', String(launched.pid), '/T', '/F'], {encoding:'utf8'});
   // NSIS or Electron may already have launched an independent sibling in this disposable VM.
   spawnSync('taskkill', ['/IM','Dani Bot.exe','/T','/F'], {encoding:'utf8'});
 }
 async function open() {
-  launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:'ignore'});
+  launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe']});
+  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE')||text.includes('DANI_NATIVE_SERVER'))console.log(text)});
+  launched.on('error',error=>{launchOutput+='\n'+error.message});
   for(let i=0;i<120;i++) {
     try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
       for(let j=0;j<90;j++) {
@@ -72,6 +91,19 @@ async function inspect(page,label) {
 }
 (async()=>{
  stop();let ui=await open();await inspect(ui.page,'INSTALLED');
+ if(process.env.DANI_VERIFY_FREE_INSTALL==='1') {
+   const button=ui.page.locator('[data-dani-free-install]');await button.waitFor({state:'visible'});
+   assert.equal(await button.innerText(),'Install Dani Free');await button.click();
+   console.log('DANI_FREE_FINAL_STATUS',JSON.stringify(await waitDaniFreeSetup(ui.page)));
+   await capture(ui.page,'FREE_INSTALLED');
+   const isolatedFiles=fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:config\.json|server\.log|runtime\.json|cua-local-control\.json)$/.test(p));
+   console.log('DANI_ISOLATED_PROFILE_FILES',JSON.stringify(isolatedFiles));
+   assert.ok(fs.existsSync(path.join(data,'config.json')),'setup reported installed without config in the explicitly isolated profile');
+   const config=JSON.parse(fs.readFileSync(path.join(data,'config.json'),'utf8'));
+   assert.equal(config.instances.daniFree.driver,'dani-free');
+   assert.equal(fs.existsSync(path.join(data,'dani-free/runtime.json')),false,'install must not start a model service');
+   console.log('DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS');
+ }
  await ui.page.locator('[data-welcome-later]').click();
  await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
  await capture(ui.page,'CHIEF');
@@ -88,4 +120,4 @@ async function inspect(page,label) {
  assert.equal(fs.readFileSync(path.join(data,'synthetic-preserved-marker.txt'),'utf8'),'preserve synthetic data');
  assert.equal(await ui.page.locator('[data-welcome]').count(),0,'completed welcome reopened on relaunch');
  console.log('MAIN_INSTALLED_RELAUNCH_PASS');await ui.browser.close();
-})().catch(e=>{console.error(e.stack);process.exitCode=1}).finally(()=>stop());
+})().catch(e=>{console.error(e.stack);reportOwnedDiagnostics();process.exitCode=1}).finally(()=>stop());

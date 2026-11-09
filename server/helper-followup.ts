@@ -12,7 +12,9 @@ const appName = z.string().transform((name) => name.replace(/\p{Cc}+/gu, " ").re
 
 export const helperFollowupBody = z.object({
   threadId: z.string().regex(/^[\w-]+$/).optional(),
-  ai: z.enum(["own", "backup", "none"]),
+  ai: z.enum(["own", "backup", "none", "unverified"]),
+  version: z.literal(2).optional(),
+  appsKnown: z.boolean().optional(),
   apps: z.array(appName).max(20).default([]),
 });
 
@@ -32,7 +34,7 @@ function seenBy(bot: BotRecord, person: string): boolean {
 /** What Dani found: what its client saw, with the person's other bots and the routines they run counted here. */
 export function followupFacts(
   maus: BotRecord,
-  seen: { ai: HelperFollowupFacts["ai"]; apps: readonly string[] },
+  seen: { ai: HelperFollowupFacts["ai"]; apps: readonly string[]; version?: 2; appsKnown?: boolean },
   bots: readonly BotRecord[],
   routines: readonly { botId: string; enabled: boolean }[],
 ): HelperFollowupFacts {
@@ -41,6 +43,7 @@ export function followupFacts(
   const theirs = new Set([maus.id, ...others.map((bot) => bot.id)]);
   return {
     ai: seen.ai,
+    ...(seen.version === 2 ? { version: 2 as const, appsKnown: seen.appsKnown !== false } : {}),
     apps: [...new Set(seen.apps)],
     bots: others.length,
     routines: routines.filter((routine) => routine.enabled && theirs.has(routine.botId)).length,

@@ -14,6 +14,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import type { StandaloneAsset, StandaloneRelease } from "./contracts.ts";
 import {
   installStandaloneEngine,
+  renameStandalonePath,
   isAppStandaloneCopy,
   plainInstallError,
   STANDALONE_DOWNLOAD_TIMEOUT_MS,
@@ -55,7 +56,7 @@ describe("explaining a file-system failure", () => {
   const asset: StandaloneAsset = { url: "https://downloads.example.test/a", sha256: "0".repeat(64), executableSha256: "1".repeat(64), archive: "raw", executable: "x", approxBytes: 1 };
   const failure = (code: string, syscall: string) => Object.assign(new Error(`${code}: operation failed, ${syscall}`), { code, syscall });
   const inUse = "Fake Engine is open in another window. Close it, then try again.";
-  const noPermission = "OpenMausBot can't write to its folder for Fake Engine. Check the folder's permissions, then try again.";
+  const noPermission = "Dani Bot can't write to its folder for Fake Engine. Check the folder's permissions, then try again.";
 
   it.each([
     ["EBUSY", "rmdir", inUse],
@@ -361,7 +362,7 @@ describe.skipIf(process.platform === "win32")("installing a standalone engine", 
     chmodSync(engineDir(), 0o500);
     try {
       const error = await refusal(install(release));
-      expect(error.message).toBe("OpenMausBot can't write to its folder for Fake Engine. Check the folder's permissions, then try again.");
+      expect(error.message).toBe("Dani Bot can't write to its folder for Fake Engine. Check the folder's permissions, then try again.");
     } finally {
       chmodSync(engineDir(), 0o700);
     }
@@ -792,5 +793,29 @@ describe.skipIf(process.platform === "win32")("installing a standalone engine", 
       expect(readdirSync(binDir())).toEqual(["fake-engine"]);
       expect(pathDirs().at(-1)).toBe(binDir());
     });
+  });
+});
+
+describe("standalone activation transient handle locks", () => {
+  it("retries transient locks without deleting or changing either path", async () => {
+    for (const code of ["EPERM", "EACCES", "EBUSY"]) {
+      let calls = 0; const waits: number[] = [];
+      await renameStandalonePath("from", "to", async (from, to) => {
+        expect([from,to]).toEqual(["from","to"]);
+        if (++calls < 3) throw Object.assign(new Error(code),{code});
+      }, async ms => { waits.push(ms); });
+      expect(calls).toBe(3); expect(waits).toEqual([50,100]);
+    }
+  });
+  it("bounds retries and preserves the original persistent error", async () => {
+    const error=Object.assign(new Error("persistent lock"),{code:"EPERM"}); let calls=0;
+    await expect(renameStandalonePath("from","to",async()=>{calls++;throw error},async()=>{})).rejects.toBe(error);
+    expect(calls).toBe(6);
+  });
+  it("does not retry missing paths or unrelated errors", async () => {
+    for(const code of ["ENOENT","EXDEV","ENOTEMPTY"]){let calls=0;
+      await expect(renameStandalonePath("from","to",async()=>{calls++;throw Object.assign(new Error(code),{code})},async()=>{throw Error("must not wait")})).rejects.toMatchObject({code});
+      expect(calls).toBe(1);
+    }
   });
 });

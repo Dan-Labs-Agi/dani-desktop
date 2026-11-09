@@ -3,8 +3,11 @@
 // ENGLISH mirrors src/locales/en.json helperIntro.followup.*. It never names the AI it thinks with.
 
 export interface HelperFollowupFacts {
-  /** "own": an AI of the person's own answers; "backup": only the free backup model works; "none": no AI yet. */
-  ai: "own" | "backup" | "none";
+  /** Provider setup state, not proof of an inference call. v2 distinguishes installed/unverified Dani Free. */
+  ai: "own" | "backup" | "none" | "unverified";
+  version?: 2;
+  appsKnown?: boolean;
+  countsKnown?: boolean;
   /** The apps every bot here can use, by name. */
   apps: string[];
   /** The person's other bots, and the routines running here, when it looked. */
@@ -20,6 +23,18 @@ export interface HelperFollowupField {
 export const FOLLOWUP_APP_NAMES = 3;
 
 export const FOLLOWUP_ENGLISH = {
+  "helperIntro.setup.checking": "I'll check this app's local setup: connected apps, other bots and enabled routines. This does not check your inbox or tasks.",
+  "helperIntro.setup.unknownCounts": "I couldn't confirm the bot and routine counts.",
+  "helperIntro.setup.summary": "Local setup check: {bots}, {routines}.",
+  "helperIntro.setup.apps": "Connected apps listed here: {apps}.",
+  "helperIntro.setup.noApps": "No connected apps are listed here.",
+  "helperIntro.setup.unknownApps": "I couldn't confirm the connected-app list.",
+  "helperIntro.setup.unverified": "Dani Free tools are installed. A live model conversation has not been verified.",
+  "helperIntro.setup.provider": "A model provider is configured. This setup check did not run a model conversation.",
+  "helperIntro.setup.noAi": "No model provider is ready in this app's setup.",
+  "helperIntro.setup.backup": "A backup model is listed in setup. This check did not run a model conversation.",
+  "helperIntro.setup.scope": "I haven't checked your inbox or unfinished tasks, and this check does not start ongoing monitoring.",
+
   "helperIntro.followup.found": "I looked around and nothing's waiting on you yet.",
   "helperIntro.followup.empty": "There's no unfinished work, no other bots or routines, and no apps are connected so far.",
   "helperIntro.followup.counts": "You have {bots} and {routines}, and no apps are connected so far.",
@@ -45,6 +60,16 @@ function counted(say: Say, count: number, none: FollowupKey, one: FollowupKey, m
 
 /** The follow-up in `say`'s language; `list` joins app names as that language does. */
 export function followupText(facts: HelperFollowupFacts, say: Say, list: (items: string[]) => string): string {
+  if (facts.version === 2) {
+    const counts = facts.countsKnown === false ? say("helperIntro.setup.unknownCounts") : say("helperIntro.setup.summary", {
+      bots: counted(say, facts.bots, "helperIntro.followup.botsNone", "helperIntro.followup.botOne", "helperIntro.followup.bots"),
+      routines: counted(say, facts.routines, "helperIntro.followup.routinesNone", "helperIntro.followup.routineOne", "helperIntro.followup.routines"),
+    });
+    const apps = facts.appsKnown === false ? say("helperIntro.setup.unknownApps") : facts.apps.length ? say("helperIntro.setup.apps", { apps: list(facts.apps) }) : say("helperIntro.setup.noApps");
+    const ai = say(facts.ai === "unverified" ? "helperIntro.setup.unverified" : facts.ai === "none" ? "helperIntro.setup.noAi" : facts.ai === "backup" ? "helperIntro.setup.backup" : "helperIntro.setup.provider");
+    return `${counts} ${apps} ${ai} ${say("helperIntro.setup.scope")}`;
+  }
+  if (facts.ai === "unverified") return say("helperIntro.setup.unverified");
   if (facts.ai === "none") return say("helperIntro.followup.noAi");
   if (facts.ai === "backup") return say("helperIntro.followup.backup");
   const found = say("helperIntro.followup.found");

@@ -1,4 +1,4 @@
-// Anything touching the new dir before ensureDirs() runs would make the ~/.opengrokbot rename a no-op: this pins the order.
+// Anything touching the Dani dir before ensureDirs() runs would make the legacy profile rename a no-op: this pins the order.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -59,7 +59,7 @@ afterAll(async () => {
 
 describe("legacy data dir", () => {
   it("is renamed to the new name on first boot, with its contents and a fresh environment id", () => {
-    const fresh = join(home, ".openmausbot");
+    const fresh = join(home, ".danibot");
     expect(existsSync(join(home, ".opengrokbot"))).toBe(false);
     expect(readFileSync(join(fresh, "keep-me.txt"), "utf8")).toBe("carried over");
     expect(readFileSync(join(fresh, "environment-id"), "utf8").trim()).toMatch(/^[0-9a-f-]{36}$/);
