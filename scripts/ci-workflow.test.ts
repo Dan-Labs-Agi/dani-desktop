@@ -128,7 +128,7 @@ describe("adopted portable CI contract", () => {
     expect(release.on.push.branches).toEqual(["main", "prod"]);
     expect(release.permissions).toEqual({ contents: "read" });
     expect(publish.if).toBe("github.event_name != 'pull_request'");
-    expect(publish.needs).toEqual(["prepare", "linux", "windows", "macos", "download_check", "checks"]);
+    expect(publish.needs).toEqual(["prepare", "linux", "windows", "macos", "download_check", "checks", "published_deb_migration"]);
     expect(publish["continue-on-error"]).toBeUndefined();
     const staging = readFileSync(new URL("./release-staging.mjs", import.meta.url), "utf8");
     expect(staging).toContain("'draft=true'");

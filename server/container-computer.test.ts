@@ -473,7 +473,7 @@ describe("containerComputerStatus", () => {
 
     expect(status.managed).toBe(false);
     expect(status.ready).toBe(false);
-    expect(status.problem).toContain("not created by OpenMausBot");
+    expect(status.problem).toContain("not created by Dani Bot");
   });
 
   it("prefers a running runtime over an earlier installed but stopped one", async () => {
@@ -930,7 +930,7 @@ describe("containerComputerAction", () => {
     });
 
     await expect(containerComputerAction("remove", fake.run, "linux")).rejects.toThrow(
-      /not created by OpenMausBot.*remove it manually/i,
+      /not created by Dani Bot.*remove it manually/i,
     );
     expect(fake.calls).not.toContain(`docker rm -f ${CONTAINER}`);
   });
