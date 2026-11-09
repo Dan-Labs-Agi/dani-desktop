@@ -148,6 +148,7 @@ jobs:
           name: danibot-ubuntu-smoke-diagnostics
           path: |
             /tmp/omb-linux-smoke-*
+            /tmp/omb-deb-command-*
             /tmp/omb-linux-smoke-runtime-*
           if-no-files-found: warn
           include-hidden-files: true

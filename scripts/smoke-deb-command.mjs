@@ -6,7 +6,8 @@
 //
 // Needs a container runtime.
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { packageInstallCommand } from "../electron/package-install-command.mjs";
@@ -46,8 +47,14 @@ function inContainer(script, { expectFailure = false } = {}) {
     return output;
   } catch (error) {
     if (expectFailure) return String(error.stdout ?? "") + String(error.stderr ?? "");
-    console.error(String(error.stdout ?? ""));
-    console.error(String(error.stderr ?? ""));
+    const diagnostic = mkdtempSync(path.join(tmpdir(), "omb-deb-command-"));
+    const stdout = String(error.stdout ?? ""), stderr = String(error.stderr ?? "");
+    writeFileSync(path.join(diagnostic, "stdout.log"), stdout, { mode: 0o600 });
+    writeFileSync(path.join(diagnostic, "stderr.log"), stderr, { mode: 0o600 });
+    console.error(`[smoke-deb-command] full container logs: ${diagnostic}`);
+    // APT emits enough output to hide the final dpkg reason in a single CI log message.
+    for (const line of stdout.slice(-24_000).split("\n")) console.error(line);
+    for (const line of stderr.slice(-24_000).split("\n")) console.error(line);
     throw error;
   }
 }
