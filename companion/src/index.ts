@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 // The sidecar: `node companion/src/index.ts`. Running it is the opt-in.
 //
 //   :8810  0.0.0.0    devices     token required, allowlisted, scrubbed
