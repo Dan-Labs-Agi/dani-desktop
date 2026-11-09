@@ -75,7 +75,7 @@ async function inspect(page,label) {
  await page.waitForTimeout(7000);
  const status=await page.evaluate(async()=>{const r=await fetch('/api/health');return {code:r.status,body:await r.json()}});
  assert.equal(status.code,200,'packaged server health unavailable');
- assert.equal(status.body.app,'openmausbot','expected retained health wire identity');
+ assert.equal(status.body.app,phase==='published'?'danibot':'openmausbot','phase-specific packaged health identity');
  const skin=await page.evaluate(()=>document.documentElement.dataset.skin);
  if(phase==='upgraded')assert.equal(skin,'midnight','upgraded app must retain current dark design');
  const body=await page.locator('body').innerText();
@@ -83,24 +83,11 @@ async function inspect(page,label) {
  console.log(JSON.stringify({event:label,health:status,visibleText:body.slice(0,2200),url:page.url()}));
  await capture(page,label);
 }
-(async()=>{
- stop();let ui=await open();await inspect(ui.page,'INSTALLED');
- if(phase==='published'){
- await ui.page.locator('[data-welcome-later]').click();
- await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
- await capture(ui.page,'CHIEF');
- await ui.page.waitForTimeout(1000); // Respect the real Chief intro's accidental-click guard.
- await ui.page.locator('[data-chief-create]').click();
- await ui.page.locator('[data-welcome]').waitFor({state:'detached',timeout:15000});
- }
- await inspect(ui.page,'ONBOARDED');
- const onboarding=await ui.page.evaluate(async()=>{const r=await fetch('/api/config');const c=await r.json();return {code:r.status,onboarding:c.onboarding}});
- console.log('MAIN_ONBOARDING_CONFIG',JSON.stringify(onboarding));
- assert.equal(onboarding.code,200);assert.ok(onboarding.onboarding?.completedAt,'onboarding completion missing');
- const state=await ui.page.evaluate(async()=>{
+async function persistedState(page){
+ return page.evaluate(async()=>{
    const config=await fetch('/api/config').then(r=>r.json());
    const bots=await fetch('/api/bots').then(r=>r.json());
-   const records=(bots.bots??bots).map(b=>({id:b.id,name:b.name,threadId:b.threadId})).sort((a,b)=>a.id.localeCompare(b.id));
+   const records=(bots.bots??bots).filter(b=>b.name==='Published migration test bot').map(b=>({id:b.id,name:b.name,threadId:b.threadId})).sort((a,b)=>a.id.localeCompare(b.id));
    const threads=[];
    for(const bot of records){
      const response=await fetch('/api/threads/'+encodeURIComponent(bot.threadId)+'/messages?limit=200');
@@ -108,21 +95,53 @@ async function inspect(page,label) {
      const body=await response.json();
      threads.push({threadId:bot.threadId,messages:(body.messages??body).map(m=>({id:m.id,role:m.role,kind:m.kind,text:m.text}))});
    }
-   return {onboarding:config.onboarding,bots:records,threads};
+   return {profile:config.profile,bots:records,threads};
  });
- assert.ok(state.bots.length>0,'migration needs actual persisted bots');
+}
+(async()=>{
+ stop();let ui=await open();await inspect(ui.page,'INSTALLED');
+ if(phase==='published'){
+   // The old UI has a different email/engine onboarding tour. Leave it intact.
+   // This bot is saved by the real old API, never by editing its database.
+   // An explicitly unavailable selection prevents any model process or call.
+   const created=await ui.page.evaluate(async()=>{
+     const r=await fetch('/api/bots',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'Published migration test bot',modelSelection:{instanceId:'migration-no-provider',model:'migration-no-model'}})});
+     return {status:r.status,body:await r.json()};
+   });
+   assert.equal(created.status,201,JSON.stringify(created));
+   console.log('PUBLISHED_API_CREATED_TEST_BOT_NO_MODEL',JSON.stringify(created.body.bot?.id));
+ }
+ const state=await persistedState(ui.page);
+ assert.equal(state.bots.length,1,'migration needs actual old-API persisted bot');
  if(phase==='published'){
    fs.writeFileSync(snapshot,JSON.stringify(state));
    fs.writeFileSync(path.join(data,'synthetic-preserved-marker.txt'),'preserve synthetic data');
  }else{
-   assert.deepEqual(state,JSON.parse(fs.readFileSync(snapshot,'utf8')),'published onboarding/bot identity changed during upgrade');
+   assert.deepEqual(state,JSON.parse(fs.readFileSync(snapshot,'utf8')),'published profile/bot/thread state changed during upgrade');
    assert.equal(fs.existsSync('/opt/Dani Bot/danibot'),false,'dpkg left old tracked executable behind');
    assert.equal(fs.realpathSync('/usr/bin/danibot'),executable,'CLI maps to wrong installation');
    assert.match(fs.readFileSync('/usr/share/applications/com.danibot.app.desktop','utf8'),/Exec=\/opt\/danibot\/danibot/);
+   const policy=fs.readFileSync('/etc/apparmor.d/danibot','utf8');
+   assert.ok(policy.includes('/opt/danibot/'),'AppArmor attachment lost the new root');
+   assert.ok(!policy.includes('/opt/Dani Bot/'),'AppArmor retains old attachment');
+   console.log('PUBLISHED_DEB_DPKG_CLI_DESKTOP_APPARMOR_STATE_PASS');
+   // The old package has no current onboarding schema. Complete the new tour
+   // separately; new Chief records must not alter the migrated bot/thread.
+   await ui.page.locator('[data-welcome-later]').click();
+   await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
+   await capture(ui.page,'CHIEF');await sleep(1000);
+   await ui.page.locator('[data-chief-create]').click();
+   await ui.page.locator('[data-welcome]').waitFor({state:'detached',timeout:15000});
+   await inspect(ui.page,'ONBOARDED');
+   const onboarding=await ui.page.evaluate(()=>fetch('/api/config').then(r=>r.json()).then(c=>c.onboarding));
+   assert.ok(onboarding?.completedAt,'new onboarding completion missing');
+   assert.deepEqual(await persistedState(ui.page),state,'new onboarding changed migrated state');
  }
+ await capture(ui.page,'PERSISTED_STATE');
  await ui.browser.close();stop();await sleep(3000);
  ui=await open();await inspect(ui.page,'RELAUNCHED');
+ assert.deepEqual(await persistedState(ui.page),state,'persisted state changed on relaunch');
  assert.equal(fs.readFileSync(path.join(data,'synthetic-preserved-marker.txt'),'utf8'),'preserve synthetic data');
- assert.equal(await ui.page.locator('[data-welcome]').count(),0,'completed welcome reopened on relaunch');
+ if(phase==='upgraded')assert.equal(await ui.page.locator('[data-welcome]').count(),0,'new welcome reopened after completion');
  console.log('PUBLISHED_DEB_MIGRATION_'+phase.toUpperCase()+'_LAUNCH_STATE_RELAUNCH_PASS');await ui.browser.close();
 })().catch(e=>{console.error(e.stack);reportOwnedDiagnostics();process.exitCode=1}).finally(()=>stop());
