@@ -95,7 +95,17 @@ it("keeps the selected API model for direct, group and scheduled Boat turns and 
       }
       const settled = await control(["wait", ...destination, "--timeout", "20"]);
       expect(settled.status).toBe(scenario === "held" ? "failed" : "settled");
-      expect(requests.slice(before)).toHaveLength(2);
+      // The fixture deliberately answers without repairing a failed tool result.
+      // The current driver allows exactly two correction prompts, then fails.
+      expect(requests.slice(before)).toHaveLength(scenario === "held" ? 4 : 2);
+      if (scenario === "held") {
+        const corrections = requests.slice(before + 2);
+        expect(corrections.map(request => request.messages.filter((message: any) =>
+          message.role === "user" && typeof message.content === "string" && message.content.includes("a tool call in this turn failed")
+        ).length)).toEqual([1, 2]);
+        // Panel refreshes after release may run; the failed model tool itself must not.
+        expect(commands.slice(commandsBefore).every(command => !command.includes(".model.jpg"))).toBe(true);
+      }
       expect(requests.slice(before).every(request => request.model === "chosen-vision-model")).toBe(true);
       const followup = requests[before + 1].messages;
       if (scenario === "held") {
