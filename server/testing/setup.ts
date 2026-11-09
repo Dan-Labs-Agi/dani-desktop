@@ -24,7 +24,7 @@ Object.defineProperty(globalThis.navigator, "language", { value: "en", configura
 // DOM tests do not open the server database. Importing its native SQLite module
 // into the client bundler prevents those tests from being collected at all.
 let closeMessageDb: (() => void) | undefined;
-if (typeof window === "undefined") {
+if (!("window" in globalThis)) {
   ({ closeMessageDb } = await import("../message-db.ts"));
   // Windows will not remove an open database: keep real server cleanup intact.
   afterEach(closeMessageDb);
