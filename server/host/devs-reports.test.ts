@@ -267,7 +267,7 @@ describe("localized failure-line receipts", () => {
       await fx.settle();
       await fx.settle();
       expect(fx.notices("scout-main")).toEqual([]);
-      if (outcome.retry) {
+      if (!outcome.ok && outcome.retry) {
         fx.advance(RETRY_MS[0]);
         await fx.settle();
         expect(fx.sent).toHaveLength(2);
