@@ -32,7 +32,7 @@ export function ownTurnText(prompt: unknown): string {
 
 async function askPermission(server: AgentsIntegration, ask: { tool_name: string; input: Record<string, unknown> }): Promise<{ behavior: string; message?: string }> {
   const child = spawn(server.command, server.args, { env: { ...process.env, ...server.env }, stdio: ["pipe", "pipe", "pipe"] });
-  child.stderr.on("data", (chunk) => { childError = (childError + chunk).slice(-2000); });
+  child.stderr.resume();
   try {
     return await new Promise((resolve, reject) => {
       createInterface({ input: child.stdout }).on("line", line => {
@@ -65,7 +65,7 @@ function withCaptured(value: unknown, captured: Record<string, string>): unknown
 
 async function serverToolCall(server: AgentsIntegration, name: string, args: unknown): Promise<any> {
   const child = spawn(server.command, server.args, { env: { ...process.env, ...server.env }, stdio: ["pipe", "pipe", "pipe"] });
-  child.stderr.on("data", (chunk) => { childError = (childError + chunk).slice(-2000); });
+  child.stderr.resume();
   try {
     return await new Promise((resolve, reject) => {
       createInterface({ input: child.stdout }).on("line", line => {
