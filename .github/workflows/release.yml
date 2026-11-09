@@ -245,7 +245,7 @@ jobs:
       - run: pnpm exec vitest run server/dani-free-runtime-lifecycle.test.ts server/dani-free-runtime.test.ts server/drivers/dani-free.test.ts server/dani-free-setup.test.ts server/engine-standalone.test.ts server/routes/instances.test.ts server/tested-ai.test.ts
 
   download_check:
-    name: Download and install exact staged bytes (${{ matrix.os }})
+    name: Download and install exact staged bytes (${{ matrix.os }}, ${{ matrix.format }})
     if: github.event_name != 'pull_request'
     needs: [prepare, linux, windows, macos]
     strategy:
@@ -254,18 +254,29 @@ jobs:
         include:
           - os: windows-latest
             platform: windows
+            format: nsis
+          - os: windows-latest
+            platform: windows
+            format: zip
           - os: macos-latest
             platform: macos
+            format: dmg
           - os: macos-15-intel
             platform: macos
+            format: dmg
           - os: ubuntu-latest
             platform: linux
+            format: deb
+          - os: ubuntu-latest
+            platform: linux
+            format: appimage
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     env:
       GH_TOKEN: ${{ github.token }}
       OMB_AI_CHECKS: '0'
       DANI_VERIFY_FREE_INSTALL: '1'
+      DANI_INSTALLER_FORMAT: ${{ matrix.format }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -275,7 +286,7 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: node scripts/release-download-verify.mjs v${{ needs.prepare.outputs.version }} ${{ needs.prepare.outputs.sha }} ${{ matrix.platform }}
+      - run: node scripts/release-download-verify.mjs v${{ needs.prepare.outputs.version }} ${{ needs.prepare.outputs.sha }} ${{ matrix.platform }} ${{ matrix.format }}
       - run: npm install --prefix "${{ runner.temp }}/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
       - if: matrix.platform == 'windows'
         run: node scripts/verify-main-installed.cjs

@@ -1,6 +1,7 @@
 import { ArrowUpRight, KeyRound, Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useStore } from "@/state/store";
+import { DaniFreeSetup } from "./onboarding/DaniFreeSetup";
 import { EngineGroupLabel } from "@/components/EngineGroupLabel";
 import { EngineSetup, installCommandFor } from "@/components/EngineSetup";
 import { InstanceProviderMark } from "@/components/ProviderIcons";
@@ -57,6 +58,11 @@ export function NoEngines() {
           {t("noEngines.intro", { app: productName() })}
         </p>
 
+        <section data-no-engines-dani-free="" className="mt-6 rounded-xl border border-hairline/40 bg-card p-3.5">
+          <h2 className="text-[14px] font-medium text-ink">Dani Free</h2>
+          <p className="mb-3 mt-1 text-[13px] text-ink-secondary">Set up its local tools here, including after an upgrade. This does not start a model or verify a live conversation.</p>
+          <DaniFreeSetup showNavigation={false} onNext={() => void recheck()} onOther={() => {}} />
+        </section>
         <div className="mt-6 flex flex-col gap-2.5">
           {(() => {
             const { subscription, api, custom } = splitEngineRail(engines);

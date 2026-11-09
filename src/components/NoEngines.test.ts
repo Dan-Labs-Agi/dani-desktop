@@ -1,0 +1,20 @@
+// @vitest-environment happy-dom
+import {act,createElement} from 'react';
+import {createRoot,type Root} from 'react-dom/client';
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+const f=vi.hoisted(()=>({api:vi.fn(),refresh:vi.fn(),state:{instances:[]},dispatch:vi.fn()}));
+vi.mock('@/state/store',()=>({api:f.api,useStore:()=>({state:f.state,dispatch:f.dispatch,refreshInstances:f.refresh})}));
+vi.mock('@/components/EngineSetup',()=>({EngineSetup:()=>null,installCommandFor:()=>null}));
+vi.mock('@/components/ProviderIcons',()=>({InstanceProviderMark:()=>null}));
+vi.mock('@/components/DesktopCapabilities',()=>({WindowDragStrip:()=>null}));
+vi.mock('@/components/EngineGroupLabel',()=>({EngineGroupLabel:()=>null}));
+vi.mock('@/lib/engine-rail',()=>({splitEngineRail:()=>({subscription:[],api:[],custom:[]})}));
+vi.mock('@/lib/i18n',()=>({t:(key:string)=>key}));
+import {NoEngines} from './NoEngines';
+(globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
+let host:HTMLDivElement,root:Root;
+beforeEach(()=>{host=document.createElement('div');document.body.append(host);root=createRoot(host);f.api.mockReset();f.refresh.mockReset();f.api.mockResolvedValue({phase:'not-installed',message:'Tools not installed',modelReady:false});localStorage.setItem('omb-email-gate','skipped');window.ogb=undefined;});
+afterEach(()=>{act(()=>root.unmount());host.remove();localStorage.clear();});
+it('returning local users retain explicit Dani Free setup without a model probe',async()=>{await act(async()=>root.render(createElement(NoEngines)));expect(host.querySelector('[data-no-engines-dani-free]')).not.toBeNull();expect(host.querySelector('[data-dani-free-install]')?.textContent).toBe('Install Dani Free');expect(host.textContent).not.toContain('Set up later');expect(f.api.mock.calls).toEqual([['/api/instances/dani-free/setup']]);f.api.mockResolvedValue({phase:'installed',message:'Tools installed; live conversation unverified',modelReady:false});await act(async()=>host.querySelector<HTMLButtonElement>('[data-dani-free-install]')!.click());expect(f.api).toHaveBeenLastCalledWith('/api/instances/dani-free/setup',{method:'POST',body:'{}'});expect(host.textContent).toContain('live conversation unverified');await act(async()=>host.querySelector<HTMLButtonElement>('[data-welcome-later]')!.click());expect(f.refresh).toHaveBeenCalledTimes(1);expect(f.api.mock.calls.every(([path])=>path==='/api/instances/dani-free/setup')).toBe(true);});
+it('remote clients cannot install tools on the local computer',async()=>{window.ogb={remoteClient:{active:true}} as typeof window.ogb;await act(async()=>root.render(createElement(NoEngines)));expect(host.textContent).toContain('The host needs an AI');expect(host.querySelector('[data-dani-free-install]')).toBeNull();expect(f.api).not.toHaveBeenCalled();});
+it('setup failure remains visible and can be retried explicitly',async()=>{await act(async()=>root.render(createElement(NoEngines)));f.api.mockRejectedValueOnce(new Error('offline'));await act(async()=>host.querySelector<HTMLButtonElement>('[data-dani-free-install]')!.click());expect(host.textContent).toContain('setup could not start');expect(host.querySelector<HTMLButtonElement>('[data-dani-free-install]')!.disabled).toBe(false);expect(f.refresh).not.toHaveBeenCalled();});

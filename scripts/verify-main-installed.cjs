@@ -25,12 +25,20 @@ fs.mkdirSync(process.env.APPDATA,{recursive:true});
 fs.mkdirSync(process.env.LOCALAPPDATA,{recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
 fs.writeFileSync(marker, 'preserve synthetic customer data');
-const installer = path.resolve('release', fs.readdirSync('release').find(f => /^DaniBot-.*-setup\.exe$/.test(f)) || 'missing-installer.exe');
+const format=process.env.DANI_INSTALLER_FORMAT || 'nsis';
+assert.ok(['nsis','zip'].includes(format),'unsupported Windows installer format');
+const installer = path.resolve('release', fs.readdirSync('release').find(f => format==='zip' ? /^DaniBot-\d.*-x64\.zip$/.test(f) : /^DaniBot-.*-setup\.exe$/.test(f)) || 'missing-installer');
 const sha = createHash('sha256').update(fs.readFileSync(installer)).digest('hex');
-console.log(JSON.stringify({event:'candidate', source:process.env.GITHUB_SHA, sha256:sha, bytes:fs.statSync(installer).size}));
-const result = spawnSync(installer, ['/S', '/D='+install], {timeout:180000,encoding:'utf8'});
-assert.equal(result.status,0, 'NSIS install failed: '+result.stderr);
-const executable = path.join(install, 'Dani Bot.exe');
+console.log(JSON.stringify({event:'candidate',format,source:process.env.GITHUB_SHA,sha256:sha,bytes:fs.statSync(installer).size}));
+if(format==='zip'){
+ const quote=value=>"'"+value.replaceAll("'","''")+"'";
+ const extracted=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command','Expand-Archive -LiteralPath '+quote(installer)+' -DestinationPath '+quote(install)],{timeout:180000,encoding:'utf8'});
+ assert.equal(extracted.status,0,'Portable ZIP extraction failed: '+extracted.stderr);
+}else{
+ const result=spawnSync(installer,['/S','/D='+install],{timeout:180000,encoding:'utf8'});
+ assert.equal(result.status,0,'NSIS install failed: '+result.stderr);
+}
+const executable = path.join(install,'Dani Bot.exe');
 assert.ok(fs.existsSync(executable),'installer did not install expected app');
 assert.ok(fs.existsSync(path.join(install,'resources/server/index.js')),'installed packaged server missing');
 const update=fs.readFileSync(path.join(install,'resources/app-update.yml'),'utf8');
@@ -51,23 +59,29 @@ function stop() {
   spawnSync('taskkill', ['/IM','Dani Bot.exe','/T','/F'], {encoding:'utf8'});
 }
 async function open() {
-  launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe']});
+  launched=spawn(executable,['--remote-debugging-port=9333','--user-data-dir='+path.join(temp,'electron-user-data')],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe']});
   for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE')||text.includes('DANI_NATIVE_SERVER'))console.log(text)});
   launched.on('error',error=>{launchOutput+='\n'+error.message});
-  for(let i=0;i<120;i++) {
-    try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
-      for(let j=0;j<90;j++) {
-        const page=browser.contexts().flatMap(c=>c.pages()).find(p=> /^http:\/\/127\.0\.0\.1:\d+/.test(p.url()));
-        if(page) {await page.waitForLoadState('domcontentloaded'); return {browser,page};}
-        await sleep(1000);
-      }
-      throw Error('packaged UI not reachable');
-    }catch(e){if(i===119)throw e;await sleep(1000);}
+  const deadline=Date.now()+120000;
+  let browser;
+  try {
+    while(Date.now()<deadline){
+      if(launched.exitCode!==null || launched.signalCode!==null)throw Error('Installed app exited before readiness');
+      if(!browser){try{browser=await chromium.connectOverCDP('http://127.0.0.1:9333',{timeout:3000});}catch{await sleep(500);continue;}}
+      const page=browser.contexts().flatMap(c=>c.pages()).find(p=>/^http:\/\/127\.0\.0\.1:\d+/.test(p.url()));
+      if(page){await page.waitForLoadState('domcontentloaded',{timeout:Math.max(1,deadline-Date.now())});return {browser,page};}
+      await sleep(500);
+    }
+    throw Error('Installed app did not expose UI within120seconds');
+  }catch(error){
+    for(const [index,page] of (browser?.contexts().flatMap(c=>c.pages()).slice(0,2) ?? []).entries())await capture(page,'STARTUP_FAILURE_'+index).catch(()=>{});
+    if(browser)await Promise.race([browser.close().catch(()=>{}),sleep(3000)]);
+    throw error;
   }
 }
 async function capture(page,label) {
  await page.waitForTimeout(1500);
- const png=await page.screenshot({animations:'disabled'});
+ const png=await page.screenshot({animations:'disabled',timeout:3000});
  if(process.env.DANI_EVIDENCE_DIR) {
    fs.mkdirSync(process.env.DANI_EVIDENCE_DIR,{recursive:true});
    fs.writeFileSync(path.join(process.env.DANI_EVIDENCE_DIR,label+'.png'),png);
