@@ -3,6 +3,10 @@ import type { Stats } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 
+// Embedded Linux daemon protocol identity, owned by electron/cua-linux-runtime.cjs HOST_BUNDLE_ID.
+// This is not the desktop appId or display brand. Keep one exact identity and verify producer parity in tests.
+export const LINUX_CUA_EMBEDDED_HOST_ID = "com.openmausbot.app";
+
 export const REQUIRED_LINUX_TOOLS = ["click", "get_window_state", "list_apps", "type_text"];
 // Keep in sync with DRIVER_FILE_IDENTITY_KEYS in electron/cua-linux.cjs: Electron publishes it, the server revalidates it.
 export const DRIVER_FILE_IDENTITY_KEYS = [
@@ -224,7 +228,7 @@ export function decodeLinuxDescriptor(value: LinuxConnectionDescriptor): LocalCo
       ...(wayland ? ["CUA_DRIVER_RS_ENABLE_WAYLAND"] : []),
     ]) ||
     (mcp.env as Record<string, unknown>).CUA_DRIVER_EMBEDDED !== "1" ||
-    (mcp.env as Record<string, unknown>).CUA_DRIVER_HOST_BUNDLE_ID !== "com.danibot.app" ||
+    (mcp.env as Record<string, unknown>).CUA_DRIVER_HOST_BUNDLE_ID !== LINUX_CUA_EMBEDDED_HOST_ID ||
     (mcp.env as Record<string, unknown>).CUA_DRIVER_RS_UPDATE_CHECK !== "false" ||
     (mcp.env as Record<string, unknown>).CUA_DRIVER_RS_TELEMETRY_ENABLED !== "false" ||
     (wayland && (mcp.env as Record<string, unknown>).CUA_DRIVER_RS_ENABLE_WAYLAND !== "1")

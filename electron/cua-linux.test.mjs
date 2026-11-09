@@ -20,7 +20,8 @@ const {
 const temporaryDirectories = [];
 
 function temporaryDirectory() {
-  const base = process.platform === "win32" ? os.tmpdir() : fs.realpathSync("/tmp");
+  // Driver fixtures need trusted ancestors. A user-owned world-writable /tmp correctly fails production checks.
+  const base = process.platform === "win32" ? os.tmpdir() : fs.realpathSync(os.userInfo().homedir);
   const directory = fs.mkdtempSync(path.join(base, "omb-cua-linux-"));
   temporaryDirectories.push(directory);
   return directory;

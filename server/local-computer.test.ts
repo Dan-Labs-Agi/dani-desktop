@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DRIVER_FILE_IDENTITY_KEYS,
+  LINUX_CUA_EMBEDDED_HOST_ID,
   REQUIRED_LINUX_TOOLS,
   cuaUnavailableReason,
   decodeCuaConnection,
@@ -30,7 +31,9 @@ const require = createRequire(import.meta.url);
 const { DRIVER_FILE_IDENTITY_KEYS: ELECTRON_DRIVER_FILE_IDENTITY_KEYS } = require(
   "../electron/cua-linux.cjs",
 );
-const { REQUIRED_TOOLS: ELECTRON_REQUIRED_TOOLS } = require("../electron/cua-linux-runtime.cjs");
+const {
+  REQUIRED_TOOLS: ELECTRON_REQUIRED_TOOLS, HOST_BUNDLE_ID: ELECTRON_EMBEDDED_HOST_ID,
+} = require("../electron/cua-linux-runtime.cjs");
 
 function linuxDescriptor(userData: string, { session = "x11" }: { session?: "x11" | "wayland" } = {}) {
   const binary = join(userData, "cua-driver");
@@ -163,6 +166,19 @@ describe("local computer descriptor", () => {
       writeFileSync(file, JSON.stringify({ ...connection, status }), { mode: 0o600 });
       expect(readCuaConnection({ platform: "darwin", userData })).toBeNull();
       expect(readCuaConnection({ platform: "win32", userData })).toBeNull();
+    }
+  });
+
+  it("keeps the exact embedded-driver protocol identity in sync with its producer, independent of app branding", () => {
+    expect(LINUX_CUA_EMBEDDED_HOST_ID).toBe("com.openmausbot.app");
+    expect(LINUX_CUA_EMBEDDED_HOST_ID).toBe(ELECTRON_EMBEDDED_HOST_ID);
+    const userData = privateUserData("driver-identity");
+    const descriptor = linuxDescriptor(userData);
+    expect(decodeLinuxDescriptor(descriptor)).not.toBeNull();
+    for (const otherId of ["com.danibot.app", "com.attacker.app", ""]) {
+      expect(decodeLinuxDescriptor({ ...descriptor, mcp: { ...descriptor.mcp, env: {
+        ...descriptor.mcp.env, CUA_DRIVER_HOST_BUNDLE_ID: otherId,
+      } } })).toBeNull();
     }
   });
 
