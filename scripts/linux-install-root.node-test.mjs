@@ -58,3 +58,13 @@ test('private DEB cleanup waits only for its own verifier and never ignores a bu
  const migration=readFileSync(new URL('./verify-deb-published-migration.sh',import.meta.url),'utf8');
  assert.ok(migration.includes("-name 'DaniBot-*-amd64.deb'"));
 });
+
+test('old published GUI compatibility check is bounded to a supported OS, not a sandbox override',()=>{
+ const s=readFileSync(new URL('./verify-deb-published-migration.sh',import.meta.url),'utf8');
+ assert.doesNotMatch(s,/sysctl[^\n]*=|--no-sandbox|--disable-gpu-sandbox/);
+ for(const name of ['permanent-installer-validation','tested-preview-download','release']){
+  const source=readFileSync(new URL('../.github/workflows/'+name+'.yml',import.meta.url),'utf8').split('  published_deb_migration:')[1];
+  assert.match(source,/runs-on: ubuntu-22.04/);
+ }
+ assert.ok(readFileSync(new URL('./smoke-deb-upgrade.mjs',import.meta.url),'utf8').includes('/usr/share/applications/com.danibot.app.desktop'));
+});

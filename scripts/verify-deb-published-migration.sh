@@ -2,6 +2,9 @@
 # Native DEB proof in a disposable private /opt. The hosted runner's /opt is
 # never repaired or used as a substitute for the package's safety requirement.
 set -euo pipefail
+cat /etc/os-release
+printf 'DANI_MIGRATION_KERNEL '
+uname -r
 printf 'DANI_HOST_OPT '
 stat -c '%U:%G:%a' /opt
 command -v unshare >/dev/null

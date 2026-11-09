@@ -307,7 +307,9 @@ jobs:
     name: Published DEB upgrade and preserved-state proof
     if: github.event_name != 'pull_request' && needs.linux.result == 'success'
     needs: [prepare, linux]
-    runs-on: ubuntu-latest
+    # Old published Electron must be exercised unchanged on a supported compatible OS.
+    # Fresh candidate validation remains on ubuntu-latest with all protections.
+    runs-on: ubuntu-22.04
     timeout-minutes: 25
     permissions:
       contents: write
@@ -327,7 +329,7 @@ jobs:
       - run: node scripts/release-download-verify.mjs v${{ needs.prepare.outputs.version }} ${{ needs.prepare.outputs.sha }} linux deb
       - run: node scripts/fetch-published-deb-migration.mjs
       - run: npm install --prefix "${{ runner.temp }}/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - run: sudo apt-get update && sudo apt-get install -y xvfb dbus-x11 libnss3 libatk-bridge2.0-0 libgtk-3-0t64 libasound2t64
+      - run: sudo apt-get update && sudo apt-get install -y xvfb dbus-x11 libnss3 libatk-bridge2.0-0 libgtk-3-0 libasound2
       - run: dbus-run-session -- xvfb-run -a bash scripts/verify-deb-published-migration.sh
 
   publish:
