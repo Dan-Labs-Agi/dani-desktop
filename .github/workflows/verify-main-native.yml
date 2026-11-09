@@ -1,6 +1,11 @@
 name: Verify main native startup
 on:
   workflow_dispatch:
+    inputs:
+      inspect_intel_download:
+        description: Observe existing private Intel Safari download and Gatekeeper dialogs, without approving any exception
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -26,3 +31,14 @@ jobs:
       - name: Native CryptoKit credential interoperability
         if: matrix.os == 'macos-15-intel'
         run: pnpm exec vitest run server/phone-secret.test.ts server/phone-secret-interop.test.ts
+      - name: Observe existing Intel Safari download quarantine
+        if: matrix.os == 'macos-15-intel' && inputs.inspect_intel_download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/inspect-intel-download-quarantine.py > "$RUNNER_TEMP/quarantine-observation.log" 2>&1
+          result=$?
+          cat "$RUNNER_TEMP/quarantine-observation.log"
+          exit "$result"
