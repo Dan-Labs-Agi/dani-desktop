@@ -37,6 +37,11 @@ function reportOwnedDiagnostics(){
  }
  console.error('DANI_CHILD_STATE',JSON.stringify({exitCode:launched?.exitCode,signalCode:launched?.signalCode}));
 }
+function assertPreserved(actual,expected,label='state'){
+ if(Array.isArray(expected)){assert.ok(Array.isArray(actual),label);assert.equal(actual.length,expected.length,label);expected.forEach((v,i)=>assertPreserved(actual[i],v,label+'['+i+']'));return;}
+ if(expected&&typeof expected==='object'){assert.ok(actual&&typeof actual==='object',label);for(const [key,value] of Object.entries(expected))assertPreserved(actual[key],value,label+'.'+key);return;}
+ assert.deepEqual(actual,expected,label);
+}
 function stop(){if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
   launched=spawn(executable,['--remote-debugging-port=9333','--user-data-dir='+path.join(temp,'electron-user-data')],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe'],detached:true});
@@ -93,7 +98,7 @@ async function persistedState(page){
      const response=await fetch('/api/threads/'+encodeURIComponent(bot.threadId)+'/messages?limit=200');
      if(!response.ok)throw Error('Cannot read persisted migration thread: '+response.status);
      const body=await response.json();
-     threads.push({threadId:bot.threadId,messages:(body.messages??body).map(m=>({id:m.id,role:m.role,kind:m.kind,text:m.text}))});
+     threads.push({threadId:bot.threadId,messages:body.messages??body});
    }
    return {profile:config.profile,bots:records,threads};
  });
@@ -117,7 +122,7 @@ async function persistedState(page){
    fs.writeFileSync(snapshot,JSON.stringify(state));
    fs.writeFileSync(path.join(data,'synthetic-preserved-marker.txt'),'preserve synthetic data');
  }else{
-   assert.deepEqual(state,JSON.parse(fs.readFileSync(snapshot,'utf8')),'published profile/bot/thread state changed during upgrade');
+   assertPreserved(JSON.parse(JSON.stringify(state)),JSON.parse(fs.readFileSync(snapshot,'utf8')),'published profile/bot/thread preservation');
    assert.equal(fs.existsSync('/opt/Dani Bot/danibot'),false,'dpkg left old tracked executable behind');
    assert.equal(fs.realpathSync('/usr/bin/danibot'),executable,'CLI maps to wrong installation');
    assert.match(fs.readFileSync('/usr/share/applications/com.danibot.app.desktop','utf8'),/Exec=\/opt\/danibot\/danibot/);
@@ -125,22 +130,15 @@ async function persistedState(page){
    assert.ok(policy.includes('/opt/danibot/'),'AppArmor attachment lost the new root');
    assert.ok(!policy.includes('/opt/Dani Bot/'),'AppArmor retains old attachment');
    console.log('PUBLISHED_DEB_DPKG_CLI_DESKTOP_APPARMOR_STATE_PASS');
-   // The old package has no current onboarding schema. Complete the new tour
-   // separately; new Chief records must not alter the migrated bot/thread.
-   await ui.page.locator('[data-welcome-later]').click();
-   await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
-   await capture(ui.page,'CHIEF');await sleep(1000);
-   await ui.page.locator('[data-chief-create]').click();
-   await ui.page.locator('[data-welcome]').waitFor({state:'detached',timeout:15000});
-   await inspect(ui.page,'ONBOARDED');
-   const onboarding=await ui.page.evaluate(()=>fetch('/api/config').then(r=>r.json()).then(c=>c.onboarding));
-   assert.ok(onboarding?.completedAt,'new onboarding completion missing');
-   assert.deepEqual(await persistedState(ui.page),state,'new onboarding changed migrated state');
+   // Existing published workspaces retain their provider setup route. Do not
+   // impose the new fresh-install Welcome/Chief tour onto existing state.
+   assert.ok((await ui.page.locator('body').innerText()).includes('Published migration test bot'),'migrated bot missing from real UI');
+   await inspect(ui.page,'UPGRADED_EXISTING_WORKSPACE');
  }
  await capture(ui.page,'PERSISTED_STATE');
  await ui.browser.close();stop();await sleep(3000);
  ui=await open();await inspect(ui.page,'RELAUNCHED');
- assert.deepEqual(await persistedState(ui.page),state,'persisted state changed on relaunch');
+ assertPreserved(JSON.parse(JSON.stringify(await persistedState(ui.page))),JSON.parse(JSON.stringify(state)),'relaunch preservation');
  assert.equal(fs.readFileSync(path.join(data,'synthetic-preserved-marker.txt'),'utf8'),'preserve synthetic data');
  if(phase==='upgraded')assert.equal(await ui.page.locator('[data-welcome]').count(),0,'new welcome reopened after completion');
  console.log('PUBLISHED_DEB_MIGRATION_'+phase.toUpperCase()+'_LAUNCH_STATE_RELAUNCH_PASS');await ui.browser.close();

@@ -31,7 +31,7 @@ test('published migration is exact real source and required before publication',
  const source=read('scripts/fetch-published-deb-migration.mjs');
  assert.match(source,/702141437/);assert.match(source,/450485508/);assert.match(source,/d61e9d434efef9034587be8db32ff1d7667dd7ac875c5773f5f40951fddd540b/);
  const migration=read('scripts/verify-deb-published-migration.cjs');
- for(const value of ['published-state.json','assert.deepEqual(state','/api/threads/','synthetic-preserved-marker.txt','PUBLISHED_DEB_MIGRATION_'])assert.ok(migration.includes(value));
+ for(const value of ['published-state.json','assertPreserved(JSON.parse(JSON.stringify(state))','/api/threads/','synthetic-preserved-marker.txt','PUBLISHED_DEB_MIGRATION_'])assert.ok(migration.includes(value));
  const shell=read('scripts/verify-deb-published-migration.sh');
  assert.match(shell,/DANI_MIGRATION_PHASE=published/);assert.match(shell,/DANI_MIGRATION_PHASE=upgraded/);
  assert.doesNotMatch(shell,/--no-sandbox|--disable-gpu-sandbox|chown[^\n]*\/opt/);
@@ -67,4 +67,16 @@ test('old published GUI compatibility check is bounded to a supported OS, not a 
   assert.match(source,/runs-on: ubuntu-22.04/);
  }
  assert.ok(readFileSync(new URL('./smoke-deb-upgrade.mjs',import.meta.url),'utf8').includes('/usr/share/applications/com.danibot.app.desktop'));
+});
+
+test('migration comparison preserves all old fields and message contents while allowing new schema fields',()=>{
+ const source=readFileSync(new URL('./verify-deb-published-migration.cjs',import.meta.url),'utf8');
+ const body=source.slice(source.indexOf('function assertPreserved('),source.indexOf('function stop(){'));
+ const compare=new Function('assert',body+';return assertPreserved;')(assert);
+ const old={profile:{name:''},messages:[{id:'1',role:'bot',content:'real saved text'}]};
+ compare({profile:{name:'',aboutMe:''},messages:[{id:'1',role:'bot',content:'real saved text',extra:true}]},old);
+ assert.throws(()=>compare({profile:{name:''},messages:[{id:'1',role:'bot',content:'lost text'}]},old));
+ assert.throws(()=>compare({profile:{name:''},messages:[]},old));
+ assert.throws(()=>compare({profile:{},messages:old.messages},old));
+ assert.ok(source.includes('messages:body.messages??body'));
 });
