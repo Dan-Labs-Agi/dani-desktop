@@ -119,6 +119,12 @@ describe("the failure code a Cloud home reports", () => {
     expect(incidents(w)).toEqual([{ kind: "turn", code: "auth", engine: "codex", count: 1 }]);
   });
 
+  it("keeps current and persisted legacy restart records in the same incident category", () => {
+    const w = world();
+    for (const product of ["Dani Bot", "OpenMausBot"]) w.fail(`turn interrupted \u2014 ${product} restarted`);
+    expect(incidents(w)).toEqual([{ kind: "turn", code: "restart", engine: null, count: 2 }]);
+  });
+
   it("names the failures the server writes itself, and a trial credit's refusal", () => {
     const w = world();
     w.fail("no activity for 20 minutes — the turn was stopped");
