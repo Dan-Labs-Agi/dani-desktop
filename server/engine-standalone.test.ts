@@ -389,6 +389,15 @@ describe.skipIf(process.platform === "win32")("installing a standalone engine", 
     expect(leftovers()).toEqual([VERSION, "bin", "current.json"]);
   });
 
+  it("probes a new program only after its version directory is settled, before activation", async () => {
+    const program = `#!/bin/sh
+case "$0" in */.staging-*/*) echo 'probe ran before directory placement' >&2; exit 9;; esac
+echo 'fake-engine ${VERSION}'
+`;
+    await expect(install(await served("raw", {}, program))).resolves.toMatchObject({ version: VERSION });
+    expect(readFileSync(binPath(), "utf8")).toBe(program);
+  });
+
   it("never runs or keeps a swapped program, even one that prints the right version", async () => {
     const release = await served("raw");
     await install(release);

@@ -741,10 +741,6 @@ async function installOnce(release: StandaloneRelease, options: StandaloneInstal
     if (signedHere(key, release) && !(await macSignerOk(stagedProgram, release, codesign))) {
       throw new StandaloneInstallError(`The downloaded ${release.name} is not signed by its maker, so nothing was installed.`);
     }
-    const failure = await probeVersion(stagedProgram, release);
-    if (failure !== null) {
-      throw new StandaloneInstallError(`${release.name} was downloaded, but it doesn't start on this computer (${failure}). Nothing was installed.`);
-    }
     const record: InstallRecord = {
       engine: release.engine, version: release.version, sha256: asset.sha256, executable: asset.executable, executableSha256: programSha256, installedAt: Date.now(),
     };
@@ -762,10 +758,16 @@ async function installOnce(release: StandaloneRelease, options: StandaloneInstal
     }
     let installed: StandaloneInstalled;
     try {
+      // Never run a Windows executable while its directory still needs to move.
+      // Hash/signature checks already passed; the candidate is not active yet.
+      const failure = await probeVersion(executableIn(versionDir, asset.executable), release);
+      if (failure !== null) {
+        throw new StandaloneInstallError(`${release.name} was downloaded, but it doesn't start on this computer (${failure}). Nothing was installed.`);
+      }
       installed = await activate(engineDir, release, asset, programSha256);
     } catch (error) {
+      await removeDir(versionDir).catch(() => {});
       if (aside) {
-        await removeDir(versionDir).catch(() => {});
         await renameStandalonePath(aside, versionDir).catch(() => {});
       }
       throw error;
