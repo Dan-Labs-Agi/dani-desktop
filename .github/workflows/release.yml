@@ -247,6 +247,8 @@ jobs:
       - run: pnpm exec vitest run server/dani-free-runtime-lifecycle.test.ts server/dani-free-runtime.test.ts server/drivers/dani-free.test.ts server/dani-free-setup.test.ts server/engine-standalone.test.ts server/routes/instances.test.ts server/tested-ai.test.ts
 
   download_check:
+    permissions:
+      contents: write
     name: Download and install exact staged bytes (${{ matrix.os }}, ${{ matrix.format }})
     if: github.event_name != 'pull_request'
     needs: [prepare, linux, windows, macos]

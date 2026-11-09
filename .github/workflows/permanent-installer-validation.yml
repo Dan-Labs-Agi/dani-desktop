@@ -9,6 +9,10 @@ on:
         description: "Commit, tag, or branch to release (defaults to the selected branch)"
         required: false
         type: string
+      retained_source_sha:
+        description: "Download-only: exact source SHA of an existing immutable private validation draft"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -30,6 +34,7 @@ jobs:
       sha: ${{ steps.release.outputs.sha }}
       version: ${{ steps.release.outputs.version }}
       short: ${{ steps.release.outputs.short }}
+      verifier_sha: ${{ steps.release.outputs.verifier_sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,21 +44,28 @@ jobs:
       - id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          RETAINED_SOURCE_SHA: ${{ inputs.retained_source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          echo "verifier_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           sha=$(git rev-parse HEAD)
+          if [ -n "$RETAINED_SOURCE_SHA" ]; then
+            [[ "$RETAINED_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 1
+            sha="$RETAINED_SOURCE_SHA"
+          fi
           version=$(node -p "require('./package.json').version")
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "short=${sha:0:12}" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Stage an immutable private validation draft, never publish
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && inputs.retained_source_sha == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/release-staging.mjs prepare v${{ steps.release.outputs.version }}-validation.${{ steps.release.outputs.short }} ${{ steps.release.outputs.sha }}
 
   linux:
+    if: inputs.retained_source_sha == ''
     permissions:
       contents: write
     name: Linux x64 (AppImage + deb)
@@ -104,6 +116,7 @@ jobs:
         run: node scripts/release-staging.mjs upload v${{ needs.prepare.outputs.version }}-validation.${{ needs.prepare.outputs.short }} ${{ needs.prepare.outputs.sha }} linux
 
   windows:
+    if: inputs.retained_source_sha == ''
     permissions:
       contents: write
     name: Windows x64 (NSIS)
@@ -161,6 +174,7 @@ jobs:
         run: node scripts/release-staging.mjs upload v${{ needs.prepare.outputs.version }}-validation.${{ needs.prepare.outputs.short }} ${{ needs.prepare.outputs.sha }} windows
 
   macos:
+    if: inputs.retained_source_sha == ''
     permissions:
       contents: write
     name: macOS arm64 + Intel (dmg + zip)
@@ -243,8 +257,12 @@ jobs:
       - run: pnpm exec vitest run server/dani-free-runtime-lifecycle.test.ts server/dani-free-runtime.test.ts server/drivers/dani-free.test.ts server/dani-free-setup.test.ts server/engine-standalone.test.ts server/routes/instances.test.ts server/tested-ai.test.ts
 
   download_check:
+    # GitHub hides draft releases from read-only tokens. Write contents is needed to read this private draft;
+    # this job contains no upload, edit, delete or publication command.
+    permissions:
+      contents: write
     name: Download and install exact staged bytes (${{ matrix.os }}, ${{ matrix.format }})
-    if: github.event_name != 'pull_request'
+    if: always() && github.event_name != 'pull_request' && needs.prepare.result == 'success' && (inputs.retained_source_sha != '' || (needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result == 'success'))
     needs: [prepare, linux, windows, macos]
     strategy:
       fail-fast: false
@@ -278,7 +296,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ needs.prepare.outputs.sha }}
+          ref: ${{ needs.prepare.outputs.verifier_sha }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:

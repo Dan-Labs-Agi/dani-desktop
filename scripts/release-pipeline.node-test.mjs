@@ -102,3 +102,16 @@ test('fresh onboarding clicks the Welcome dialog install, not the upgrade button
   assert.ok(!verifier.includes("ui.page.locator('[data-dani-free-install]')"));
  }
 });
+test('private draft downloads have draft-read permission and a retained-byte path never rebuilds',()=>{
+ for(const file of ['release.yml','permanent-installer-validation.yml','tested-preview-download.yml']){
+  const text=readFileSync(new URL('../.github/workflows/'+file,import.meta.url),'utf8');
+  assert.match(text.slice(text.indexOf('  download_check:')),/permissions:\n      contents: write/);
+ }
+ const text=readFileSync(new URL('../.github/workflows/permanent-installer-validation.yml',import.meta.url),'utf8');
+ for(const job of ['linux','windows','macos'])assert.ok(text.includes('  '+job+':\n    if: inputs.retained_source_sha == '+"''"));
+ assert.match(text,/ref: \$\{\{ needs.prepare.outputs.verifier_sha \}\}/);
+ assert.match(text,/sha="\$RETAINED_SOURCE_SHA"/);
+ assert.match(text,/needs.prepare.result == 'success'/);
+ const download=text.slice(text.indexOf('  download_check:'));
+ assert.doesNotMatch(download,/release-staging|release-publish|--clobber/);
+});
