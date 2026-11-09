@@ -243,7 +243,7 @@ jobs:
           package-manager-cache: false
       - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
-      - run: node --test scripts/release-pipeline.node-test.mjs
+      - run: node --test scripts/release-pipeline.node-test.mjs scripts/release-asset-names.node-test.mjs
       - run: pnpm exec vitest run server/dani-free-runtime-lifecycle.test.ts server/dani-free-runtime.test.ts server/drivers/dani-free.test.ts server/dani-free-setup.test.ts server/engine-standalone.test.ts server/routes/instances.test.ts server/tested-ai.test.ts
 
   download_check:

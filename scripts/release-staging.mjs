@@ -3,6 +3,7 @@ import {execFileSync} from 'node:child_process';
 import {readdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {join} from 'node:path';
+import {releaseAssetNames} from './release-asset-names.mjs';
 const [command,tag,sha,platform]=process.argv.slice(2);
 const repo=process.env.GITHUB_REPOSITORY;if(!repo||!/^v\d+\.\d+\.\d+(?:-validation\.[a-f0-9]{12})?$/.test(tag??'')||!/^[a-f0-9]{40}$/.test(sha??''))throw Error('Invalid release identity');
 const candidate=tag.includes('-validation.');
@@ -23,7 +24,7 @@ if(command==='check-version') {
 } else if(command==='upload') {
  const release=JSON.parse(gh(['release','view',tag,'--repo',repo,'--json','isDraft,targetCommitish']));
  if(!release.isDraft||release.targetCommitish!==sha)throw Error('Draft source changed');
- const files=readdirSync('release').filter(n=>/\.(exe|zip|dmg|AppImage|deb|yml|blockmap)$/.test(n));
+ const files=releaseAssetNames(readdirSync('release'),platform);
  if(!files.length)throw Error('No release files');
  const inventory=files.map(name=>({name,sha256:createHash('sha256').update(readFileSync(join('release',name))).digest('hex')}));
  const manifest=`${platform}-SHA256SUMS.txt`;writeFileSync(join('release',manifest),inventory.map(x=>`${x.sha256}  ${x.name}\n`).join(''));
