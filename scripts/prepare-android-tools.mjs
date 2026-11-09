@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { downloadBytes } from "./official-download.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const platformNames = { darwin: "darwin", linux: "linux", win32: "win32" };
@@ -26,10 +27,8 @@ try {
     cpSync(override, staged, { recursive: true });
   } else {
     const url = `https://dl.google.com/android/repository/platform-tools-latest-${archive}.zip`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`could not download Android Platform Tools: HTTP ${response.status}`);
     const zip = join(temporary, basename(new URL(url).pathname));
-    writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
+    writeFileSync(zip, await downloadBytes(url));
     const extraction = join(temporary, "extracted");
     mkdirSync(extraction);
     // A bare "tar" is Windows' bundled bsdtar (zip-capable) in cmd/PowerShell

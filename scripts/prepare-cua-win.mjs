@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { build } from "esbuild";
+import { downloadBytes } from "./official-download.mjs";
 import { createBackgroundExecutable } from "./cua-windows-background.mjs";
 
 if (process.platform !== "win32" || process.arch !== "x64") throw new Error("prepare-cua-win requires Windows x64");
@@ -51,12 +52,9 @@ async function officialBinary() {
   await mkdir(cache, { recursive: true });
   const url = `https://github.com/trycua/cua/releases/download/cua-driver-rs-v${release.version}/${release.file}`;
   console.log(`Downloading CUA Driver ${release.version} from the official release…`);
-  const response = await fetch(url, {
-    headers: { "user-agent": "DaniBot-packager" },
-    signal: AbortSignal.timeout(120_000),
-  });
-  if (!response.ok) throw new Error(`CUA Driver download failed: HTTP ${response.status}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const bytes = await downloadBytes(url, { githubRelease: {
+    owner: "trycua", repo: "cua", tag: `cua-driver-rs-v${release.version}`, asset: release.file,
+  } });
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (digest !== release.sha256) {
     throw new Error(`CUA Driver checksum mismatch: expected ${release.sha256}, got ${digest}`);
