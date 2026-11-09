@@ -1,55 +1,231 @@
-name: Tested Windows preview download
+# Native desktop release builds. Each package is built on the OS it runs on,
+# then staged directly as release assets, verified and published only after all gates pass.
+name: Permanent installer validation
+
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit, tag, or branch to release (defaults to the selected branch)"
+        required: false
+        type: string
+
 permissions:
   contents: read
+
 concurrency:
-  group: tested-windows-preview
+  # A newer push to the same branch supersedes an older build. Tags and manual
+  # runs use their own refs, so they do not cancel branch releases.
+  group: permanent-installer-validation-${{ github.ref }}
   cancel-in-progress: false
+
 jobs:
   prepare:
+    name: Pin release commit
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     outputs:
-      sha: ${{ steps.draft.outputs.sha }}
-      tag: ${{ steps.draft.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.release.outputs.version }}
+      short: ${{ steps.release.outputs.short }}
     steps:
-      - id: draft
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SOURCE: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
-          tag=v0.1.139-preview.2
-          release_id=$(gh api "repos/$GH_REPO/releases?per_page=100" --jq '.[] | select(.tag_name == "v0.1.139-preview.2" and .draft == true and (.assets | length) == 0) | .id')
-          if gh release view "$tag" --json isDraft >/dev/null 2>&1 && [ -z "$release_id" ]; then
-            echo 'A nonempty or published preview exists; refuse replacement.' >&2
-            exit 1
-          fi
-          jq -n --arg tag "$tag" --arg sha "$SOURCE" '{tag_name:$tag,target_commitish:$sha,name:"Dani Desktop 0.1.139 testing preview",body:"Private test candidate. Not approved for public publication. Native install and exact-download results pending.",draft:true,prerelease:true}' > "$RUNNER_TEMP/draft.json"
-          if [ -n "$release_id" ]; then
-            gh api --method PATCH "repos/$GH_REPO/releases/$release_id" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
-          else
-            gh api --method POST "repos/$GH_REPO/releases" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
-          fi
-          echo "sha=$SOURCE" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-  build_install:
-    needs: prepare
-    runs-on: windows-latest
-    timeout-minutes: 90
+          sha=$(git rev-parse HEAD)
+          version=$(node -p "require('./package.json').version")
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "short=${sha:0:12}" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Stage an immutable private validation draft, never publish
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-staging.mjs prepare v${{ steps.release.outputs.version }}-validation.${{ steps.release.outputs.short }} ${{ steps.release.outputs.sha }}
+
+  linux:
     permissions:
       contents: write
+    name: Linux x64 (AppImage + deb)
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      NODE_OPTIONS: --max-old-space-size=6144
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
-      DANI_EVIDENCE_DIR: built-evidence
+      OMB_AI_CHECKS: "0"
+      NODE_OPTIONS: "--max-old-space-size=7168"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - name: Stage pinned cloudflared for Linux
+        run: node scripts/prepare-cloudflared.mjs
+      - name: Build Linux packages
+        run: pnpm package:linux
+      - run: node scripts/verify-linux-package.mjs
+      - name: Verify release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-amd64.deb
+          test -f release/latest-linux.yml
+      - name: Create stable download names
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          cp "release/DaniBot-$version-x86_64.AppImage" release/DaniBot.AppImage
+          cp "release/DaniBot-$version-amd64.deb" release/danibot-amd64.deb
+          test -s release/DaniBot.AppImage
+          test -s release/danibot-amd64.deb
+      - name: Upload verified packages directly to private release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-staging.mjs upload v${{ needs.prepare.outputs.version }}-validation.${{ needs.prepare.outputs.short }} ${{ needs.prepare.outputs.sha }} linux
+
+  windows:
+    permissions:
+      contents: write
+    name: Windows x64 (NSIS)
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      DANI_VERIFY_FREE_INSTALL: "1"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      OMB_AI_CHECKS: "0"
+      NODE_OPTIONS: "--max-old-space-size=7168"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - name: Stage pinned cloudflared for Windows
+        run: node scripts/prepare-cloudflared.mjs
+      - name: Verify startup and source installer regressions
+        run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs
+      - name: Build Windows packages
+        run: pnpm package:win
+      - name: Install isolated native smoke tools
+        shell: pwsh
+        run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - name: Verify installed Windows onboarding and relaunch
+        shell: pwsh
+        run: node scripts/verify-main-installed.cjs
+      - name: Verify release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-setup.exe
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-x64.zip
+          test -f release/latest.yml
+      - name: Create stable download name
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          cp "release/DaniBot-$version-setup.exe" release/DaniBot-setup.exe
+          cp "release/DaniBot-$version-x64.zip" release/DaniBot-Windows-Portable.zip
+          test -s release/DaniBot-setup.exe
+          test -s release/DaniBot-Windows-Portable.zip
+      - name: Upload verified packages directly to private release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-staging.mjs upload v${{ needs.prepare.outputs.version }}-validation.${{ needs.prepare.outputs.short }} ${{ needs.prepare.outputs.sha }} windows
+
+  macos:
+    permissions:
+      contents: write
+    name: macOS arm64 + Intel (dmg + zip)
+    needs: prepare
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      # No Apple Developer ID is configured yet. electron-builder may apply an
+      # ad-hoc signature, but these builds are not Developer ID signed or notarized.
+      DANI_VERIFY_FREE_INSTALL: "1"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # The arm64 runner has 7 GB of memory; keep the ceiling below it.
+      OMB_AI_CHECKS: "0"
+      NODE_OPTIONS: "--max-old-space-size=5120"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - name: Stage pinned cloudflared for both Mac architectures
+        run: node scripts/prepare-cloudflared.mjs
+      - name: Build macOS packages
+        run: pnpm package:mac
+      - name: Verify release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          for arch in arm64 x64; do
+            test -f "release/DaniBot-$version-$arch.dmg"
+            test -f "release/DaniBot-$version-mac-$arch.zip"
+          done
+          test -f release/latest-mac.yml
+      - name: Create stable download names
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=${{ needs.prepare.outputs.version }}
+          cp "release/DaniBot-$version-x64.dmg" release/DaniBot-Intel.dmg
+          cp "release/DaniBot-$version-arm64.dmg" release/DaniBot-Silicon.dmg
+          cp "release/DaniBot-$version-mac-x64.zip" release/DaniBot-Intel-Portable.zip
+          cp "release/DaniBot-$version-mac-arm64.zip" release/DaniBot-Silicon-Portable.zip
+          for file in \
+            DaniBot-Intel.dmg DaniBot-Silicon.dmg \
+            DaniBot-Intel-Portable.zip DaniBot-Silicon-Portable.zip; do
+            test -s "release/$file"
+          done
+      - name: Upload verified packages directly to private release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-staging.mjs upload v${{ needs.prepare.outputs.version }}-validation.${{ needs.prepare.outputs.short }} ${{ needs.prepare.outputs.sha }} macos
+
+  checks:
+    name: Release regression gate
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OMB_AI_CHECKS: '0'
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -61,37 +237,42 @@ jobs:
           package-manager-cache: false
       - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
-      - run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs electron/dani-brand-assets.node-test.mjs
-      - run: pnpm package:win
-      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - name: Install exact built NSIS, onboard, relaunch, preserve profile
-        run: node scripts/verify-main-installed.cjs
-      - name: Upload passed exact bytes directly to draft, never Actions storage
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $draft = gh release view $env:PREVIEW_TAG --json isDraft,targetCommitish | ConvertFrom-Json
-          if (!$draft.isDraft -or $draft.targetCommitish -ne '${{ needs.prepare.outputs.sha }}') { throw 'Draft identity changed' }
-          $exe = Get-Item release/DaniBot-0.1.139-setup.exe
-          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Set-Content -Encoding ascii release/WINDOWS-SHA256SUMS.txt
-          gh release upload $env:PREVIEW_TAG $exe.FullName release/WINDOWS-SHA256SUMS.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Installer draft upload failed' }
-          Get-ChildItem $env:DANI_EVIDENCE_DIR/*.png | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:RUNNER_TEMP ('built-' + $_.Name)) }
-          gh release upload $env:PREVIEW_TAG "$env:RUNNER_TEMP/built-INSTALLED.png" "$env:RUNNER_TEMP/built-CHIEF.png" "$env:RUNNER_TEMP/built-ONBOARDED.png" "$env:RUNNER_TEMP/built-RELAUNCHED.png"
-          if ($LASTEXITCODE -ne 0) { throw 'Evidence draft upload failed' }
-          Write-Output "EXACT_BUILT_INSTALLER_PASS sha256=$hash bytes=$($exe.Length)"
-  download_install:
-    needs: [prepare, build_install]
-    runs-on: windows-latest
+      - run: node --test scripts/release-pipeline.node-test.mjs
+      - run: pnpm exec vitest run server/dani-free-runtime-lifecycle.test.ts server/dani-free-runtime.test.ts server/drivers/dani-free.test.ts server/dani-free-setup.test.ts server/engine-standalone.test.ts server/routes/instances.test.ts server/tested-ai.test.ts
+
+  download_check:
+    name: Download and install exact staged bytes (${{ matrix.os }}, ${{ matrix.format }})
+    if: github.event_name != 'pull_request'
+    needs: [prepare, linux, windows, macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            format: nsis
+          - os: windows-latest
+            platform: windows
+            format: zip
+          - os: macos-latest
+            platform: macos
+            format: dmg
+          - os: macos-15-intel
+            platform: macos
+            format: dmg
+          - os: ubuntu-latest
+            platform: linux
+            format: deb
+          - os: ubuntu-latest
+            platform: linux
+            format: appimage
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 25
-    permissions:
-      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
-      DANI_EVIDENCE_DIR: downloaded-evidence
+      OMB_AI_CHECKS: '0'
+      DANI_VERIFY_FREE_INSTALL: '1'
+      DANI_INSTALLER_FORMAT: ${{ matrix.format }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -101,28 +282,13 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Download exact draft installer on a fresh machine and verify hash
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $draft = gh release view $env:PREVIEW_TAG --json isDraft,targetCommitish | ConvertFrom-Json
-          if (!$draft.isDraft -or $draft.targetCommitish -ne '${{ needs.prepare.outputs.sha }}') { throw 'Draft identity changed' }
-          New-Item -ItemType Directory release | Out-Null
-          gh release download $env:PREVIEW_TAG --pattern DaniBot-0.1.139-setup.exe --pattern WINDOWS-SHA256SUMS.txt --dir release
-          if ($LASTEXITCODE -ne 0) { throw 'Draft download failed' }
-          $expected = (Get-Content release/WINDOWS-SHA256SUMS.txt).Split(' ')[0]
-          $actual = (Get-FileHash release/DaniBot-0.1.139-setup.exe -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw 'Downloaded installer hash mismatch' }
-          Write-Output "EXACT_DOWNLOADED_INSTALLER_HASH $actual"
-      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - name: Install downloaded bytes, onboard, relaunch, preserve profile
+      - run: node scripts/release-download-verify.mjs v${{ needs.prepare.outputs.version }}-validation.${{ needs.prepare.outputs.short }} ${{ needs.prepare.outputs.sha }} ${{ matrix.platform }} ${{ matrix.format }}
+      - run: npm install --prefix "${{ runner.temp }}/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - if: matrix.platform == 'windows'
         run: node scripts/verify-main-installed.cjs
-      - name: Attach downloaded-install screenshots to private draft
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Get-ChildItem $env:DANI_EVIDENCE_DIR/*.png | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:RUNNER_TEMP ('downloaded-' + $_.Name)) }
-          gh release upload $env:PREVIEW_TAG "$env:RUNNER_TEMP/downloaded-INSTALLED.png" "$env:RUNNER_TEMP/downloaded-CHIEF.png" "$env:RUNNER_TEMP/downloaded-ONBOARDED.png" "$env:RUNNER_TEMP/downloaded-RELAUNCHED.png"
-          if ($LASTEXITCODE -ne 0) { throw 'Evidence draft upload failed' }
-          Write-Output 'EXACT_DOWNLOADED_INSTALLER_PASS'
-      # No publish, latest.yml, Actions artifact, cache, tag push or deploy step.
+      - if: matrix.platform == 'macos'
+        run: node scripts/verify-main-mac-installed.cjs
+      - if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2t64 xvfb dbus-x11 libnss3 libatk-bridge2.0-0 libgtk-3-0t64 libasound2t64
+      - if: matrix.platform == 'linux'
+        run: dbus-run-session -- xvfb-run -a node scripts/verify-main-linux-installed.cjs

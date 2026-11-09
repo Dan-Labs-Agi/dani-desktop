@@ -84,3 +84,7 @@ test('permanent validation stages source-bound private candidates without any pu
  const staging=readFileSync(new URL('./release-staging.mjs',import.meta.url),'utf8');
  assert.match(staging,/Candidate tag must identify its exact source/);assert.match(staging,/prerelease=\$\{candidate\}/);assert.doesNotMatch(staging,/--clobber|release','edit|release','delete/);
 });
+test('registered manual validation entrypoint runs the permanent path, never the obsolete fixed Windows preview',()=>{
+ const root=new URL('../.github/workflows/',import.meta.url);
+ assert.equal(readFileSync(new URL('tested-preview-download.yml',root),'utf8'),readFileSync(new URL('permanent-installer-validation.yml',root),'utf8'));
+});
