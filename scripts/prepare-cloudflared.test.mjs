@@ -57,13 +57,33 @@ describe("cloudflared download retries", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it("stops after three transient failures", async () => {
+  it("bounds direct retries and fails if the canonical API is also unavailable", async () => {
     const fetchMock = mockDownload();
     fetchMock.mockImplementation(async () => new Response("unavailable", { status: 503 }));
     const result = expect(releaseBytes({ name: "cloudflared-linux-amd64" })).rejects.toThrow(/HTTP 503/);
     await vi.runAllTimersAsync();
     await result;
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it.each(["valid", "corrupt", "wrong-tag", "missing", "ambiguous"])("recovers only the exact pinned API payload: %s", async (scenario) => {
+    const fetchMock = mockDownload();
+    const bytes = Buffer.from("pinned canonical asset");
+    const asset = { name: "cloudflared-darwin-amd64.tgz", sha256: sha256(bytes) };
+    for (let attempt = 0; attempt < 3; attempt++) fetchMock.mockResolvedValueOnce(new Response("gateway timeout", { status: 504 }));
+    const entry = { id: 662572905, name: asset.name, url: "https://untrusted.example.invalid/never-fetch" };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      tag_name: scenario === "wrong-tag" ? "other" : CLOUDFLARED_VERSION,
+      assets: scenario === "missing" ? [] : scenario === "ambiguous" ? [entry, entry] : [entry],
+    })));
+    fetchMock.mockResolvedValueOnce(new Response(scenario === "corrupt" ? "wrong bytes" : bytes));
+    const result = releaseBytes(asset);
+    const check = scenario === "valid" ? expect(result).resolves.toEqual(bytes)
+      : expect(result).rejects.toThrow(/SHA-256 verification|pinned version|missing or ambiguous/);
+    await vi.runAllTimersAsync();
+    await check;
+    expect(fetchMock).toHaveBeenCalledTimes(["valid", "corrupt"].includes(scenario) ? 5 : 4);
+    if (["valid", "corrupt"].includes(scenario)) expect(fetchMock.mock.calls[4][0]).toBe("https://api.github.com/repos/cloudflare/cloudflared/releases/assets/662572905");
   });
 
   it("fails immediately for a missing pinned asset", async () => {

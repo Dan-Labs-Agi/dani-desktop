@@ -233,11 +233,36 @@ export async function releaseBytes(asset) {
       if (!(error instanceof TypeError) && !["TimeoutError", "AbortError"].includes(error?.name)) throw error;
       failure = error;
     }
-    if (attempt === 3) throw failure;
+    if (attempt === 3) {
+      // The browser-download redirect can fail while GitHub's canonical asset
+      // API remains healthy. This is the same pinned release, never a mirror.
+      console.warn(`cloudflared direct download exhausted: ${failure.message}; trying the canonical asset API`);
+      return releaseAssetBytes(asset);
+    }
     const delay = 1_000 * 2 ** (attempt - 1);
     console.warn(`cloudflared download attempt ${attempt}/3 failed: ${failure.message}; retrying in ${delay}ms`);
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
+}
+
+async function releaseAssetBytes(asset) {
+  const api = "https://api.github.com/repos/cloudflare/cloudflared/releases";
+  const response = await fetch(`${api}/tags/${CLOUDFLARED_VERSION}`, {
+    headers: { Accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(120_000),
+  });
+  if (!response.ok) throw new Error(`cloudflared release metadata: HTTP ${response.status}`);
+  const release = await response.json();
+  if (release.tag_name !== CLOUDFLARED_VERSION || !Array.isArray(release.assets)) throw new Error("cloudflared release metadata did not match the pinned version");
+  const matches = release.assets.filter((entry) => entry.name === asset.name);
+  if (matches.length !== 1 || !Number.isSafeInteger(matches[0].id) || matches[0].id <= 0) throw new Error(`cloudflared pinned asset missing or ambiguous: ${asset.name}`);
+  const download = await fetch(`${api}/assets/${matches[0].id}`, {
+    headers: { Accept: "application/octet-stream" }, redirect: "follow", signal: AbortSignal.timeout(120_000),
+  });
+  if (!download.ok) throw new Error(`cloudflared asset API: HTTP ${download.status}`);
+  const payload = Buffer.from(await download.arrayBuffer());
+  // Do not let an API error body or a replacement asset enter the build.
+  verifySha256(payload, asset.sha256, asset.name);
+  return payload;
 }
 
 async function stageTarget(root, target) {
