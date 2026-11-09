@@ -314,3 +314,30 @@ jobs:
         run: dbus-run-session -- xvfb-run -a node scripts/verify-main-linux-installed.cjs
       - if: matrix.platform == 'linux' && matrix.format == 'deb'
         run: dbus-run-session -- xvfb-run -a bash scripts/verify-deb-clean-opt.sh
+
+  published_deb_migration:
+    name: Published DEB upgrade and preserved-state proof
+    if: always() && needs.prepare.result == 'success' && (inputs.retained_source_sha != '' || needs.linux.result == 'success')
+    needs: [prepare, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OMB_AI_CHECKS: '0'
+      DANI_INSTALLER_FORMAT: deb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.prepare.outputs.verifier_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: node scripts/release-download-verify.mjs v${{ needs.prepare.outputs.version }}-validation.${{ needs.prepare.outputs.short }} ${{ needs.prepare.outputs.sha }} linux deb
+      - run: node scripts/fetch-published-deb-migration.mjs
+      - run: npm install --prefix "${{ runner.temp }}/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - run: sudo apt-get update && sudo apt-get install -y xvfb dbus-x11 libnss3 libatk-bridge2.0-0 libgtk-3-0t64 libasound2t64
+      - run: dbus-run-session -- xvfb-run -a bash scripts/verify-deb-published-migration.sh

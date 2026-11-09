@@ -11,7 +11,7 @@ test('merged builds stage directly without Actions artifact or cache storage',()
  assert.match(release,/push:\n    branches:\n      - main/);assert.doesNotMatch(release,/upload-artifact@|download-artifact@|cache@|pull_request_target/);assert.match(release,/release-staging.mjs upload/);
 });
 test('publication waits for every native exact-download install and approval',()=>{
- assert.match(release,/needs: \[prepare, linux, windows, macos, download_check, checks\]/);assert.match(release,/release-download-verify.mjs/);assert.match(release,/macos-15-intel/);
+ assert.match(release,/needs: \[prepare, linux, windows, macos, download_check, checks, published_deb_migration\]/);assert.match(release,/release-download-verify.mjs/);assert.match(release,/macos-15-intel/);
  const publish=readFileSync(new URL('./release-publish.mjs',import.meta.url),'utf8');assert.match(publish,/publicationApproved!==true/);assert.match(publish,/--latest=\$\{!policy.prerelease\}/);
 });
 test('download links and updater use the same current repository',()=>{

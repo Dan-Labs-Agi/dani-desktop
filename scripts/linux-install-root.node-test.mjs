@@ -26,3 +26,14 @@ test('package payload and custom privileged hooks pin the same space-free root',
  assert.match(read('build/linux-danibot-browser.apparmor'),/\/opt\/danibot\/\{danibot,/);
  assert.match(read('build/linux-after-remove.sh'),/"\/opt\/danibot\/danibot" "\/opt\/Dani Bot\/danibot"/);
 });
+test('published migration is exact real source and required before publication',()=>{
+ const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+ const source=read('scripts/fetch-published-deb-migration.mjs');
+ assert.match(source,/702141437/);assert.match(source,/450485508/);assert.match(source,/d61e9d434efef9034587be8db32ff1d7667dd7ac875c5773f5f40951fddd540b/);
+ const migration=read('scripts/verify-deb-published-migration.cjs');
+ for(const value of ['published-state.json','assert.deepEqual(state','/api/threads/','synthetic-preserved-marker.txt','PUBLISHED_DEB_MIGRATION_'])assert.ok(migration.includes(value));
+ const shell=read('scripts/verify-deb-published-migration.sh');
+ assert.match(shell,/DANI_MIGRATION_PHASE=published/);assert.match(shell,/DANI_MIGRATION_PHASE=upgraded/);
+ assert.doesNotMatch(shell,/--no-sandbox|--disable-gpu-sandbox|chown[^\n]*\/opt/);
+ assert.match(read('.github/workflows/release.yml'),/needs: \[prepare, linux, windows, macos, download_check, checks, published_deb_migration\]/);
+});

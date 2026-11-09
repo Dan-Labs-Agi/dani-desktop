@@ -8,7 +8,7 @@ test('download matrix verifies each README advertised format on its native OS',(
  assert.equal((workflow.match(/format: dmg/g)||[]).length,2);
  assert.ok(workflow.includes('DANI_INSTALLER_FORMAT: ${{ matrix.format }}'));
  assert.ok(workflow.includes('${{ matrix.platform }} ${{ matrix.format }}'));
- assert.ok(workflow.includes('needs: [prepare, linux, windows, macos, download_check, checks]'));
+ assert.ok(workflow.includes('needs: [prepare, linux, windows, macos, download_check, checks, published_deb_migration]'));
  assert.ok(!workflow.includes('continue-on-error: true'));
 });
 test('Windows portable ZIP and Linux original AppImage are actually launched, not only inspected',()=>{
