@@ -443,7 +443,7 @@ describe("a run that Dani Bot's shutdown cuts off", () => {
     expect(h.failed).toEqual([]);
 
     h.restart();
-    expect(h.run(run.id)).toMatchObject({ status: "queued", retried: "restarted", threadId: "thread-1", attention: "Starting again shortly after OpenMausBot restarted while it ran" });
+    expect(h.run(run.id)).toMatchObject({ status: "queued", retried: "restarted", threadId: "thread-1", attention: "Starting again shortly after Dani Bot restarted while it ran" });
     expect(h.cut.map((cut) => cut.id)).toEqual([run.id]);
     h.restart();
     expect(h.cut).toHaveLength(1);
