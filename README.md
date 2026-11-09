@@ -1,287 +1,158 @@
-
-
 <div align="center">
 
-# Dani Bot
+<a href="https://github.com/somdipto/dani-desktop/releases/latest">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/readme/hero-static.webp">
+    <img src="docs/assets/readme/hero.webp" width="100%" alt="Dani Bot: your own team of AI bots, in a chat app. Seven 3D robots stand in a row. Dani, in the middle, wears a crown.">
+  </picture>
+</a>
 
-**Your own team of AI bots, in a chat app.**
+<br>
+<br>
 
-<sub>Bring-your-own-agent, local-first, on the models you already have.</sub>
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-mac-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-mac-light.png"><img src="docs/assets/readme/btn-mac-light.png" width="226" alt="Download for macOS (Apple silicon)"></picture></a>&nbsp;
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-win-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-win-light.png"><img src="docs/assets/readme/btn-win-light.png" width="226" alt="Download for Windows (installer)"></picture></a>&nbsp;
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-lin-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-lin-light.png"><img src="docs/assets/readme/btn-lin-light.png" width="226" alt="Download for Ubuntu (AppImage)"></picture></a>
 
-Every bot in the sidebar is a real agent — powered by the agent CLIs and models you already have,
-or the built-in free model route — with its own personality, its own model, its own computer, and its
-own connected apps. Talk to them like contacts. Watch them work. Approve what matters.
-
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Electron](https://img.shields.io/badge/Electron-macOS%20%C2%B7%20Windows%20%C2%B7%20Ubuntu-2B2E3A?logo=electron&logoColor=9FEAF9)
-![Agents](https://img.shields.io/badge/agents-your%20CLIs%20·%20local%20models-d97757)
-![Release pipeline](https://img.shields.io/badge/releases-version%20tags-1084fe)
-![PRs](https://img.shields.io/badge/PRs-welcome-38d591)
+<sub>Also: [Mac (Intel)](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg) · [Windows portable](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip) · [Ubuntu .deb](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb) · [All releases](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
 
 <br>
 
-### ⬇️ Download Dani Bot
-
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><img src="https://img.shields.io/badge/Download-macOS_Apple_Silicon-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Apple Silicon)">
-
-</a>
-
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg"><img src="https://img.shields.io/badge/Download-macOS_Intel-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Intel)">
-
-</a>
-
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe"><img src="https://img.shields.io/badge/Download-Windows_Installer-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (installer)">
-
-</a>
-
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip"><img src="https://img.shields.io/badge/Download-Windows_Portable-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (portable zip)">
-
-</a>
-
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage"><img src="https://img.shields.io/badge/Download-Linux_AppImage-b85c00?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux (AppImage)">
-
-</a>
-
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb"><img src="https://img.shields.io/badge/Download-Linux_.deb-b85c00?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Download for Linux (deb)">
-
-</a>
-
-<sub>These buttons always fetch the newest release. [All downloads and release notes →](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
-
-<br>
-
-<img src="docs/assets/screenshots/dani-hero-dark.png" alt="Dani Desktop in dark mode: a chat with Dani and the connected-apps market, with the Dani robots around the windows" width="900">
+**[Features](#what-it-does)** &nbsp;·&nbsp; **[How it works](#how-it-works)** &nbsp;·&nbsp; **[Install](#install)** &nbsp;·&nbsp; **[Platforms](#platform-support)** &nbsp;·&nbsp; **[Contribute](#status-and-contributing)**
 
 </div>
 
----
+<br>
 
-## Why
+## One assistant in one box is the wrong shape for agents.
 
-One assistant in one box is the wrong shape for agents. Dani Bot is a
-messaging app for agents — a roster of bots you chat with, each with its own personality,
-memory of its thread, model, computer, and apps — rebuilt open, local-first, and on the agents you
-already have:
+Dani Bot is a messaging app for agents. Every bot in the sidebar is a real agent, running on the CLIs and models you already have or the built-in free model route, with its own personality, model, computer, and connected apps.
 
-- **Bring your own agents.** Bots run on the `claude`, `codex`, and `grok` CLIs installed on your own machine
-— your existing logins and subscriptions, no new accounts, no proxy in the middle. Point any engine at a
-custom CLI binary (a versioned build or wrapper) in **Settings → Engines**.
-- **Local first.** One small harness server on `127.0.0.1` owns every agent process. Transcripts, keys, and
-events live in `~/.danibot`, not a cloud.
-- **Agents with hands.** Each bot can use a cloud Linux desktop, an isolated Local VM, or—where the platform
-safety boundary is currently certified—your own computer, plus 500+ apps through Composio. Host control is
-available on macOS and Ubuntu Xorg after explicit opt-in. Ubuntu Wayland host control remains disabled while
-issue #345 is resolved.
+**Talk to them like contacts. Watch them work. Approve what matters.**
 
-## Features
+- **Bring your own agents.** Bots run on the `claude`, `codex`, and `grok` CLIs on your own machine, with your existing logins and subscriptions. No new accounts, no proxy in the middle. Point any engine at a custom binary in **Settings → Engines**.
+- **Local first.** One small harness server on `127.0.0.1` owns every agent process. Transcripts, keys, and events live in `~/.danibot`, not a cloud.
+- **Agents with hands.** A bot can use a cloud Linux desktop, an isolated Local VM, or your own computer where the platform's safety boundary is certified, plus 500+ apps through Composio.
+
+<br>
+
+## What it does
+
+### Bots you talk to like contacts
+
+Right-click any bot to pin it, mark it unread, edit its profile, duplicate it, copy its conversation ID, hide it, or delete it. Replies stream in with tool-run activity chips, and screenshots of the bot's work fold into the transcript.
+
+<img src="docs/assets/readme/team.webp" width="100%" alt="The Dani Bot chat window with a roster of bots in the sidebar and Bow asking what to help with first. Bow, a pink robot with a bow, waves from the corner.">
+
+### A different brain for every bot
+
+Each bot's picker shows the models its engine can actually run: local models through Hermes out of the box, cloud providers once their keys are in Settings. Switch mid-conversation.
+
+<img src="docs/assets/readme/models.webp" width="100%" alt="The per-bot model picker open over a chat with Dani, listing the models available to its engine.">
+
+### Every bot gets a computer
+
+Open the Computer panel to see which machine a bot is assigned to, start a private view-only preview of this one, or turn on local control after explicit opt-in. Every local action still asks first.
+
+<img src="docs/assets/readme/computer.webp" width="100%" alt="A chat beside the Computer panel, with Screen, Browser, Data and Files tabs. Tuft, a blue robot, stands in front of the panel.">
+
+### The whole crew in one chat
+
+Make a group from any bots on your roster. Give it a shared working folder and a brief every member sees on each turn, then choose who answers: an auto lead, one named bot, everyone, or only the bots you @mention.
+
+<img src="docs/assets/readme/group.webp" width="100%" alt="Group chat setup with a working folder, default responder choices, and shared group instructions.">
+
+### 500+ apps, connected once
+
+A one-click marketplace over Composio Sessions: Gmail, Slack, GitHub, Notion, Linear, and hundreds more. Connect an app or your own MCP server once, then choose which bots may use it.
+
+<img src="docs/assets/readme/apps.webp" width="100%" alt="The connected-apps market listing Google Calendar, GitHub, Linear, Slack, Gmail and more, each with a Connect button.">
+
+### Keys once, everything lights up
+
+Paste credentials in App Settings. They persist locally and the provider fleet hot-reloads instantly. Secrets are write-only: the UI only ever sees "configured" flags.
+
+<img src="docs/assets/readme/keys.webp" width="100%" alt="AI settings listing each provider with a single Set up button, plus an API keys section.">
+
+### And the rest
 
 <table>
-
 <tr>
-
-<td width="50%" valign="top">
-
-### 🧠 Pick a brain per bot
-
-Each bot's model picker shows the models its engine can actually run - local models through Hermes out
-of the box, cloud providers once their keys are in Settings - with the default marked. Switch a bot's model
-mid-conversation.
-
-<img src="docs/assets/screenshots/dani-models-dark.png" alt="The per-bot model picker listing the models the installed engine can run, in dark mode" width="100%">
-
-</td>
-
-<td width="50%" valign="top">
-
-### 🖥️ Every bot gets a computer
-
-Open the Computer panel to see which computer a bot is assigned to, start a private view-only
-preview of this machine, or enable local control after explicit opt-in - every local action still asks
-first.
-
-<img src="docs/assets/screenshots/dani-computer-dark.png" alt="The bot Computer panel with Screen, Browser, Data and Files tabs and the browser permission toggle, in dark mode" width="100%">
-
-</td>
-
+<td width="28%"><b>Channels for every context</b></td>
+<td>Keep Work, Personal, and each project apart without cloning your bots. Each channel has its own transcript, shared instructions, working folder, responder rules, and roster.</td>
 </tr>
-
 <tr>
-
-<td width="50%" valign="top">
-
-### 👥 Put the whole crew in one chat
-
-Create a group chat from any bots on your roster. Give the team a shared working folder and a brief
-every member sees on each turn, then choose who answers - an auto lead, one named bot, everyone,
-or only the bots you @mention.
-
-<img src="docs/assets/screenshots/dani-group-setup-dark.png" alt="Setting up a group chat: shared working folder, default responder choices, and a shared group brief, in dark mode" width="100%">
-
-</td>
-
-<td width="50%" valign="top">
-
-### 🔌 Connected apps
-
-A one-click marketplace over Composio Sessions: Gmail, Slack, GitHub, Notion, Linear and hundreds more.
-OAuth once, and every bot can use them as tools.
-
-<img src="docs/assets/screenshots/dani-apps-dark.png" alt="The connected-apps market: Gmail, Slack, GitHub, Notion, Linear and more with one-click Connect buttons, in dark mode" width="100%">
-
-</td>
-
+<td width="28%"><b>A team from one Markdown file</b></td>
+<td>Pick an outcome-driven team on <a href="https://botmrr.io">BotMRR</a> and choose <b>Add to Dani Bot</b>, or use <b>Teams → Import</b> with a <code>.md</code> file or public GitHub URL. You review it all first. Connections stay off until you approve them, routines arrive paused, and packages never carry credentials, conversations, permissions, memory, or computer access.</td>
 </tr>
-
 <tr>
-
-<td width="50%" valign="top">
-
-### 🗂 Manage bots like chats
-
-Right-click any bot: pin, mark unread, edit profile, duplicate, copy conversation ID, hide, delete. It's a
-messaging app — your agents behave like contacts.
-
-<img src="docs/assets/screenshots/dani-team-dark.png" alt="A team of Dani bots in the chat list, each with its own color, in dark mode" width="100%">
-
-</td>
-
-<td width="50%" valign="top">
-
-### 🔑 Keys once, everything lights up
-
-Paste credentials in App Settings — they persist locally and the provider fleet hot-reloads instantly.
-Secrets are write-only: the UI only ever sees "configured" flags.
-
-<img src="docs/assets/screenshots/dani-keys-dark.png" alt="AI settings: every provider with one Set up button and the API keys section, in dark mode" width="100%">
-
-</td>
-
+<td width="28%"><b>Bots that talk back</b></td>
+<td>Press the speaker on any reply, or have a bot read answers as they land. Hit call and it's a conversation: it hears you, says what it's doing, and asks for approvals out loud. Bring your own ElevenLabs key and give each bot its own voice.</td>
 </tr>
-
+<tr>
+<td width="28%"><b>Routines and webhooks</b></td>
+<td>Run once, on chosen weekdays, or every 5 to 1,440 minutes. Slow runs skip the next occurrence instead of piling up. Webhook triggers fire the same queued tasks.</td>
+</tr>
+<tr>
+<td width="28%"><b>Orchestrate over MCP</b></td>
+<td>A stdio <a href="docs/mcp-server.md">MCP server</a> lets Claude Desktop, Cursor, and other clients run your team: inspect, create, send work, wait, switch models, interrupt. It can't grant approvals, delete data, read credentials, or control computers.</td>
+</tr>
+<tr>
+<td width="28%"><b>Extras</b></td>
+<td>Native macOS dictation with on-device Apple speech · cursor mascots with role-aware expressions · 16 interface languages</td>
+</tr>
 </table>
 
-### #️⃣ Channels for every context
-
-Keep Work, Personal, and each project in separate channels without cloning your bots. Every channel has
-its own transcript, shared instructions, working folder, responder rules, and editable bot roster. File a
-channel and its bots under a named context, then rename it or change its members whenever the team changes.
-
-### 📦 Install a complete team from one Markdown file
-
-Browse outcome-driven teams on [BotMRR](https://botmrr.io), then choose **Add to Dani Bot**. The app
-opens a review screen before creating the bots, Chief of Staff, channels, playbooks, connector checklist,
-and suggested routines. You can also import the same `.md` file from disk or paste its public GitHub URL
-in **Teams → Import**.
-
-The format stays portable: Dani Bot reads the structured YAML frontmatter for a reliable one-click
-install, while Grok, Claude, ChatGPT, and people can follow the ordinary Markdown playbook. Connections
-remain off until you approve them, routines arrive paused, and packages never carry credentials,
-conversations, permissions, memory, or computer access. Browse the
-[open-source playbook repository](https://github.com/somdipto/dani-desktop) or read its
-[portable format](https://github.com/somdipto/dani-desktop).
-
-### 🎧 Bots that talk back
-
-Press the speaker on any reply, or switch a bot to read its answers out as they land — so you can listen
-to what ran overnight while you make breakfast. Hit **call** and it's a conversation: it hears you, tells
-you what it's doing while it works, and asks for approvals out loud.
-
-Bring your own ElevenLabs key — paste it once in App Settings, pick a voice, and every bot can talk.
-Give a bot its own voice and a channel stops sounding like one person.
-
-**Also in the box:** streaming replies with tool-run activity chips · native macOS dictation from the
-composer mic (on-device Apple speech recognition — desktop app) · cursor mascots with role-aware
-expressions · screenshots of the bot's work folded into the transcript.
+<br>
 
 ## How it works
 
-Two processes. The app holds no transports of its own — it sends typed commands over HTTP and folds one SSE
-event stream into state. The harness server owns every agent process and normalizes each provider's native
-protocol into one canonical runtime event stream (logged per-thread as NDJSON).
+<img src="docs/assets/readme/architecture.webp" width="100%" alt="Architecture: the app sends HTTP commands to a harness server on 127.0.0.1:8799 and folds one SSE stream back. The harness spawns local agent CLIs, brokers their permission requests, and optionally talks to a Box cloud computer and Composio connected apps.">
 
-```mermaid
-flowchart LR
-    subgraph app ["App — React + Tailwind (5199)"]
-        UI[Chat UI · model picker · computer panel]
-    end
-    subgraph server ["Harness server (127.0.0.1:8799)"]
-        REG[Driver registry] --> BUS[Event bus → SSE]
-        BROKER[Permission broker]
-    end
-    subgraph agents ["Agents on your computer"]
-        CL[claude CLI]
-        CX[codex CLI]
-        GR[grok CLI]
-    end
-    UI -- "HTTP commands" --> server
-    BUS -- "one SSE stream" --> UI
-    REG --> CL & CX & GR
-    CL & CX & GR -- "permission requests" --> BROKER
-    server -- "Box API" --> BOX[("Cloud computer<br/>box.ascii.dev")]
-    server -- "Composio Session" --> APPS[("Gmail · Slack · GitHub · …")]
-```
+Two processes. The app holds no transports of its own: it sends typed commands over HTTP and folds one SSE stream into state. The harness owns every agent process and normalizes each provider's native protocol into one canonical event stream, logged per thread as NDJSON.
 
+<details>
+<summary><b>Where everything lives</b></summary>
 
-| Layer   | Where             | What it does                                                                                                                                                                                        |
-| ------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Drivers | `server/drivers/` | One per provider: Claude, Codex, and Grok Build over their local CLIs (stream-JSON / JSON-RPC / ACP), plus a cloud-computer agent. Unknown drivers degrade to "unavailable", never crash the fleet. |
-| Harness | `server/harness/` | Registry (configs → live instances) and the fan-in event bus every client folds.                                                                                                                    |
-| API     | `server/index.ts` | Bots, turns, approvals, model catalog, computer lifecycle, connectors, config — HTTP + SSE.                                                                                                         |
-| Voice   | `server/tts/`     | ElevenLabs, bring your own key. Runs on the harness so the key never reaches the UI; markdown is rewritten into something worth hearing before it is spoken.                                        |
-| App     | `src/`            | The chat shell. Server-backed store, one reducer, zero client-side transports.                                                                                                                      |
-| Desktop | `electron/`       | macOS, Windows, and Ubuntu shells with an embedded harness and platform capabilities; Apple speech stays macOS-only, Ubuntu Xorg has opt-in local control, and Wayland remains fail-closed.         |
+<br>
 
+| Layer | Where | What it does |
+| :-- | :-- | :-- |
+| **Drivers** | `server/drivers/` | One per provider: Claude, Codex, and Grok over their local CLIs (stream-JSON / JSON-RPC / ACP), a cloud-computer agent, and drivers for Gemini, Kimi, Droid, Cursor, OpenCode, Qwen, Hermes, Cline, Copilot, Pi, and more. Unknown drivers degrade to "unavailable" and never crash the fleet. |
+| **Harness** | `server/harness/` | Registry (configs → live instances) and the fan-in event bus every client folds. |
+| **API** | `server/index.ts` | Bots, turns, approvals, model catalog, computer lifecycle, connectors, config, over HTTP + SSE. |
+| **Voice** | `server/tts/` | ElevenLabs, bring your own key. Runs on the harness so the key never reaches the UI. |
+| **App** | `src/` | The chat shell. Server-backed store, one reducer, zero client-side transports. |
+| **Desktop** | `electron/` | macOS, Windows, and Ubuntu shells with an embedded harness and platform capabilities. |
 
-### Orchestrate Dani Bot over MCP
+</details>
 
-Dani Bot ships a stdio MCP server for external clients such as Claude Desktop and Cursor. It exposes a
-deliberately bounded team control plane: inspect bots and channels, read/search compact transcript pages,
-create and configure bots/channels/tasks, send work, wait for completion, switch models, and interrupt turns.
-It does **not** expose approval grants, deletion, arbitrary settings, credentials, or computer lifecycle.
+<br>
 
-See [MCP server setup and tool reference](docs/mcp-server.md).
+## Install
 
-## Quick start
+**Download an installer** with the buttons at the top. First launch opens the setup wizard on every platform. The Windows installer is unsigned, so SmartScreen shows an "unknown publisher" prompt on first run.
 
-**Installers - one download per desktop OS** (stable names, always resolving to the [newest release](https://github.com/somdipto/dani-desktop/releases/latest)):
-
-
-| Platform             | Download                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| macOS, Apple silicon | [DaniBot-Silicon.dmg](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg) |
-| macOS, Intel         | [DaniBot-Intel.dmg](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg)     |
-| Windows              | [DaniBot-setup.exe](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe)     |
-| Ubuntu, AppImage     | [DaniBot.AppImage](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage)       |
-| Ubuntu, .deb         | [danibot-amd64.deb](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb)     |
-
-
-The Windows installer is unsigned, so SmartScreen shows an "unknown publisher" prompt on first run. First launch opens the setup wizard on every platform.
-
-See the [Ubuntu Desktop guide](docs/linux-desktop.md) for platform notes and source-build prerequisites.
-Any desktop build can also pair as a client to another Windows, macOS, or Ubuntu host over Tailscale; see [desktop-to-desktop companion mode](docs/desktop-companion.md).
-
-**One command, from nothing to a running app** (idempotent - safe to re-run; prints a verified success check):
-
-macOS / Ubuntu:
+**Or build one from source** with a single command. It clones or reuses the repo, installs dependencies, packages the desktop app for your platform, and prints the installer path. It's safe to re-run.
 
 ```sh
+# macOS / Ubuntu
 curl -fsSL https://raw.githubusercontent.com/somdipto/dani-desktop/main/install.sh | sh
 ```
 
-Windows (PowerShell):
-
 ```powershell
+# Windows (PowerShell)
 irm https://raw.githubusercontent.com/somdipto/dani-desktop/main/install.ps1 | iex
 ```
 
-The script clones (or reuses) the repo, installs dependencies, packages the
-desktop app for your platform, and prints the verified installer path and how
-to launch it. First launch opens the setup wizard. These exact commands are
-tested against `install.sh` / `install.ps1` in CI, so this block cannot drift
-from the scripts it documents.
+**You'll need** macOS, Windows, or Ubuntu 24.04 x64, plus Node 24+ and pnpm to build from source. Install and log in to at least one agent CLI (`claude`, `codex`, or `grok`) and it appears in the model picker automatically.
 
-**Or step by step, from source:**
+Any desktop build can also pair as a client to another Windows, macOS, or Ubuntu host over Tailscale. See [desktop-to-desktop companion mode](docs/desktop-companion.md) and the [Ubuntu Desktop guide](docs/linux-desktop.md).
+
+<details>
+<summary><b>Run from source</b></summary>
+
+<br>
 
 ```sh
 git clone https://github.com/somdipto/dani-desktop && cd dani-desktop
@@ -292,147 +163,102 @@ pnpm dev           # app → http://127.0.0.1:5199
 pnpm dev:desktop   # Electron shell; keep the two commands above running
 ```
 
-To start all three in separate terminals, run `./start-dev.sh` on macOS or
-Linux, or `./start-dev.ps1` in PowerShell on Windows. The launcher installs
-the pinned pnpm version if needed and installs dependencies when they are not
-already present. The Windows launcher also installs the current Node LTS with
-`winget` when Node is missing or older than version 24.
-
-Requirements: **macOS, Windows, or Ubuntu 24.04 x64**, **Node 24+**, **pnpm**, and at least one agent CLI — [`claude`](https://claude.com/claude-code),
-[`codex`](https://github.com/openai/codex), or [`grok`](https://x.ai/cli) — installed and logged in. They appear
-in the model picker automatically.
-
-Package the desktop application:
+Check and package:
 
 ```sh
-pnpm package:mac      # macOS: DMG + ZIP; requires Swift/Xcode tools
-pnpm package:win      # Windows: installer + ZIP
-pnpm package:linux    # Ubuntu x64: .deb + AppImage + verified CUA runtime
+pnpm typecheck       # app + server
+pnpm test            # unit, driver, API, and desktop capability tests
+pnpm build           # typecheck + production build
+pnpm check:electron  # syntax-check Electron main/preload files
+
+pnpm package:mac     # macOS: DMG + ZIP; requires Swift/Xcode tools
+pnpm package:win     # Windows: installer + ZIP
+pnpm package:linux   # Ubuntu x64: .deb + AppImage + verified CUA runtime
 ```
 
-### Desktop capability status
+</details>
 
+<details>
+<summary><b>Optional credentials</b></summary>
 
-| Capability                                       | macOS     | Ubuntu 24.04 Xorg     | Ubuntu 24.04 Wayland          |
-| ------------------------------------------------ | --------- | --------------------- | ----------------------------- |
-| Packaged app, embedded harness, local agent CLIs | Supported | Beta                  | Beta                          |
-| Composio and Box/cloud computers                 | Supported | Beta                  | Beta                          |
-| Explicit preview-only local screen capture       | Supported | Beta                  | Beta                          |
-| Bot control of this computer                     | Supported | Beta, explicit opt-in | Disabled: Wayland safety gate |
-| Native on-device dictation                       | Supported | Planned               | Planned                       |
+<br>
 
+Local chat works without these. Paste a key once in **App Settings** when you want an integration.
 
-The Linux preview is user-initiated and never enables local bot control or Auto routing. On Xorg, the reviewed Cua
-Driver 0.19.3 runtime starts only after explicit opt-in and without its full-screen cursor overlay. On Wayland the
-app never starts it and clears legacy opt-ins while that real-seat safety gate remains unresolved. Chat, preview,
-Cloud, and Local VM remain available on both sessions. See the [Ubuntu Desktop guide](docs/linux-desktop.md) and tracking
-issues [#29](https://github.com/somdipto/dani-desktop/issues/29),
-[#345](https://github.com/somdipto/dani-desktop/issues/345), and
-[#113](https://github.com/somdipto/dani-desktop/issues/113).
+| Credential | What it enables | Get it |
+| :-- | :-- | :-- |
+| Composio project key (`ak_…`) | Gmail, GitHub, Slack, Notion, and other apps for your bots | [Composio setup](docs/composio.md) |
+| Box API key | An isolated remote Linux computer with a desktop and terminal | [Box API key guide](https://docs.ascii.dev/box/api-keys) |
+| ElevenLabs key | Read replies aloud and call your bots | [ElevenLabs API keys](https://elevenlabs.io/app/settings/api-keys) |
 
-The Linux packager downloads only the tag-pinned upstream archive during the build, verifies its size, SHA-256,
-complete member allowlist, and inner executable hashes, then packages only the CLI and cursor-theme sidecar. The
-installed app never downloads or self-updates native automation code. Cua's MIT notice, Inter's SIL OFL, a generated
-third-party license report, and a CycloneDX inventory ship with the runtime. See
-[`third_party/cua-driver/`](third_party/cua-driver/) for the reviewed provenance record.
+Composio and Box are third-party services with their own accounts and terms. Box is paid after its trial, and using a cloud computer may incur charges.
 
-These credentials are optional — local chat works without them. Paste a key once in **App Settings** (gear
-in the sidebar footer) when you want to enable its integration:
+</details>
 
+<details>
+<summary><b>Routine and webhook details</b></summary>
 
-| Credential                    | What it enables                                                         | Where to get it                                                    |
-| ----------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Composio project key (`ak_…`) | Connect Gmail, GitHub, Slack, Notion, and other apps to your bots       | [Dani Bot Composio setup](docs/composio.md)                        |
-| Box API key                   | Give bots an isolated remote Linux computer with a desktop and terminal | [Box API key guide](https://docs.ascii.dev/box/api-keys)           |
-| ElevenLabs key                | Read replies aloud, and call your bots                                  | [ElevenLabs API keys](https://elevenlabs.io/app/settings/api-keys) |
+<br>
 
+Routines use a bot's configured model and computer or the Cloud VM runner. Interval schedules stay aligned to their chosen start time. An optional **Advanced** run limit can stop stuck work; no timeout applies unless you choose one.
 
-Composio and Box are third-party services with their own accounts and terms. Box is a paid service after
-its trial, and using a cloud computer may incur charges.
+Dani Bot starts a webhook-only receiver on `127.0.0.1:8800` by default, or one port above `DANI_PORT`. Set `DANI_WEBHOOK_PORT` to choose another. A webhook secret is shown once when a trigger is created or rotated. Bearer authentication is recommended so the secret stays out of URLs and most access logs; a capability URL remains for senders that can't set headers. The receiver exposes only `/health` and secret `/hooks/...` endpoints, never the app's wider API.
 
-```sh
-pnpm typecheck     # app + server
-pnpm test          # unit, driver, API, and desktop capability tests
-pnpm build         # typecheck + production build
-pnpm check:electron # syntax-check Electron main/preload files
-pnpm package:win   # Windows installer + zip → release/
-pnpm package:linux # Ubuntu x64 .deb + AppImage → release/
-```
+Dani Bot must be running to accept a delivery. For public internet delivery, proxy only this receiver through a hosted relay or a tool such as Tailscale Funnel.
 
-### Routines and webhook triggers
+</details>
 
-Routines can run once, on selected weekdays, or every 5–1,440 minutes, using either a bot's configured
-model/computer or the Cloud VM runner. Interval schedules stay aligned to their chosen start time and skip
-an occurrence when the previous run is still active, so slow work cannot build an unbounded queue. A
-separate optional Advanced run limit can safely stop stuck work; no timeout is imposed unless one is chosen.
-The existing duration field remains calendar/display metadata. Webhook triggers are independent from schedules
-but reuse the same queued task executor and calendar
-receipts.
+<details>
+<summary><b>Uninstall</b></summary>
 
-Dani Bot starts a webhook-only receiver on `127.0.0.1:8800` by default (or one port above `DANI_PORT`).
-Set `DANI_WEBHOOK_PORT` to choose another port. A webhook secret is shown once when the trigger is created
-or rotated. Bearer authentication is recommended so the secret stays out of request URLs and most access
-logs; a single capability URL remains available for senders that cannot configure headers. The receiver
-exposes only `/health` and secret `/hooks/...` endpoints; it never exposes the app's broader API.
-Dani Bot must remain running to accept a delivery. For public internet delivery, proxy only this
-dedicated receiver through a hosted relay or a tool such as Tailscale Funnel.
+<br>
 
-## Uninstall
+Your data directory is `~/.danibot` on every platform, or `$DANI_DATA_DIR` if you set it. It holds your bots, chats, config, and keys, and is left in place by design so a reinstall picks up where you left off. Delete it for a clean break.
 
-Uninstalling removes the app completely. The only thing left behind is your data directory, by design:
-**`~/.danibot`** holds your bots, chats, config, and keys, so a reinstall picks up where you left off. Delete it
-too if you want a clean break.
+| Platform | Remove the app | Then remove |
+| :-- | :-- | :-- |
+| **macOS** | Move `Dani Bot.app` to the Trash | `rm -rf "$HOME/Library/Application Support/Dani Bot" "$HOME/Library/Logs/Dani Bot"` |
+| **Windows** | Uninstall from **Settings → Apps**. This also removes the `%APPDATA%\Dani Bot` app-data folder. | Nothing else |
+| **Ubuntu (.deb)** | `sudo apt remove danibot` | `rm -rf "$HOME/.config/Dani Bot"` |
+| **AppImage** | Delete the file | `rm -rf "$HOME/.config/Dani Bot"` |
 
-What each platform's uninstall removes, and the one step it cannot do for you:
+If you upgraded from a legacy install, first launch moves the old data folders into `~/.danibot`. If a move isn't possible, the old folder stays behind and can be removed once the new one works.
 
-**macOS** - move `Dani Bot.app` to the Trash, then remove the app-support and log folders (macOS has no
-uninstaller to do it):
+</details>
 
-```sh
-rm -rf "$HOME/Library/Application Support/Dani Bot" "$HOME/Library/Logs/Dani Bot"
-```
+<br>
 
-**Windows** - uninstall from Settings &gt; Apps. The uninstaller removes the program and the `%APPDATA%\Dani Bot`
-app-data folder (window state, app logs, stored app credentials).
+## Platform support
 
-**Ubuntu (.deb)** - `sudo apt remove danibot` removes the program, its `/usr/bin/danibot` link, and its AppArmor
-profile. A package manager must not touch home directories, so remove the per-user app data yourself:
+| Capability | macOS | Ubuntu 24.04 Xorg | Ubuntu 24.04 Wayland |
+| :-- | :-- | :-- | :-- |
+| Packaged app, embedded harness, local agent CLIs | Supported | Beta | Beta |
+| Composio and Box / cloud computers | Supported | Beta | Beta |
+| Explicit preview-only local screen capture | Supported | Beta | Beta |
+| Bot control of this computer | Supported | Beta, explicit opt-in | Disabled: safety gate |
+| Native on-device dictation | Supported | Planned | Planned |
 
-```sh
-rm -rf "$HOME/.config/Dani Bot"
-```
+The Linux preview is user-initiated and never enables local bot control or Auto routing. On Xorg, the reviewed Cua Driver 0.19.3 runtime starts only after explicit opt-in and without its full-screen cursor overlay. On Wayland the app never starts it and clears legacy opt-ins while that real-seat safety gate is unresolved. Chat, preview, Cloud, and Local VM remain available on both sessions.
 
-The AppImage installs nothing; delete the file and the same `~/.config/Dani Bot` folder.
+The Linux packager downloads only the tag-pinned upstream archive during the build and verifies its size, SHA-256, member allowlist, and inner executable hashes. The installed app never downloads or self-updates native automation code. See [`third_party/cua-driver/`](third_party/cua-driver/) for the reviewed provenance record.
 
-Your data directory is `~/.danibot` on every platform (or `$DANI_DATA_DIR` if you set it). If you upgraded from a
-legacy install, first launch moves the old `~/.danibot` / `~/.opengrokbot` data folders into `~/.danibot`;
-when a move is not possible (different drive, folder busy) the old folder stays behind and can be removed once
-the new one works.
+<br>
 
-## Status
+## Status and contributing
 
-Early but real — the loop works end to end: message → agent → streamed reply → tools → approvals →
-computer use. Installers for macOS, Windows, and Ubuntu 24.04 x64 publish together per release; Ubuntu remains a
-beta with the
-capability limits above. Rough edges to expect: hosted/mobile connectivity is still being built, and webhook
-triggers currently use the local receiver rather than an always-on hosted relay.
-Voice needs an ElevenLabs key, and calls are macOS-only for now (they ride the same on-device dictation as
-the composer mic) — see [`docs/voice-mode.md`](docs/voice-mode.md) for the design and the known gaps.
+**Early but real.** The loop works end to end: message → agent → streamed reply → tools → approvals → computer use. Expect rough edges: Ubuntu is a beta, hosted and mobile connectivity are still being built, webhooks use the local receiver rather than an always-on hosted relay, and calls are macOS-only for now ([voice design and known gaps](docs/voice-mode.md)).
 
-Contributions welcome — the driver SPI in [`server/contracts.ts`](server/contracts.ts) is deliberately
-small; adding a provider is one file in [`server/drivers/`](server/drivers/) plus a one-line registration.
-No code needed at all for your own engines: any ACP-speaking CLI or OpenAI-compatible endpoint
-plugs in through config — see [`docs/custom-engines.md`](docs/custom-engines.md).
-Users can add their own MCP tool servers with zero code via [`docs/custom-mcp-servers.md`](docs/custom-mcp-servers.md).
+Contributions welcome. The driver SPI in [`server/contracts.ts`](server/contracts.ts) is deliberately small: a new provider is one file in [`server/drivers/`](server/drivers/) plus a one-line registration. No code needed for your own engines or tools:
+
+- [Custom engines](docs/custom-engines.md): any ACP-speaking CLI or OpenAI-compatible endpoint, through config.
+- [Custom MCP servers](docs/custom-mcp-servers.md): add your own tool servers with zero code.
+
+<br>
 
 ## License
 
 [Apache License 2.0](LICENSE) © 2026 Dani and Dani Bot contributors.
 
-Packaged Cua Driver components retain their upstream MIT, SIL OFL 1.1, MPL-2.0, and other dependency terms;
-the corresponding notices, license texts, source locations, and SBOM are in
-[`third_party/cua-driver/`](third_party/cua-driver/) and ship beside the native runtime.
+Packaged Cua Driver components retain their upstream MIT, SIL OFL 1.1, MPL-2.0, and other dependency terms. The notices, license texts, source locations, and SBOM are in [`third_party/cua-driver/`](third_party/cua-driver/) and ship beside the native runtime.
 
-Dani Bot is an independent, open-source project inspired by Grok Bot. It is
-not affiliated with, endorsed by, or associated with xAI; "Grok" is a trademark
-of its respective owner.
+<sub>Dani Bot is an independent, open-source project inspired by Grok Bot. It is not affiliated with, endorsed by, or associated with xAI; "Grok" is a trademark of its respective owner.</sub>
