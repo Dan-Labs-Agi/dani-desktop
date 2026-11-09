@@ -1,5 +1,5 @@
 name: Retained Intel exact-byte native revalidation
-true:
+on:
   workflow_dispatch: null
 permissions:
   contents: read
