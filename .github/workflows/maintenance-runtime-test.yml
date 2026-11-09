@@ -65,7 +65,7 @@ jobs:
         run: pnpm exec electron-builder --win --x64 --publish never
       - name: Package macOS
         if: runner.os == 'macOS'
-        run: pnpm build:speech && pnpm build:recorder && pnpm build:cua && pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never -c.mac.identity=-
+        run: pnpm build:speech && pnpm build:recorder && pnpm build:cua && pnpm exec electron-builder --mac dmg zip --${{ matrix.arch }} --publish never -c.mac.identity=-
       - name: Package Ubuntu
         if: runner.os == 'Linux'
         run: pnpm build:cua:linux && pnpm exec electron-builder --linux --x64 --publish never

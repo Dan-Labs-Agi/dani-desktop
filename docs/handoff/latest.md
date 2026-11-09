@@ -19,7 +19,7 @@ The newer multi-harness `main` tree is not replaced by this maintenance release.
 ### Local evidence
 
 - `pnpm exec vitest run scripts/after-pack.test.mjs scripts/prepare-cloudflared.test.mjs server/managed-runtime-retry.test.ts server/managed-runtime.test.ts server/drivers/acp/hermes.test.ts`: 96 passed.
-- `node --test scripts/mac-installer-evidence.node-test.cjs`: 2 passed.
+- `node --test scripts/mac-installer-evidence.node-test.cjs`: 1 passed. Removed command-routing/output-text assertions; the remaining regression rejects failed screenshot capture.
 - `python3 scripts/hermes_payload_recipe_test.py`: 3 passed.
 - `pnpm typecheck`: passed.
 - `pnpm lint`: exited zero with warnings in existing unrelated files; not a warning-free result.
@@ -30,6 +30,8 @@ The newer multi-harness `main` tree is not replaced by this maintenance release.
 ### Native delivery gate
 
 This source revision requires its own `Verified native runtime installers` run; historical maintenance successes do not certify the new artifacts. Native statuses and screenshots are attached only after the corresponding real installed checks pass. The candidate job cannot run unless all four native target jobs succeed.
+
+Initial native run [42719539906](https://github.com/Dan-Labs-Agi/dani-desktop/actions/runs/42719539906), source `4920ab07f2f1f2c8b4111647bd235b416a424db9`, passed the real Linux DEB lifecycle. The new package guard rejected the Mac jobs because electron-builder 26.15.3 expanded both configured architectures despite the CLI architecture flag. The native workflow now supplies explicit `dmg zip` targets as well as the architecture. A Windows failure came from a POSIX-literal command-routing assertion, not app execution; that incidental assertion was removed rather than re-pinned. A new full native run is required after these changes.
 
 macOS artifacts are ad-hoc signed, not Developer ID signed or notarized. Windows artifacts are unsigned. Keep the candidate private; do not claim Gatekeeper/SmartScreen acceptance or promote it as a signed public release. Linux installed lifecycle covers DEB; AppImage and portable ZIPs are built but their independent lifecycles are not certified. Native runtime readiness does not certify an ordinary live-provider turn or the full voice/computer-use matrix.
 
