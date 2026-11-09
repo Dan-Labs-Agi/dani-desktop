@@ -4,6 +4,14 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
 export const files = [
+  'companion/test/proxy.test.ts',
+  'src/components/RemoteComputerSection.test.ts',
+  'src/components/SettingsModal.appearance.test.ts',
+  'src/components/RoomHeader.test.ts',
+  'src/components/ChatView.live-status.test.ts',
+  'src/components/robot/RobotAvatar.test.ts',
+  'src/components/robot/robot-avatar-engine.test.ts',
+  'server/message-db.test.ts',
   'server/headless/main.test.ts',
   'server/headless/engine.test.ts',
   'server/surface.test.ts',
