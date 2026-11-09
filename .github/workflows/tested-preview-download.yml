@@ -1,128 +1,135 @@
-name: Tested Windows preview download
+name: Private Intel candidate acceptance
 on:
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: tested-windows-preview
+  group: private-intel-candidate-5289d90
   cancel-in-progress: false
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      sha: ${{ steps.draft.outputs.sha }}
-      tag: ${{ steps.draft.outputs.tag }}
-    steps:
-      - id: draft
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SOURCE: ${{ github.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag=v0.1.139-preview.2
-          release_id=$(gh api "repos/$GH_REPO/releases?per_page=100" --jq '.[] | select(.tag_name == "v0.1.139-preview.2" and .draft == true and (.assets | length) == 0) | .id')
-          if gh release view "$tag" --json isDraft >/dev/null 2>&1 && [ -z "$release_id" ]; then
-            echo 'A nonempty or published preview exists; refuse replacement.' >&2
-            exit 1
-          fi
-          jq -n --arg tag "$tag" --arg sha "$SOURCE" '{tag_name:$tag,target_commitish:$sha,name:"Dani Desktop 0.1.139 testing preview",body:"Private test candidate. Not approved for public publication. Native install and exact-download results pending.",draft:true,prerelease:true}' > "$RUNNER_TEMP/draft.json"
-          if [ -n "$release_id" ]; then
-            gh api --method PATCH "repos/$GH_REPO/releases/$release_id" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
-          else
-            gh api --method POST "repos/$GH_REPO/releases" --input "$RUNNER_TEMP/draft.json" --jq '{id,html_url,draft,target_commitish}'
-          fi
-          echo "sha=$SOURCE" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-  build_install:
-    needs: prepare
-    runs-on: windows-latest
-    timeout-minutes: 90
+  build_install_download:
+    if: github.ref == 'refs/heads/fix/intel-private-delivery-20261109'
+    runs-on: macos-15-intel
+    timeout-minutes: 60
     permissions:
       contents: write
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      NODE_OPTIONS: --max-old-space-size=6144
-      GH_TOKEN: ${{ github.token }}
+      DANI_VERIFY_FREE_INSTALL: '1'
+      DANIBOT_CUA_ARCHES: x64
+      DANIBOT_CUA_ARCHES_PARTIAL: '1'
+      NODE_OPTIONS: --max-old-space-size=7168
+      CANDIDATE_SOURCE: 5289d90a9ce3d501bbd5f15f12dcee8aee85624c
+      CANDIDATE_TAG: v0.1.139-intel-preview.1
       GH_REPO: ${{ github.repository }}
-      PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
-      DANI_EVIDENCE_DIR: built-evidence
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ needs.prepare.outputs.sha }}
+          ref: 5289d90a9ce3d501bbd5f15f12dcee8aee85624c
           persist-credentials: false
+      - name: Verify exact source and unused candidate tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
+          gh api "repos/$GH_REPO/releases?per_page=100" > "$RUNNER_TEMP/existing-releases.json"
+          gh api "repos/$GH_REPO/git/matching-refs/tags/$CANDIDATE_TAG" > "$RUNNER_TEMP/existing-tags.json"
+          python3 - <<'PY'
+          import json, os
+          tag=os.environ['CANDIDATE_TAG']
+          releases=json.load(open(os.environ['RUNNER_TEMP']+'/existing-releases.json'))
+          refs=json.load(open(os.environ['RUNNER_TEMP']+'/existing-tags.json'))
+          assert not any(r['tag_name']==tag for r in releases), 'Candidate already exists; refuse replacement'
+          assert not any(r['ref']=='refs/tags/'+tag for r in refs), 'Tag already exists; refuse replacement'
+          PY
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24
           package-manager-cache: false
       - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
-      - run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs electron/dani-brand-assets.node-test.mjs
-      - run: pnpm package:win
-      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - name: Install exact built NSIS, onboard, relaunch, preserve profile
-        run: node scripts/verify-main-installed.cjs
-      - name: Upload passed exact bytes directly to draft, never Actions storage
-        shell: pwsh
+      - run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs scripts/release-pipeline.node-test.mjs
+      - run: pnpm package:prepare
+      - run: pnpm build:speech && pnpm build:cua
+      - run: pnpm exec electron-builder --mac --x64 --publish never -c.mac.identity=-
+      - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - name: Validate exact built DMG, Dani Free setup, graphics, onboarding and relaunch
         run: |
-          $ErrorActionPreference = 'Stop'
-          $draft = gh release view $env:PREVIEW_TAG --json isDraft,targetCommitish | ConvertFrom-Json
-          if (!$draft.isDraft -or $draft.targetCommitish -ne '${{ needs.prepare.outputs.sha }}') { throw 'Draft identity changed' }
-          $exe = Get-Item release/DaniBot-0.1.139-setup.exe
-          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Set-Content -Encoding ascii release/WINDOWS-SHA256SUMS.txt
-          gh release upload $env:PREVIEW_TAG $exe.FullName release/WINDOWS-SHA256SUMS.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Installer draft upload failed' }
-          Get-ChildItem $env:DANI_EVIDENCE_DIR/*.png | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:RUNNER_TEMP ('built-' + $_.Name)) }
-          gh release upload $env:PREVIEW_TAG "$env:RUNNER_TEMP/built-INSTALLED.png" "$env:RUNNER_TEMP/built-CHIEF.png" "$env:RUNNER_TEMP/built-ONBOARDED.png" "$env:RUNNER_TEMP/built-RELAUNCHED.png"
-          if ($LASTEXITCODE -ne 0) { throw 'Evidence draft upload failed' }
-          Write-Output "EXACT_BUILT_INSTALLER_PASS sha256=$hash bytes=$($exe.Length)"
-  download_install:
-    needs: [prepare, build_install]
-    runs-on: windows-latest
-    timeout-minutes: 25
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      PREVIEW_TAG: ${{ needs.prepare.outputs.tag }}
-      DANI_EVIDENCE_DIR: downloaded-evidence
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - name: Download exact draft installer on a fresh machine and verify hash
-        shell: pwsh
+          set -euo pipefail
+          GITHUB_SHA="$CANDIDATE_SOURCE" node scripts/verify-main-mac-installed.cjs | tee "$RUNNER_TEMP/built-native.log"
+          grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS "$RUNNER_TEMP/built-native.log"
+          grep -q MAIN_INSTALLED_RELAUNCH_PASS "$RUNNER_TEMP/built-native.log"
+          grep -q MAIN_INSTALLED_GRAPHICS_PASS "$RUNNER_TEMP/built-native.log"
+      - name: Retain only passed exact bytes in new private draft
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          $draft = gh release view $env:PREVIEW_TAG --json isDraft,targetCommitish | ConvertFrom-Json
-          if (!$draft.isDraft -or $draft.targetCommitish -ne '${{ needs.prepare.outputs.sha }}') { throw 'Draft identity changed' }
-          New-Item -ItemType Directory release | Out-Null
-          gh release download $env:PREVIEW_TAG --pattern DaniBot-0.1.139-setup.exe --pattern WINDOWS-SHA256SUMS.txt --dir release
-          if ($LASTEXITCODE -ne 0) { throw 'Draft download failed' }
-          $expected = (Get-Content release/WINDOWS-SHA256SUMS.txt).Split(' ')[0]
-          $actual = (Get-FileHash release/DaniBot-0.1.139-setup.exe -Algorithm SHA256).Hash.ToLower()
-          if ($actual -ne $expected) { throw 'Downloaded installer hash mismatch' }
-          Write-Output "EXACT_DOWNLOADED_INSTALLER_HASH $actual"
-      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - name: Install downloaded bytes, onboard, relaunch, preserve profile
-        run: node scripts/verify-main-installed.cjs
-      - name: Attach downloaded-install screenshots to private draft
-        shell: pwsh
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
+          test -f release/DaniBot-0.1.139-mac-x64.dmg
+          shasum -a 256 release/DaniBot-0.1.139-mac-x64.dmg > "$RUNNER_TEMP/INTEL-SHA256SUMS.txt"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          file=pathlib.Path('release/DaniBot-0.1.139-mac-x64.dmg')
+          record={'source':os.environ['CANDIDATE_SOURCE'],'filename':file.name,'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),'bytes':file.stat().st_size,'audience':'private test candidate','built_native_validation':'passed','downloaded_native_validation':'pending','limits':['Full test matrix is not passing; not production-ready.','Ad-hoc signing only; not Developer ID signed or notarized. macOS trust acceptance and the actual browser/Finder dialog are unverified.','Dani Free tools setup is tested without starting a model service. Live Kilo model response is unverified; no external model request was made.','No security exception is performed or authorized by this candidate.']}
+          pathlib.Path(os.environ['RUNNER_TEMP']+'/CANDIDATE.json').write_text(json.dumps(record,indent=2)+'\n')
+          PY
+          cat > "$RUNNER_TEMP/candidate-notes.txt" <<'EOF'
+          Private Intel test candidate of the new Dani Free architecture. Not production-ready and not a replacement for public/latest Downloads.
+
+          Exact built DMG native installation, Dani Free tool setup without a model service, onboarding, relaunch, synthetic profile preservation and graphics checks passed. Downloaded-byte verification is pending until CANDIDATE.json says passed.
+
+          Known limits: full test matrix is not passing; live Kilo model response is unverified; ad-hoc signing only, no Developer ID or notarization. Ordinary browser-download/macOS trust acceptance and the exact Finder dialog are unverified. No security exception was performed. Do not treat this page as an instruction to override a damaged or malware warning.
+          EOF
+          gh release create "$CANDIDATE_TAG" --target "$CANDIDATE_SOURCE" --draft --prerelease --title 'Dani Desktop Intel private test candidate' --notes-file "$RUNNER_TEMP/candidate-notes.txt"
+          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/before-upload.json"
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open(os.environ['RUNNER_TEMP']+'/before-upload.json'))
+          assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']
+          PY
+          gh release upload "$CANDIDATE_TAG" release/DaniBot-0.1.139-mac-x64.dmg "$RUNNER_TEMP/INTEL-SHA256SUMS.txt" "$RUNNER_TEMP/CANDIDATE.json"
+          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish,url,assets > "$RUNNER_TEMP/draft-state.json"
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open(os.environ['RUNNER_TEMP']+'/draft-state.json'))
+          assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']
+          print('PRIVATE_DRAFT_RETAINED '+r['url'])
+          PY
+      - name: Download retained bytes and validate independently in a fresh disposable profile
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          Get-ChildItem $env:DANI_EVIDENCE_DIR/*.png | ForEach-Object { Copy-Item $_.FullName (Join-Path $env:RUNNER_TEMP ('downloaded-' + $_.Name)) }
-          gh release upload $env:PREVIEW_TAG "$env:RUNNER_TEMP/downloaded-INSTALLED.png" "$env:RUNNER_TEMP/downloaded-CHIEF.png" "$env:RUNNER_TEMP/downloaded-ONBOARDED.png" "$env:RUNNER_TEMP/downloaded-RELAUNCHED.png"
-          if ($LASTEXITCODE -ne 0) { throw 'Evidence draft upload failed' }
-          Write-Output 'EXACT_DOWNLOADED_INSTALLER_PASS'
-      # No publish, latest.yml, Actions artifact, cache, tag push or deploy step.
+          set -euo pipefail
+          mv release "$RUNNER_TEMP/built-release"
+          mkdir release
+          gh release download "$CANDIDATE_TAG" --pattern DaniBot-0.1.139-mac-x64.dmg --dir release
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          meta=json.load(open(os.environ['RUNNER_TEMP']+'/CANDIDATE.json'))
+          file=pathlib.Path('release')/meta['filename']
+          assert file.stat().st_size==meta['bytes']
+          assert hashlib.sha256(file.read_bytes()).hexdigest()==meta['sha256']
+          print('PRIVATE_DOWNLOADED_EXACT_BYTES '+json.dumps({k:meta[k] for k in ['source','filename','sha256','bytes']}))
+          PY
+          mkdir "$RUNNER_TEMP/downloaded-profile"
+          ln -s "$RUNNER_TEMP/smoke-tools" "$RUNNER_TEMP/downloaded-profile/smoke-tools"
+          RUNNER_TEMP="$RUNNER_TEMP/downloaded-profile" GITHUB_SHA="$CANDIDATE_SOURCE" node scripts/verify-main-mac-installed.cjs | tee "$RUNNER_TEMP/downloaded-native.log"
+          grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS "$RUNNER_TEMP/downloaded-native.log"
+          grep -q MAIN_INSTALLED_RELAUNCH_PASS "$RUNNER_TEMP/downloaded-native.log"
+          grep -q MAIN_INSTALLED_GRAPHICS_PASS "$RUNNER_TEMP/downloaded-native.log"
+          python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'CANDIDATE.json'
+          r=json.loads(p.read_text());r['downloaded_native_validation']='passed';p.write_text(json.dumps(r,indent=2)+'\n')
+          PY
+          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/before-final-status.json"
+          python3 - <<'PY'
+          import json,os
+          r=json.load(open(os.environ['RUNNER_TEMP']+'/before-final-status.json'))
+          assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']
+          PY
+          gh release upload "$CANDIDATE_TAG" "$RUNNER_TEMP/CANDIDATE.json" --clobber
+          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish,url,assets
+      # Never publish this draft, change latest, upload Actions storage, or click a macOS exception.
