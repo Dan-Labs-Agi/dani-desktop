@@ -21,12 +21,17 @@ process.env.OMB_COMPANION_DIR = join(home, ".openmausbot-companion");
 // Product code follows navigator.language; pin it so English assertions do not depend on the host locale.
 Object.defineProperty(globalThis.navigator, "language", { value: "en", configurable: true });
 
-// Windows will not remove a directory holding an open SQLite database: close it before the reset.
-const { closeMessageDb } = await import("../message-db.ts");
-afterEach(closeMessageDb);
+// DOM tests do not open the server database. Importing its native SQLite module
+// into the client bundler prevents those tests from being collected at all.
+let closeMessageDb: (() => void) | undefined;
+if (typeof window === "undefined") {
+  ({ closeMessageDb } = await import("../message-db.ts"));
+  // Windows will not remove an open database: keep real server cleanup intact.
+  afterEach(closeMessageDb);
+}
 
 // Windows holds a live process's cwd, and a just-killed CLI lets go a beat after the kill returns.
 afterAll(async () => {
-  closeMessageDb();
+  closeMessageDb?.();
   await removeTempDir(home);
 });

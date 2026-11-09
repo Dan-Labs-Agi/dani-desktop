@@ -81,14 +81,18 @@ describe("the room header in Simple mode", () => {
     expect(head).toContain("data-room-name=");
     expect(head).toContain('aria-label="Open settings for Desk HQ"');
     expect(head).toContain("The recruiting desk");
-    expect(head.match(/data-held|title="(?:Desk Manager|Vendor Bench|Job Board Sourcer|Paperwork|Phone Screener|Matcher|Interview Coordinator|Submission Writer|Timesheets)"/g)).toHaveLength(3);
+    const parsed = new DOMParser().parseFromString(head, "text/html");
+    const faces = [...parsed.querySelectorAll("span.relative.inline-flex.rounded-full[title]")];
+    expect(faces.map(face => face.getAttribute("title"))).toEqual(NAMES.slice(0, 3));
     expect(head).toContain(">+6</span>");
     expect(markup).not.toContain(BULLETIN);
   });
 
   it("draws no +N while every member has a face", () => {
     const head = header(view(room({ memberIds: ["bot-0", "bot-1", "bot-2"] })));
-    expect(head.match(/title="(?:Desk Manager|Vendor Bench|Job Board Sourcer)"/g)).toHaveLength(3);
+    const parsed = new DOMParser().parseFromString(head, "text/html");
+    const faces = [...parsed.querySelectorAll("span.relative.inline-flex.rounded-full[title]")];
+    expect(faces.map(face => face.getAttribute("title"))).toEqual(NAMES.slice(0, 3));
     expect(head).not.toMatch(/>\+\d/);
   });
 

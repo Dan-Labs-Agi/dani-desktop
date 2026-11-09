@@ -95,7 +95,10 @@ describe("Simple mode's working line", () => {
     render(busyBot([ask]));
     expect(mascot()).not.toBeNull();
     expect(statusLine()).toBe("Thinking it through");
-    expect(mascot()!.innerHTML).toContain('width="28"');
+    const avatar = mascot()!.querySelector<HTMLElement>('[data-robot-role]');
+    expect(avatar).not.toBeNull();
+    expect(avatar!.style.width).toBe("28px");
+    expect(avatar!.style.height).toBe("28px");
     const row = mascot()!.firstElementChild as HTMLElement;
     expect([...row.classList]).toEqual(expect.arrayContaining(["h-9", "ps-2", "gap-2"]));
     expect(row.title).toMatch(/^Working · /);
