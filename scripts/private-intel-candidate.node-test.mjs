@@ -5,7 +5,7 @@ const file=readFileSync(new URL('../.github/workflows/tested-preview-download.ym
 test('private Intel candidate is opt-in, branch guarded and source pinned',()=>{
  assert.match(file,/workflow_dispatch:/);
  assert.match(file,/github.ref == 'refs\/heads\/fix\/intel-private-delivery-20261109'/);
- assert.match(file,/ref: 5289d90a9ce3d501bbd5f15f12dcee8aee85624c/);
+ assert.match(file,/ref: 727a2eb2590d48fcf3181d6eebd10c7f710f3347/);
  assert.match(file,/test "\$\(git rev-parse HEAD\)" = "\$CANDIDATE_SOURCE"/);
  assert.match(file,/persist-credentials: false/);
  assert.match(file,/cancel-in-progress: false/);
@@ -22,7 +22,7 @@ test('only built-native-passed bytes can be retained, never replacing an existin
  assert.doesNotMatch(file,/gh release (delete|edit)|--latest|upload-artifact@|cache@|pull_request_target/);
 });
 test('downloaded exact-byte check precedes a second real install in a fresh synthetic profile',()=>{
- assert.match(file,/gh release download "\$CANDIDATE_TAG" --pattern DaniBot-0.1.139-mac-x64.dmg/);
+ assert.match(file,/gh release download "\$CANDIDATE_TAG" --pattern DaniBot-0.1.139-x64.dmg/);
  assert.match(file,/file.stat\(\).st_size==meta\['bytes'\]/);
  assert.match(file,/hashlib.sha256\(file.read_bytes\(\)\).hexdigest\(\)==meta\['sha256'\]/);
  assert.match(file,/RUNNER_TEMP="\$RUNNER_TEMP\/downloaded-profile" GITHUB_SHA="\$CANDIDATE_SOURCE" node scripts\/verify-main-mac-installed.cjs/);

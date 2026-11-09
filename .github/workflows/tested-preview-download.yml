@@ -4,7 +4,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: private-intel-candidate-5289d90
+  group: private-intel-candidate-727a2eb
   cancel-in-progress: false
 jobs:
   build_install_download:
@@ -19,13 +19,13 @@ jobs:
       DANIBOT_CUA_ARCHES: x64
       DANIBOT_CUA_ARCHES_PARTIAL: '1'
       NODE_OPTIONS: --max-old-space-size=7168
-      CANDIDATE_SOURCE: 5289d90a9ce3d501bbd5f15f12dcee8aee85624c
+      CANDIDATE_SOURCE: 727a2eb2590d48fcf3181d6eebd10c7f710f3347
       CANDIDATE_TAG: v0.1.139-intel-preview.1
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 5289d90a9ce3d501bbd5f15f12dcee8aee85624c
+          ref: 727a2eb2590d48fcf3181d6eebd10c7f710f3347
           persist-credentials: false
       - name: Verify exact source and unused candidate tag
         env:
@@ -67,11 +67,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
-          test -f release/DaniBot-0.1.139-mac-x64.dmg
-          shasum -a 256 release/DaniBot-0.1.139-mac-x64.dmg > "$RUNNER_TEMP/INTEL-SHA256SUMS.txt"
+          test -f release/DaniBot-0.1.139-x64.dmg
+          shasum -a 256 release/DaniBot-0.1.139-x64.dmg > "$RUNNER_TEMP/INTEL-SHA256SUMS.txt"
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          file=pathlib.Path('release/DaniBot-0.1.139-mac-x64.dmg')
+          file=pathlib.Path('release/DaniBot-0.1.139-x64.dmg')
           record={'source':os.environ['CANDIDATE_SOURCE'],'filename':file.name,'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),'bytes':file.stat().st_size,'audience':'private test candidate','built_native_validation':'passed','downloaded_native_validation':'pending','limits':['Full test matrix is not passing; not production-ready.','Ad-hoc signing only; not Developer ID signed or notarized. macOS trust acceptance and the actual browser/Finder dialog are unverified.','Dani Free tools setup is tested without starting a model service. Live Kilo model response is unverified; no external model request was made.','No security exception is performed or authorized by this candidate.']}
           pathlib.Path(os.environ['RUNNER_TEMP']+'/CANDIDATE.json').write_text(json.dumps(record,indent=2)+'\n')
           PY
@@ -89,7 +89,7 @@ jobs:
           r=json.load(open(os.environ['RUNNER_TEMP']+'/before-upload.json'))
           assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']
           PY
-          gh release upload "$CANDIDATE_TAG" release/DaniBot-0.1.139-mac-x64.dmg "$RUNNER_TEMP/INTEL-SHA256SUMS.txt" "$RUNNER_TEMP/CANDIDATE.json"
+          gh release upload "$CANDIDATE_TAG" release/DaniBot-0.1.139-x64.dmg "$RUNNER_TEMP/INTEL-SHA256SUMS.txt" "$RUNNER_TEMP/CANDIDATE.json"
           gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish,url,assets > "$RUNNER_TEMP/draft-state.json"
           python3 - <<'PY'
           import json,os
@@ -104,7 +104,7 @@ jobs:
           set -euo pipefail
           mv release "$RUNNER_TEMP/built-release"
           mkdir release
-          gh release download "$CANDIDATE_TAG" --pattern DaniBot-0.1.139-mac-x64.dmg --dir release
+          gh release download "$CANDIDATE_TAG" --pattern DaniBot-0.1.139-x64.dmg --dir release
           python3 - <<'PY'
           import hashlib,json,os,pathlib
           meta=json.load(open(os.environ['RUNNER_TEMP']+'/CANDIDATE.json'))
