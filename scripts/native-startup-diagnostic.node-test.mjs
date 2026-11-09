@@ -24,7 +24,7 @@ test('failure log reads are only reported product logs, never credential files o
  assert.match(verifier,/\['server.log','desktop-crashes.log'\]/);
  assert.doesNotMatch(verifier,/readFileSync\([^\n]*(?:credentials\.bin|keychain)|xattr\s+-[dr]|spctl.*--master-disable|security\s+unlock-keychain/);
  assert.match(verifier,/DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS/);
- assert.match(verifier,/MAIN_INSTALLED_GRAPHICS_PASS/);
+ assert.match(verifier,/MAIN_INSTALLED_AVATAR_PRESENTATION_PASS/);
  assert.match(verifier,/MAIN_INSTALLED_RELAUNCH_PASS/);
 });
 
@@ -34,4 +34,12 @@ test('macOS keeps native HOME and product data remains explicitly isolated',()=>
  assert.ok(verifier.includes('process.env.OMB_DATA_DIR=data;'));
  assert.ok(verifier.includes('DANI_DATA_DIR:data,OMB_DATA_DIR:data'));
  assert.doesNotMatch(verifier,/security.*(?:create-keychain|unlock-keychain|delete-keychain|set-keychain)/);
+});
+
+test('usable avatar presentation never claims unavailable WebGL is a 3D pass',()=>{
+ assert.ok(verifier.includes("avatar.renderer==='static-fallback' && avatar.error"));
+ assert.ok(verifier.includes('avatar.fallback.complete && avatar.fallback.visible && avatar.fallback.width>0 && avatar.fallback.height>0'));
+ assert.ok(verifier.includes("avatar.fallback?.src==='/app-icon-512.png'"));
+ assert.ok(!verifier.includes('MAIN_INSTALLED_GRAPHICS_PASS'));
+ assert.ok(verifier.includes('not 3D proof'));
 });

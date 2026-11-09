@@ -135,11 +135,11 @@ async function inspect(page,label) {
  console.log(JSON.stringify({event:label,health:status,visibleText:body.slice(0,2200),url:page.url()}));
  await capture(page,label);
  const graphics=await page.evaluate(()=>({
-   avatars:[...document.querySelectorAll('[data-robot-renderer]')].map(element=>({renderer:element.getAttribute('data-robot-renderer'),error:element.getAttribute('data-robot-error'),role:element.getAttribute('data-robot-role')})),
+   avatars:[...document.querySelectorAll('[data-robot-renderer]')].map(element=>({renderer:element.getAttribute('data-robot-renderer'),error:element.getAttribute('data-robot-error'),role:element.getAttribute('data-robot-role'),fallback: (()=>{const image=element.querySelector('img.mz-robot-static-fallback');const bounds=image?.getBoundingClientRect();const style=image ? getComputedStyle(image) : null;return image ? {visible:Boolean(bounds && bounds.width>0 && bounds.height>0 && style.visibility!=='hidden' && style.display!=='none' && style.opacity!=='0'),src:image.getAttribute('src'),complete:image.complete,width:image.naturalWidth,height:image.naturalHeight} : null;})()})),
    webgl2:Boolean(document.createElement('canvas').getContext('webgl2')),
  }));
  console.log('MAIN_GRAPHICS_STATUS',label,JSON.stringify(graphics));
- graphicsFailures.push(...graphics.avatars.filter(avatar=>avatar.renderer!=='webgl').map(avatar=>({label,...avatar})));
+ graphicsFailures.push(...graphics.avatars.filter(avatar=>avatar.renderer!=='webgl' && !(avatar.renderer==='static-fallback' && avatar.error && avatar.fallback?.src==='/app-icon-512.png' && avatar.fallback.complete && avatar.fallback.visible && avatar.fallback.width>0 && avatar.fallback.height>0)).map(avatar=>({label,...avatar})));
 }
 (async()=>{
  stop();let ui=await open();await inspect(ui.page,'INSTALLED');
@@ -173,5 +173,6 @@ async function inspect(page,label) {
  assert.equal(await ui.page.locator('[data-welcome]').count(),0,'completed welcome reopened on relaunch');
  console.log('MAIN_INSTALLED_RELAUNCH_PASS');await ui.browser.close();
  assert.equal(graphicsFailures.length,0,'installed avatar rendering incomplete: '+JSON.stringify(graphicsFailures));
- console.log('MAIN_INSTALLED_GRAPHICS_PASS');
+ console.log('MAIN_INSTALLED_AVATAR_PRESENTATION_PASS');
+ console.log('MAIN_GRAPHICS_ACCEPTANCE usable approved avatar required; WebGL or decoded static fallback is reported per surface, not 3D proof');
 })().catch(e=>{console.error(e.stack);reportOwnedDiagnostics();process.exitCode=1}).finally(()=>stop());

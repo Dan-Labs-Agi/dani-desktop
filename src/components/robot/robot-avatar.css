@@ -56,3 +56,15 @@
   border-radius: 8px;
   background: #f4f6f8;
 }
+
+/* Keep the same approved Dani visible when this device cannot create WebGL.
+   This is a static image, not a claim that the 3D renderer recovered. */
+.mz-robot-avatar > .mz-robot-static-fallback {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}

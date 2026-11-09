@@ -40,6 +40,8 @@ export function RobotAvatar(props: RobotAvatarProps) {
   const previousMotionKey = useRef(props.motionKey);
   const [ready, setReady] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [fallbackReady, setFallbackReady] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
 
   const label = typeof props.label === "string" && props.label.trim() ? props.label : "AI agent";
   const role = props.role ?? inferRobotRole(label);
@@ -54,6 +56,8 @@ export function RobotAvatar(props: RobotAvatarProps) {
     if (!element || !canvas) return;
     setReady(false);
     setFailure(null);
+    setFallbackReady(false);
+    setFallbackFailed(false);
     const instance: AvatarInstance = {
       element,
       canvas,
@@ -113,18 +117,29 @@ export function RobotAvatar(props: RobotAvatarProps) {
       className={`mz-robot-avatar${ready ? " is-ready" : ""}${props.className ? ` ${props.className}` : ""}`}
       style={{ width: `${size}px`, height: `${size}px` }}
       role="img"
-      aria-label={failure ? `${label}. 3D avatar unavailable.` : label}
+      aria-label={failure ? `${label}. Static Dani image; 3D avatar unavailable.` : label}
       title={failure ?? label}
       data-robot-error={failure ?? undefined}
       data-robot-role={props.variant ?? role}
       data-robot-motion={motion}
-      data-robot-renderer={ready ? "webgl" : failure ? "unavailable" : "loading"}
+      data-robot-renderer={ready ? "webgl" : failure && fallbackReady ? "static-fallback" : failure && fallbackFailed ? "unavailable" : "loading"}
     >
-      <span className="mz-robot-placeholder" aria-hidden="true">
-        {failure ? "3D unavailable" : "Loading 3D"}
-      </span>
+      {failure && !fallbackFailed ? (
+        <img
+          className="mz-robot-static-fallback"
+          src="/app-icon-512.png"
+          alt=""
+          aria-hidden="true"
+          onLoad={() => setFallbackReady(true)}
+          onError={() => { setFallbackReady(false); setFallbackFailed(true); }}
+        />
+      ) : (
+        <span className="mz-robot-placeholder" aria-hidden="true">
+          {failure ? "Avatar unavailable" : "Loading 3D"}
+        </span>
+      )}
       <canvas ref={canvasRef} className="mz-robot-canvas" />
-      {failure ? (
+      {failure && fallbackFailed ? (
         <span className="mz-robot-error" aria-hidden="true">
           !
         </span>
