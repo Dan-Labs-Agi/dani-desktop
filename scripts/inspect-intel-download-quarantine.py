@@ -118,12 +118,13 @@ def main():
         else:
             # A successful quit guarantees private browser URLs are off screen.
             quit_result = osa('tell application "Safari" to quit', required=False)
-            if quit_result.returncode == 0:
-                time.sleep(2)
+            time.sleep(2)
+            safari_stopped = run(['pgrep', '-x', 'Safari'], required=False).returncode == 1
+            if quit_result.returncode == 0 and safari_stopped:
                 screenshot(directory, 'DOWNLOAD_DIAGNOSTIC_BROWSER_CLOSED')
             emit({'event': 'diagnostic-url-safety', 'tabs_closed': False,
-                  'safari_quit': quit_result.returncode == 0,
-                  'screenshot_skipped_if_url_clearance_unverified': quit_result.returncode != 0})
+                  'safari_quit': quit_result.returncode == 0 and safari_stopped,
+                  'screenshot_skipped_if_url_clearance_unverified': not (quit_result.returncode == 0 and safari_stopped)})
         raise RuntimeError('Safari download did not complete; metadata observed, no retry or curl substitute')
     osa('tell application "Safari" to quit')
     digest = hashlib.sha256(file.read_bytes()).hexdigest()
