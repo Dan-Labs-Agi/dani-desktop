@@ -66,3 +66,11 @@ test('aggregate CI rejects missing, failed, cancelled or skipped mandatory jobs'
  assert.match(ci,/jobs\[name\]\?\.result !== "success"/);
  assert.match(ci,/outputs\[name\] === "true" \? "success" : "skipped"/);
 });
+
+test('focused Intel acceptance uses current Mac installer and Dani Free checks, never the stale verifier',()=>{
+ const text=readFileSync(new URL('../.github/workflows/verify-main-intel-installed.yml',import.meta.url),'utf8');
+ assert.match(text,/runs-on: macos-15-intel/);
+ assert.match(text,/DANI_VERIFY_FREE_INSTALL: '1'/);
+ assert.match(text,/node scripts\/verify-main-mac-installed.cjs/);
+ assert.doesNotMatch(text,/node scripts\/verify-main-intel-installed.cjs|contents: write|upload-artifact@|cache@/);
+});

@@ -128,16 +128,16 @@ describe("openmausbot sentinel", () => {
   it("--check-install reports a schedule whose node or script has moved", () => {
     const lines: string[] = [];
     const io = { log: (line: string) => lines.push(line), error: (line: string) => lines.push(line) };
-    const unit = "/Users/maus/Library/LaunchAgents/com.openmausbot.sentinel.plist";
-    const plist = `<key>ProgramArguments</key>\n<array>\n<string>/old/node</string>\n<string>/Applications/OpenMausBot.app/Contents/Resources/server/openmausbot.js</string>\n<string>sentinel</string>\n</array>`;
+    const unit = "/Users/maus/Library/LaunchAgents/com.danibot.sentinel.plist";
+    const plist = `<key>ProgramArguments</key>\n<array>\n<string>/old/node</string>\n<string>/Applications/Dani Bot.app/Contents/Resources/server/openmausbot.js</string>\n<string>sentinel</string>\n</array>`;
     const host = (present: string[]) => ({ platform: "darwin" as const, home: "/Users/maus", exists: (path: string) => path === unit || present.includes(path), read: () => plist });
-    expect(runSentinelCli(["--check-install"], io, {}, host(["/Applications/OpenMausBot.app/Contents/Resources/server/openmausbot.js"]))).toBe(1);
-    expect(lines.join("\n")).toContain("stale install: /Users/maus/Library/LaunchAgents/com.openmausbot.sentinel.plist needs /old/node, which no longer exists; rerun openmausbot service install --sentinel");
+    expect(runSentinelCli(["--check-install"], io, {}, host(["/Applications/Dani Bot.app/Contents/Resources/server/openmausbot.js"]))).toBe(1);
+    expect(lines.join("\n")).toContain("stale install: /Users/maus/Library/LaunchAgents/com.danibot.sentinel.plist needs /old/node, which no longer exists; rerun danibot service install --sentinel");
     lines.length = 0;
-    expect(runSentinelCli(["--check-install", "--json"], io, {}, host(["/old/node", "/Applications/OpenMausBot.app/Contents/Resources/server/openmausbot.js"]))).toBe(0);
+    expect(runSentinelCli(["--check-install", "--json"], io, {}, host(["/old/node", "/Applications/Dani Bot.app/Contents/Resources/server/openmausbot.js"]))).toBe(0);
     expect(JSON.parse(lines[0]!)).toMatchObject({ ok: true, status: "ok", node: "/old/node" });
     lines.length = 0;
     expect(runSentinelCli(["--check-install"], io, {}, { ...host([]), exists: () => false })).toBe(1);
-    expect(lines.join("\n")).toContain("install one with openmausbot service install --sentinel");
+    expect(lines.join("\n")).toContain("install one with danibot service install --sentinel");
   });
 });
