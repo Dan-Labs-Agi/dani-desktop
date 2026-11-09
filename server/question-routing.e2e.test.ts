@@ -17,7 +17,8 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 const MARCO = { email: "marco@acme.test", role: "owner" as const };
 const SETTLED = "Your downstream room requests have settled.";
 const ENGINE = `const dir = process.env.FAKE_CLAUDE_FIXTURE_DIR;
-process.env.FAKE_CLAUDE_ROOM_PLAN = dir + "/room-plan.json";`;
+process.env.FAKE_CLAUDE_ROOM_PLAN = dir + "/.openmausbot/tools/standalone/room-plan.json";
+process.env.FAKE_CLAUDE_ROOM_EVIDENCE_ROOT = dir + "/.openmausbot/workspaces";`;
 const TOKEN = `ops_fake-team-${randomBytes(8).toString("hex")}`;
 
 type Card = { requestId?: string; requestType?: string; subtitle?: string; options?: string[]; answered?: string; answeredText?: string; dismissed?: boolean;
@@ -34,14 +35,14 @@ let marco = "";
 let fuchs: Bot, dachs: Bot, otter: Bot;
 let inbox = "";
 
-const file = (name: string) => join(team.home, name);
+const file = (name: string) => join(team.home, ".openmausbot", "tools", "standalone", name);
 const plan: Record<string, { script: unknown[] }> = {};
 const script = (botId: string, ...entries: unknown[]) => {
   (plan[botId] ??= { script: [] }).script.push(...entries);
   writeFileSync(file("room-plan.json"), JSON.stringify(plan));
 };
 const turns = (botId: string): Array<{ planKey?: string; prompt: unknown }> => {
-  const path = file("room-plan.json.evidence.jsonl");
+  const path = join(team.home, ".openmausbot", "workspaces", botId, "room-plan.evidence.jsonl");
   return existsSync(path) ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((turn) => turn.botId === botId) : [];
 };
 const keys = (botId: string, job: string) => turns(botId).map((turn) => turn.planKey).filter((key) => key?.startsWith(job));
@@ -151,23 +152,25 @@ describe("Just do it: nothing a bot can settle reaches the person", () => {
     await until(idle);
   }, hostTimeout(150_000));
 
-  it("asks Marco only for the sign-in he alone can do, once, while Otter's part finishes and Fuchs carries on; his line in Dachs's chat carries Dachs on", async () => {
+  it("asks Marco only for the sign-in he alone can do, once, while Otter finishes independently; his line carries Dachs on and Fuchs receives both results", async () => {
     script(fuchs.id,
       { key: "JD3-L", match: ["JD3-JOB"], steps: [
         { arguments: { bot_ids: [dachs.id], message: "JD3-BRIEF-B: Lade die Notion-Seite herunter." } },
         { arguments: { bot_ids: [otter.id], message: "JD3-BRIEF-O: Fasse die Notizen zusammen." } }], reply: "JD3-L: verteilt." },
-      { key: "JD3-L-MID", match: ["[OpenMausBot note from @Dachs", "JD3-JOB"], reply: "JD3-L-MID: Otter ist fertig; Dachs wartet auf deine Notion-Anmeldung." },
+      { key: "JD3-L-MID", match: ["[Dani Bot note from @Dachs", "JD3-JOB"], reply: "JD3-L-MID: Dachs wartet auf deine Notion-Anmeldung." },
       done("JD3"));
     script(dachs.id,
       { key: "JD3-B2", match: ["JD3-BRIEF-B", "instead of pressing Done"], reply: "JD3-B2: Seite geladen." },
-      { key: "JD3-B", match: ["JD3-BRIEF-B"], delayMs: 2_000, steps: [{ tool: "request_sign_in", arguments: { site: "notion.so", reason: "Die Seite liegt hinter einer Anmeldung." } }],
+      { key: "JD3-B", match: ["JD3-BRIEF-B"], steps: [{ tool: "request_sign_in", arguments: { site: "notion.so", reason: "Die Seite liegt hinter einer Anmeldung." } }],
         reply: "JD3-B: Ich brauche deine Anmeldung bei Notion." });
     script(otter.id, { key: "JD3-O", match: ["JD3-BRIEF-O"], reply: "JD3-O: Zusammenfassung fertig." });
     const before = (await notes()).length;
     await say(fuchs, inbox, "JD3-JOB: Lass Dachs die Notion-Seite laden und Otter die Notizen zusammenfassen.");
     await until(() => keys(fuchs.id, "JD3").includes("JD3-L-MID"), 90_000);
 
-    expect(told(fuchs.id, "JD3-L-MID"), "Fuchs carries on with Otter's result while the sign-in waits").toContain("JD3-O: Zusammenfassung fertig.");
+    // The question interrupts as soon as it arrives, independent of Otter's native process startup. Otter still
+    // completes while the sign-in waits; both results must reach Fuchs before its consolidated completion below.
+    await until(() => keys(otter.id, "JD3").includes("JD3-O"));
     expect(told(fuchs.id, "JD3-L-MID")).toContain("can do that and it is already in front of them: do not ask them again.");
     const work = (await workThread())!;
     const signIns = (await messages(work)).filter((line) => line.kind === "signin");
@@ -184,6 +187,7 @@ describe("Just do it: nothing a bot can settle reaches the person", () => {
     expect(told(dachs.id, "JD3-B2")).toContain("Bin jetzt bei Notion angemeldet.");
     expect((await messages(work)).find((line) => line.kind === "signin")?.signIn).toMatchObject({ answeredInChat: true });
     expect(told(fuchs.id, "JD3-L-DONE")).toContain("JD3-B2: Seite geladen.");
+    expect(told(fuchs.id, "JD3-L-DONE")).toContain("JD3-O: Zusammenfassung fertig.");
     await until(async () => (await needsYou()).filter((item) => item.kind === "question").length === 0);
     await until(idle);
   }, hostTimeout(180_000));
@@ -261,7 +265,7 @@ describe("Ask me first: a question waits for the person, and an answer counts wh
     const question = "Nur den Abschlusstext oder auch den Einladungstext?";
     script(fuchs.id, handOn("AF3", dachs, "AF3-BRIEF: Setz den Fix um."), done("AF3"));
     script(dachs.id,
-      { key: "AF3-B2", match: ["AF3-BRIEF", "OpenMausBot restarted"], reply: "AF3-B2: Beides angepasst, wie im Auftrag." },
+      { key: "AF3-B2", match: ["AF3-BRIEF", "Dani Bot restarted"], reply: "AF3-B2: Beides angepasst, wie im Auftrag." },
       { key: "AF3-B", match: ["AF3-BRIEF"], timeoutMs: 120_000, steps: [{ server: "ogb", tool: "ask_user", arguments: { question, choices: ["Nur den Abschlusstext", "Beides"] } }], reply: "AF3-B: nie erreicht." });
     await say(fuchs, inbox, "AF3-JOB: Lass Dachs den Fix umsetzen.");
     const work = await (async () => { await until(async () => Boolean(await workThread())); return (await workThread())!; })();
