@@ -310,5 +310,7 @@ jobs:
         run: node scripts/verify-main-mac-installed.cjs
       - if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y libfuse2t64 xvfb dbus-x11 libnss3 libatk-bridge2.0-0 libgtk-3-0t64 libasound2t64
-      - if: matrix.platform == 'linux'
+      - if: matrix.platform == 'linux' && matrix.format == 'appimage'
         run: dbus-run-session -- xvfb-run -a node scripts/verify-main-linux-installed.cjs
+      - if: matrix.platform == 'linux' && matrix.format == 'deb'
+        run: dbus-run-session -- xvfb-run -a bash scripts/verify-deb-clean-opt.sh

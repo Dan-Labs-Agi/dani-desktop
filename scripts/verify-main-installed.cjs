@@ -1,5 +1,6 @@
 // Main architecture, disposable Windows runner only. Exercise the installed app, not win-unpacked.
 const fs = require('node:fs');
+const {ownedProfileFiles}=require('./owned-profile-files.cjs');
 const {waitDaniFreeSetup}=require('./wait-dani-free-setup.cjs');
 const path = require('node:path');
 const {spawn, spawnSync} = require('node:child_process');
@@ -48,7 +49,7 @@ let launched;
 let launchOutput='';
 function reportOwnedDiagnostics(){
  console.error('DANI_LAUNCH_OUTPUT',launchOutput.slice(-12000));
- for(const file of fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:server\.log|desktop-crashes\.log)$/.test(p))){
+ for(const file of ownedProfileFiles(temp).filter(p=>/(?:server\.log|desktop-crashes\.log)$/.test(p))){
   try{console.error('DANI_OWNED_LOG',file,fs.readFileSync(path.join(temp,file),'utf8').slice(-16000));}catch{}
  }
  console.error('DANI_CHILD_STATE',JSON.stringify({exitCode:launched?.exitCode,signalCode:launched?.signalCode}));
@@ -110,7 +111,7 @@ async function inspect(page,label) {
    assert.equal(await button.innerText(),'Install Dani Free');await button.click();
    console.log('DANI_FREE_FINAL_STATUS',JSON.stringify(await waitDaniFreeSetup(ui.page)));
    await capture(ui.page,'FREE_INSTALLED');
-   const isolatedFiles=fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:config\.json|server\.log|runtime\.json|cua-local-control\.json)$/.test(p));
+   const isolatedFiles=ownedProfileFiles(temp).filter(p=>/(?:config\.json|server\.log|runtime\.json|cua-local-control\.json)$/.test(p));
    console.log('DANI_ISOLATED_PROFILE_FILES',JSON.stringify(isolatedFiles));
    assert.ok(fs.existsSync(path.join(data,'config.json')),'setup reported installed without config in the explicitly isolated profile');
    const config=JSON.parse(fs.readFileSync(path.join(data,'config.json'),'utf8'));
