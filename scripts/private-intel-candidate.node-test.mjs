@@ -5,7 +5,7 @@ const file=readFileSync(new URL('../.github/workflows/tested-preview-download.ym
 test('private Intel candidate is opt-in, branch guarded and source pinned',()=>{
  assert.match(file,/workflow_dispatch:/);
  assert.match(file,/github.ref == 'refs\/heads\/fix\/intel-private-delivery-20261109'/);
- assert.match(file,/ref: 727a2eb2590d48fcf3181d6eebd10c7f710f3347/);
+ assert.match(file,/ref: 5a590e33037678148b6f44c87bb59d62364b6bb7/);
  assert.match(file,/test "\$\(git rev-parse HEAD\)" = "\$CANDIDATE_SOURCE"/);
  assert.match(file,/persist-credentials: false/);
  assert.match(file,/cancel-in-progress: false/);
@@ -37,4 +37,10 @@ test('candidate retains functional and security limits without live-model or ove
  assert.match(file,/actual browser\/Finder dialog are unverified/);
  assert.match(file,/DANI_VERIFY_FREE_INSTALL: '1'/);
  assert.doesNotMatch(file,/xattr\s+-[dr]|spctl\s+--(?:master-disable|global-disable)|click.*Open Anyway|DANI_FREE_PROBE_ON_REFRESH:\s*['"]?1/);
+});
+
+test('native Keychain preflight is metadata only and runs before expensive build',()=>{
+ assert.ok(file.indexOf('DANI_NATIVE_KEYCHAIN_METADATA')<file.indexOf('pnpm install --frozen-lockfile'));
+ assert.match(file,/default-keychain/);
+ assert.doesNotMatch(file,/['"](?:create-keychain|unlock-keychain|delete-keychain|set-keychain-settings)['"]/);
 });

@@ -4,7 +4,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: private-intel-candidate-727a2eb
+  group: private-intel-candidate-5a590e3
   cancel-in-progress: false
 jobs:
   build_install_download:
@@ -19,13 +19,13 @@ jobs:
       DANIBOT_CUA_ARCHES: x64
       DANIBOT_CUA_ARCHES_PARTIAL: '1'
       NODE_OPTIONS: --max-old-space-size=7168
-      CANDIDATE_SOURCE: 727a2eb2590d48fcf3181d6eebd10c7f710f3347
+      CANDIDATE_SOURCE: 5a590e33037678148b6f44c87bb59d62364b6bb7
       CANDIDATE_TAG: v0.1.139-intel-preview.1
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 727a2eb2590d48fcf3181d6eebd10c7f710f3347
+          ref: 5a590e33037678148b6f44c87bb59d62364b6bb7
           persist-credentials: false
       - name: Verify exact source and unused candidate tag
         env:
@@ -42,6 +42,19 @@ jobs:
           refs=json.load(open(os.environ['RUNNER_TEMP']+'/existing-tags.json'))
           assert not any(r['tag_name']==tag for r in releases), 'Candidate already exists; refuse replacement'
           assert not any(r['ref']=='refs/tags/'+tag for r in refs), 'Tag already exists; refuse replacement'
+          PY
+      - name: Inspect existing native account Keychain metadata without changes
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,pwd,pathlib,subprocess,json
+          home=pwd.getpwuid(os.getuid()).pw_dir
+          result=subprocess.run(['/usr/bin/security','default-keychain','-d','user'],capture_output=True,text=True,timeout=10)
+          default=result.stdout.strip().strip('"')
+          record={'HOME':os.environ.get('HOME'),'account_home':home,'keychain_directory_exists':pathlib.Path(home,'Library','Keychains').is_dir(),'default_query_status':result.returncode,'default_keychain':default,'default_exists':bool(default) and pathlib.Path(default).is_file()}
+          print('DANI_NATIVE_KEYCHAIN_METADATA '+json.dumps(record))
+          assert os.environ.get('HOME')==home,'Native HOME mismatch; do not alter Keychain'
+          assert result.returncode==0 and record['default_exists'],'No existing default Keychain; stop before build, no reset/create/unlock'
           PY
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
