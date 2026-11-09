@@ -72,7 +72,7 @@ function reportOwnedDiagnostics(){
 const graphicsFailures=[];
 function stop() {if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
-  launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe'],detached:true});
+  launched=spawn(executable,['--remote-debugging-port=9333','--user-data-dir='+path.join(temp,'electron-user-data')],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe'],detached:true});
   for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE')||text.includes('DANI_NATIVE_SERVER')||text.includes('DANI_NATIVE_PHASE'))console.log(text)});
   launched.on('error',error=>{launchOutput+='\n'+error.message});
   const deadline=Date.now()+120000;
@@ -133,6 +133,7 @@ async function inspect(page,label) {
  const body=await page.locator('body').innerText();
  assert.ok(body.trim().length>10,'packaged renderer empty');
  console.log(JSON.stringify({event:label,health:status,visibleText:body.slice(0,2200),url:page.url()}));
+ console.log('MAIN_ONBOARDING_STORAGE',JSON.stringify(await page.evaluate(async()=>({onboarding:(await (await fetch('/api/config')).json()).onboarding,legacyKeys:Object.keys(localStorage).filter(key=>/welcome|onboard/i.test(key)).map(key=>({key,value:localStorage.getItem(key)}))}))));
  await capture(page,label);
  const graphics=await page.evaluate(()=>({
    avatars:[...document.querySelectorAll('[data-robot-renderer]')].map(element=>({renderer:element.getAttribute('data-robot-renderer'),error:element.getAttribute('data-robot-error'),role:element.getAttribute('data-robot-role'),fallback: (()=>{const image=element.querySelector('img.mz-robot-static-fallback');const bounds=image?.getBoundingClientRect();const style=image ? getComputedStyle(image) : null;return image ? {visible:Boolean(bounds && bounds.width>0 && bounds.height>0 && style.visibility!=='hidden' && style.display!=='none' && style.opacity!=='0'),src:image.getAttribute('src'),complete:image.complete,width:image.naturalWidth,height:image.naturalHeight} : null;})()})),

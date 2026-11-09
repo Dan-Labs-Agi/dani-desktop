@@ -43,3 +43,8 @@ test('usable avatar presentation never claims unavailable WebGL is a 3D pass',()
  assert.ok(!verifier.includes('MAIN_INSTALLED_GRAPHICS_PASS'));
  assert.ok(verifier.includes('not 3D proof'));
 });
+
+test('native passes isolate Chromium user data without changing native HOME',()=>{
+ assert.ok(verifier.includes("'--user-data-dir='+path.join(temp,'electron-user-data')"));
+ assert.ok(verifier.includes('MAIN_ONBOARDING_STORAGE'));
+});
