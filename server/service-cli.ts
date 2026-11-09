@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import {
-  currentUser, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
+  SYSTEMD_UNIT_NAME, currentUser, launchdPlist, sentinelCommand, sentinelLaunchdPlist, sentinelServicePlan, sentinelSystemdService, sentinelSystemdTimer,
   servicePlan, shippedSentinelCli, systemdUnit, unstableInstallWarning,
 } from "./service-unit.ts";
 import { defaultSentinelOut, outRefusal } from "./sentinel/paths.ts";
@@ -82,8 +82,8 @@ export function runServiceCommand(input: ServiceInstallInput, io: ServiceIo): nu
   for (const line of plan.activate) io.log(`  ${line}`);
   io.log("");
   if (input.domain && platform === "linux") io.log("the unit grants Caddy the capability for ports 80 and 443, so no setcap is needed under the service");
-  io.log(`logs: ${platform === "darwin" ? `${input.dataDir}/logs/service.log` : "journalctl -u openmausbot -f"}`);
-  io.log(`change options later by running \`danibot service install\` again with the new ones, then: ${platform === "darwin" ? plan.activate[1] : "sudo systemctl daemon-reload && sudo systemctl restart openmausbot"}`);
+  io.log(`logs: ${platform === "darwin" ? `${input.dataDir}/logs/service.log` : `journalctl -u ${SYSTEMD_UNIT_NAME} -f`}`);
+  io.log(`change options later by running \`danibot service install\` again with the new ones, then: ${platform === "darwin" ? plan.activate[1] : `sudo systemctl daemon-reload && sudo systemctl restart ${SYSTEMD_UNIT_NAME}`}`);
   return 0;
 }
 

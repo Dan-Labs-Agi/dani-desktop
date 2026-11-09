@@ -119,7 +119,7 @@ export async function openClient(flags: Flags, deps: ClientDeps, mutating: boole
 }
 
 export function serverWords(message: string): string {
-  const body = /^Dani Bot API error \(\d+\): ([\s\S]*)$/.exec(message)?.[1];
+  const body = /^(?:Dani Bot|OpenMausBot) API error \(\d+\): ([\s\S]*)$/.exec(message)?.[1];
   if (body === undefined) return message;
   try {
     const said = (JSON.parse(body) as { error?: unknown }).error;

@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { daniVariantForColor } from "@/components/robot/dani-variants";
 import { MAUS_COLOR_NAMES } from "@/lib/mascot";
 
-type Seen = { color: string; state: string; animated: boolean; trackPointer?: boolean; size: number };
-vi.mock("@/components/Avatar", () => ({
-  MausAvatar: ({ color, state, animated, trackPointer, size: _size, ...choreography }: Seen) => createElement("i", {
-    "data-maus": color, "data-state": state, "data-animated": String(animated), "data-pointer": String(trackPointer),
+type Seen = { variant: string; label: string; state: string; animated: boolean; size: number };
+vi.mock("@/components/robot/RobotAvatar", () => ({
+  RobotAvatar: ({ variant, label, state, animated, size: _size, ...choreography }: Seen) => createElement("i", {
+    "data-maus": label, "data-variant": variant, "data-state": state, "data-animated": String(animated),
     "data-extra": Object.keys(choreography).join(",") }),
 }));
 const { NightCard } = await import("./NightCard");
@@ -36,7 +37,7 @@ it("the scene is hidden from screen readers: the card's own text is what is read
   expect(card().querySelector("h2")!.closest("svg"), "the text sits outside the scene").toBeNull();
 });
 
-it("three of the app's own mascots ride the cloud in three colours, each in a calm state, never following the pointer", async () => {
+it("three of the app's own mascots ride the cloud in three colours, each in a calm state, with their Dani variants", async () => {
   await render();
   const colors = mascots().map(node => node.dataset.maus!);
   expect(colors).toHaveLength(3);
@@ -44,7 +45,7 @@ it("three of the app's own mascots ride the cloud in three colours, each in a ca
   for (const color of colors) expect(MAUS_COLOR_NAMES).toContain(color);
   expect(mascots().map(node => node.dataset.state)).toEqual(["working", "idle", "thinking"]);
   expect(mascots().map(node => node.dataset.extra), "no faces, gazes or motions laid on top").toEqual(["", "", ""]);
-  expect(mascots().map(node => node.dataset.pointer)).toEqual(["false", "false", "false"]);
+  expect(mascots().map(node => node.dataset.variant)).toEqual(colors.map(daniVariantForColor));
 });
 
 it("live, one star twinkles, the z's drift and now and then a star shoots, all in CSS: no timer or frame of its own", async () => {
