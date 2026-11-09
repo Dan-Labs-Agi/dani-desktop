@@ -82,9 +82,10 @@ beforeEach(() => {
   f.checks = [];
   f.api.mockImplementation(async (path: string, init?: { body?: string }) => {
     if (path.endsWith("/check")) { f.checks.push(path); return { ok: true }; }
+    if (path === "/api/instances/dani-free/setup") return { phase: "not-installed", message: "Set up Dani Free on this computer.", modelReady: false };
     return path === "/api/instances" ? { instances: f.state.instances } : JSON.parse(init?.body ?? "{}");
   });
-  f.state = { instances: [claude(true)], config: { onboarding: EMPTY_ONBOARDING, profile: { name: "" } }, bots: [maus], cloudAdd: null };
+  f.state = { instances: [claude(true, "passed")], config: { onboarding: EMPTY_ONBOARDING, profile: { name: "" } }, bots: [maus], cloudAdd: null };
   stageIntro(null);
   host = document.createElement("div");
   document.body.append(host);
@@ -124,9 +125,9 @@ describe("a new install's first run", () => {
     expect(saved()).toEqual([{ onboarding: expect.objectContaining({ version: WELCOME_VERSION, hintsSeen: [MET_CHIEF_HINT] }) }]);
   });
 
-  it("counts an AI once it answered one tiny test message, and never before", async () => {
+  it("uses an already verified AI without sending a surprise model test", async () => {
     await show();
-    expect(f.checks).toEqual(["/api/instances/claude/check"]);
+    expect(f.checks).toEqual([]);
     expect(button("Next")!.disabled).toBe(false);
     expect(host.querySelector("[data-sign-in]")).toBeNull();
   });
@@ -180,12 +181,12 @@ describe("What's new", () => {
 });
 
 describe("with no AI working yet", () => {
-  it("keeps the screen's shape: the pill signs in, and the line under it offers other ways or later", async () => {
+  it("keeps the screen's shape: the button installs Dani Free, and the line under it offers other ways or later", async () => {
     f.state = { ...f.state, instances: [signIn()] };
     await show();
     expect(host.querySelector("h1")?.textContent).toBe("Meet Dani Bot");
     expect(button("Next")).toBeUndefined();
-    expect(button("Sign in with Claude")).toBeDefined();
+    expect(button("Install Dani Free")).toBeDefined();
     expect(button("Other ways to connect")).toBeDefined();
     expect(host.querySelector("[data-engine-setup]"), "no setup card on the screen itself").toBeNull();
     await toChief("Set up later");
@@ -195,7 +196,7 @@ describe("with no AI working yet", () => {
   it("opens every other way in the Connect an AI dialog, where OpenCode's free model is only a backup", async () => {
     f.state = { ...f.state, instances: [freeOpenCode, claude(false)] };
     await show();
-    expect(button("Connect Claude"), "an AI set up in Terminal opens the dialog").toBeDefined();
+    expect(button("Install Dani Free"), "tool setup does not send a model probe").toBeDefined();
     expect(f.checks).toEqual([]);
     await press("Other ways to connect");
     const dialog = host.querySelector("[data-connect-ai]")!;
@@ -207,10 +208,11 @@ describe("with no AI working yet", () => {
     expect(text(), "Escape closed the dialog only").toContain("Meet Dani Bot");
   });
 
-  it("says why an AI didn't answer its test, under the pill and in the dialog with Check again", async () => {
+  it("keeps failed AI details in the other-ways dialog without claiming Free model readiness", async () => {
     f.state = { ...f.state, instances: [freeOpenCode, claude(true, "failed")] };
     await show();
-    expect(host.querySelector("[role=alert]")?.textContent).toContain("Claude");
+    expect(button("Install Dani Free")).toBeDefined();
+    expect(f.checks).toEqual([]);
     await press("Other ways to connect");
     expect(host.querySelector("[data-connect-ai] [data-ai-silent]")).not.toBeNull();
   });
@@ -229,10 +231,10 @@ describe("with no AI working yet", () => {
     expect(f.checks).toEqual([]);
   });
 
-  it("turns the pill into Next once the AI connects, with the confirmation above it", async () => {
+  it("turns setup into Next only after the server reports a verified AI", async () => {
     f.state = { ...f.state, instances: [claude(false)] };
     await show();
-    f.state = { ...f.state, instances: [claude(true)] };
+    f.state = { ...f.state, instances: [claude(true, "passed")] };
     await show();
     await act(async () => {});
     expect(text()).toContain("Connected to Claude");
@@ -240,16 +242,67 @@ describe("with no AI working yet", () => {
     expect(button("Set up later")).toBeUndefined();
   });
 
-  it("moves on with Escape, and Enter presses the pill, never past an AI still to connect", async () => {
+  it("does not silently start tool setup on Enter, and Escape can defer it", async () => {
     f.state = { ...f.state, instances: [claude(false)] };
     await show();
     await key("Enter");
-    expect(host.querySelector("[data-connect-ai]"), "Enter pressed Connect Claude").not.toBeNull();
+    expect(host.querySelector("[data-connect-ai]")).toBeNull();
+    expect(f.api.mock.calls.some(([, init]) => init?.method === "POST"), "Enter did not consent to install or model probe").toBe(false);
+    await press("Other ways to connect");
     expect(text()).toContain("Meet Dani Bot");
     await act(async () => { host.querySelector("[data-connect-ai]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     await key("Escape");
     await tick(100);
     expect(text()).toContain("Introducing your Chief of Staff");
+  });
+});
+
+describe("Dani Free setup consent and results", () => {
+  it("installs only on an explicit click, polls to installed, and never calls a model check", async () => {
+    f.state = { ...f.state, instances: [] };
+    let phase = "not-installed";
+    f.api.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+      if (path === "/api/instances/dani-free/setup") {
+        if (init?.method === "POST") phase = "installing";
+        return { phase, message: phase === "installed" ? "Tools installed. No model has been started." : "Preparing tools", modelReady: false };
+      }
+      return JSON.parse(init?.body ?? "{}");
+    });
+    await show();
+    expect(button("Install Dani Free")!.disabled).toBe(false);
+    expect(f.api.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    await press("Install Dani Free");
+    expect(button("Installing Dani Free...")!.disabled).toBe(true);
+    phase = "installed";
+    await tick(2000);
+    expect(button("Dani Free tools installed")!.disabled).toBe(true);
+    expect(text()).toContain("No model has been started");
+    expect(f.api.mock.calls.filter(([path, init]) => path === "/api/instances/dani-free/setup" && init?.method === "POST")).toHaveLength(1);
+    expect(f.api.mock.calls.some(([path]) => path.endsWith("/check"))).toBe(false);
+    await toChief("Continue");
+    expect(text()).toContain("Introducing your Chief of Staff");
+  });
+
+  it("shows an install failure and lets the person retry without pretending a model is ready", async () => {
+    f.state = { ...f.state, instances: [] };
+    let attempt = 0;
+    f.api.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path !== "/api/instances/dani-free/setup") return {};
+      if (init?.method === "POST") {
+        attempt++;
+        return { phase: attempt === 1 ? "failed" : "installed", message: attempt === 1 ? "Synthetic tool download failed" : "Tools installed; model not started", modelReady: false };
+      }
+      return { phase: "not-installed", message: "Setup needed", modelReady: false };
+    });
+    await show();
+    await press("Install Dani Free");
+    expect(text()).toContain("Synthetic tool download failed");
+    expect(button("Install Dani Free")!.disabled).toBe(false);
+    await press("Install Dani Free");
+    expect(attempt).toBe(2);
+    expect(text()).toContain("model not started");
+    expect(button("Continue")).toBeDefined();
+    expect(f.api.mock.calls.some(([path]) => path.endsWith("/check"))).toBe(false);
   });
 });
 

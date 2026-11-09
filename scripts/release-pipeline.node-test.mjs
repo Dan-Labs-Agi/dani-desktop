@@ -74,3 +74,13 @@ test('focused Intel acceptance uses current Mac installer and Dani Free checks, 
  assert.match(text,/node scripts\/verify-main-mac-installed.cjs/);
  assert.doesNotMatch(text,/node scripts\/verify-main-intel-installed.cjs|contents: write|upload-artifact@|cache@/);
 });
+
+test('permanent validation stages source-bound private candidates without any publish or replacement path',()=>{
+ const workflow=readFileSync(new URL('../.github/workflows/permanent-installer-validation.yml',import.meta.url),'utf8');
+ assert.match(workflow,/workflow_dispatch:/);assert.doesNotMatch(workflow,/\n  push:|\n  publish:|release-publish\.mjs|upload-artifact@|cache@/);
+ assert.match(workflow,/validation\.\$\{\{ needs.prepare.outputs.short \}\}/);
+ for(const format of ['nsis','zip','dmg','deb','appimage'])assert.match(workflow,new RegExp('format: '+format));
+ assert.match(workflow,/macos-15-intel/);assert.match(workflow,/release-download-verify\.mjs/);
+ const staging=readFileSync(new URL('./release-staging.mjs',import.meta.url),'utf8');
+ assert.match(staging,/Candidate tag must identify its exact source/);assert.match(staging,/prerelease=\$\{candidate\}/);assert.doesNotMatch(staging,/--clobber|release','edit|release','delete/);
+});

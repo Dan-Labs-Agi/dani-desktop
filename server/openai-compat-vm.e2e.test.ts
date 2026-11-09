@@ -100,6 +100,8 @@ beforeAll(async () => {
   upstream = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     if (req.url === "/v1/models") return res.end(JSON.stringify({ data: [{ id: "fixture-model" }] }));
+    if (req.url === "/api/version") return res.end(JSON.stringify({ version: "synthetic-fixture" }));
+    if (req.url !== "/v1/chat/completions") { res.writeHead(404); return res.end(JSON.stringify({ error: "unexpected fixture endpoint" })); }
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const request = JSON.parse(raw || "{}") as ChatRequest;

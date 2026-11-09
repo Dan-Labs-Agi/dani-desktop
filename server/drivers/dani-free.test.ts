@@ -28,4 +28,16 @@ describe('Dani Free provider',()=>{
   const replies=await Promise.allSettled([instance.generateText!('a'),instance.generateText!('b')]);
   expect(replies.every(r=>r.status==='rejected')).toBe(true);expect(mocks.start).toHaveBeenCalledTimes(1);await instance.dispose();
  });
+ it('returns rate limiting without retrying the model request',async()=>{
+  mocks.start.mockResolvedValue({url:'http://127.0.0.1:45678/v1',key:'synthetic-test-key'});
+  const fetcher=vi.spyOn(globalThis,'fetch').mockImplementation(async url=>{
+   expect(String(url)).toBe('http://127.0.0.1:45678/v1/chat/completions');
+   return new Response(JSON.stringify({error:{message:'synthetic rate limit'}}),{status:429,headers:{'content-type':'application/json'}});
+  });
+  const instance=await DaniFreeDriver.create(input);
+  await expect(instance.generateText!('offline rate limit test')).rejects.toThrow('429');
+  expect(fetcher).toHaveBeenCalledTimes(1);expect(mocks.start).toHaveBeenCalledTimes(1);
+  await instance.dispose();
+ });
+
 });
