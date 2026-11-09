@@ -145,7 +145,7 @@ async function inspect(page,label) {
 (async()=>{
  stop();let ui=await open();await inspect(ui.page,'INSTALLED');
  if(process.env.DANI_VERIFY_FREE_INSTALL==='1') {
-   const button=ui.page.locator('[data-dani-free-install]');await button.waitFor({state:'visible'});
+   const button=ui.page.locator('[data-welcome="meet"] [data-dani-free-install]');await button.waitFor({state:'visible'});
    assert.equal(await button.innerText(),'Install Dani Free');await button.click();
    console.log('DANI_FREE_FINAL_STATUS',JSON.stringify(await waitDaniFreeSetup(ui.page)));
    await capture(ui.page,'FREE_INSTALLED');

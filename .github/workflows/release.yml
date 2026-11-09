@@ -82,6 +82,8 @@ jobs:
         run: node scripts/prepare-cloudflared.mjs
       - name: Build Linux packages
         run: pnpm package:linux
+      - name: Install Linux desktop metadata validator
+        run: sudo apt-get update && sudo apt-get install -y desktop-file-utils
       - run: node scripts/verify-linux-package.mjs
       - name: Verify release files
         shell: bash

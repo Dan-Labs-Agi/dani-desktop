@@ -2,10 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const main=readFileSync(new URL('../electron/main.mjs',import.meta.url),'utf8');
+const diagnostics=readFileSync(new URL('../electron/native-verification.mjs',import.meta.url),'utf8');
 const verifier=readFileSync(new URL('./verify-main-mac-installed.cjs',import.meta.url),'utf8');
 test('phase diagnostics are opt-in labels, never credential values',()=>{
- assert.match(main,/function nativeVerifyPhase\(phase\) \{\n  if \(process.env.DANI_NATIVE_VERIFY === "1"\) console.log\("DANI_NATIVE_PHASE", phase\);\n\}/);
- for(const phase of ['data-lease-start','data-lease-ready','credential-load-start','credential-load-ready','credential-migration-start','credential-migration-ready','phone-identity-start','phone-identity-ready','server-start'])assert.ok(main.includes('nativeVerifyPhase("'+phase+'")'));
+ assert.match(diagnostics,/export function nativeVerifyPhase/);
+ assert.ok(diagnostics.includes("process.env.DANI_NATIVE_VERIFY === '1'"));
+ assert.match(main,/import.*nativeVerifyPhase.*nativeVerifyProfile/);
+ for(const phase of ['data-lease-start','data-lease-ready','credential-load-start','credential-load-ready','credential-migration-start','credential-migration-ready','server-start'])assert.ok(main.includes('nativeVerifyPhase("'+phase+'")'));
+ assert.ok(diagnostics.includes("nativeVerifyPhase('phone-identity-start')"));
+ assert.ok(diagnostics.includes("nativeVerifyPhase('phone-identity-ready')"));
+ assert.match(main,/await verifyPhoneIdentity\(ensurePhoneSecretIdentity\)/);
  assert.doesNotMatch(main,/nativeVerifyPhase\([^)]*(secureCredentials|phoneSecretIdentity|credentials\.bin)/);
 });
 test('installed UI wait has one bounded deadline, checks exit, captures failures',()=>{

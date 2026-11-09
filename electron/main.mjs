@@ -1,3 +1,5 @@
+import { broadcastCapabilities } from "./capability-broadcast.mjs";
+import { nativeVerifyPhase, nativeVerifyProfile, verifyPhoneIdentity } from "./native-verification.mjs";
 import { app, autoUpdater as nativeAutoUpdater, BrowserWindow, Tray, WebContentsView, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, powerMonitor, powerSaveBlocker, safeStorage, screen, session, shell, systemPreferences, utilityProcess, nativeTheme } from "electron";
 import { createRequire } from "node:module";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -2861,22 +2863,9 @@ ipcMain.handle("approvals:set-trusted-mode", localOnly("approvals:set-trusted-mo
 
 // Electron fixes a Windows window's title bar when the window is made; on macOS the choice applies at once.
 const windowFrameNow = () => (process.platform === "win32" ? windowFrameMade : null) ?? desktopPrefs?.windowFrame() !== false;
-async function broadcastDesktopCapabilities() {
-  const localConnection = await cuaReady;
-  const build = (remote) =>
-    desktopCapabilities({ remote, platform: process.platform, env: process.env, packaged: app.isPackaged, localConnection, frame: windowFrameNow() });
-  const local = build(false);
-  chromeRail.send("desktop:capabilities-changed", local);
-  let redacted = null;
-  for (const window of appWindows()) {
-    if (window.isDestroyed()) continue;
-    let isLocal = false;
-    try {
-      isLocal = new URL(window.webContents.getURL()).origin === rendererOrigin();
-    } catch {}
-    if (!isLocal) redacted ??= build(true);
-    window.webContents.send("desktop:capabilities-changed", isLocal ? local : redacted);
-  }
+function broadcastDesktopCapabilities() {
+  return broadcastCapabilities({ connection: cuaReady, rail: chromeRail, windows: appWindows, origin: rendererOrigin,
+    build: (remote, localConnection) => desktopCapabilities({ remote, platform: process.platform, env: process.env, packaged: app.isPackaged, localConnection, frame: windowFrameNow() }) });
 }
 
 setCuaStateListener((connection) => {
@@ -2887,10 +2876,6 @@ setCuaStateListener((connection) => {
     console.error("[desktop] capability broadcast failed:", error);
   });
 });
-
-function nativeVerifyPhase(phase) {
-  if (process.env.DANI_NATIVE_VERIFY === "1") console.log("DANI_NATIVE_PHASE", phase);
-}
 
 app.whenReady().then(async () => {
   await evictStartupCacheOnce({
@@ -2940,14 +2925,7 @@ app.whenReady().then(async () => {
     }
     bootDataDir = boot.dataDir;
   }
-  if (process.env.DANI_NATIVE_VERIFY === "1") {
-    console.log("DANI_NATIVE_PROFILE", JSON.stringify({
-      requestedDaniDir: process.env.DANI_DATA_DIR,
-      requestedLegacyDir: process.env.OMB_DATA_DIR,
-      home: app.getPath("home"), userData: app.getPath("userData"),
-      logs: app.getPath("logs"), bootDataDir,
-    }));
-  }
+  nativeVerifyProfile(app, bootDataDir);
   if (app.isPackaged) {
     try {
       // Acquire before either plaintext credential migration touches config.json.
@@ -2995,11 +2973,7 @@ app.whenReady().then(async () => {
     writable: !credentialStoreUnavailable,
   });
   secureCredentials = secureCredentialState.read();
-  if (app.isPackaged) {
-    nativeVerifyPhase("phone-identity-start");
-    await ensurePhoneSecretIdentity();
-    nativeVerifyPhase("phone-identity-ready");
-  }
+  if (app.isPackaged) await verifyPhoneIdentity(ensurePhoneSecretIdentity);
   desktopRemoteAccess = desktopCompanionAccess(secureCredentials);
   const hostedAccount = desktopRemoteAccess ? null : ensureCompanionAccountService();
   // Display capture needs a one-shot renderer intent from the same frame/origin, no audio, and a user gesture.

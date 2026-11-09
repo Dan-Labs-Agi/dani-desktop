@@ -88,3 +88,17 @@ test('registered manual validation entrypoint runs the permanent path, never the
  const root=new URL('../.github/workflows/',import.meta.url);
  assert.equal(readFileSync(new URL('tested-preview-download.yml',root),'utf8'),readFileSync(new URL('permanent-installer-validation.yml',root),'utf8'));
 });
+test('every native Linux build installs desktop-file-validate before mandatory package verification',()=>{
+ for(const file of ['release.yml','permanent-installer-validation.yml','tested-preview-download.yml']){
+  const workflow=readFileSync(new URL('../.github/workflows/'+file,import.meta.url),'utf8');
+  assert.ok(workflow.indexOf('apt-get install -y desktop-file-utils') < workflow.indexOf('node scripts/verify-linux-package.mjs'));
+  assert.ok(workflow.includes('apt-get install -y desktop-file-utils'));
+ }
+});
+test('fresh onboarding clicks the Welcome dialog install, not the upgrade button behind its overlay',()=>{
+ for(const file of ['verify-main-installed.cjs','verify-main-mac-installed.cjs','verify-main-linux-installed.cjs']){
+  const verifier=readFileSync(new URL('./'+file,import.meta.url),'utf8');
+  assert.ok(verifier.includes('ui.page.locator(\'[data-welcome="meet"] [data-dani-free-install]\')'));
+  assert.ok(!verifier.includes("ui.page.locator('[data-dani-free-install]')"));
+ }
+});

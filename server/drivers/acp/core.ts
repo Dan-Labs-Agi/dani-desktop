@@ -1,3 +1,4 @@
+import { isHermesReasoningReplay } from "./reasoning-replay.ts";
 // The shared ACP (JSON-RPC 2.0 over stdio) driver; per-CLI quirks live in an AcpSupport.
 // ACP has no turn/completed: the session/prompt result (stopReason + usage) is the completion.
 // session/load replays history as ordinary session/update notifications, so nothing emits before
@@ -261,12 +262,6 @@ const SHARED_SESSIONS_MAX = 6, SHARED_SESSIONS_LIFETIME = 12;
 const HEALTHY_CLOSE = new Set(["idle", "reset", "contract", "stop", "stopAll", "dispose", "approval-unconfirmed"]);
 /** ACP agents may compact their history silently; re-send the full prompt after this many bare turns. */
 const ACP_PROMPT_RE_ANCHOR_TURNS = 8;
-function isHermesReasoningReplay(chunk: string, streamed: string): boolean {
-  const reply = streamed.trim();
-  const replay = chunk.trim();
-  return reply !== "" && /^(?:> |-# )?💭/.test(replay) && replay.endsWith(reply)
-    && /\n\n[ \t]*$/.test(replay.slice(0, -reply.length));
-}
 
 let unkeyedToolSeq = 0;
 /** A synthetic id for a `tool_call` without `toolCallId`, paired FIFO with the first terminal update. */
