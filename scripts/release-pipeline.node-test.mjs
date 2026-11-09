@@ -23,7 +23,7 @@ test('native install checks exercise the Dani Free button without starting a mod
  }
 });
 
-test('Mac and Windows zip basenames cannot collide in release staging',()=>{const builder=readFileSync(new URL('../electron-builder.yml',import.meta.url),'utf8');assert.match(builder,/mac:\n  artifactName: DaniBot-\$\{version\}-mac-\$\{arch\}/);});
+test('Mac and Windows zip basenames cannot collide in release staging',()=>{const builder=readFileSync(new URL('../electron-builder.yml',import.meta.url),'utf8');assert.match(builder,/mac:[\s\S]*?artifactName: DaniBot-\$\{version\}-mac-\$\{arch\}/);});
 test('approval is off until the owner decides the release audience and wording',()=>{const policy=JSON.parse(readFileSync(new URL('./release-policy.json',import.meta.url),'utf8'));assert.equal(policy.publicationApproved,false);assert.equal(policy.prerelease,true);});
 
 test('installer autolaunch inherits the disposable product data profile',()=>{
@@ -114,4 +114,17 @@ test('private draft downloads have draft-read permission and a retained-byte pat
  assert.match(text,/needs.prepare.result == 'success'/);
  const download=text.slice(text.indexOf('  download_check:'));
  assert.doesNotMatch(download,/release-staging|release-publish|--clobber/);
+});
+
+test('Mac packages get a complete free ad-hoc signature and the verifier keeps strict signature gates',()=>{
+ const builder=readFileSync(new URL('../electron-builder.yml',import.meta.url),'utf8');
+ assert.match(builder,/mac:[\s\S]*?identity: "-"/);
+ const verifier=readFileSync(new URL('./verify-main-mac-installed.cjs',import.meta.url),'utf8');
+ assert.ok((verifier.match(/'--verify','--deep','--strict'/g)||[]).length>=2);
+ assert.doesNotMatch(verifier,/codesign.*--force/);
+});
+test('DEB native installation resolves declared dependencies, rather than leaving dpkg unconfigured',()=>{
+ const verifier=readFileSync(new URL('./verify-main-linux-installed.cjs',import.meta.url),'utf8');
+ assert.ok(verifier.includes("spawnSync('sudo',['apt-get','install','-y',installer]"));
+ assert.ok(!verifier.includes("['dpkg','-i',installer]"));
 });

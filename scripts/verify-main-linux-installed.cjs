@@ -35,7 +35,7 @@ if(format==='appimage'){
  const extracted=spawnSync(installer,['--appimage-extract'],{cwd:install,encoding:'utf8',timeout:180000});assert.equal(extracted.status,0,extracted.stderr);
  executable=installer;resources=path.join(install,'squashfs-root','resources');
 }else{
- const result=spawnSync('sudo',['dpkg','-i',installer],{encoding:'utf8',timeout:180000});assert.equal(result.status,0,result.stderr);
+ const result=spawnSync('sudo',['apt-get','install','-y',installer],{encoding:'utf8',timeout:180000});assert.equal(result.status,0,result.stderr);
  executable='/opt/Dani Bot/danibot';resources='/opt/Dani Bot/resources';
 }
 assert.ok(fs.existsSync(executable));assert.ok(fs.existsSync(path.join(resources,'server/index.js')));
