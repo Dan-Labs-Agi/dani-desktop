@@ -4,6 +4,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
 export const files = [
+  'server/headless/main.test.ts',
+  'server/headless/engine.test.ts',
+  'server/surface.test.ts',
+  'server/thread-capacity-api.test.ts',
+  'server/usage-attribution.e2e.test.ts',
+  'server/independent-threads-api.test.ts',
   'electron/cua-linux-runtime.test.mjs',
   'electron/cua-linux.test.mjs',
   'scripts/ci-workflow.test.ts',
