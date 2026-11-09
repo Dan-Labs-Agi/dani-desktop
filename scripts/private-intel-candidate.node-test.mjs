@@ -5,7 +5,7 @@ const file=readFileSync(new URL('../.github/workflows/tested-preview-download.ym
 test('private Intel candidate is opt-in, branch guarded and source pinned',()=>{
  assert.match(file,/workflow_dispatch:/);
  assert.match(file,/github.ref == 'refs\/heads\/fix\/intel-private-delivery-20261109'/);
- assert.match(file,/ref: 5a590e33037678148b6f44c87bb59d62364b6bb7/);
+ assert.match(file,/ref: dd74946d36d4138880ae474ea515db4b9022373a/);
  assert.match(file,/test "\$\(git rev-parse HEAD\)" = "\$CANDIDATE_SOURCE"/);
  assert.match(file,/persist-credentials: false/);
  assert.match(file,/cancel-in-progress: false/);
@@ -27,7 +27,7 @@ test('downloaded exact-byte check precedes a second real install in a fresh synt
  assert.match(file,/hashlib.sha256\(file.read_bytes\(\)\).hexdigest\(\)==meta\['sha256'\]/);
  assert.match(file,/RUNNER_TEMP="\$RUNNER_TEMP\/downloaded-profile" GITHUB_SHA="\$CANDIDATE_SOURCE" node scripts\/verify-main-mac-installed.cjs/);
  assert.equal((file.match(/grep -q MAIN_INSTALLED_RELAUNCH_PASS/g)||[]).length,2);
- assert.equal((file.match(/grep -q MAIN_INSTALLED_GRAPHICS_PASS/g)||[]).length,2);
+ assert.equal((file.match(/grep -q MAIN_INSTALLED_AVATAR_PRESENTATION_PASS/g)||[]).length,2);
  assert.equal((file.match(/grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS/g)||[]).length,2);
 });
 test('candidate retains functional and security limits without live-model or override execution',()=>{

@@ -4,7 +4,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: private-intel-candidate-5a590e3
+  group: private-intel-candidate-dd74946
   cancel-in-progress: false
 jobs:
   build_install_download:
@@ -19,13 +19,13 @@ jobs:
       DANIBOT_CUA_ARCHES: x64
       DANIBOT_CUA_ARCHES_PARTIAL: '1'
       NODE_OPTIONS: --max-old-space-size=7168
-      CANDIDATE_SOURCE: 5a590e33037678148b6f44c87bb59d62364b6bb7
+      CANDIDATE_SOURCE: dd74946d36d4138880ae474ea515db4b9022373a
       CANDIDATE_TAG: v0.1.139-intel-preview.1
       GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 5a590e33037678148b6f44c87bb59d62364b6bb7
+          ref: dd74946d36d4138880ae474ea515db4b9022373a
           persist-credentials: false
       - name: Verify exact source and unused candidate tag
         env:
@@ -67,13 +67,13 @@ jobs:
       - run: pnpm build:speech && pnpm build:cua
       - run: pnpm exec electron-builder --mac --x64 --publish never -c.mac.identity=-
       - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - name: Validate exact built DMG, Dani Free setup, graphics, onboarding and relaunch
+      - name: Validate exact built DMG, Dani Free setup, avatar presentation, onboarding and relaunch
         run: |
           set -euo pipefail
           GITHUB_SHA="$CANDIDATE_SOURCE" node scripts/verify-main-mac-installed.cjs | tee "$RUNNER_TEMP/built-native.log"
           grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS "$RUNNER_TEMP/built-native.log"
           grep -q MAIN_INSTALLED_RELAUNCH_PASS "$RUNNER_TEMP/built-native.log"
-          grep -q MAIN_INSTALLED_GRAPHICS_PASS "$RUNNER_TEMP/built-native.log"
+          grep -q MAIN_INSTALLED_AVATAR_PRESENTATION_PASS "$RUNNER_TEMP/built-native.log"
       - name: Retain only passed exact bytes in new private draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,13 +85,13 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,os,pathlib
           file=pathlib.Path('release/DaniBot-0.1.139-x64.dmg')
-          record={'source':os.environ['CANDIDATE_SOURCE'],'filename':file.name,'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),'bytes':file.stat().st_size,'audience':'private test candidate','built_native_validation':'passed','downloaded_native_validation':'pending','limits':['Full test matrix is not passing; not production-ready.','Ad-hoc signing only; not Developer ID signed or notarized. macOS trust acceptance and the actual browser/Finder dialog are unverified.','Dani Free tools setup is tested without starting a model service. Live Kilo model response is unverified; no external model request was made.','No security exception is performed or authorized by this candidate.']}
+          record={'source':os.environ['CANDIDATE_SOURCE'],'filename':file.name,'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),'bytes':file.stat().st_size,'audience':'private test candidate','built_native_validation':'passed','downloaded_native_validation':'pending','limits':['Full test matrix is not passing; not production-ready.','WebGL 3D rendering on the runner is not verified; usable approved static crowned Dani fallback is tested when WebGL initialization fails.','Ad-hoc signing only; not Developer ID signed or notarized. macOS trust acceptance and the actual browser/Finder dialog are unverified.','Dani Free tools setup is tested without starting a model service. Live Kilo model response is unverified; no external model request was made.','No security exception is performed or authorized by this candidate.']}
           pathlib.Path(os.environ['RUNNER_TEMP']+'/CANDIDATE.json').write_text(json.dumps(record,indent=2)+'\n')
           PY
           cat > "$RUNNER_TEMP/candidate-notes.txt" <<'EOF'
           Private Intel test candidate of the new Dani Free architecture. Not production-ready and not a replacement for public/latest Downloads.
 
-          Exact built DMG native installation, Dani Free tool setup without a model service, onboarding, relaunch, synthetic profile preservation and graphics checks passed. Downloaded-byte verification is pending until CANDIDATE.json says passed.
+          Exact built DMG native installation, Dani Free tool setup without a model service, onboarding, relaunch, synthetic profile preservation and usable avatar presentation checks passed. The runner uses an explicit decoded static fallback of the approved crowned Dani when WebGL is unavailable; 3D rendering on this runner is not verified. Downloaded-byte verification is pending until CANDIDATE.json says passed.
 
           Known limits: full test matrix is not passing; live Kilo model response is unverified; ad-hoc signing only, no Developer ID or notarization. Ordinary browser-download/macOS trust acceptance and the exact Finder dialog are unverified. No security exception was performed. Do not treat this page as an instruction to override a damaged or malware warning.
           EOF
@@ -131,7 +131,7 @@ jobs:
           RUNNER_TEMP="$RUNNER_TEMP/downloaded-profile" GITHUB_SHA="$CANDIDATE_SOURCE" node scripts/verify-main-mac-installed.cjs | tee "$RUNNER_TEMP/downloaded-native.log"
           grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS "$RUNNER_TEMP/downloaded-native.log"
           grep -q MAIN_INSTALLED_RELAUNCH_PASS "$RUNNER_TEMP/downloaded-native.log"
-          grep -q MAIN_INSTALLED_GRAPHICS_PASS "$RUNNER_TEMP/downloaded-native.log"
+          grep -q MAIN_INSTALLED_AVATAR_PRESENTATION_PASS "$RUNNER_TEMP/downloaded-native.log"
           python3 - <<'PY'
           import json,os,pathlib
           p=pathlib.Path(os.environ['RUNNER_TEMP'])/'CANDIDATE.json'
