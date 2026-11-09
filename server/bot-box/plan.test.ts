@@ -44,6 +44,17 @@ linuxBox("the box plan", () => {
     expect(visibleInBox(plan, "/root/.ssh/id_ed25519")).toBe("none");
   });
 
+  it("keeps explicitly declared code readable under private temporary folders without exposing neighboring files", () => {
+    for (const base of ["/tmp", "/var/tmp", "/run"]) {
+      const code = `${base}/dani-code`;
+      const plan = planBox({ ...setup(), codeRoots: [code] }, { command: "/usr/bin/node", args: [`${code}/server/index.ts`], cwd, env: {} });
+      expect(visibleInBox(plan, `${code}/server/index.ts`)).toBe("ro");
+      expect(visibleInBox(plan, `${code}/server/bot-box/box-probe.ts`)).toBe("ro");
+      expect(visibleInBox(plan, `${base}/other-turn/secrets.json`)).toBe("none");
+      expect(visibleInBox(plan, `${dataDir}/messages.db`)).toBe("none");
+    }
+  });
+
   it("writes the bubblewrap argv in mount order, with its own namespaces and the bridged sockets", () => {
     const args = bwrapArgs(turn());
     const text = args.join(" ");

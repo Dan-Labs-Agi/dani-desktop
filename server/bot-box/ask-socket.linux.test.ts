@@ -37,6 +37,8 @@ function askInBox(socket: string, rw: string[]): Promise<{ content: Array<{ text
       child.kill();
       resolve(reply.result);
     });
+    child.once("error", (error) => { clearTimeout(timer); reject(error); });
+    child.once("exit", (code) => { clearTimeout(timer); reject(new Error(`boxed helper exited ${code}: ${out}`)); });
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "ask_user", arguments: { question: "Which account?" } } }) + "\n");
   });
 }
@@ -44,6 +46,7 @@ function askInBox(socket: string, rw: string[]): Promise<{ content: Array<{ text
 describe.skipIf(!available)(`a bot's question from inside a real box (${available ? "bubblewrap works here" : `skipped: ${detection.reason}`})`, () => {
   it("reaches the broker through the socket put back in the box, and says what to do instead without it", async () => {
     mkdirSync(cwd, { recursive: true });
+    mkdirSync(join(dataDir, "workspaces", "bot-a"), { recursive: true });
     const asked: string[] = [];
     const broker = await createPermissionBroker({
       socketPaths: [join(dataDir, "perm-test.sock")],

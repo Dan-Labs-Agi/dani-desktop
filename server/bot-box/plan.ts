@@ -129,15 +129,17 @@ export function planBox(setup: BoxSetup, request: BoxRequest): BoxPlan {
     { kind: "ro", source: "/opt", target: "/opt", optional: true },
     { kind: "ro", source: "/var/lib", target: "/var/lib", optional: true },
   ];
+  mounts.push({ kind: "proc", target: "/proc" }, { kind: "dev", target: "/dev" });
+  if (mutate.has("tmp-shared")) mounts.push({ kind: "bind", source: "/tmp", target: "/tmp" });
+  else mounts.push({ kind: "tmpfs", target: "/tmp" });
+  mounts.push({ kind: "tmpfs", target: "/var/tmp" }, { kind: "tmpfs", target: "/run" });
+  // Restore only the already declared code roots after private temporary folders. A checkout under /tmp must remain
+  // readable, but its neighbors stay private; HOME and the data-folder mask below retain their existing precedence.
   for (const root of setup.codeRoots) {
     const code = resolve(root);
     if (["/usr", "/etc", "/opt", "/var/lib"].some((base) => under(code, base))) continue;
     mounts.push({ kind: "ro", source: code, target: code });
   }
-  mounts.push({ kind: "proc", target: "/proc" }, { kind: "dev", target: "/dev" });
-  if (mutate.has("tmp-shared")) mounts.push({ kind: "bind", source: "/tmp", target: "/tmp" });
-  else mounts.push({ kind: "tmpfs", target: "/tmp" });
-  mounts.push({ kind: "tmpfs", target: "/var/tmp" }, { kind: "tmpfs", target: "/run" });
 
   const writable: string[] = [];
   const rw = (path: string) => {

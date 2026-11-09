@@ -33,7 +33,7 @@ describe.skipIf(!available)(`the real box (${detection.box === "bwrap" ? "bubble
     const expected: Record<string, string[]> = {
       "bind-data": ["messages-db-hidden", "config-hidden", "data-dir-empty", "other-bot-folder-hidden", "other-task-folder-hidden", "secret-not-on-disk"],
       "share-pid": ["other-pid-hidden", "server-pid-hidden"],
-      "share-net": ["host-loopback-unreachable", "no-direct-internet"],
+      "share-net": ["harness-other-refused", "egress-loopback-refused", "egress-metadata-refused", "egress-private-refused"],
       "env-all": ["secret-not-in-env"],
       "tmp-shared": ["tmp-private"],
       "engines-rw": ["engine-read-only"],
@@ -43,7 +43,13 @@ describe.skipIf(!available)(`the real box (${detection.box === "bwrap" ? "bubble
       const result = await runBoxSelfCheck({ ...options(), mutate: new Set([mutation as never]) });
       expect(result.error, mutation).toBeUndefined();
       for (const id of checks) expect(result.failed, `${mutation} should fail ${id}`).toContain(id);
-      // share-net drops the two isolated-network checks instead of failing them; everything else holds.
+      // A shared-network request deliberately has neither bridges nor broker rewriting; it reaches the unrestricted
+      // fixture server and loses all four refusal gates. The isolated-network and broker checks are absent there.
+      if (mutation === "share-net") {
+        for (const id of ["host-loopback-unreachable", "no-direct-internet", "no-provider-key-in-env", "base-url-is-broker", "broker-call-works", "broker-wrong-token-refused", "broker-other-grant-refused", "broker-key-not-on-disk"]) {
+          expect(result.results.some((check) => check.id === id), `${id} is isolated-network only`).toBe(false);
+        }
+      }
       const other = result.failed.filter((id) => !checks.includes(id));
       expect(other, `${mutation} broke more than it should`).toEqual([]);
     }
