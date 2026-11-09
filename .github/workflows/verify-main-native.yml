@@ -31,8 +31,18 @@ jobs:
       - name: Native CryptoKit credential interoperability
         if: matrix.os == 'macos-15-intel'
         run: pnpm exec vitest run server/phone-secret.test.ts server/phone-secret-interop.test.ts
+  quarantine_observation:
+    if: inputs.inspect_intel_download && github.ref == 'refs/heads/fix/mac-quarantine-observation-20261109'
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    permissions:
+      # Draft releases require push visibility, even for this read-only code.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - name: Observe existing Intel Safari download quarantine
-        if: matrix.os == 'macos-15-intel' && inputs.inspect_intel_download
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash

@@ -63,7 +63,9 @@ def main():
                'Accept': 'application/vnd.github+json'}
     root = 'https://api.github.com/repos/' + REPO
     releases = json.load(urllib.request.urlopen(urllib.request.Request(root + '/releases?per_page=100', headers=headers), timeout=30))
-    release = next(r for r in releases if r['id'] == 438594031)
+    release = next((r for r in releases if r['id'] == 438594031), None)
+    if release is None:
+        raise RuntimeError('Job token cannot see the approved private draft; stop before Safari')
     if not release['draft'] or release['target_commitish'] != '35ec74d00e809f0339cf238f76ea723fba59c456':
         raise RuntimeError('Expected immutable private repair draft/source not found')
     asset = next(a for a in release['assets'] if a['name'] == NAME)
