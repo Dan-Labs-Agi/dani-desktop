@@ -23,6 +23,9 @@ jobs:
     name: DEB + AppImage (Ubuntu 24.04 x64)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      OMB_AI_CHECKS: "0"
+      NODE_OPTIONS: --max-old-space-size=7168
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,6 +41,10 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           at-spi2-core dbus-x11 desktop-file-utils libxi6 libxkbcommon0 squashfs-tools x11-utils xdotool xvfb
       - run: pnpm install --frozen-lockfile
+      - name: Typecheck exact source and verify the Linux embedded-driver contract
+        run: |
+          pnpm typecheck
+          pnpm exec vitest run server/local-computer.test.ts electron/cua-linux-runtime.test.mjs electron/cua-linux.test.mjs
       - name: Clean generated output
         run: pnpm clean
       - name: Stage the pinned CUA runtime
