@@ -269,7 +269,7 @@ export async function executePlan(steps: FleetStep[], deps: FleetDeps, io: Fleet
         break;
       }
       case "health":
-        if (!(await deps.health(step.url, HEALTH_TIMEOUT_MS))) return failed(io, step.why, `${step.url} did not answer within ${HEALTH_TIMEOUT_MS / 1000}s; check journalctl -u openmausbot@<slug>`);
+        if (!(await deps.health(step.url, HEALTH_TIMEOUT_MS))) return failed(io, step.why, `${step.url} did not answer within ${HEALTH_TIMEOUT_MS / 1000}s; check journalctl -u danibot@<slug>`);
         break;
       case "note":
         io.log(step.text);
@@ -310,7 +310,7 @@ export function planFleetAction(input: FleetInput, deps: FleetDeps): FleetStep[]
         return plan.steps.flatMap((step): FleetStep[] => {
           if (step.kind === "write" && step.path === layout.registryFile) return [{ ...step, content: `${JSON.stringify(registry, null, 2)}\n` }];
           if (step.kind === "write" && step.path === layout.fenceFile) return [{ ...step, content: fenceRules(Object.values(registry.workspaces)) }];
-          if (step.kind === "run" && step.argv.join(" ") === "systemctl enable --now openmausbot-fence.service") return [step, { kind: "run", argv: ["nft", "-f", layout.fenceFile], why: "reapply the preserved workspace fence" }];
+          if (step.kind === "run" && step.argv.join(" ") === "systemctl enable --now danibot-fence.service") return [step, { kind: "run", argv: ["nft", "-f", layout.fenceFile], why: "reapply the preserved workspace fence" }];
           return [step];
         });
       }
@@ -321,7 +321,7 @@ export function planFleetAction(input: FleetInput, deps: FleetDeps): FleetStep[]
       assertSlug(input.slug);
       const registry = loadRegistry(layout, deps);
       if (registry.workspaces[input.slug]) throw new Error(`workspace "${input.slug}" already exists`);
-      for (const path of [workspaceHome(layout, input.slug), posix.join(layout.instancesDir, `${input.slug}.env`), posix.join(layout.caddyDir, `${input.slug}.caddy`), posix.join(posix.dirname(layout.unitFile), `openmausbot@${input.slug}.service.d`)]) {
+      for (const path of [workspaceHome(layout, input.slug), posix.join(layout.instancesDir, `${input.slug}.env`), posix.join(layout.caddyDir, `${input.slug}.caddy`), posix.join(posix.dirname(layout.unitFile), `danibot@${input.slug}.service.d`)]) {
         if (deps.pathExists(path)) throw new Error(`workspace path already exists: ${path}; recover or remove it explicitly before provisioning a fresh workspace`);
       }
       const brandJson = input.brandJson ?? (input.brandFile ? deps.readText(input.brandFile) : undefined);
@@ -430,7 +430,7 @@ export async function runFleetCommand(input: FleetInput, io: FleetIo, deps: Flee
         return 0;
       }
       for (const workspace of rows) {
-        const live = asRoot && (workspace.status === "running" || workspace.status === "suspended") ? (await deps.run(["systemctl", "is-active", `openmausbot@${workspace.slug}.service`])).output.trim() : workspace.status;
+        const live = asRoot && (workspace.status === "running" || workspace.status === "suspended") ? (await deps.run(["systemctl", "is-active", `danibot@${workspace.slug}.service`])).output.trim() : workspace.status;
         io.log(`${workspace.slug.padEnd(24)} https://${workspace.host.padEnd(40)} :${String(workspace.port).padEnd(6)} ${live}`);
       }
       return 0;

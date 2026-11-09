@@ -31,7 +31,7 @@ const scriptToolCalls = (calls: unknown[] | null) => {
   const file = join(team.home, "tool-calls.json");
   if (calls) writeFileSync(file, JSON.stringify(calls)); else rmSync(file, { force: true });
 };
-const dataDir = (...rest: string[]) => join(team.home, ".openmausbot", ...rest);
+const dataDir = (...rest: string[]) => join(team.home, ".danibot", ...rest);
 const messages = (token: string, threadId: string) => team.as(token, "GET", `/api/threads/${threadId}/messages?limit=200`);
 const idle = async (token: string) => ((await team.as(token, "GET", "/api/bots")).body.bots as Array<{ activity?: string; busy?: boolean }>)
   .every((entry) => entry.activity !== "working" && !entry.busy);
@@ -286,8 +286,8 @@ it("when Bob leaves the team, his private chats and everything only his are dele
   expect(existsSync(layer)).toBe(true);
   expect(existsSync(adminsLayer)).toBe(true);
   for (const file of [bobFile, bobDoc, bobUnsent]) expect(existsSync(dataDir("attachments", file))).toBe(true);
-  const bobsMausBot = ((await team.as(bob, "GET", "/api/bots")).body.bots as Array<{ id: string; threadId: string; name: string }>).find((entry) => entry.name === "Dani")!;
-  expect(bobsMausBot).toBeDefined();
+  const bobsDaniBot = ((await team.as(bob, "GET", "/api/bots")).body.bots as Array<{ id: string; threadId: string; name: string }>).find((entry) => entry.name === "Dani")!;
+  expect(bobsDaniBot).toBeDefined();
   const room = (await team.as(owner, "POST", "/api/groups", { name: "Desk", memberIds: [bot.id], setup: { bulletin: "", defaultResponder: { kind: "everyone" } } })).body.group as { id: string; threadId: string };
   expect((await team.as(owner, "POST", `/api/groups/${room.id}/messages`, { text: "@Scout hello" })).status).toBe(202);
   await until(async () => await idle(owner) && ((await messages(owner, room.threadId)).body.messages as unknown[]).length >= 2);
@@ -324,10 +324,10 @@ it("when Bob leaves the team, his private chats and everything only his are dele
   expect(roomReads(), "a deleted room's read lines go with it").not.toContain(room.id);
   // His own Dani and its chat go with him.
   for (const token of [owner, admin]) {
-    expect(((await team.as(token, "GET", "/api/bots")).body.bots as Array<{ id: string }>).map((entry) => entry.id)).not.toContain(bobsMausBot.id);
-    expect((await messages(token, bobsMausBot.threadId)).status).toBe(404);
+    expect(((await team.as(token, "GET", "/api/bots")).body.bots as Array<{ id: string }>).map((entry) => entry.id)).not.toContain(bobsDaniBot.id);
+    expect((await messages(token, bobsDaniBot.threadId)).status).toBe(404);
   }
-  expect(existsSync(dataDir("workspaces", bobsMausBot.id))).toBe(false);
+  expect(existsSync(dataDir("workspaces", bobsDaniBot.id))).toBe(false);
   // The team's own things stay: the bot, its main chat, and the Admin's own chat and notes.
   expect((await messages(owner, bot.mainThreadId)).status).toBe(200);
   expect((await messages(admin, adminThread)).status).toBe(200);

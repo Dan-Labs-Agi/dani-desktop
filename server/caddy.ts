@@ -198,7 +198,7 @@ export function normalizeDomainOption(raw: string): string | { error: string } {
   const value = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
   const label = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
   if (!value || value.length > 253 || !value.includes(".") || /[\s/:@?#]/.test(value) || !value.split(".").every((part) => label.test(part))) {
-    return { error: "--domain takes a bare hostname such as maus.example.com" };
+    return { error: "--domain takes a bare hostname such as dani.example.com" };
   }
   if (/(?:^|\.)(?:localhost|local|internal|invalid)$/.test(value)) return { error: "--domain needs a public domain name that resolves to this machine" };
   return value;

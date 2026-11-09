@@ -16,8 +16,8 @@ import { hostTimeout } from "./testing/host-timeout.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
 
 const SETTLED = "Your downstream room requests have settled.";
-const REPORT_FROM_MIRA = "[OpenMausBot report from @Mira";
-const QUESTION_FROM_MIRA = "[OpenMausBot question from @Mira";
+const REPORT_FROM_MIRA = "[DaniBot report from @Mira";
+const QUESTION_FROM_MIRA = "[DaniBot question from @Mira";
 
 type Row = Record<string, any>;
 const jsonl = (path: string): any[] => existsSync(path)
@@ -317,7 +317,7 @@ it("P4 keeps Mira's question from a Clive turn a webhook started: it is not list
   await f.say(f.mira.id, chat, "P4: redo the pricing page.");
   await expect.poll(async () => (await asking(f, chat)) !== undefined, { timeout: 30_000 }).toBe(true);
 
-  const hook = await f.api("POST", "/api/webhooks", { name: "P4", prompt: "P4-HOOK: tell Mira to keep it.", botId: f.clive.id, runOn: "maus" });
+  const hook = await f.api("POST", "/api/webhooks", { name: "P4", prompt: "P4-HOOK: tell Mira to keep it.", botId: f.clive.id, runOn: "dani" });
   expect(hook.status, JSON.stringify(hook.body)).toBe(201);
   const delivered = await fetch(hook.body.credential.url, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   expect(delivered.status).toBe(202);

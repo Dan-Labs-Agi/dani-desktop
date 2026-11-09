@@ -23,10 +23,10 @@ export const VERB_HELP: Record<string, string> = {
   models: "danibot models\n  The engines and the models each offers (use them as INSTANCE/MODEL).",
   messages: `danibot messages TARGET [--limit 30]\n  The latest messages of a conversation (at most 200).
   ${T}`,
-  send: `openmausbot send TARGET (TEXT | --text TEXT | --message-file FILE | -) [--send-id ID] [--dry-run]
+  send: `danibot send TARGET (TEXT | --text TEXT | --message-file FILE | -) [--send-id ID] [--dry-run]
   Send one message and return at once. The same --send-id never sends twice.
   ${T}`,
-  "send-channel": "openmausbot send-channel --channel ID (TEXT | --text TEXT) [--task ID] [--dry-run]\n  The same as send, for a room named by id.",
+  "send-channel": "danibot send-channel --channel ID (TEXT | --text TEXT) [--task ID] [--dry-run]\n  The same as send, for a room named by id.",
   run: `danibot run TARGET (TEXT | --message-file FILE | -) [--task new|current|ID] [--title T]
                 [--wait job|turn|none] [--timeout 30m] [--on-input exit|wait|stop] [--on-timeout leave|stop]
                 [--strict] [--export DIR [--force]]
@@ -75,7 +75,7 @@ export const VERB_HELP: Record<string, string> = {
   connect: `danibot connect [URL] [--code CODE] --out FILE [--label NAME] [--client] [--force]
   Get a token for a workspace you reach over the network, saved to FILE (only you can read it).
   On this computer's own server the code is made for you; elsewhere, get one from Settings → Phone.
-  Then use it: --url URL --token-file FILE (or OPENMAUSBOT_URL and OPENMAUSBOT_TOKEN).`,
+  Then use it: --url URL --token-file FILE (or DANIBOT_URL and DANIBOT_TOKEN).`,
   mcp: "danibot mcp\n  Serve the Dani Bot MCP tools on stdin and stdout, for an agent (docs/mcp-server.md).",
 };
 

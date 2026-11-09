@@ -209,7 +209,7 @@ export function describeEdition(status: EditionStatus): string {
     const until = status.expiresAt ? ` until ${status.expiresAt}` : "";
     return `danibot enterprise edition for ${status.customer}${until}: ${status.features.join(", ") || "no features"}`;
   }
-  return `openmausbot open-source edition${status.notice ? ` (${status.notice})` : ""}`;
+  return `danibot open-source edition${status.notice ? ` (${status.notice})` : ""}`;
 }
 
 /** The edition as Settings shows it: a licence block only while an Enterprise licence is near or past expiry. */

@@ -15,7 +15,7 @@ const legacyNameFor = (botId: string) => {
   return `ogb-${prefix}-${hash}`;
 };
 
-describe("OpenMaus-managed Boat inventory", () => {
+describe("Dani-managed Boat inventory", () => {
   let api: Server;
   let boats: ProviderBoat[] = [];
   let listStatus = 200;

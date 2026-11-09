@@ -74,7 +74,7 @@
 - **Platform coverage:** badge says macOS · Windows · Ubuntu; `electron-builder.yml` builds mac (dmg+zip, arm64+x64), win (nsis+zip x64), linux (AppImage+deb x64). Match.
 - **Honest caveats inline:** Windows installer unsigned ("SmartScreen shows unknown publisher" — `electron-builder.yml` win comment), "Ubuntu Wayland host control remains disabled while issue #345 is resolved", "Installers are published only after a version-tag build produces and verifies the complete … set."
 - **"Local-first":** accurate for packaged builds — harness on 127.0.0.1, transcripts/keys in `~/.danibot` (`README.md` "Local first" section). Nuance: `DEFAULT_COMPOSIO_BROKER_URL = ""` (`electron/main.mjs:112`) — no default cloud broker, so local-first holds by default.
-- **Legacy naming:** `package.json` `desktopName: "com.openmausbot.app.desktop"` and `electron-builder.yml` `appId: com.openmausbot.app` still carry the old "openmausbot" product name while everything user-facing says "Dani Bot" — cosmetic, but it's the kind of thing that shows up in keychain entries and protocol strings (`danibot://` scheme registered at `electron/main.mjs:2457` is the new name).
+- **Legacy naming:** `package.json` `desktopName: "com.danibot.app.desktop"` and `electron-builder.yml` `appId: com.danibot.app` still carry the old "danibot" product name while everything user-facing says "Dani Bot" — cosmetic, but it's the kind of thing that shows up in keychain entries and protocol strings (`danibot://` scheme registered at `electron/main.mjs:2457` is the new name).
 - Features claimed (model picker, computer panel, approval cards, connected apps, bring-your-own agents) all exist as components/drivers. No phantom features found.
 
 ---
@@ -103,4 +103,4 @@
 
 1. Plaintext provider keys in dev/CLI mode (`server/index.ts:11750` else-branch → `~/.danibot/config.json`). Consider warning in Settings UI when `!app.isPackaged`, or always routing through the OS store.
 2. Six IPC handlers bypass `localOnly()` and rely on the preload allowlist (`desktop:open-external` at `electron/main.mjs:2105` is the sharpest). Consider a lint/test asserting every `ipcMain.handle` is either wrapped or on an explicit allowlist — `electron/local-only-hoist.node-test.mjs` exists; extend it.
-3. Legacy `com.openmausbot.app` identifiers in `package.json`/`electron-builder.yml` vs the "Dani Bot" brand — rename before the identifiers bake into more keychain entries.
+3. Legacy `com.danibot.app` identifiers in `package.json`/`electron-builder.yml` vs the "Dani Bot" brand — rename before the identifiers bake into more keychain entries.

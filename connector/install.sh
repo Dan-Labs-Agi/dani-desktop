@@ -2,9 +2,9 @@
 # MausBot on a server of your own: checks the server, installs the bot box's two security profiles, starts the MausBot
 # connector and connects it to MausBot with the one-time code MausBot shows. Running it again repairs the install.
 #
-#   curl -fsSL https://cloud.openmausbot.com/install.sh | sudo sh -s -- <code>
-#   curl -fsSL https://cloud.openmausbot.com/install.sh | sudo sh -s -- uninstall               (keeps your data)
-#   curl -fsSL https://cloud.openmausbot.com/install.sh | sudo sh -s -- uninstall --delete-data (deletes it too)
+#   curl -fsSL https://cloud.danibot.com/install.sh | sudo sh -s -- <code>
+#   curl -fsSL https://cloud.danibot.com/install.sh | sudo sh -s -- uninstall               (keeps your data)
+#   curl -fsSL https://cloud.danibot.com/install.sh | sudo sh -s -- uninstall --delete-data (deletes it too)
 #
 # MausBot serves this file with its own address and the connector's image (pinned by digest) filled in below.
 set -eu

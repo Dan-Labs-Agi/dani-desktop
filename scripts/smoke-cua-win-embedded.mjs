@@ -37,12 +37,12 @@ if (!createBackgroundExecutable(readFileSync(binary)).equals(readFileSync(backgr
 // library lookup to exactly this path; verify the redirect is present, or the
 // packaged app would fall back to node_modules paths that do not exist.
 const bundledSource = readFileSync(bundle, "utf8");
-if (!bundledSource.includes("OPENMAUSBOT_CUA_SDK_LIBRARY")) {
-  console.error("staged cua-sdk.mjs lacks the OPENMAUSBOT_CUA_SDK_LIBRARY resolver patch — re-run pnpm build:cua:win");
+if (!bundledSource.includes("DANIBOT_CUA_SDK_LIBRARY")) {
+  console.error("staged cua-sdk.mjs lacks the DANIBOT_CUA_SDK_LIBRARY resolver patch — re-run pnpm build:cua:win");
   process.exit(1);
 }
 
-process.env.OPENMAUSBOT_CUA_SDK_LIBRARY = dll;
+process.env.DANIBOT_CUA_SDK_LIBRARY = dll;
 process.env.CUA_DRIVER_RS_TELEMETRY_ENABLED = "0";
 const watchdog = setTimeout(() => {
   console.error("smoke:cua-win timed out");
@@ -110,7 +110,7 @@ async function checkProxy(socketPath) {
   });
   try {
     const initialized = await request(1, "initialize", {
-      protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "openmausbot-smoke", version: "1" },
+      protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "danibot-smoke", version: "1" },
     });
     if (!initialized?.serverInfo) throw new Error("MCP initialization missing serverInfo");
     send({ method: "notifications/initialized" });

@@ -5,10 +5,10 @@ import Foundation
 /// Keep the group identifier in one source file rather than repeating it in
 /// the app and extension. The matching capabilities still live in the Xcode
 /// project, where iOS verifies them against the provisioning profile.
-enum OpenMausSharedConfiguration {
-    static let appGroupIdentifier = "group.com.openmausbot.shared"
-    static let legacyAppBundleIdentifier = "com.openmausbot.app"
-    static let keychainAccessGroupInfoKey = "OpenMausKeychainAccessGroup"
+enum DaniSharedConfiguration {
+    static let appGroupIdentifier = "group.com.danibot.shared"
+    static let legacyAppBundleIdentifier = "com.danibot.app"
+    static let keychainAccessGroupInfoKey = "DaniKeychainAccessGroup"
 
     /// The shared suite can be unavailable in unsigned previews and local
     /// tests. Callers which need compatibility with an already-installed app

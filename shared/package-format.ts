@@ -199,7 +199,7 @@ const exampleSchema = z.object({
 });
 
 const packageDocumentV1Schema = z.object({
-  format: z.literal(PACKAGE_FORMAT, { error: "This is not an OpenMaus package" }),
+  format: z.literal(PACKAGE_FORMAT, { error: "This is not an Dani package" }),
   version: z.literal(PACKAGE_V1_VERSION, { error: "Package version is not supported" }),
   package: z.object({
     id: requiredText(80).regex(/^[a-z0-9][a-z0-9-]*$/, { message: "must be a lowercase slug" }),
@@ -236,7 +236,7 @@ const packageDocumentV1Schema = z.object({
       name: requiredText(80),
       agent: key,
       prompt: requiredText(20_000),
-      runOn: z.enum(["maus", "cloud"]),
+      runOn: z.enum(["dani", "cloud"]),
       schedule: packageRoutineScheduleSchema,
       durationMinutes: z.number().int().min(5).max(240),
       timeoutMinutes: z.number().int().min(5).max(240).optional(),
@@ -362,7 +362,7 @@ const routineSchema = z.object({
   /** Present = a room goal (runs on this computer, no continuity). */
   room: key.optional(),
   prompt: requiredText(20_000),
-  runOn: z.enum(["maus", "cloud"]),
+  runOn: z.enum(["dani", "cloud"]),
   schedule: packageRoutineScheduleSchema,
   durationMinutes: z.number().int().min(5).max(240),
   timeoutMinutes: z.number().int().min(1).max(1_440).optional(),
@@ -426,7 +426,7 @@ const connectionSchema = z.object({
 });
 
 export const packageDocumentSchema = z.object({
-  format: z.literal(PACKAGE_FORMAT, { error: "This is not an OpenMaus package" }),
+  format: z.literal(PACKAGE_FORMAT, { error: "This is not an Dani package" }),
   version: z.literal(PACKAGE_VERSION, { error: "Package version is not supported" }),
   package: z.object({
     /** The package slug: its identity across releases. */
@@ -673,7 +673,7 @@ function checkV2References(pkg: PackageDefinition): void {
     if (!agents.has(routine.agent)) throw invalid(`Routine ${routine.key} references unknown agent: ${routine.agent}`);
     if (routine.room === undefined) continue;
     if (!rooms.has(routine.room)) throw invalid(`Routine ${routine.key} references unknown group chat: ${routine.room}`);
-    if (routine.runOn !== "maus") throw invalid(`Routine ${routine.key} is a group chat goal, which only runs on this computer`);
+    if (routine.runOn !== "dani") throw invalid(`Routine ${routine.key} is a group chat goal, which only runs on this computer`);
     if (routine.continuity) throw invalid(`Routine ${routine.key} is a group chat goal, which cannot carry continuity`);
     // The goal scheduler refuses a lead who is not in the room.
     if (!roomMembers.get(routine.room)!.has(routine.agent)) {
@@ -760,7 +760,7 @@ export function parsePackageDocument(value: unknown, options: { trust?: PackageT
     document = upgradeV1(parsePackageV1(value));
   } else {
     if (!value || typeof value !== "object" || Array.isArray(value) || (value as { format?: unknown }).format !== PACKAGE_FORMAT) {
-      throw new PackageFormatError("not_a_package", "This is not an OpenMaus package");
+      throw new PackageFormatError("not_a_package", "This is not an Dani package");
     }
     const version = (value as { version?: unknown }).version;
     if (typeof version === "number" && Number.isInteger(version) && version > PACKAGE_VERSION) {

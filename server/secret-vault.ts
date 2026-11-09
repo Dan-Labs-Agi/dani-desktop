@@ -97,7 +97,7 @@ export class SecretVault {
     return ref;
   }
 
-  /** Writes the card's value to `<home>/.openmausbot-secrets/<thread>/<card>` (0600, in 0700 folders); returns its path
+  /** Writes the card's value to `<home>/.danibot-secrets/<thread>/<card>` (0600, in 0700 folders); returns its path
    * as the bot's commands see it. */
   saveFile(owner: SecretOwner, messageId: string, value: string, home: SecretFileHome): string {
     if (!ID.test(owner.threadId) || !ID.test(messageId)) throw new Error("invalid conversation or card id");

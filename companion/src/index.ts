@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // The sidecar: `node companion/src/index.ts`. Running it is the opt-in.
 //
 //   :8810  0.0.0.0    devices     token required, allowlisted, scrubbed
@@ -38,7 +38,7 @@ const controlReady = controlToken ? Promise.resolve() : new Promise<void>((resol
 parentPort?.on("message", ({ data }) => {
   if (!data || typeof data !== "object") return;
   const message = data as Record<string, unknown>;
-  if (message.type !== "openmausbot:companion-mutation-token") return;
+  if (message.type !== "DaniBot:companion-mutation-token") return;
   if (typeof message.token === "string" && /^[A-Za-z0-9_-]{43}$/.test(message.token)) {
     mutationToken = message.token;
   }
@@ -58,7 +58,7 @@ const HARNESS_PORT = num(process.env.OMB_PORT, 8799);
 const WEBHOOK_PORT = num(process.env.OMB_WEBHOOK_PORT, HARNESS_PORT + 1);
 const COMPANION_PORT = num(process.env.OMB_COMPANION_PORT, 8810);
 const CONTROL_PORT = num(process.env.OMB_CONTROL_PORT, 8811);
-const SERVICE_TYPE = "_openmausbot._tcp";
+const SERVICE_TYPE = "_DaniBot._tcp";
 let hostedUrl = hostedCompanionUrl(process.env.OMB_COMPANION_HOSTED_URL);
 const PRIVATE_ORIGIN = companionOriginSocket(process.env.OMB_COMPANION_INTERNAL_ORIGIN);
 const SECRET_PUBLIC_KEY = normalizedPhoneSecretPublicKey(
@@ -81,7 +81,7 @@ const conflict = (name: string, port: number): string | null => {
  * startup. Failures fall back: no part of pairing depends on the name. */
 let cachedName = process.env.OMB_COMPANION_NAME?.trim() || "";
 
-const machineName = (): string => cachedName || "OpenMausBot";
+const machineName = (): string => cachedName || "DaniBot";
 
 async function refreshMachineName(): Promise<void> {
   if (cachedName) return;
@@ -257,3 +257,4 @@ main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 });
+

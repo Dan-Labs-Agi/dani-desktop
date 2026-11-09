@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+﻿import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 
@@ -13,7 +13,7 @@ import {
   readApnsConfig,
 } from "../src/push";
 
-const BASE_URL = "https://auth.openmausbot.test";
+const BASE_URL = "https://auth.DaniBot.test";
 const TOKEN_A = "a1".repeat(32);
 const TOKEN_B = "b2".repeat(32);
 
@@ -64,7 +64,7 @@ async function pushEnv(privateKeyPem: string, extra: Record<string, string> = {}
     ...env,
     APNS_KEY_ID: "KEY1234567",
     APNS_TEAM_ID: "TEAM123456",
-    APNS_BUNDLE_ID: "com.example.mausbot",
+    APNS_BUNDLE_ID: "com.example.Danibot",
     APNS_PRIVATE_KEY: privateKeyPem,
     APNS_ENVIRONMENTS: "production,sandbox",
     ...extra,
@@ -171,7 +171,7 @@ describe("phone push relay", () => {
     const [sent] = apns.calls;
     expect(sent!.url).toBe(`https://api.sandbox.push.apple.com/3/device/${TOKEN_A}`);
     expect(sent!.headers).toMatchObject({
-      "apns-topic": "com.example.mausbot",
+      "apns-topic": "com.example.Danibot",
       "apns-push-type": "alert",
       "apns-priority": "10",
     });
@@ -357,3 +357,4 @@ describe("phone push relay", () => {
     expect(readApnsConfig(await pushEnv(key.privateKeyPem, { APNS_ENVIRONMENTS: "" }))?.environments).toEqual(new Set(["production"]));
   });
 });
+

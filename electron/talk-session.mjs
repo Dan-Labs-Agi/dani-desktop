@@ -28,7 +28,7 @@ const SPEECH_PROBLEMS = new Map([
 const SERVER_NOTICES = new Map([
   ["server-down", TALK_TEXT.serverDown],
   ["starting", TALK_TEXT.starting],
-  ["no-mausbot", TALK_TEXT.noMausbot],
+  ["no-danibot", TALK_TEXT.noMausbot],
   ["moved", TALK_TEXT.moved],
 ]);
 

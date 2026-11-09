@@ -1,4 +1,4 @@
-// The connector's state volume: small JSON files, each written whole (temp file, then rename) and readable by root only,
+﻿// The connector's state volume: small JSON files, each written whole (temp file, then rename) and readable by root only,
 // in a folder only root may enter. The agent token and the home's environment live here and nowhere else.
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -53,7 +53,7 @@ export interface SelfUpdateRecord {
   /** The id of the container that started the update; the new one removes it once it has connected. */
   previousContainer: string;
   candidateContainer: string;
-  /** The new connector's MAUSBOT_INSTANCE: how each side knows which one it is. */
+  /** The new connector's DaniBOT_INSTANCE: how each side knows which one it is. */
   candidateInstance: string;
   deadline: number;
 }
@@ -165,3 +165,4 @@ export class StateStore {
     this.remove("self-update.aborted.json");
   }
 }
+

@@ -44,7 +44,7 @@ async function api(method: string, path: string, options: { body?: unknown; remo
 }
 
 async function ownerPairing(): Promise<string> {
-  const body = JSON.stringify({ label: "OpenMausBot app (Cloud)", ttlSeconds: 300 });
+  const body = JSON.stringify({ label: "DaniBot app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
     "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
@@ -55,7 +55,7 @@ async function ownerPairing(): Promise<string> {
 
 beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-cloud-sync-e2e-"));
-  const dataDir = join(home, ".openmausbot");
+  const dataDir = join(home, ".danibot");
   mkdirSync(dataDir, { recursive: true });
   const cli = join(home, "fixture-claude.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
@@ -72,7 +72,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     },
   }));
   mkdirSync(join(home, "web"));
-  writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>OpenMausBot</title>");
+  writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>DaniBot</title>");
   const port = await freePortBlock([0, 1]);
   base = `http://127.0.0.1:${port}`;
   const offlinePrelude = `data:text/javascript,${encodeURIComponent('globalThis.fetch = async () => new Response("offline fixture", { status: 503 });')}`;
@@ -112,7 +112,7 @@ const desktopFetch = (url: string, init: RequestInit & { headers?: Record<string
 function desktop(pcHome: string) {
   return createCloudFilesService({
     settingsFile: join(pcHome, "user", "settings.json"), stateFile: join(pcHome, "user", "state.db"),
-    documentsDir: join(pcHome, "Documents"), localDataDir: join(pcHome, ".openmausbot"), homeDir: pcHome, platform: process.platform, hostname: "Ash-PC",
+    documentsDir: join(pcHome, "Documents"), localDataDir: join(pcHome, ".danibot"), homeDir: pcHome, platform: process.platform, hostname: "Ash-PC",
     cloudOrigin: () => PC_ORIGIN, fetch: desktopFetch as typeof fetch, trashItem: async (file: string) => rmSync(file), markDownloaded: async () => {},
     watch: () => () => {}, now: () => Date.now() + 60_000,
   });
@@ -169,7 +169,7 @@ it("a bot's turn wakes the desktop, and its new work comes down to Documents/Dan
   const service = desktop(pcHome);
   try {
     await service.pass();
-    const output = join(home, ".openmausbot", "task-workspaces", bot.id, bot.threadId);
+    const output = join(home, ".danibot", "task-workspaces", bot.id, bot.threadId);
     mkdirSync(output, { recursive: true });
     writeFileSync(join(output, "report.md"), "# Q3");
     const later = new Date(Date.now() + 120_000);

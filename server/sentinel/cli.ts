@@ -23,8 +23,8 @@ danibot sentinel --check-install [--json]
 Scans a Dani Bot data dir, read-only, for failed tool calls, stopped or
 timed-out turns, long queue waits, expensive turns and retry loops, and keeps
 them as issues in issues.jsonl, outside the data dir: on macOS in
-~/Library/Application Support/openmausbot-sentinel, on Linux in
-$XDG_STATE_HOME/openmausbot-sentinel (~/.local/state/…), or in --out. Issues
+~/Library/Application Support/danibot-sentinel, on Linux in
+$XDG_STATE_HOME/danibot-sentinel (~/.local/state/…), or in --out. Issues
 point at the evidence by id and carry a normalized one-line title; they never
 copy tool output or message text.
 
@@ -38,7 +38,7 @@ copy tool output or message text.
 
 export function parseSentinelArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): SentinelArgs | { error: string; json: boolean } {
   const json = argv.includes("--json");
-  let dataDir = env.OMB_DATA_DIR || join(homedir(), ".openmausbot");
+  let dataDir = env.OMB_DATA_DIR || join(homedir(), ".danibot");
   let out: string | undefined;
   const args: Omit<SentinelArgs, "dataDir" | "out"> = { json };
   for (let i = 0; i < argv.length; i += 1) {

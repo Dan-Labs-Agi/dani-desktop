@@ -14,15 +14,15 @@ Dani Desktop team while the desktop app and its harness are running.
 The v1 server intentionally cannot approve requests, remember permission grants, delete data, import teams,
 change credentials, or control computer/VM lifecycle. Those actions stay in the human-facing app.
 
-## From the openmausbot command
+## From the danibot command
 
-With the `openmausbot` npm package installed, the MCP client can run it
+With the `danibot` npm package installed, the MCP client can run it
 directly; it serves the same tools:
 
 ```json
 {
   "mcpServers": {
-    "openmausbot": { "command": "openmausbot", "args": ["mcp"], "env": { "OMB_PORT": "8799" } }
+    "danibot": { "command": "danibot", "args": ["mcp"], "env": { "OMB_PORT": "8799" } }
   }
 }
 ```
@@ -37,7 +37,7 @@ Start Dani Desktop, then configure the MCP client to run:
 ```json
 {
   "mcpServers": {
-    "openmausbot": {
+    "danibot": {
       "command": "pnpm",
       "args": ["--dir", "/absolute/path/to/Dani Desktop", "mcp"]
     }
@@ -70,7 +70,7 @@ client:
    "env": {
      "ELECTRON_RUN_AS_NODE": "1",
      "OMB_PORT": "8799",
-     "OPENMAUSBOT_TOKEN": "omb_sess_..."
+     "DANIBOT_TOKEN": "omb_sess_..."
    }
    ```
 
@@ -87,7 +87,7 @@ macOS example:
 ```json
 {
   "mcpServers": {
-    "openmausbot": {
+    "danibot": {
       "command": "/Applications/Dani Desktop.app/Contents/MacOS/Dani Desktop",
       "args": ["/Applications/Dani Desktop.app/Contents/Resources/server/mcp-server.js"],
       "env": { "ELECTRON_RUN_AS_NODE": "1" }
@@ -100,7 +100,7 @@ On Windows, use the installed `Dani Desktop.exe` as `command`, the adjacent
 `resources\\server\\mcp-server.js` as the argument, and the same `ELECTRON_RUN_AS_NODE=1` environment value.
 The usual per-user install is under `%LOCALAPPDATA%\\Programs\\Dani Desktop`.
 
-On Ubuntu `.deb` installs, the executable is normally `/opt/Dani Desktop/openmausbot` and the script is
+On Ubuntu `.deb` installs, the executable is normally `/opt/Dani Desktop/danibot` and the script is
 `/opt/Dani Desktop/resources/server/mcp-server.js`. Use the same environment value.
 
 ## Connection discovery
@@ -109,12 +109,12 @@ With no configuration, the MCP process probes Dani Desktop's three desktop ports
 and accepts only a health response that identifies itself as Dani Desktop. This handles the desktop's normal
 fallback when another local process already owns port 8799.
 
-Set `OMB_PORT` to force one local port, or `OPENMAUSBOT_URL` to use an explicit HTTP(S) origin. Cleartext remote
+Set `OMB_PORT` to force one local port, or `DANIBOT_URL` to use an explicit HTTP(S) origin. Cleartext remote
 HTTP is rejected unless `ALLOW_INSECURE_HTTP=true`; HTTPS should be used outside loopback. An optional
-`OPENMAUSBOT_TOKEN` is sent as a bearer token for authenticated reverse proxies. When a token is set, an
-explicit `OPENMAUSBOT_URL` or `OMB_PORT` is required so the credential is never sent while probing unrelated
-local ports. `OPENMAUSBOT_MCP_TIMEOUT_MS` can set an HTTP timeout between 1,000 and 120,000 milliseconds.
-In packaged builds, `OPENMAUSBOT_TOKEN` is required for mutating tools as
+`DANIBOT_TOKEN` is sent as a bearer token for authenticated reverse proxies. When a token is set, an
+explicit `DANIBOT_URL` or `OMB_PORT` is required so the credential is never sent while probing unrelated
+local ports. `DANIBOT_MCP_TIMEOUT_MS` can set an HTTP timeout between 1,000 and 120,000 milliseconds.
+In packaged builds, `DANIBOT_TOKEN` is required for mutating tools as
 described above; it is not a generic reverse-proxy secret.
 
 ## Tools

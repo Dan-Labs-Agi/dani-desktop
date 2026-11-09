@@ -183,7 +183,7 @@ test("a server that can't take asks says why and stops listening: down, still st
   const notices = [
     ["server-down", "Open Dani to talk"],
     ["starting", TALK_TEXT.starting],
-    ["no-mausbot", TALK_TEXT.noMausbot],
+    ["no-danibot", TALK_TEXT.noMausbot],
     ["moved", "Dani lives on My Cloud now — talk to it there"],
   ];
   for (const [code, text] of notices) {

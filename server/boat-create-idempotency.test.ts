@@ -159,7 +159,7 @@ describe("Boat create idempotency", () => {
     scenario = "lost-response";
     vi.resetModules();
     const { provisionBoat } = await import("./boat.ts");
-    // Keys this OpenMausBot holds stay here; the Boat gets none of them.
+    // Keys this DaniBot holds stay here; the Boat gets none of them.
     const held = { OPENAI_API_KEY: process.env.OPENAI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN };
     process.env.OPENAI_API_KEY = "sk-openai-held-here";
     process.env.CLAUDE_CODE_OAUTH_TOKEN = "claude-oauth-held-here";

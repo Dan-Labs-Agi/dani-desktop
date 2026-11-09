@@ -106,7 +106,7 @@ describe("optional desktop Organisation settings", () => {
   it("offers no default portal: sign-in starts from the organization's own address, typed once", async () => {
     await ready();
     let view = render();
-    expect(view.html).not.toContain("https://admin.openmausbot.com");
+    expect(view.html).not.toContain("https://admin.danibot.com");
     expect(view.nodes.find(node => node.type === "button" && node.props.children === "Sign in with your organization")).toBeUndefined();
     expect(view.html).toContain("Use your work email to sign in securely in your browser.");
     expect(view.html).toContain("Custom Admin portal URL");
@@ -200,7 +200,7 @@ describe("optional desktop Organisation settings", () => {
   it("explains a lapsed Admin licence without a sign-in loop and shows Company models unavailable", async () => {
     await ready({ ...connected, status: "license-expired" });
     const html = render().html;
-    expect(html).toContain("Your organization&#x27;s OpenMaus Admin license has expired. Contact your admin.");
+    expect(html).toContain("Your organization&#x27;s Dani Admin license has expired. Contact your admin.");
     expect(html).not.toContain("Disconnect below, then sign in again");
     expect(html).not.toContain("Sign in with your organization");
     expect(html).toContain("Unavailable until the licence is renewed");

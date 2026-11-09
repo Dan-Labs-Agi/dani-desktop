@@ -169,8 +169,8 @@ describe("grokExportToPackage", () => {
     const { document, leftOut } = mapped();
     const routines = document.package.routines!;
     expect(routines.map((routine) => [routine.name, routine.schedule, routine.enabledAfterInstall, routine.runOn, routine.agent])).toEqual([
-      ["Weekly audit", { type: "cron", expression: "0 9 * * 1", timeZone: "America/New_York" }, false, "maus", "doge-department-of-grok-efficiency"],
-      ["Morning check", { type: "daily", time: "08:30", weekdays: [1, 2, 3, 4, 5] }, false, "maus", "doge-department-of-grok-efficiency"],
+      ["Weekly audit", { type: "cron", expression: "0 9 * * 1", timeZone: "America/New_York" }, false, "dani", "doge-department-of-grok-efficiency"],
+      ["Morning check", { type: "daily", time: "08:30", weekdays: [1, 2, 3, 4, 5] }, false, "dani", "doge-department-of-grok-efficiency"],
     ]);
     expect(leftOut).toContainEqual({
       kind: "routine",

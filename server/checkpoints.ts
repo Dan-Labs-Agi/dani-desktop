@@ -26,7 +26,7 @@ const EXCLUDES = `# Dani Bot checkpoint excludes — never snapshotted
 .git/
 .svn/
 .hg/
-.openmausbot-secrets/
+.danibot-secrets/
 node_modules/
 bower_components/
 .pnpm-store/

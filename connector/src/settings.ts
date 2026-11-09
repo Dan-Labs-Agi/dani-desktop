@@ -1,25 +1,25 @@
-// Names, paths and limits the connector, install.sh and the e2e share. install.sh repeats the names it needs, and a
+﻿// Names, paths and limits the connector, install.sh and the e2e share. install.sh repeats the names it needs, and a
 // test holds them equal.
 
 export const CONNECTOR_VERSION = "1.0.0";
 
 /** Docker objects the connector owns. */
 export const NAMES = {
-  connector: "mausbot-connector",
-  connectorNext: "mausbot-connector-next",
-  home: "mausbot-home",
-  dataVolume: "mausbot-data",
-  stateVolume: "mausbot-connector",
-  snapshotVolume: "mausbot-snapshot",
-  backupPrefix: "mausbot-backup-",
+  connector: "Danibot-connector",
+  connectorNext: "Danibot-connector-next",
+  home: "Danibot-home",
+  dataVolume: "Danibot-data",
+  stateVolume: "Danibot-connector",
+  snapshotVolume: "Danibot-snapshot",
+  backupPrefix: "Danibot-backup-",
 } as const;
 
 export const LABELS = {
-  role: "com.mausbot.role",
-  instance: "com.mausbot.instance",
-  created: "com.mausbot.created",
-  image: "com.mausbot.image",
-  env: "com.mausbot.env",
+  role: "com.Danibot.role",
+  instance: "com.Danibot.instance",
+  created: "com.Danibot.created",
+  image: "com.Danibot.image",
+  env: "com.Danibot.env",
 } as const;
 
 /** Backups the connector keeps; a newer one replaces the oldest. */
@@ -27,12 +27,12 @@ export const BACKUPS_KEPT = 3;
 
 /** Inside the connector's container. */
 export const PATHS = {
-  state: process.env.MAUSBOT_STATE_DIR || "/state",
-  docker: process.env.MAUSBOT_DOCKER_SOCKET || "/var/run/docker.sock",
-  /** /etc/mausbot on the host, mounted read-only: the seccomp profile install.sh put there. */
-  hostConfig: process.env.MAUSBOT_HOST_CONFIG_DIR || "/etc/mausbot",
+  state: process.env.DaniBOT_STATE_DIR || "/state",
+  docker: process.env.DaniBOT_DOCKER_SOCKET || "/var/run/docker.sock",
+  /** /etc/Danibot on the host, mounted read-only: the seccomp profile install.sh put there. */
+  hostConfig: process.env.DaniBOT_HOST_CONFIG_DIR || "/etc/Danibot",
   /** The connector's own copies, which install.sh installs from this image. */
-  profiles: process.env.MAUSBOT_PROFILES_DIR || "/app/profiles",
+  profiles: process.env.DaniBOT_PROFILES_DIR || "/app/profiles",
 } as const;
 
 export const SECCOMP_FILE = "seccomp-omb-home.json";
@@ -60,3 +60,4 @@ export function envSeconds(name: string, fallback: number, min: number, max: num
   const value = raw === undefined ? NaN : Number(raw);
   return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
 }
+

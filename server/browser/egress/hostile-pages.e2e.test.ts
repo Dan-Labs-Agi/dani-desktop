@@ -1,4 +1,4 @@
-// S6: a hostile page in a bot's real Chrome tries every way it has to reach OpenMausBot, this machine's other services,
+// S6: a hostile page in a bot's real Chrome tries every way it has to reach DaniBot, this machine's other services,
 // the local network and the cloud metadata service. Each attempt must be refused at the egress gate and reported, and
 // Dani Bot's stand-in must see nothing.
 import type { ChildProcess } from "node:child_process";
@@ -37,7 +37,7 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
   let site: ChildProcess;
   let sitePort = 0;
 
-  /** Stands in for OpenMausBot at 127.0.0.1 and [::1] on one port; records anything that reaches it. */
+  /** Stands in for DaniBot at 127.0.0.1 and [::1] on one port; records anything that reaches it. */
   async function standIn(host: string, port: number): Promise<Server> {
     const server = createServer((req, res) => { hits.push(`${host} ${req.method} ${req.url}`); res.end("owner data"); });
     server.on("upgrade", (req, socket) => { hits.push(`${host} upgrade ${req.url}`); socket.destroy(); });
@@ -137,7 +137,7 @@ describe.skipIf(!chrome)("S6: a hostile page in a bot's browser", () => {
     }
   };
 
-  it("cannot reach OpenMausBot on the desktop, in any spelling of this machine or through any request", async () => {
+  it("cannot reach DaniBot on the desktop, in any spelling of this machine or through any request", async () => {
     const own = [
       [`http://127.0.0.1:${ombPort}/`, "127.0.0.1", "omb"],
       [`http://localhost.:${ombPort}/`, "localhost.", "omb"],

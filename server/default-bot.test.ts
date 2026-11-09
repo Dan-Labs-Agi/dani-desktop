@@ -13,7 +13,7 @@ import { availableTools, catalogProfileFromEnv } from "./drivers/agents-catalog.
 import { createBrief } from "./host/brief.ts";
 
 const selection = (): ModelSelection => ({ instanceId: "claude", model: "claude-sonnet-5" });
-const placeMausBots = (store: Store) => store.bots.filter((bot) => bot.defaultBot && !bot.defaultBot.person);
+const placeDaniBots = (store: Store) => store.bots.filter((bot) => bot.defaultBot && !bot.defaultBot.person);
 const intros = (store: Store, bot: BotRecord) => (bot.tasks ?? []).flatMap((task) => store.messagesFor(task.threadId)).filter((message) => message.helperIntro);
 const boot = (store: Store) => ensureDefaultBot(store, { dataDir: DATA_DIR });
 /** Who the daily brief comes from, as the server picks it. */
@@ -40,9 +40,9 @@ describe("Dani, every person's helper", () => {
     again.seedIfEmpty();
     boot(again);
     expect(again.bots).toHaveLength(1);
-    const maus = placeMausBots(again)[0]!;
-    expect(maus).toMatchObject({ name: "Dani", color: "chrome", chiefOfStaff: true, defaultBot: {} });
-    expect(intros(again, maus)).toHaveLength(1);
+    const dani = placeDaniBots(again)[0]!;
+    expect(dani).toMatchObject({ name: "Dani", color: "chrome", chiefOfStaff: true, defaultBot: {} });
+    expect(intros(again, dani)).toHaveLength(1);
   });
 
   it("gives an existing install without one a Dani once on update, beside its Chief, which stays exactly as it was", () => {
@@ -51,15 +51,15 @@ describe("Dani, every person's helper", () => {
     store.setChiefOfStaff(chief.id);
     store.createBot({ name: "Writer", title: "Writer", soul: "Write." });
     const before = structuredClone(store.bot(chief.id));
-    const maus = boot(store)!;
-    expect(maus).toMatchObject({ name: "Dani", color: "chrome", defaultBot: {} });
-    expect(maus.chiefOfStaff).toBeFalsy();
-    expect(chiefLevel(maus)).toBe(true);
+    const dani = boot(store)!;
+    expect(dani).toMatchObject({ name: "Dani", color: "chrome", defaultBot: {} });
+    expect(dani.chiefOfStaff).toBeFalsy();
+    expect(chiefLevel(dani)).toBe(true);
     expect(store.bot(chief.id)).toEqual(before);
-    expect(intros(store, maus)).toHaveLength(1);
+    expect(intros(store, dani)).toHaveLength(1);
     const restarted = new Store(selection);
     boot(restarted);
-    expect(placeMausBots(restarted).map((bot) => bot.id)).toEqual([maus.id]);
+    expect(placeDaniBots(restarted).map((bot) => bot.id)).toEqual([dani.id]);
     expect(restarted.bots).toHaveLength(3);
     expect(restarted.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([chief.id]);
   });
@@ -94,10 +94,10 @@ describe("Dani, every person's helper", () => {
   it("makes Dani the Chief of a place that has none, so the brief has someone to come from", () => {
     const store = new Store(selection);
     store.createBot({ name: "Pixel" });
-    const maus = boot(store)!;
-    expect(store.bot(maus.id)?.chiefOfStaff).toBe(true);
-    expect(briefChief(store)?.id).toBe(maus.id);
-    expect(intros(store, maus)[0]?.text).toContain("Hey! I'm Dani. I'm new here. I'm here to be your Chief of Staff. I can manage your other bots.");
+    const dani = boot(store)!;
+    expect(store.bot(dani.id)?.chiefOfStaff).toBe(true);
+    expect(briefChief(store)?.id).toBe(dani.id);
+    expect(intros(store, dani)[0]?.text).toContain("Hey! I'm Dani. I'm new here. I'm here to be your Chief of Staff. I can manage your other bots.");
   });
 
   it("makes an adopted Dani the Chief when its place has none left", () => {
@@ -114,22 +114,22 @@ describe("Dani, every person's helper", () => {
     const store = new Store(selection);
     const chief = store.createBot({ name: "Clive" });
     store.setChiefOfStaff(chief.id);
-    const maus = boot(store)!;
-    expect(store.bot(maus.id)?.chiefOfStaff).toBeFalsy();
-    expect(briefChief(store)?.id).toBe(maus.id);
-    expect(intros(store, maus)[0]?.text).toContain("your helper for everything here");
-    expect(intros(store, maus)[0]?.text).toContain("keep an eye on your day");
-    expect(intros(store, maus)[0]?.text).not.toContain("Chief of Staff");
+    const dani = boot(store)!;
+    expect(store.bot(dani.id)?.chiefOfStaff).toBeFalsy();
+    expect(briefChief(store)?.id).toBe(dani.id);
+    expect(intros(store, dani)[0]?.text).toContain("your helper for everything here");
+    expect(intros(store, dani)[0]?.text).toContain("keep an eye on your day");
+    expect(intros(store, dani)[0]?.text).not.toContain("Chief of Staff");
   });
 
   it("keeps a Dani Chief hidden from the sidebar working as the Chief", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    store.patchBot(maus.id, { sidebarHidden: true });
+    const dani = boot(store)!;
+    store.patchBot(dani.id, { sidebarHidden: true });
     const restarted = new Store(selection);
     boot(restarted);
-    expect(restarted.bot(maus.id)).toMatchObject({ chiefOfStaff: true, sidebarHidden: true });
-    expect(briefChief(restarted)?.id).toBe(maus.id);
+    expect(restarted.bot(dani.id)).toMatchObject({ chiefOfStaff: true, sidebarHidden: true });
+    expect(briefChief(restarted)?.id).toBe(dani.id);
   });
 
   it("knows a renamed Dani by its mark: no second one on update, Chief tools kept", () => {
@@ -137,64 +137,64 @@ describe("Dani, every person's helper", () => {
     store.createBot({ name: "Writer" });
     const chief = store.createBot({ name: "Clive" });
     store.setChiefOfStaff(chief.id);
-    const maus = boot(store)!;
-    store.patchBot(maus.id, { name: "Jarvis", color: "blue" });
+    const dani = boot(store)!;
+    store.patchBot(dani.id, { name: "Jarvis", color: "blue" });
     const restarted = new Store(selection);
     boot(restarted);
-    expect(placeMausBots(restarted).map((bot) => [bot.id, bot.name])).toEqual([[maus.id, "Jarvis"]]);
-    expect(chiefLevel(restarted.bot(maus.id))).toBe(true);
+    expect(placeDaniBots(restarted).map((bot) => [bot.id, bot.name])).toEqual([[dani.id, "Jarvis"]]);
+    expect(chiefLevel(restarted.bot(dani.id))).toBe(true);
     expect(restarted.bots).toHaveLength(3);
   });
 
   it("never takes a first bot that is not a new install's Dani: it gets a Dani beside it", () => {
     const store = new Store(selection);
     const pixel = store.createBot({ name: "Pixel" });
-    const maus = boot(store)!;
-    expect(maus.id).not.toBe(pixel.id);
+    const dani = boot(store)!;
+    expect(dani.id).not.toBe(pixel.id);
     expect(store.bot(pixel.id)?.defaultBot).toBeUndefined();
   });
 
   it("introduces itself once: not again after the asks were answered or dismissed, nor after a restart", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    const [intro] = intros(store, maus);
+    const dani = boot(store)!;
+    const [intro] = intros(store, dani);
     expect(intro?.card?.options).toHaveLength(4);
-    store.appendMessage(maus.threadId, { role: "user", kind: "text", text: "What can you do?" });
-    expect(store.messagesFor(maus.threadId).find((message) => message.id === intro!.id)?.card?.dismissed).toBe(true);
+    store.appendMessage(dani.threadId, { role: "user", kind: "text", text: "What can you do?" });
+    expect(store.messagesFor(dani.threadId).find((message) => message.id === intro!.id)?.card?.dismissed).toBe(true);
     for (let restart = 0; restart < 2; restart++) boot(new Store(selection));
     const after = new Store(selection);
-    expect(intros(after, after.bot(maus.id)!)).toHaveLength(1);
+    expect(intros(after, after.bot(dani.id)!)).toHaveLength(1);
   });
 
   it("never counts its intro as something that needs the person", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    expect(intros(store, maus)).toHaveLength(1);
+    const dani = boot(store)!;
+    expect(intros(store, dani)).toHaveLength(1);
     expect(mdb.attentionRows(0).filter((row) => row.kind === "options")).toEqual([]);
   });
 
   it("is hidden, never deleted or archived, and a hidden Dani is never made again", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
+    const dani = boot(store)!;
     const other = store.createBot({ name: "Writer" });
-    expect(() => store.deleteBot(maus.id)).toThrow(/Dani can't be deleted or archived/);
-    expect(store.bot(maus.id)).toBeTruthy();
-    expect(defaultBotPatchRefusal(maus, { hidden: true })).toMatch(/Show Dani in the sidebar/);
+    expect(() => store.deleteBot(dani.id)).toThrow(/Dani can't be deleted or archived/);
+    expect(store.bot(dani.id)).toBeTruthy();
+    expect(defaultBotPatchRefusal(dani, { hidden: true })).toMatch(/Show Dani in the sidebar/);
     expect(defaultBotPatchRefusal(other, { sidebarHidden: true })).toMatch(/Only Dani/);
-    expect(defaultBotPatchRefusal(maus, { sidebarHidden: "yes" })).toBe("sidebarHidden must be true or false");
-    expect(defaultBotPatchRefusal(maus, { sidebarHidden: true })).toBeNull();
-    store.patchBot(maus.id, { sidebarHidden: true });
+    expect(defaultBotPatchRefusal(dani, { sidebarHidden: "yes" })).toBe("sidebarHidden must be true or false");
+    expect(defaultBotPatchRefusal(dani, { sidebarHidden: true })).toBeNull();
+    store.patchBot(dani.id, { sidebarHidden: true });
     const restarted = new Store(selection);
     boot(restarted);
-    expect(placeMausBots(restarted).map((bot) => [bot.id, bot.sidebarHidden])).toEqual([[maus.id, true]]);
-    restarted.patchBot(maus.id, { sidebarHidden: false });
-    expect(new Store(selection).bot(maus.id)?.sidebarHidden).toBe(false);
+    expect(placeDaniBots(restarted).map((bot) => [bot.id, bot.sidebarHidden])).toEqual([[dani.id, true]]);
+    restarted.patchBot(dani.id, { sidebarHidden: false });
+    expect(new Store(selection).bot(dani.id)?.sidebarHidden).toBe(false);
   });
 
   it("is never made twice for one place, even once its mark is gone", () => {
     const store = new Store(selection);
-    const maus = boot(store)!;
-    store.patchBot(maus.id, { defaultBot: undefined });
+    const dani = boot(store)!;
+    store.patchBot(dani.id, { defaultBot: undefined });
     expect(boot(store)).toBeNull();
     expect(store.bots).toHaveLength(1);
   });
@@ -205,7 +205,7 @@ describe("Dani, every person's helper", () => {
     const second = store.createBot({ name: "Dani 2" });
     store.patchBot(second.id, { defaultBot: {} });
     expect(boot(store)?.id).toBe(first.id);
-    expect(placeMausBots(store).map((bot) => bot.id)).toEqual([first.id]);
+    expect(placeDaniBots(store).map((bot) => bot.id)).toEqual([first.id]);
   });
 
   it("gives each Team Cloud member their own private Dani, and the team no Dani of its own", () => {
@@ -247,7 +247,7 @@ describe("Dani, every person's helper", () => {
       let status = 0;
       await moveKindsRoute(deps(store), { path: "/api/cloud-send/kind", method: "PUT", url: new URL("http://127.0.0.1/api/cloud-send/kind"), auth: {} as never, req: {} as never,
         res: { setHeader() {} } as never, json: ((_res: unknown, code: number) => { status = code; }) as never,
-        readBody: (async () => ({ v: 1, key: `bot:${id}`, dataDir: "/Users/amit/.openmausbot", record })) as never });
+        readBody: (async () => ({ v: 1, key: `bot:${id}`, dataDir: "/Users/amit/.danibot", record })) as never });
       return status;
     }
     const fields = (bot: Record<string, unknown>) => Object.fromEntries(MOVE_BOT_FIELDS.map((name) => [name, bot[name] ?? null]));
@@ -256,10 +256,10 @@ describe("Dani, every person's helper", () => {
       const cloud = new Store(selection);
       cloud.seedIfEmpty();
       boot(cloud);
-      const starter = placeMausBots(cloud)[0]!;
-      const arrivingMaus = cloud.createBot({ name: "Dani" }, { id: "desk-maus-000001", seedMessages: false });
+      const starter = placeDaniBots(cloud)[0]!;
+      const arrivingMaus = cloud.createBot({ name: "Dani" }, { id: "desk-dani-000001", seedMessages: false });
       expect(await arrive(cloud, arrivingMaus.id, fields({ defaultBot: {}, sidebarHidden: true, welcomed: true }))).toBe(200);
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([arrivingMaus.id]);
+      expect(placeDaniBots(cloud).map((bot) => bot.id)).toEqual([arrivingMaus.id]);
       expect(cloud.bot(arrivingMaus.id)).toMatchObject({ sidebarHidden: true, welcomed: true });
       expect(cloud.bot(starter.id)).toMatchObject({ chiefOfStaff: true });
       expect(cloud.bot(starter.id)?.hidden).toBeFalsy();
@@ -268,19 +268,19 @@ describe("Dani, every person's helper", () => {
       expect(cloud.bot(starter.id)).toMatchObject({ hidden: true });
       expect(cloud.bot(starter.id)?.defaultBot).toBeUndefined();
       expect(cloud.bots.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([pixel.id]);
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([arrivingMaus.id]);
+      expect(placeDaniBots(cloud).map((bot) => bot.id)).toEqual([arrivingMaus.id]);
     });
 
     it("still makes one Dani on My Cloud when this computer's arrives renamed and with its own picture", async () => {
       const cloud = new Store(selection);
       cloud.seedIfEmpty();
       boot(cloud);
-      const starter = placeMausBots(cloud)[0]!;
+      const starter = placeDaniBots(cloud)[0]!;
       cloud.patchBot(starter.id, { name: "Starter" });
-      const arriving = cloud.createBot({ name: "Jarvis" }, { id: "desk-maus-000003", seedMessages: false });
+      const arriving = cloud.createBot({ name: "Jarvis" }, { id: "desk-dani-000003", seedMessages: false });
       cloud.patchBot(arriving.id, { avatarUrl: "/api/attachments/jarvis.png", avatarCrop: "circle" });
       expect(await arrive(cloud, arriving.id, fields({ defaultBot: {}, welcomed: true }))).toBe(200);
-      expect(placeMausBots(cloud).map((bot) => [bot.id, bot.name, bot.avatarUrl])).toEqual([[arriving.id, "Jarvis", "/api/attachments/jarvis.png"]]);
+      expect(placeDaniBots(cloud).map((bot) => [bot.id, bot.name, bot.avatarUrl])).toEqual([[arriving.id, "Jarvis", "/api/attachments/jarvis.png"]]);
       expect(cloud.bot(starter.id)?.defaultBot).toBeUndefined();
     });
 
@@ -288,9 +288,9 @@ describe("Dani, every person's helper", () => {
       const cloud = new Store(selection);
       const theirs = boot(cloud)!;
       cloud.appendMessage(theirs.threadId, { role: "user", kind: "text", text: "Hi" });
-      const arriving = cloud.createBot({ name: "Dani" }, { id: "desk-maus-000002", seedMessages: false });
+      const arriving = cloud.createBot({ name: "Dani" }, { id: "desk-dani-000002", seedMessages: false });
       expect(await arrive(cloud, arriving.id, fields({ defaultBot: {} }))).toBe(200);
-      expect(placeMausBots(cloud).map((bot) => bot.id)).toEqual([arriving.id]);
+      expect(placeDaniBots(cloud).map((bot) => bot.id)).toEqual([arriving.id]);
       expect(cloud.bot(theirs.id)?.hidden).toBeFalsy();
     });
 
@@ -310,7 +310,7 @@ describe("Dani, every person's helper", () => {
       home.seedIfEmpty();
       boot(home);
       expect(home.bots.map((bot) => bot.id)).toEqual([mausOnCloud.id]);
-      expect(placeMausBots(home)[0]).toMatchObject({ name: "Jarvis", sidebarHidden: true });
+      expect(placeDaniBots(home)[0]).toMatchObject({ name: "Jarvis", sidebarHidden: true });
     });
   });
 });

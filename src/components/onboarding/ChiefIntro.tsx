@@ -6,7 +6,7 @@ import { usePrefersReducedMotion } from "@/components/mascot-clock";
 import { cn } from "@/lib/cn";
 import { chiefChoices, chiefFor, createChiefPatch, DEFAULT_BOT_NAME, myDefaultBot, setWelcomingBot, stageIntro, useViewerEmail } from "@/lib/default-bot";
 import { t } from "@/lib/i18n";
-import { FLIGHT_MS, landInSidebar } from "@/lib/mausbot-landing";
+import { FLIGHT_MS, landInSidebar } from "@/lib/danibot-landing";
 import { useStore, type Bot } from "@/state/store";
 
 /** Clicks, Enter and Space wait this long after the dialog opens, so a double click on Next never presses Create. */
@@ -30,17 +30,17 @@ function canLead(bot: Bot, instances: ReturnType<typeof useStore>["state"]["inst
   return Boolean(bot.chiefOfStaff) || instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId)?.capabilities?.agentsMcp === true;
 }
 
-/** The first run's second screen, over the empty app: MausBot as the person's Chief of Staff (Create), or, where they
+/** The first run's second screen, over the empty app: DaniBot as the person's Chief of Staff (Create), or, where they
  * already have bots, one of those (Choose, then Confirm). It shows only where no other bot is the Chief (chiefStepFits)
- * and asks for a choice, so Escape leaves only the list. Create flies MausBot onto its sidebar tile; the chat comes when
+ * and asks for a choice, so Escape leaves only the list. Create flies DaniBot onto its sidebar tile; the chat comes when
  * it lands (`onDone`), and `onLeave` fades the scrim with the dialog. */
 export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDone: (botId: string | null) => void; onLeave?: () => void }) {
   const { state, dispatch } = useStore();
   const reduced = usePrefersReducedMotion();
   const viewer = useViewerEmail();
-  const maus = myDefaultBot(state.bots, viewer);
-  const chief = chiefFor(state.bots, maus);
-  const choices = chiefChoices(state.bots, maus, viewer);
+  const dani = myDefaultBot(state.bots, viewer);
+  const chief = chiefFor(state.bots, dani);
+  const choices = chiefChoices(state.bots, dani, viewer);
   const [choosing, setChoosing] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -53,10 +53,10 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
     return () => clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!maus) return;
-    setWelcomingBot(maus.id);
+    if (!dani) return;
+    setWelcomingBot(dani.id);
     return () => setWelcomingBot(null);
-  }, [maus?.id]);
+  }, [dani?.id]);
   useEffect(() => {
     const first = dialog.current?.querySelector<HTMLElement>(choosing ? "[role=radio][tabindex='0']" : "[data-primary]");
     (first ?? dialog.current)?.focus({ preventScroll: true });
@@ -77,25 +77,25 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
   };
 
   const create = () => {
-    if (leaving || !maus) return;
-    const patch = createChiefPatch(maus, chief);
-    if (!replay) stageIntro(maus.id);
+    if (leaving || !dani) return;
+    const patch = createChiefPatch(dani, chief);
+    if (!replay) stageIntro(dani.id);
     landInSidebar({
       from: avatar.current,
-      botId: maus.id,
+      botId: dani.id,
       reduced,
       commit: () => {
         setWelcomingBot(null);
-        dispatch({ type: "updateBot", botId: maus.id, patch });
+        dispatch({ type: "updateBot", botId: dani.id, patch });
       },
     });
-    leave(maus.id, reduced ? CHIEF_FADE_MS : FLIGHT_MS);
+    leave(dani.id, reduced ? CHIEF_FADE_MS : FLIGHT_MS);
   };
 
   const keep = (bot: Bot) => {
     if (leaving) return;
     setWelcomingBot(null);
-    if (maus && !maus.welcomed) dispatch({ type: "updateBot", botId: maus.id, patch: { welcomed: true } });
+    if (dani && !dani.welcomed) dispatch({ type: "updateBot", botId: dani.id, patch: { welcomed: true } });
     if (!bot.chiefOfStaff) dispatch({ type: "updateBot", botId: bot.id, patch: { chiefOfStaff: true } });
     leave(bot.id, CHIEF_FADE_MS);
   };
@@ -174,7 +174,7 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
         <>
           <div className="flex flex-col items-center gap-4 px-6 pb-4 pt-6 text-center">
             <span ref={avatar} className="relative flex">
-              {maus ? <BotAvatar bot={maus} size={AVATAR_SIZE} motion="arrive" /> : <RobotAvatar variant="dani" size={AVATAR_SIZE} label={DEFAULT_BOT_NAME} />}
+              {dani ? <BotAvatar bot={dani} size={AVATAR_SIZE} motion="arrive" /> : <RobotAvatar variant="dani" size={AVATAR_SIZE} label={DEFAULT_BOT_NAME} />}
               <ChiefBadge />
             </span>
             <div className="flex flex-col gap-2">
@@ -188,7 +188,7 @@ export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDon
                 <span className="truncate">{t("onboarding.chief.choose")}</span>
               </button>
             )}
-            <button type="button" data-primary="" data-chief-create="" onClick={create} disabled={!maus} className={cn(PRIMARY, "w-full min-w-0")}>
+            <button type="button" data-primary="" data-chief-create="" onClick={create} disabled={!dani} className={cn(PRIMARY, "w-full min-w-0")}>
               <span className="truncate">{t("onboarding.chief.create")}</span>
             </button>
           </div>

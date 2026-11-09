@@ -24,13 +24,13 @@ async function doctorOnce(ctx: VerbContext): Promise<VerbOutcome> {
   const availableEngines = instances.filter((instance) => instance.snapshot?.state === "available").map((instance) => instance.instanceId);
   const quietly = <T>(read: Promise<T>) => read.catch(() => null);
   const [server, session, config] = await Promise.all([
-    quietly(client.json<Rec>("/.well-known/openmausbot/environment")),
+    quietly(client.json<Rec>("/.well-known/danibot/environment")),
     quietly(client.json<Rec>("/api/auth/session")),
     quietly(client.json<Rec>("/api/config")),
   ]);
   const problems: string[] = [];
   const warnings: string[] = [];
-  const isOmb = health.app === "openmausbot";
+  const isOmb = health.app === "danibot";
   if (!isOmb) problems.push(`${client.baseUrl} answered, but it is not Dani Bot`);
   const tooOld = Boolean(server) && server!.capabilities?.jobs !== true;
   if (tooOld) problems.push(`Dani Bot ${server!.version ?? "(unknown version)"} is too old for the headless commands: it cannot report a conversation's job`);

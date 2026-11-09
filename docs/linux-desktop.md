@@ -22,11 +22,11 @@ The local preview does **not** give the bot control of this computer by itself. 
 the global **Enable local control** choice and assigning a bot to **This computer**; every action still enters the
 approval flow. On Wayland, local control is disabled and legacy opt-ins are cleared automatically. Automatic Wayland
 helper installation, Linux dictation, and ARM64 remain unavailable and fail closed; follow their
-progress in [issue #29](https://github.com/milind-soni/OpenMausBot/issues/29) and the safety hold in
-[issue #345](https://github.com/milind-soni/OpenMausBot/issues/345). Bundled
-CUA supply-chain work is tracked in [issue #113](https://github.com/milind-soni/OpenMausBot/issues/113). Xorg is tracked in
-[issue #79](https://github.com/milind-soni/OpenMausBot/issues/79), and guarded GNOME/Wayland support in
-[issue #109](https://github.com/milind-soni/OpenMausBot/issues/109).
+progress in [issue #29](https://github.com/milind-soni/DaniBot/issues/29) and the safety hold in
+[issue #345](https://github.com/milind-soni/DaniBot/issues/345). Bundled
+CUA supply-chain work is tracked in [issue #113](https://github.com/milind-soni/DaniBot/issues/113). Xorg is tracked in
+[issue #79](https://github.com/milind-soni/DaniBot/issues/79), and guarded GNOME/Wayland support in
+[issue #109](https://github.com/milind-soni/DaniBot/issues/109).
 
 ## Download packages
 
@@ -73,7 +73,7 @@ sudo apt install ./Dani Desktop-amd64.deb
 Then open **Dani Desktop** from the GNOME application launcher. To remove it:
 
 ```sh
-sudo apt remove openmausbot
+sudo apt remove danibot
 ```
 
 The portable AppImage does not install system files:
@@ -113,7 +113,7 @@ do not add `--no-sandbox`, disable AppArmor globally, or allowlist arbitrary exe
 directory. See [Chromium's explanation of the Ubuntu restriction](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 
 Application data remains local in `~/.danibot`. Electron browser data and window state use the normal XDG
-configuration directory (`~/.config/openmausbot` unless the environment overrides it).
+configuration directory (`~/.config/danibot` unless the environment overrides it).
 
 ## Develop the desktop shell
 
@@ -129,7 +129,7 @@ For a package-shaped build without creating `.deb` or AppImage artifacts:
 
 ```sh
 pnpm package:linux:dir
-./release/linux-unpacked/openmausbot
+./release/linux-unpacked/danibot
 ```
 
 ## Agent CLI discovery
@@ -241,7 +241,7 @@ pnpm smoke:linux-package
 The verifier checks `.deb` metadata, desktop identity, the exact dormant Cua resource tree and provenance,
 SquashFS/DEB directory modes, runtime path policy, and matching binary hashes across all artifacts. The local smoke
 launches the unpacked app and AppImage without `--no-sandbox`; CI first reproduces a `0.1.7` in-place DEB upgrade and
-then runs the same smoke against `/opt/Dani Desktop/openmausbot`. These lanes prove the embedded server and UI are
+then runs the same smoke against `/opt/Dani Desktop/danibot`. These lanes prove the embedded server and UI are
 usable while an optional Composio broker stalls, verify that an old local-control opt-in is cleared, and assert that
 no Cua executable starts on Xorg or simulated Wayland. Low-level runtime tests retain the future private-daemon
 contract without activating it in a packaged app. Only a real-seat acceptance matrix can authorize re-enablement.

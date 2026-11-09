@@ -1,4 +1,4 @@
-# OpenMausBot control plane
+# DaniBot control plane
 
 This directory is an isolated Cloudflare Worker for cloud account identity,
 installation ownership, and per-installation managed companion endpoints. It
@@ -108,7 +108,7 @@ Account bearer tokens are rejected.
   recoverable from GET or D1. After an idle reclaim the same call allocates a
   new tunnel behind the **same hostname**, so a paired phone keeps its
   address; it may also take back an endpoint whose reclaim is still pending.
-  The desktop app (Remote access on) and `openmausbot serve --tunnel` ask
+  The desktop app (Remote access on) and `danibot serve --tunnel` ask
   `GET` every 15 minutes, even while their connector reports ready, and make
   this call when the endpoint is gone or in `error`; a `401` from `GET` (the
   90-day installation credential expired) sends them through account
@@ -323,7 +323,7 @@ limit below the real quota turns a genuine rate limit at that count into a
 ten-minute capacity gate for that account and, with several accounts, makes
 the account look full, so new endpoints go elsewhere while it still has
 room). `wrangler.jsonc` sets `OMB_DNS_RECORD_LIMIT` to 3500 because the
-`openmausbot.com` zone is on Pro.
+`danibot.com` zone is on Pro.
 
 `GET /healthz` keeps `ok` and `service` unchanged (desktops gate hosted sign-in
 on them; a full quota must not hide sign-in or recovery) and adds a
@@ -358,7 +358,7 @@ ID):
   "reclaim": { "mode": "on", "pending": 12 },
   "accounts": [
     {
-      "hostSuffix": "openmausbot.com",
+      "hostSuffix": "danibot.com",
       "newEndpoints": true,
       "status": "full",
       "checkedAt": 1790000060000,
@@ -368,7 +368,7 @@ ID):
       "reclaimPending": 12
     },
     {
-      "hostSuffix": "mausbot.si",
+      "hostSuffix": "danibot.si",
       "newEndpoints": true,
       "status": "ok",
       "checkedAt": 1790000000000,
@@ -412,8 +412,8 @@ repository:
 [
   {
     "accountId": "<32-hex Cloudflare account ID>",
-    "zoneId": "<32-hex zone ID of mausbot.si in that account>",
-    "companionHostSuffix": "mausbot.si",
+    "zoneId": "<32-hex zone ID of danibot.si in that account>",
+    "companionHostSuffix": "danibot.si",
     "apiTokenSecret": "CLOUDFLARE_API_TOKEN_MAUSBOT_SI",
     "tunnelLimit": 1000,
     "dnsRecordLimit": 200,
@@ -515,9 +515,9 @@ Cloudflare. Every such refusal, with one account too, logs
 and `errorCode`; only an operator can fix the token.
 
 **Why `minAppVersion`.** Desktop releases up to 0.1.103 accept only
-`openmausbot.com` names for **Remote computer → Desktop companion** pairing
+`danibot.com` names for **Remote computer → Desktop companion** pairing
 (phones, pairing links, and Tailscale have no domain rule). The desktop app
-accepts `mausbot.si` from the release that ships this change, and from the
+accepts `danibot.si` from the release that ships this change, and from the
 same release it reports its version with every endpoint request; older apps
 are judged by the version they registered with. Set `minAppVersion` to that
 release so a computer on an older release keeps an address every desktop can
@@ -586,7 +586,7 @@ Workers Free, four accounts with `OMB_CLEANUP_SWEEP_LIMIT` 4 use the whole
 
 ### HighLevel OAuth relay
 
-OpenMausBot's native HighLevel (GoHighLevel, and white-labels such as Growably)
+DaniBot's native HighLevel (GoHighLevel, and white-labels such as Growably)
 integration signs a person in through a Marketplace app registered to us. The
 app's client secret lives only in this Worker; the harness (desktop or a Cloud
 home) never sees it. Routes, none of which need an installation credential: the
@@ -607,7 +607,7 @@ Logs carry counts and error codes, never codes or tokens.
 Setup, once:
 
 1. Register the Marketplace app (private, sub-account, installable by agency and
-   sub-account). Redirect URL: `https://accounts.openmausbot.com/v1/highlevel/callback`.
+   sub-account). Redirect URL: `https://accounts.danibot.com/v1/highlevel/callback`.
    Scopes: `contacts.readonly contacts.write opportunities.readonly opportunities.write conversations.readonly locations.readonly calendars.readonly users.readonly`.
 2. Put the client id in `vars.HIGHLEVEL_CLIENT_ID` (it is public: it appears in the
    authorization URL). Keep `HIGHLEVEL_REDIRECT_URL` and `HIGHLEVEL_SCOPES` in step
@@ -640,8 +640,8 @@ non-production scoped `CLOUDFLARE_API_TOKEN`, apply the migrations locally, and
 start Wrangler:
 
 ```sh
-pnpm --filter @openmausbot/control-plane exec wrangler d1 migrations apply DB --local --config wrangler.jsonc
-pnpm --filter @openmausbot/control-plane exec wrangler dev --config wrangler.jsonc
+pnpm --filter @danibot/control-plane exec wrangler d1 migrations apply DB --local --config wrangler.jsonc
+pnpm --filter @danibot/control-plane exec wrangler dev --config wrangler.jsonc
 ```
 
 Do not commit `.dev.vars`. Because `wrangler.jsonc` declares
@@ -679,7 +679,7 @@ companion on port `8810` also does not prove managed HTTPS is ready.
 2. Check the scope of failures without exporting account or installation data:
 
    ```sh
-   pnpm --filter @openmausbot/control-plane exec wrangler d1 execute DB --remote --command "SELECT provider_account, status, last_error_code, COUNT(*) AS endpoints FROM installation_endpoints GROUP BY provider_account, status, last_error_code"
+   pnpm --filter @danibot/control-plane exec wrangler d1 execute DB --remote --command "SELECT provider_account, status, last_error_code, COUNT(*) AS endpoints FROM installation_endpoints GROUP BY provider_account, status, last_error_code"
    ```
 
 3. Check **account-wide** undeleted tunnel usage in the endpoint's Cloudflare
@@ -755,7 +755,7 @@ Before a production deployment, an operator must:
    the APNs secrets listed under **Phone push relay**. Without them the push
    routes answer `503 push_unavailable` and nothing else changes.
 9. Deploy the Worker and verify that `GET <BETTER_AUTH_URL>/healthz` returns
-   `"ok": true` and `"service": "openmausbot-control-plane"` over HTTPS
+   `"ok": true` and `"service": "danibot-control-plane"` over HTTPS
    before shipping the desktop build. Electron probes this endpoint and
    keeps new hosted onboarding hidden until it is healthy; an already signed-in
    user remains visible so cleanup and recovery are not stranded.

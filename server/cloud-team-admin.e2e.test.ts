@@ -31,7 +31,7 @@ function signed(method: "GET" | "POST", path: string, body = "") {
 
 beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-team-admin-"));
-  dataDir = join(home, ".openmausbot");
+  dataDir = join(home, ".danibot");
   mkdirSync(dataDir, { recursive: true });
   const cli = join(home, "fixture-claude.mjs");
   writeFileSync(cli, `#!/usr/bin/env node
@@ -50,7 +50,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     mcpServers: { linear: { type: "http", url: "https://mcp.linear.app/sse?token=query-never-shown", headers: { Authorization: "Bearer header-never-shown" } } },
   }));
   mkdirSync(join(home, "web"));
-  writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>OpenMausBot</title>");
+  writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>DaniBot</title>");
   const port = await freePortBlock([0, 1]);
   base = `http://127.0.0.1:${port}`;
   const prelude = `data:text/javascript,${encodeURIComponent("globalThis.fetch = async () => new Response(\"offline fixture\", { status: 503 });")}`;

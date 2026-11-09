@@ -25,7 +25,7 @@ export function autostartEntry(exec, { lending = true } = {}) {
  * Windows, whether Windows starts the app at sign-in at all, as its Startup apps list shows.
  */
 export function createOpenAtLogin({ app, file, platform = process.platform, env = process.env, home, argv = process.argv, execPath = process.execPath }) {
-  const autostart = path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "autostart", "openmausbot.desktop");
+  const autostart = path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "autostart", "danibot.desktop");
   const saved = () => { try { return JSON.parse(fs.readFileSync(file, "utf8")) ?? {}; } catch { return {}; } };
   const store = (fields) => { try { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify({ ...saved(), ...fields })); } catch {} };
   const added = () => saved().added === true;

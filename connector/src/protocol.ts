@@ -1,4 +1,4 @@
-// MausBot connector protocol v1: what the connector on an own server and the MausBot Cloud Admin say to each other.
+﻿// DaniBot connector protocol v1: what the connector on an own server and the DaniBot Cloud Admin say to each other.
 // The Admin side copies this file as it is: it imports nothing.
 //
 // The connector only ever calls out. It enrols once over HTTPS with a one-time code, then holds one WebSocket to the
@@ -25,8 +25,8 @@ export const HEARTBEAT_INTERVAL_MS = 30_000;
 export const UPDATE_HEALTH_WINDOW_MS = 10 * 60_000;
 
 /** The only images a home may run, and the only ones the connector may become: our registry, pinned by digest. */
-export const HOME_IMAGE = /^ghcr\.io\/milind-soni\/openmausbot-cloud-home@sha256:[0-9a-f]{64}$/;
-export const CONNECTOR_IMAGE = /^ghcr\.io\/milind-soni\/mausbot-connector@sha256:[0-9a-f]{64}$/;
+export const HOME_IMAGE = /^ghcr\.io\/milind-soni\/DaniBot-cloud-home@sha256:[0-9a-f]{64}$/;
+export const CONNECTOR_IMAGE = /^ghcr\.io\/milind-soni\/Danibot-connector@sha256:[0-9a-f]{64}$/;
 
 export interface ConnectorIdentity {
   version: string;
@@ -60,7 +60,7 @@ export type CheckId = "arch" | "docker" | "rootless" | "apparmor" | "profiles" |
 export interface HostCheck {
   id: CheckId;
   ok: boolean;
-  /** A warning still lets MausBot run. */
+  /** A warning still lets DaniBot run. */
   warning?: boolean;
   fix?: string;
 }
@@ -285,20 +285,20 @@ function checkArgs(type: JobType, args: Record<string, unknown>): Checked<JobArg
     case "start": {
       const extra = only(args, ["image", "env"]);
       if (extra) return { ok: false, message: extra };
-      if (typeof args.image !== "string" || !HOME_IMAGE.test(args.image)) return { ok: false, message: "image must be ghcr.io/milind-soni/openmausbot-cloud-home@sha256:<digest>" };
+      if (typeof args.image !== "string" || !HOME_IMAGE.test(args.image)) return { ok: false, message: "image must be ghcr.io/milind-soni/DaniBot-cloud-home@sha256:<digest>" };
       const env = checkHomeEnv(args.env);
       return env.ok ? { ok: true, value: { image: args.image, env: env.value } } : env;
     }
     case "update": {
       const extra = only(args, ["image"]);
       if (extra) return { ok: false, message: extra };
-      if (typeof args.image !== "string" || !HOME_IMAGE.test(args.image)) return { ok: false, message: "image must be ghcr.io/milind-soni/openmausbot-cloud-home@sha256:<digest>" };
+      if (typeof args.image !== "string" || !HOME_IMAGE.test(args.image)) return { ok: false, message: "image must be ghcr.io/milind-soni/DaniBot-cloud-home@sha256:<digest>" };
       return { ok: true, value: { image: args.image } };
     }
     case "self-update": {
       const extra = only(args, ["image"]);
       if (extra) return { ok: false, message: extra };
-      if (typeof args.image !== "string" || !CONNECTOR_IMAGE.test(args.image)) return { ok: false, message: "image must be ghcr.io/milind-soni/mausbot-connector@sha256:<digest>" };
+      if (typeof args.image !== "string" || !CONNECTOR_IMAGE.test(args.image)) return { ok: false, message: "image must be ghcr.io/milind-soni/Danibot-connector@sha256:<digest>" };
       return { ok: true, value: { image: args.image } };
     }
     case "restore": {
@@ -331,5 +331,6 @@ export function checkEnrollResponse(value: unknown): Checked<EnrollResponse> {
 export function checkEnrollCode(value: unknown): Checked<string> {
   return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9-]{5,127}$/.test(value)
     ? { ok: true, value }
-    : { ok: false, message: "the code is the one-time code MausBot shows next to the install command" };
+    : { ok: false, message: "the code is the one-time code DaniBot shows next to the install command" };
 }
+

@@ -59,7 +59,7 @@ function DemoComposer({ reduced, onTyping }: { reduced: boolean; onTyping: (typi
 export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => void }) {
   const { state } = useStore();
   const reduced = usePrefersReducedMotion();
-  const maus = myDefaultBot(state.bots, useViewerEmail());
+  const dani = myDefaultBot(state.bots, useViewerEmail());
   // An AI counts once it answered a test message (or cannot be sent one); OpenCode's free model never does.
   const tested = useWelcomeAi(state.instances, !hosted);
   const ready = aiWorks(tested);
@@ -85,8 +85,8 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
       <span className="absolute left-1/2 top-[calc(50%-98px)] flex -translate-x-1/2 -translate-y-1/2" style={{ width: MASCOT_SIZE, height: MASCOT_SIZE }}>
         {logo ? (
           <img src={logo} alt="" width={MASCOT_SIZE} height={MASCOT_SIZE} className="size-full object-contain" />
-        ) : maus ? (
-          <BotAvatar bot={maus} size={MASCOT_SIZE} state={face} animated={!reduced} robotZoom={1.35} />
+        ) : dani ? (
+          <BotAvatar bot={dani} size={MASCOT_SIZE} state={face} animated={!reduced} robotZoom={1.35} />
         ) : (
           <RobotAvatar variant="dani" size={MASCOT_SIZE} state={face} animated={!reduced} label={DEFAULT_BOT_NAME} zoom={1.35} />
         )}

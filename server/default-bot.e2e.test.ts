@@ -40,26 +40,26 @@ it("makes Dani a new install's first bot, never deleted, hidden by its switch, w
   const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
   const bots = async () => (await api("GET", "/api/bots")).body.bots as any[];
   try {
-    const [maus] = await bots();
+    const [dani] = await bots();
     // The fixture renames its starter; it is still the new install's Dani.
-    expect(maus).toMatchObject({ color: "chrome", chiefOfStaff: true, defaultBot: {} });
-    expect(maus.messages.map((message: any) => [message.kind, message.helperIntro])).toEqual([["options", true]]);
+    expect(dani).toMatchObject({ color: "chrome", chiefOfStaff: true, defaultBot: {} });
+    expect(dani.messages.map((message: any) => [message.kind, message.helperIntro])).toEqual([["options", true]]);
 
-    const refused = await api("DELETE", `/api/bots/${maus.id}`);
+    const refused = await api("DELETE", `/api/bots/${dani.id}`);
     expect(refused.status).toBe(409);
-    expect(refused.body.error).toBe(`${maus.name} can't be deleted or archived. To take it off the sidebar, choose Hide in its menu, or turn off "Show ${maus.name} in the sidebar" in Settings → General.`);
-    expect((await api("PATCH", `/api/bots/${maus.id}`, { hidden: true })).status).toBe(400);
-    expect((await api("PATCH", `/api/bots/${maus.id}`, { sidebarHidden: true })).status).toBe(200);
-    expect((await bots()).find((bot) => bot.id === maus.id)?.sidebarHidden).toBe(true);
-    expect((await api("PATCH", `/api/bots/${maus.id}`, { sidebarHidden: false })).status).toBe(200);
-    expect((await bots()).find((bot) => bot.id === maus.id)?.sidebarHidden).toBe(false);
+    expect(refused.body.error).toBe(`${dani.name} can't be deleted or archived. To take it off the sidebar, choose Hide in its menu, or turn off "Show ${dani.name} in the sidebar" in Settings → General.`);
+    expect((await api("PATCH", `/api/bots/${dani.id}`, { hidden: true })).status).toBe(400);
+    expect((await api("PATCH", `/api/bots/${dani.id}`, { sidebarHidden: true })).status).toBe(200);
+    expect((await bots()).find((bot) => bot.id === dani.id)?.sidebarHidden).toBe(true);
+    expect((await api("PATCH", `/api/bots/${dani.id}`, { sidebarHidden: false })).status).toBe(200);
+    expect((await bots()).find((bot) => bot.id === dani.id)?.sidebarHidden).toBe(false);
 
     const { bot: clive } = await control(["new-bot", "--name", "Clive"]);
     expect((await api("PATCH", `/api/bots/${clive.id}`, { sidebarHidden: true })).status).toBe(400);
     expect((await api("PATCH", `/api/bots/${clive.id}`, { chiefOfStaff: true })).status).toBe(200);
-    expect((await bots()).find((bot) => bot.id === maus.id)?.chiefOfStaff).toBeFalsy();
+    expect((await bots()).find((bot) => bot.id === dani.id)?.chiefOfStaff).toBeFalsy();
 
-    await control(["send", "--bot", maus.id, "--text", "Stay active."]);
+    await control(["send", "--bot", dani.id, "--text", "Stay active."]);
     await expect.poll(() => existsSync(fixture.fixtureDumpPath), { timeout: 30_000 }).toBe(true);
     const launched = JSON.parse(readFileSync(fixture.fixtureDumpPath, "utf8")) as { systemPrompt: string; mcpConfig: { mcpServers: Record<string, McpServer> } };
     rmSync(fixture.fixtureDumpPath, { force: true });
@@ -73,8 +73,8 @@ it("makes Dani a new install's first bot, never deleted, hidden by its switch, w
     const after = await bots();
     expect(after.find((bot) => bot.name === "Scout")?.chiefOfStaff).toBeFalsy();
     expect(after.filter((bot) => bot.chiefOfStaff).map((bot) => bot.id)).toEqual([clive.id]);
-    expect(after.filter((bot) => bot.defaultBot).map((bot) => bot.id)).toEqual([maus.id]);
-    await control(["interrupt", "--bot", maus.id]);
+    expect(after.filter((bot) => bot.defaultBot).map((bot) => bot.id)).toEqual([dani.id]);
+    await control(["interrupt", "--bot", dani.id]);
   } finally {
     await fixture.close();
   }
@@ -93,8 +93,8 @@ it("lets Dani read the unread notifications and mark finished work read, not onc
   };
   const text = (answer: Answer) => answer.result?.content?.[0]?.text ?? "";
   try {
-    const [maus] = (await api("/api/bots")).bots as any[];
-    const agents = await launch(maus.id);
+    const [dani] = (await api("/api/bots")).bots as any[];
+    const agents = await launch(dani.id);
     expect(agents.env.OMB_MAUSBOT).toBe("1");
 
     const unread = await callTool(agents, "list_unread_notifications", {});
@@ -120,7 +120,7 @@ it("lets Dani read the unread notifications and mark finished work read, not onc
     expect(other.env.OMB_MAUSBOT).toBe("0");
     expect((await callTool(other, "list_unread_notifications", {})).result?.isError ?? true).toBe(true);
     expect((await callTool(other, "mark_notifications_read", { ids: ["no-such-notification"] })).result?.isError ?? true).toBe(true);
-    await control(["interrupt", "--bot", maus.id]);
+    await control(["interrupt", "--bot", dani.id]);
     await control(["interrupt", "--bot", clive.id]);
   } finally {
     await fixture.close();

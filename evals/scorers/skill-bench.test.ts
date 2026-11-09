@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import type { Assertion } from "../types.ts";
 import type { AssertionResult } from "./assertions.ts";
 import type { ScenarioResult } from "./snapshot.ts";
@@ -63,7 +63,7 @@ const fixture = skillBenchSchema.parse({
       id: "p1",
       text: "fake prompt one",
       assertions: [
-        { kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: "<openmaus-skill" },
+        { kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: "<Dani-skill" },
         { kind: "promptIncludes", bot: "worker", turn: 0, includes: "fake" },
       ],
       withSkill: { turns: [{ reply: "with" }] },
@@ -73,7 +73,7 @@ const fixture = skillBenchSchema.parse({
       id: "p2",
       text: "fake prompt two",
       assertions: [
-        { kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: "<openmaus-skill" },
+        { kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: "<Dani-skill" },
         { kind: "promptIncludes", bot: "worker", turn: 0, includes: "fake" },
       ],
       withSkill: { turns: [{ reply: "with" }] },
@@ -161,7 +161,7 @@ describe("skill bench scorers", () => {
         {
           id: "only-system",
           text: "fake prompt one",
-          assertions: [{ kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: "<openmaus-skill" }],
+          assertions: [{ kind: "systemPromptIncludes", bot: "worker", turn: 0, includes: "<Dani-skill" }],
           withSkill: { turns: [{ reply: "with" }] },
           withoutSkill: { turns: [{ reply: "without" }] },
         },
@@ -189,3 +189,4 @@ describe("skill bench scorers", () => {
     expect(report.assertions.every((assertion) => assertion.withRuns === 1 && assertion.withoutRuns === 1)).toBe(true);
   });
 });
+

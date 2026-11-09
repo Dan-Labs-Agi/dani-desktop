@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 import { accountSession, createAuth, deleteExpiredVerifications } from "./auth";
 import { readConfig, type ControlPlaneConfig } from "./config";
@@ -63,7 +63,7 @@ async function canonicalAuthResponse(response: Response): Promise<Response> {
 
   // Better Auth error bodies are dependency-owned and may contain prose or
   // change shape between releases (its rate limiter currently returns only a
-  // `message`). Publish only OpenMausBot's stable, lowercase error contract.
+  // `message`). Publish only DaniBot's stable, lowercase error contract.
   const payload: unknown = await response.json().catch(() => null);
   const parsed = betterAuthErrorSchema.safeParse(payload);
   const dependencyCode = parsed.success ? parsed.data.code : "";
@@ -213,7 +213,7 @@ export function createWorker(
         const capacity = await capacityHealth(env, healthConfig, ctx).catch(() => null);
         return secureResponse(json({
           ok: true,
-          service: "openmausbot-control-plane",
+          service: "DaniBot-control-plane",
           ...(capacity === null ? {} : { capacity }),
         }), request, null, requestId);
       }
@@ -304,3 +304,4 @@ export function createWorker(
 }
 
 export default createWorker();
+

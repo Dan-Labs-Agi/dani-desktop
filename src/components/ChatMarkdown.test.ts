@@ -552,23 +552,23 @@ describe("#Title thread links in markdown", () => {
   });
 
   it("renders a sent canonical link as a chip that opens the thread", () => {
-    const markup = render("done in [QA PR 245](openmausbot://thread/qa-245?bot=scout) today");
+    const markup = render("done in [QA PR 245](danibot://thread/qa-245?bot=scout) today");
     expect(markup).toContain('<button type="button" data-thread-link="qa-245"');
     expect(markup).toContain(">QA PR 245</button>");
-    expect(markup).not.toContain('href="openmausbot://');
+    expect(markup).not.toContain('href="danibot://');
   });
 
   it("keeps a dead thread link as plain text, never an external anchor", () => {
-    const markup = render("see [Gone](openmausbot://thread/dead?bot=scout)");
+    const markup = render("see [Gone](danibot://thread/dead?bot=scout)");
     expect(markup).toContain(">Gone<");
     expect(markup).not.toContain("data-thread-link");
-    expect(markup).not.toContain('href="openmausbot://');
+    expect(markup).not.toContain('href="danibot://');
     expect(markup).not.toContain('target="_blank"');
   });
 });
 
 describe("a Use my Mac link in an older bot message", () => {
-  const text = "To let me use your apps, press [Use my Mac](openmausbot://use-my-computer).";
+  const text = "To let me use your apps, press [Use my Mac](danibot://use-my-computer).";
 
   it("is plain text everywhere, even in this app with an older Cloud's bridge: this computer is lent by itself", () => {
     const offer = vi.fn(async () => {});
@@ -577,12 +577,12 @@ describe("a Use my Mac link in an older bot message", () => {
       const markup = renderToStaticMarkup(createElement(ChatMarkdown, { text }));
       expect(markup).toContain(">Use my Mac<");
       expect(markup).not.toContain("<button");
-      expect(markup).not.toContain('href="openmausbot://');
+      expect(markup).not.toContain('href="danibot://');
       expect(offer).not.toHaveBeenCalled();
     } finally {
       delete window.ogb;
     }
-    expect(chatUrlTransform("openmausbot://use-my-computer")).toBe("openmausbot://use-my-computer");
+    expect(chatUrlTransform("danibot://use-my-computer")).toBe("danibot://use-my-computer");
   });
 });
 
@@ -637,7 +637,7 @@ describe("application and rejected Markdown links", () => {
 });
 
 describe("a bot's link to a page it published", () => {
-  const PAGE = "https://abcdefghijklmnopqrstuvwxyz.mausbot.page/";
+  const PAGE = "https://abcdefghijklmnopqrstuvwxyz.danibot.page/";
   const text = `Here is your dashboard: [Sales dashboard](${PAGE})`;
   async function clickPage(store?: Parameters<typeof BotEditorStore>[0]["value"]) {
     const host = document.createElement("div");
@@ -689,7 +689,7 @@ describe("Markdown image metadata", () => {
     expect(markdownImageName("https://example.test/random.png", "Final render")).toBe("Final render");
     expect(markdownImageName("https://example.test/output/Launch%20art.webp")).toBe("Launch art.webp");
     expect(markdownImageName("")).toBe("Image");
-    expect(markdownImageName("C:\\Users\\Maus\\chart.png")).toBe("chart.png");
+    expect(markdownImageName("C:\\Users\\Dani\\chart.png")).toBe("chart.png");
   });
 
   it("only offers an external action for HTTP sources", () => {
@@ -713,7 +713,7 @@ describe("message-scoped file targets", () => {
     expect(localFilePath("file://server/share/report.pdf")).toBe("//server/share/report.pdf");
     expect(localFilePath("//cdn.example.test/report.pdf")).toBeNull();
     expect(localFilePath("/C:/posix/report.pdf")).toBe("/C:/posix/report.pdf");
-    expect(localFilePath("file:///C:/Users/Maus/report.pdf")).toBe("C:/Users/Maus/report.pdf");
+    expect(localFilePath("file:///C:/Users/Dani/report.pdf")).toBe("C:/Users/Dani/report.pdf");
     expect(localFilePath("https://example.test/report.pdf")).toBeNull();
     expect(localFilePath("#section")).toBeNull();
     expect(localFilePath("javascript:alert(1)")).toBeNull();
@@ -721,9 +721,9 @@ describe("message-scoped file targets", () => {
 
   it("preserves supported local file spellings without widening unsafe protocols", () => {
     expect(chatUrlTransform("file:///Users/milind/report.md")).toBe("file:///Users/milind/report.md");
-    expect(chatUrlTransform("C:/Users/Maus/report.md")).toBe("C:/Users/Maus/report.md");
+    expect(chatUrlTransform("C:/Users/Dani/report.md")).toBe("C:/Users/Dani/report.md");
     expect(chatUrlTransform("\\\\server\\share\\report.md")).toBe("\\\\server\\share\\report.md");
-    expect(chatUrlTransform("C:%5CUsers%5CMaus%5Crelease%20notes.md")).toBe("C:\\Users\\Maus\\release%20notes.md");
+    expect(chatUrlTransform("C:%5CUsers%5CMaus%5Crelease%20notes.md")).toBe("C:\\Users\\Dani\\release%20notes.md");
     expect(chatUrlTransform("javascript:alert(1)")).toBe("");
     expect(chatUrlTransform("https://example.test/report.md")).toBe("https://example.test/report.md");
   });
@@ -752,12 +752,12 @@ describe("ChatMarkdown attachments", () => {
 
   it("keeps host paths private while routing them through the scoped file handler", () => {
     const html = renderToStaticMarkup(createElement(ChatMarkdown, {
-      text: "[macOS](file:///Users/milind/report.md) [Windows](C:/Users/Maus/report.md)",
+      text: "[macOS](file:///Users/milind/report.md) [Windows](C:/Users/Dani/report.md)",
       message: { threadId: "thread-1", messageId: "message-1" },
     }));
     expect(html).toContain('title="Save a copy"');
     expect(html).not.toContain("/Users/milind/report.md");
-    expect(html).not.toContain("C:/Users/Maus/report.md");
+    expect(html).not.toContain("C:/Users/Dani/report.md");
   });
 
   it("says an image with no source is unavailable in the person's language", () => {
@@ -794,14 +794,14 @@ describe("ChatMarkdown attachments", () => {
     const preview = vi.spyOn(AttachmentPreview, "MarkdownImagePreview");
     try {
       const html = renderToStaticMarkup(createElement(ChatMarkdown, {
-        text: "[Report](C:\\Users\\Maus\\.openmausbot\\report.md)\n\n![Chart](C:\\Users\\Maus\\.openmausbot\\chart.png)",
+        text: "[Report](C:\\Users\\Dani\\.danibot\\report.md)\n\n![Chart](C:\\Users\\Dani\\.danibot\\chart.png)",
         message: { threadId: "thread-1", messageId: "message-1" },
       }));
       expect(html).toContain('title="Save a copy"');
       expect(html).not.toContain('href=""');
       expect(html).not.toContain("Image unavailable");
-      expect(save.mock.calls[0]?.[0]).toBe("C:\\Users\\Maus\\.openmausbot\\report.md");
-      expect(preview.mock.calls[0]?.[0].filePath).toBe("C:\\Users\\Maus\\.openmausbot\\chart.png");
+      expect(save.mock.calls[0]?.[0]).toBe("C:\\Users\\Dani\\.danibot\\report.md");
+      expect(preview.mock.calls[0]?.[0].filePath).toBe("C:\\Users\\Dani\\.danibot\\chart.png");
     } finally {
       save.mockRestore();
       preview.mockRestore();
@@ -810,7 +810,7 @@ describe("ChatMarkdown attachments", () => {
 
   it("preserves dollar signs in Windows file destinations", () => {
     const save = vi.spyOn(AttachmentPreview, "useLocalFileSave");
-    const filePath = "C:\\Users\\Maus\\R$5\\receipt.pdf";
+    const filePath = "C:\\Users\\Dani\\R$5\\receipt.pdf";
     try {
       renderToStaticMarkup(createElement(ChatMarkdown, {
         text: `[Receipt](${filePath})`, message: { threadId: "thread-1", messageId: "message-1" },
@@ -858,7 +858,7 @@ describe("ChatMarkdown attachments", () => {
   });
 
   describe("a file link outside the conversation's workspace", () => {
-    const filePath = "C:\\Users\\Maus\\_draft\\ollama-gen.js";
+    const filePath = "C:\\Users\\Dani\\_draft\\ollama-gen.js";
     const render = (outsideWorkspace: boolean, href = filePath) => {
       const save = vi.spyOn(AttachmentPreview, "useLocalFileSave").mockReturnValue({
         state: "failed",
@@ -896,7 +896,7 @@ describe("ChatMarkdown attachments", () => {
       try {
         const html = render(true);
         expect(html).not.toContain("Show in folder");
-        expect(html).toMatch(/<code[^>]*select-all[^>]*>C:\\Users\\Maus\\_draft\\ollama-gen\.js<\/code>/);
+        expect(html).toMatch(/<code[^>]*select-all[^>]*>C:\\Users\\Dani\\_draft\\ollama-gen\.js<\/code>/);
       } finally {
         vi.unstubAllGlobals();
       }
@@ -904,7 +904,7 @@ describe("ChatMarkdown attachments", () => {
 
     it("does not offer a retry for a refusal that happens on every try", () => {
       expect(render(true)).not.toContain("lucide-rotate-ccw");
-      expect(render(true, "file:///Users/maus/Desktop/designs/Posts/2026-10-08_News")).not.toContain("lucide-rotate-ccw");
+      expect(render(true, "file:///Users/dani/Desktop/designs/Posts/2026-10-08_News")).not.toContain("lucide-rotate-ccw");
       expect(render(false)).toContain("lucide-rotate-ccw");
     });
 
@@ -1280,7 +1280,7 @@ describe("bidi: message content carries its own direction", () => {
     expect(labelled).toContain('dir="auto"');
 
     const path = renderToStaticMarkup(createElement(ChatMarkdown, {
-      text: `${ARABIC} [report](/Users/maus/out/report.md) ${ARABIC}`,
+      text: `${ARABIC} [report](/Users/dani/out/report.md) ${ARABIC}`,
       message: { threadId: "thread-1", messageId: "message-1" },
     }));
     expect(path).toContain('<span dir="ltr"');

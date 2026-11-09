@@ -74,7 +74,7 @@ export interface WebhookManagerOptions {
   /** delivery:"post" sink: lands in the trigger's own stable thread, never a caller-supplied one. */
   post?: (botId: string, threadId: string, text: string) => void;
   /** Absent, every post delivery fails with 503 rather than falling back to an ambient thread
-   *  (https://github.com/milind-soni/OpenMausBot/issues/2071). */
+   *  (https://github.com/milind-soni/DaniBot/issues/2071). */
   resolvePostThread?: (trigger: WebhookTrigger, forceNew: boolean) => string | undefined;
   /** delivery:"post" with a groupId: the room sink. Absent, a room delivery fails with 503
    *  rather than downgrading to a thread post. */
@@ -102,7 +102,7 @@ export const DEFAULT_MAX_PENDING_RUNS = 3;
 export const MAX_PENDING_RUNS_LIMIT = 50;
 const maxPendingRunsSchema = z.number().int().min(1).max(MAX_PENDING_RUNS_LIMIT);
 
-const runOnSchema = z.enum(["maus", "cloud"]);
+const runOnSchema = z.enum(["dani", "cloud"]);
 const deliverySchema = z.enum(["run", "post"]);
 const eventTypesSchema = z.array(z.string()).max(20).optional();
 const triggerInputSchema = z.object({
@@ -216,10 +216,10 @@ function cleanInput(input: WebhookTriggerInput): CleanWebhookInput {
   const name = input.name.trim().slice(0, 80);
   const prompt = input.prompt.trim().slice(0, 20_000);
   const botId = input.botId.trim();
-  const runOn = input.runOn ?? "maus";
+  const runOn = input.runOn ?? "dani";
   if (!name) fail(400, "Give the webhook a name");
   if (!botId) fail(400, "Choose a MAUS");
-  if (runOn !== "maus" && runOn !== "cloud") fail(400, "Choose where this webhook runs");
+  if (runOn !== "dani" && runOn !== "cloud") fail(400, "Choose where this webhook runs");
   const eventTypes = Array.from(new Set(
     (input.eventTypes ?? [])
       .map((value) => value.trim().slice(0, 200))

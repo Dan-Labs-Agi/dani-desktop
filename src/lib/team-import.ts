@@ -37,7 +37,7 @@ export interface GrokSetupNotes {
   sourceUrl?: string;
   /** Apps with a Composio toolkit, to connect. */
   apps: Array<{ label: string; slug: string }>;
-  /** Grok Bot plugins Maus has no match for. */
+  /** Grok Bot plugins Dani has no match for. */
   unmatched: string[];
   leftOut: GrokLeftOut[];
 }
@@ -89,7 +89,7 @@ export function teamImportPreview(manifest: unknown): PendingTeamImport {
     };
   }
   if (root.format === "openmaus.package") return packagePreview(root, manifest);
-  if (root.format !== "openmaus.team") throw new Error("This is not an OpenMaus backup, BotMRR playbook or legacy team.");
+  if (root.format !== "openmaus.team") throw new Error("This is not an Dani backup, BotMRR playbook or legacy team.");
   if (root.version !== 1 && root.version !== 2) throw new Error(`Team file version ${String(root.version)} is not supported.`);
   if (!root.team || typeof root.team !== "object" || Array.isArray(root.team)) {
     throw new Error("This team file is missing its team definition.");

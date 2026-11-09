@@ -8,8 +8,8 @@ export const RESERVED_MCP_NAMES: ReadonlySet<string> = new Set([
   "browser",
   "phone",
   "dweb",
-  "openmausbot_connectors",
-  "openmausbot_phone",
+  "danibot_connectors",
+  "danibot_phone",
 ]);
 
 /** A server name from any text: lowercase letters, numbers, `_` and `-`, starting with a letter, at most 32. */

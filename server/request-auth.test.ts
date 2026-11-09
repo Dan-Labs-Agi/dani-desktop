@@ -245,9 +245,9 @@ describe("resolveRequestAuth", () => {
   it("accepts authenticated relay mutations without exposing the desktop owner capability", () => {
     const headers = {
       host: "127.0.0.1:8799",
-      "x-openmausbot-companion": "1",
-      "x-openmausbot-companion-device": "phone-1",
-      "x-openmausbot-companion-auth": "relay-secret",
+      "x-danibot-companion": "1",
+      "x-danibot-companion-device": "phone-1",
+      "x-danibot-companion-auth": "relay-secret",
     };
     const check = (method: string, path: string, overrides: Record<string, string> = {}, relay = "relay-secret") =>
       resolveRequestAuth(request({ ...headers, ...overrides }, method), {
@@ -262,7 +262,7 @@ describe("resolveRequestAuth", () => {
       ["GET", "/api/bots/b/browser/live"], ["POST", "/api/bots/b/browser/action"],
     ]) expect(check(method, path).auth?.kind, path).toBe("loopback");
     expect(check("GET", "/api/phones/self/jobs").auth).toEqual({ kind: "loopback", scopes: ["admin", "client"], companionDevice: "phone-1" });
-    const plain = resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-openmausbot-companion": "1", "x-openmausbot-companion-device": "phone-1" }, "GET"), {
+    const plain = resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-danibot-companion": "1", "x-danibot-companion-device": "phone-1" }, "GET"), {
       sessions, cookieName, streamPath: "/api/events", url: new URL("/api/phones/self/jobs", "http://localhost"),
       loopbackMutationToken: "desktop-secret", companionMutationToken: "relay-secret",
     });
@@ -272,10 +272,10 @@ describe("resolveRequestAuth", () => {
       ["POST", "/api/bots/b/browser/restart"],
     ]) expect(check(method, path).auth?.kind, path).not.toBe("loopback");
     const forged: Record<string, string>[] = [
-      { "x-openmausbot-companion-auth": "" },
-      { "x-openmausbot-companion-auth": "desktop-secret" },
-      { "x-openmausbot-companion-device": "" },
-      { "x-openmausbot-companion": "0" },
+      { "x-danibot-companion-auth": "" },
+      { "x-danibot-companion-auth": "desktop-secret" },
+      { "x-danibot-companion-device": "" },
+      { "x-danibot-companion": "0" },
       { origin: "https://evil.example" },
       { "x-forwarded-for": "203.0.113.1" },
       { host: "remote.example" },
@@ -374,7 +374,7 @@ describe("resolveRequestAuth", () => {
     const desktop = resolveRequestAuth(
       request({
         host: "127.0.0.1:8799",
-        "x-openmausbot-desktop-owner": "owner-token-123",
+        "x-danibot-desktop-owner": "owner-token-123",
       }, "POST"),
       options("/api/routines"),
     );
@@ -393,7 +393,7 @@ describe("resolveRequestAuth", () => {
     for (const path of ["/api/desktop-viewer/vps/bot-1", "/api/desktop-viewer/local/shared/websockify", "/api/webhooks/hook-1/address",
       "/api/local-computer", "/api/bots/bot-1/local-computer"]) {
       expect(resolveRequestAuth(request({ host: "127.0.0.1:8799" }, "GET"), options(path)).status, path).toBe(403);
-      expect(resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-openmausbot-desktop-owner": "owner-token-123" }, "GET"), options(path)).auth?.kind, path)
+      expect(resolveRequestAuth(request({ host: "127.0.0.1:8799", "x-danibot-desktop-owner": "owner-token-123" }, "GET"), options(path)).auth?.kind, path)
         .toBe("loopback");
     }
     for (const path of ["/api/webhooks", "/api/local-computer/instances", "/api/bots/bot-1/local-computer/screenshot"]) {
@@ -538,7 +538,7 @@ describe("resolveRequestAuth", () => {
   });
 });
 
-describe("an IPC listener (openmausbot serve --tunnel) is remote by construction", () => {
+describe("an IPC listener (danibot serve --tunnel) is remote by construction", () => {
   // SAFETY: only headers, method and the socket peer are read; a unix-socket peer has no address
   const overSocket = (headers: Record<string, string>) => ({ headers, method: "GET", socket: {} }) as unknown as IncomingMessage;
 
@@ -566,7 +566,7 @@ describe("an IPC listener (openmausbot serve --tunnel) is remote by construction
       const { code } = sessions.openPairing({ scopes: ["admin", "client"] });
       const paired = sessions.exchange({ code, label: "phone", source: "203.0.113.9" });
       if (!paired.ok) throw new Error(paired.error);
-      const admitted = resolveRequestAuth(overSocket({ host: "c-1.openmausbot.com", authorization: `Bearer ${paired.token}` }), gate);
+      const admitted = resolveRequestAuth(overSocket({ host: "c-1.danibot.com", authorization: `Bearer ${paired.token}` }), gate);
       expect(admitted.auth?.kind).toBe("session");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -652,7 +652,7 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
   });
 
   it("ignores service trust while the desktop capability is in force", () => {
-    expect(check("PUT", "/api/config", { trust: "service", desktopToken: "owner-token", headers: { "x-openmausbot-desktop-owner": "owner-token" } }).auth)
+    expect(check("PUT", "/api/config", { trust: "service", desktopToken: "owner-token", headers: { "x-danibot-desktop-owner": "owner-token" } }).auth)
       .toEqual({ kind: "loopback", scopes: ["admin", "client"] });
   });
 
@@ -688,7 +688,7 @@ describe("loopback trust: owner on one person's machine, service on a shared wor
   it("lets only the CLI that started the server, holding its secret, mint a pairing code under service trust", () => {
     const secret = "c".repeat(43);
     const as = (method: string, path: string, header?: string, token: string | null = secret) =>
-      resolveRequestAuth(request({ ...local, ...(header ? { "x-openmausbot-cli-owner": header } : {}) }, method), {
+      resolveRequestAuth(request({ ...local, ...(header ? { "x-danibot-cli-owner": header } : {}) }, method), {
         sessions, cookieName, streamPath: "/api/events", url: new URL(path, "http://x"), loopbackTrust: "service", cliOwnerToken: token ?? undefined,
       });
     expect(as("POST", "/api/auth/pairing", secret).auth).toEqual({ kind: "loopback", scopes: ["admin", "client"] });
@@ -730,7 +730,7 @@ describe("a browser on this machine is not the owner", () => {
     for (const headers of [page, navigation, socket, ownUi, { host: "localhost", "sec-fetch-dest": "image" }]) expect(fromBrowser(request(headers)), JSON.stringify(headers)).toBe(true);
     const programs: Record<string, string>[] = [
       { host: "127.0.0.1:8799" }, { host: "127.0.0.1:8799", origin: "http://127.0.0.1:8799" }, { host: "127.0.0.1:8799", upgrade: "websocket" },
-      { host: "127.0.0.1:8799", "x-openmausbot-cli": "1" },
+      { host: "127.0.0.1:8799", "x-danibot-cli": "1" },
       // Node's fetch.
       { host: "127.0.0.1:8799", "sec-fetch-mode": "cors", "accept-language": "*", "user-agent": "node" },
     ];
@@ -758,24 +758,24 @@ describe("a browser on this machine is not the owner", () => {
 
   it("lets the desktop app's own window in with its owner header, on http and WebSocket alike", () => {
     const desktop = { desktopToken: "owner-token-123" };
-    const owner = { "x-openmausbot-desktop-owner": "owner-token-123" };
+    const owner = { "x-danibot-desktop-owner": "owner-token-123" };
     expect(check({ ...ownUi, ...owner }, "/api/bots", "GET", desktop).auth?.kind).toBe("loopback");
     expect(check({ ...ownUi, ...owner }, "/api/bots/bot-1", "PATCH", desktop).auth?.kind).toBe("loopback");
     expect(check({ ...socket, origin: "http://127.0.0.1:8799", ...owner }, "/api/desktop-viewer/local/shared/websockify", "GET", desktop).auth?.kind).toBe("loopback");
-    for (const headers of [ownUi, page, socket, { ...ownUi, "x-openmausbot-desktop-owner": "owner-token-999" }]) {
+    for (const headers of [ownUi, page, socket, { ...ownUi, "x-danibot-desktop-owner": "owner-token-999" }]) {
       expect(check(headers, "/api/bots", "GET", desktop).status, JSON.stringify(headers)).toBe(401);
     }
     // Before the desktop app has sent its capability, nothing a browser sends matches.
-    expect(check({ ...ownUi, "x-openmausbot-desktop-owner": "" }, "/api/bots", "GET", { desktopToken: "" }).auth).toBeNull();
+    expect(check({ ...ownUi, "x-danibot-desktop-owner": "" }, "/api/bots", "GET", { desktopToken: "" }).auth).toBeNull();
     // The app's main process and the companion send no Sec-Fetch-*.
     expect(check({ host: "127.0.0.1:8799" }, "/api/bots", "GET", desktop).auth?.kind).toBe("loopback");
-    const relay = { host: "127.0.0.1:8799", "x-openmausbot-companion": "1", "x-openmausbot-companion-device": "phone-1", "x-openmausbot-companion-auth": "relay-secret" };
+    const relay = { host: "127.0.0.1:8799", "x-danibot-companion": "1", "x-danibot-companion-device": "phone-1", "x-danibot-companion-auth": "relay-secret" };
     expect(check(relay, "/api/bots/b/messages", "POST", desktop).auth?.kind).toBe("loopback");
   });
 
   it("does not lend the owner header to another page in the desktop window's session", () => {
     const desktop = { desktopToken: "owner-token-123" };
-    const owner = { "x-openmausbot-desktop-owner": "owner-token-123" };
+    const owner = { "x-danibot-desktop-owner": "owner-token-123" };
     const savedServer = { host: "127.0.0.1:8799", origin: "http://localhost:8080", "sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors", "sec-fetch-dest": "empty" };
     const otherPort = { ...savedServer, origin: "http://127.0.0.1:3000", "sec-fetch-site": "same-site" };
     const { origin: _origin, ...imageTag } = { ...savedServer, "sec-fetch-dest": "image" };

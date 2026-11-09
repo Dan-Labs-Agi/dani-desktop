@@ -21,7 +21,7 @@ files it links, and writes everything to `./rehearsal`.
 
 ## Which workspace, and as whom
 
-- `--url URL` or `OPENMAUSBOT_URL`: a workspace somewhere else. Use `https://`
+- `--url URL` or `DANIBOT_URL`: a workspace somewhere else. Use `https://`
   unless it is this computer (`ALLOW_INSECURE_HTTP=true` allows plain `http://`).
 - `--port N` or `OMB_PORT`: this computer, on that port.
 - Otherwise the command looks on this computer's usual ports (8799, 18799,
@@ -39,7 +39,7 @@ Get the code in the app under **Settings → Phone → Set up a phone**. On this
 computer's own server, `connect` makes the code itself (`--client` gives a
 token that can chat but not change settings). The token goes to a file only
 you can read, and is never printed. Pass it with `--token-file FILE` or
-`OPENMAUSBOT_TOKEN`; there is no `--token` flag, because a command line can be
+`DANIBOT_TOKEN`; there is no `--token` flag, because a command line can be
 read by other programs. A token is never sent while the command is still
 looking for a server: with a token, name the server.
 
@@ -420,7 +420,7 @@ section, or `pnpm omb engine set`, can set it later instead).
 
 The step fails when the job fails (exit 1), needs someone (exit 3) or runs out
 of time (exit 4). To drive a workspace that is already running elsewhere, set
-`OPENMAUSBOT_URL` and pass a token made with `pnpm omb connect` as a secret
+`DANIBOT_URL` and pass a token made with `pnpm omb connect` as a secret
 file (`--token-file`).
 
 ## For other agents

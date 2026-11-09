@@ -1,4 +1,4 @@
-// The Docker Engine API over its Unix socket: only the calls the connector makes, and only the fields it reads.
+﻿// The Docker Engine API over its Unix socket: only the calls the connector makes, and only the fields it reads.
 import { request } from "node:http";
 
 export interface DockerVersion {
@@ -211,7 +211,7 @@ export class SocketDocker implements Docker {
     if (this.api) return;
     const version = await this.version();
     const api = negotiateApi(version);
-    if (!api) throw new DockerError(0, `Docker ${version.Version} (API ${version.ApiVersion}) is not one the connector supports; MausBot needs Docker 24 or newer`);
+    if (!api) throw new DockerError(0, `Docker ${version.Version} (API ${version.ApiVersion}) is not one the connector supports; DaniBot needs Docker 24 or newer`);
     this.api = api;
   }
 
@@ -331,3 +331,4 @@ export class SocketDocker implements Docker {
     return (await this.json<{ Volumes: VolumeInfo[] | null }>("GET", `/volumes?filters=${filters}`))?.Volumes ?? [];
   }
 }
+

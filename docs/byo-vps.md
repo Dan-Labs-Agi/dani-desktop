@@ -74,7 +74,7 @@ computer with the alias that holds it.
 
 A bot cannot be moved to another server while its computer still lives on the old one, and the default alias
 cannot change while any computer it manages still exists: remove the computer first from Settings → Local VM →
-Self-hosted VPS computers (or by hand: `docker -H ssh://old-server rm -f openmausbot-vps-<bot>-<hash>`). A server
+Self-hosted VPS computers (or by hand: `docker -H ssh://old-server rm -f danibot-vps-<bot>-<hash>`). A server
 that cannot be reached never traps a bot: moving the bot to another server, switching its computer, or deleting
 it goes ahead, and the app says what may be left on that server and the command that removes it once the server
 is back. (Changing the default alias still waits until its server can be listed.) Any alias from your
@@ -108,7 +108,7 @@ host is unknown simply fails until you have done this once.
 
 ## Container lifecycle
 
-Each bot owns one container on the VPS, named `openmausbot-vps-<bot>-<hash>` — stable across restarts and
+Each bot owns one container on the VPS, named `danibot-vps-<bot>-<hash>` — stable across restarts and
 independent of the bot's display name. It lives on the bot's server: the default alias, or the bot's own
 when it has one.
 

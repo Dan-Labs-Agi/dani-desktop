@@ -61,7 +61,7 @@ describe("Codex instruction receipts", () => {
     expect(accepted).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps native sessions independent even for one OpenMausBot task", async () => {
+  it("keeps native sessions independent even for one DaniBot task", async () => {
     const key = randomUUID();
     const request = vi.fn().mockResolvedValue({});
     await syncCodexInstructions(key, "first", "rules", "", false, request);

@@ -1,4 +1,4 @@
-> ⚠️ **No affiliation with any cryptocurrency.** Dani Bot has no token. Any coin using the Dani Bot name is not created, endorsed, or affiliated with this project or its maintainer. I have received no tokens, payment, or allocation from anyone, and I will not be endorsing any token.
+
 
 <div align="center">
 
@@ -23,17 +23,33 @@ own connected apps. Talk to them like contacts. Watch them work. Approve what ma
 
 ### ⬇️ Download Dani Bot
 
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><img src="https://img.shields.io/badge/Download-macOS_Apple_Silicon-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Apple Silicon)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg"><img src="https://img.shields.io/badge/Download-macOS_Intel-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Intel)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe"><img src="https://img.shields.io/badge/Download-Windows_Installer-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (installer)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip"><img src="https://img.shields.io/badge/Download-Windows_Portable-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (portable zip)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage"><img src="https://img.shields.io/badge/Download-Linux_AppImage-b85c00?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux (AppImage)"></a>
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb"><img src="https://img.shields.io/badge/Download-Linux_.deb-b85c00?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Download for Linux (deb)"></a>
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><img src="https://img.shields.io/badge/Download-macOS_Apple_Silicon-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Apple Silicon)">
+
+</a>
+
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg"><img src="https://img.shields.io/badge/Download-macOS_Intel-1f2430?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS (Intel)">
+
+</a>
+
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe"><img src="https://img.shields.io/badge/Download-Windows_Installer-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (installer)">
+
+</a>
+
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip"><img src="https://img.shields.io/badge/Download-Windows_Portable-0b7bea?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows (portable zip)">
+
+</a>
+
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage"><img src="https://img.shields.io/badge/Download-Linux_AppImage-b85c00?style=for-the-badge&logo=linux&logoColor=white" alt="Download for Linux (AppImage)">
+
+</a>
+
+<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb"><img src="https://img.shields.io/badge/Download-Linux_.deb-b85c00?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Download for Linux (deb)">
+
+</a>
 
 <sub>These buttons always fetch the newest release. [All downloads and release notes →](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
 
 <br>
-
 
 <img src="docs/assets/screenshots/dani-hero-dark.png" alt="Dani Desktop in dark mode: a chat with Dani and the connected-apps market, with the Dani robots around the windows" width="900">
 
@@ -49,19 +65,21 @@ memory of its thread, model, computer, and apps — rebuilt open, local-first, a
 already have:
 
 - **Bring your own agents.** Bots run on the `claude`, `codex`, and `grok` CLIs installed on your own machine
-  — your existing logins and subscriptions, no new accounts, no proxy in the middle. Point any engine at a
-  custom CLI binary (a versioned build or wrapper) in **Settings → Engines**.
+— your existing logins and subscriptions, no new accounts, no proxy in the middle. Point any engine at a
+custom CLI binary (a versioned build or wrapper) in **Settings → Engines**.
 - **Local first.** One small harness server on `127.0.0.1` owns every agent process. Transcripts, keys, and
-  events live in `~/.danibot`, not a cloud.
+events live in `~/.danibot`, not a cloud.
 - **Agents with hands.** Each bot can use a cloud Linux desktop, an isolated Local VM, or—where the platform
-  safety boundary is currently certified—your own computer, plus 500+ apps through Composio. Host control is
-  available on macOS and Ubuntu Xorg after explicit opt-in. Ubuntu Wayland host control remains disabled while
-  issue #345 is resolved.
+safety boundary is currently certified—your own computer, plus 500+ apps through Composio. Host control is
+available on macOS and Ubuntu Xorg after explicit opt-in. Ubuntu Wayland host control remains disabled while
+issue #345 is resolved.
 
 ## Features
 
 <table>
+
 <tr>
+
 <td width="50%" valign="top">
 
 ### 🧠 Pick a brain per bot
@@ -73,6 +91,7 @@ mid-conversation.
 <img src="docs/assets/screenshots/dani-models-dark.png" alt="The per-bot model picker listing the models the installed engine can run, in dark mode" width="100%">
 
 </td>
+
 <td width="50%" valign="top">
 
 ### 🖥️ Every bot gets a computer
@@ -80,11 +99,15 @@ mid-conversation.
 Open the Computer panel to see which computer a bot is assigned to, start a private view-only
 preview of this machine, or enable local control after explicit opt-in - every local action still asks
 first.
+
 <img src="docs/assets/screenshots/dani-computer-dark.png" alt="The bot Computer panel with Screen, Browser, Data and Files tabs and the browser permission toggle, in dark mode" width="100%">
 
 </td>
+
 </tr>
+
 <tr>
+
 <td width="50%" valign="top">
 
 ### 👥 Put the whole crew in one chat
@@ -96,17 +119,22 @@ or only the bots you @mention.
 <img src="docs/assets/screenshots/dani-group-setup-dark.png" alt="Setting up a group chat: shared working folder, default responder choices, and a shared group brief, in dark mode" width="100%">
 
 </td>
+
 <td width="50%" valign="top">
 
 ### 🔌 Connected apps
 
 A one-click marketplace over Composio Sessions: Gmail, Slack, GitHub, Notion, Linear and hundreds more.
 OAuth once, and every bot can use them as tools.
+
 <img src="docs/assets/screenshots/dani-apps-dark.png" alt="The connected-apps market: Gmail, Slack, GitHub, Notion, Linear and more with one-click Connect buttons, in dark mode" width="100%">
 
 </td>
+
 </tr>
+
 <tr>
+
 <td width="50%" valign="top">
 
 ### 🗂 Manage bots like chats
@@ -117,16 +145,20 @@ messaging app — your agents behave like contacts.
 <img src="docs/assets/screenshots/dani-team-dark.png" alt="A team of Dani bots in the chat list, each with its own color, in dark mode" width="100%">
 
 </td>
+
 <td width="50%" valign="top">
 
 ### 🔑 Keys once, everything lights up
 
 Paste credentials in App Settings — they persist locally and the provider fleet hot-reloads instantly.
 Secrets are write-only: the UI only ever sees "configured" flags.
+
 <img src="docs/assets/screenshots/dani-keys-dark.png" alt="AI settings: every provider with one Set up button and the API keys section, in dark mode" width="100%">
 
 </td>
+
 </tr>
+
 </table>
 
 ### #️⃣ Channels for every context
@@ -190,14 +222,16 @@ flowchart LR
     server -- "Composio Session" --> APPS[("Gmail · Slack · GitHub · …")]
 ```
 
-| Layer | Where | What it does |
-|---|---|---|
+
+| Layer   | Where             | What it does                                                                                                                                                                                        |
+| ------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Drivers | `server/drivers/` | One per provider: Claude, Codex, and Grok Build over their local CLIs (stream-JSON / JSON-RPC / ACP), plus a cloud-computer agent. Unknown drivers degrade to "unavailable", never crash the fleet. |
-| Harness | `server/harness/` | Registry (configs → live instances) and the fan-in event bus every client folds. |
-| API | `server/index.ts` | Bots, turns, approvals, model catalog, computer lifecycle, connectors, config — HTTP + SSE. |
-| Voice | `server/tts/` | ElevenLabs, bring your own key. Runs on the harness so the key never reaches the UI; markdown is rewritten into something worth hearing before it is spoken. |
-| App | `src/` | The chat shell. Server-backed store, one reducer, zero client-side transports. |
-| Desktop | `electron/` | macOS, Windows, and Ubuntu shells with an embedded harness and platform capabilities; Apple speech stays macOS-only, Ubuntu Xorg has opt-in local control, and Wayland remains fail-closed. |
+| Harness | `server/harness/` | Registry (configs → live instances) and the fan-in event bus every client folds.                                                                                                                    |
+| API     | `server/index.ts` | Bots, turns, approvals, model catalog, computer lifecycle, connectors, config — HTTP + SSE.                                                                                                         |
+| Voice   | `server/tts/`     | ElevenLabs, bring your own key. Runs on the harness so the key never reaches the UI; markdown is rewritten into something worth hearing before it is spoken.                                        |
+| App     | `src/`            | The chat shell. Server-backed store, one reducer, zero client-side transports.                                                                                                                      |
+| Desktop | `electron/`       | macOS, Windows, and Ubuntu shells with an embedded harness and platform capabilities; Apple speech stays macOS-only, Ubuntu Xorg has opt-in local control, and Wayland remains fail-closed.         |
+
 
 ### Orchestrate Dani Bot over MCP
 
@@ -212,19 +246,20 @@ See [MCP server setup and tool reference](docs/mcp-server.md).
 
 **Installers - one download per desktop OS** (stable names, always resolving to the [newest release](https://github.com/somdipto/dani-desktop/releases/latest)):
 
-| Platform | Download |
-|---|---|
+
+| Platform             | Download                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
 | macOS, Apple silicon | [DaniBot-Silicon.dmg](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg) |
-| macOS, Intel | [DaniBot-Intel.dmg](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg) |
-| Windows | [DaniBot-setup.exe](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe) |
-| Ubuntu, AppImage | [DaniBot.AppImage](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage) |
-| Ubuntu, .deb | [danibot-amd64.deb](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb) |
+| macOS, Intel         | [DaniBot-Intel.dmg](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg)     |
+| Windows              | [DaniBot-setup.exe](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe)     |
+| Ubuntu, AppImage     | [DaniBot.AppImage](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage)       |
+| Ubuntu, .deb         | [danibot-amd64.deb](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb)     |
+
 
 The Windows installer is unsigned, so SmartScreen shows an "unknown publisher" prompt on first run. First launch opens the setup wizard on every platform.
 
 See the [Ubuntu Desktop guide](docs/linux-desktop.md) for platform notes and source-build prerequisites.
 Any desktop build can also pair as a client to another Windows, macOS, or Ubuntu host over Tailscale; see [desktop-to-desktop companion mode](docs/desktop-companion.md).
-
 
 **One command, from nothing to a running app** (idempotent - safe to re-run; prints a verified success check):
 
@@ -257,6 +292,12 @@ pnpm dev           # app → http://127.0.0.1:5199
 pnpm dev:desktop   # Electron shell; keep the two commands above running
 ```
 
+To start all three in separate terminals, run `./start-dev.sh` on macOS or
+Linux, or `./start-dev.ps1` in PowerShell on Windows. The launcher installs
+the pinned pnpm version if needed and installs dependencies when they are not
+already present. The Windows launcher also installs the current Node LTS with
+`winget` when Node is missing or older than version 24.
+
 Requirements: **macOS, Windows, or Ubuntu 24.04 x64**, **Node 24+**, **pnpm**, and at least one agent CLI — [`claude`](https://claude.com/claude-code),
 [`codex`](https://github.com/openai/codex), or [`grok`](https://x.ai/cli) — installed and logged in. They appear
 in the model picker automatically.
@@ -271,13 +312,15 @@ pnpm package:linux    # Ubuntu x64: .deb + AppImage + verified CUA runtime
 
 ### Desktop capability status
 
-| Capability | macOS | Ubuntu 24.04 Xorg | Ubuntu 24.04 Wayland |
-|---|---|---|---|
-| Packaged app, embedded harness, local agent CLIs | Supported | Beta | Beta |
-| Composio and Box/cloud computers | Supported | Beta | Beta |
-| Explicit preview-only local screen capture | Supported | Beta | Beta |
-| Bot control of this computer | Supported | Beta, explicit opt-in | Disabled: Wayland safety gate |
-| Native on-device dictation | Supported | Planned | Planned |
+
+| Capability                                       | macOS     | Ubuntu 24.04 Xorg     | Ubuntu 24.04 Wayland          |
+| ------------------------------------------------ | --------- | --------------------- | ----------------------------- |
+| Packaged app, embedded harness, local agent CLIs | Supported | Beta                  | Beta                          |
+| Composio and Box/cloud computers                 | Supported | Beta                  | Beta                          |
+| Explicit preview-only local screen capture       | Supported | Beta                  | Beta                          |
+| Bot control of this computer                     | Supported | Beta, explicit opt-in | Disabled: Wayland safety gate |
+| Native on-device dictation                       | Supported | Planned               | Planned                       |
+
 
 The Linux preview is user-initiated and never enables local bot control or Auto routing. On Xorg, the reviewed Cua
 Driver 0.19.3 runtime starts only after explicit opt-in and without its full-screen cursor overlay. On Wayland the
@@ -296,11 +339,13 @@ third-party license report, and a CycloneDX inventory ship with the runtime. See
 These credentials are optional — local chat works without them. Paste a key once in **App Settings** (gear
 in the sidebar footer) when you want to enable its integration:
 
-| Credential | What it enables | Where to get it |
-|---|---|---|
-| Composio project key (`ak_…`) | Connect Gmail, GitHub, Slack, Notion, and other apps to your bots | [Dani Bot Composio setup](docs/composio.md) |
-| Box API key | Give bots an isolated remote Linux computer with a desktop and terminal | [Box API key guide](https://docs.ascii.dev/box/api-keys) |
-| ElevenLabs key | Read replies aloud, and call your bots | [ElevenLabs API keys](https://elevenlabs.io/app/settings/api-keys) |
+
+| Credential                    | What it enables                                                         | Where to get it                                                    |
+| ----------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Composio project key (`ak_…`) | Connect Gmail, GitHub, Slack, Notion, and other apps to your bots       | [Dani Bot Composio setup](docs/composio.md)                        |
+| Box API key                   | Give bots an isolated remote Linux computer with a desktop and terminal | [Box API key guide](https://docs.ascii.dev/box/api-keys)           |
+| ElevenLabs key                | Read replies aloud, and call your bots                                  | [ElevenLabs API keys](https://elevenlabs.io/app/settings/api-keys) |
+
 
 Composio and Box are third-party services with their own accounts and terms. Box is a paid service after
 its trial, and using a cloud computer may incur charges.
@@ -347,7 +392,7 @@ uninstaller to do it):
 rm -rf "$HOME/Library/Application Support/Dani Bot" "$HOME/Library/Logs/Dani Bot"
 ```
 
-**Windows** - uninstall from Settings > Apps. The uninstaller removes the program and the `%APPDATA%\Dani Bot`
+**Windows** - uninstall from Settings &gt; Apps. The uninstaller removes the program and the `%APPDATA%\Dani Bot`
 app-data folder (window state, app logs, stored app credentials).
 
 **Ubuntu (.deb)** - `sudo apt remove danibot` removes the program, its `/usr/bin/danibot` link, and its AppArmor
@@ -360,7 +405,7 @@ rm -rf "$HOME/.config/Dani Bot"
 The AppImage installs nothing; delete the file and the same `~/.config/Dani Bot` folder.
 
 Your data directory is `~/.danibot` on every platform (or `$DANI_DATA_DIR` if you set it). If you upgraded from a
-legacy install, first launch moves the old `~/.openmausbot` / `~/.opengrokbot` data folders into `~/.danibot`;
+legacy install, first launch moves the old `~/.danibot` / `~/.opengrokbot` data folders into `~/.danibot`;
 when a move is not possible (different drive, folder busy) the old folder stays behind and can be removed once
 the new one works.
 

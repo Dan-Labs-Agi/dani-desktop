@@ -1,4 +1,4 @@
-// An in-memory Docker Engine for the connector's tests: images, containers, volumes holding files, and the fixed
+﻿// An in-memory Docker Engine for the connector's tests: images, containers, volumes holding files, and the fixed
 // helper commands the connector runs (cp, find, du, tar, the box probe) carried out on those files.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -147,7 +147,7 @@ export class FakeDocker implements Docker {
     if (container.status === "running") return;
     container.status = "running";
     container.startedAt = this.now();
-    const role = container.spec.Labels?.["com.mausbot.role"];
+    const role = container.spec.Labels?.["com.Danibot.role"];
     if (role === "helper") this.runHelper(container);
     else if (role === "home") this.onHomeStart?.(container);
     else if (role === "connector") await this.onConnectorStart?.(container);
@@ -285,3 +285,4 @@ export class FakeDocker implements Docker {
     return finish(127, `unknown helper command: ${line}`);
   }
 }
+

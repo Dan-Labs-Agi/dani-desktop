@@ -8,8 +8,8 @@ import type { LoginStore } from "./login-store.ts";
 import { ONE_PASSWORD_MALFORMED, ONE_PASSWORD_REFUSED } from "./onepassword.ts";
 import type { TotpKey } from "./totp.ts";
 
-export const LOGIN_HANDOFF_REQUEST = "openmausbot:login-handoff";
-export const LOGIN_HANDOFF_RESULT = "openmausbot:login-handoff-result";
+export const LOGIN_HANDOFF_REQUEST = "danibot:login-handoff";
+export const LOGIN_HANDOFF_RESULT = "danibot:login-handoff-result";
 
 export type LoginHandoffWhat = { kind: "1password" } | { kind: "login"; id: string } | { kind: "verify-secrets"; nonce: string };
 /** For a move to the person's own Cloud: one connection's secrets, a code for that Cloud to act as this computer's

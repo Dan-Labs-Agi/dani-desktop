@@ -45,7 +45,7 @@ function stubWorkspace() {
   const fetchImpl = async (url, init) => {
     const route = new URL(url).pathname;
     if (route === "/api/auth/session") return json({ kind: "session", id: sessionId });
-    if (route === "/.well-known/openmausbot/environment") return json({ environmentId, capabilities: { sharedComputers: true } });
+    if (route === "/.well-known/danibot/environment") return json({ environmentId, capabilities: { sharedComputers: true } });
     const body = init?.body ? JSON.parse(init.body) : {};
     if (route === "/api/shared-computers/connect") { state.connected = body; return json({}); }
     if (route.endsWith("/poll")) {
@@ -524,10 +524,10 @@ test("a protected directory spelled in another case is still refused", async t =
   grant.protectedPaths = [path.join(dir, "Dani Bot")];
   folder.write = true;
   await assert.rejects(run({ action: "read_file", path: "Dani Bot/credentials.bin" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "read_file", path: "openmausbot/credentials.bin" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "read_file", path: "OPENMAUSBOT/credentials.bin" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "list_files", path: "openmausbot" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "write_file", path: "openmausbot/computer-sharing.json", content: "{}" }), /sharing settings/);
+  await assert.rejects(run({ action: "read_file", path: "danibot/credentials.bin" }), /Desktop credentials/);
+  await assert.rejects(run({ action: "read_file", path: "DANIBOT/credentials.bin" }), /Desktop credentials/);
+  await assert.rejects(run({ action: "list_files", path: "danibot" }), /Desktop credentials/);
+  await assert.rejects(run({ action: "write_file", path: "danibot/computer-sharing.json", content: "{}" }), /sharing settings/);
 });
 
 test("a protected directory spelled in another Unicode normalization is still refused", async t => {
@@ -663,7 +663,7 @@ test("with the whole home folder lent, keys, a browser profile and this app's da
       await mkdir(path.dirname(file), { recursive: true });
       await writeFile(file, content);
     };
-    const secrets = [".ssh/id_ed25519", "Library/Application Support/Google/Chrome/Default/Cookies", ".openmausbot/config.json"];
+    const secrets = [".ssh/id_ed25519", "Library/Application Support/Google/Chrome/Default/Cookies", ".danibot/config.json"];
     for (const relative of secrets) await put(relative, `fixture ${relative}`);
     await put("Documents/plan.txt", "an ordinary file");
     const stub = stubWorkspace();
@@ -673,7 +673,7 @@ test("with the whole home folder lent, keys, a browser profile and this app's da
     // Wired as main wires it: the grants file under the app's own profile, and this app's data folder in protectedPaths.
     sharing = createComputerSharing({
       file: path.join(home, "Library", "Application Support", "Dani Bot", "computer-sharing.json"), fetch: stub.fetchImpl, home,
-      environments: () => [stub.env], enabled: async () => true, cuaConnection: async () => null, protectedPaths: [path.join(home, ".openmausbot")],
+      environments: () => [stub.env], enabled: async () => true, cuaConnection: async () => null, protectedPaths: [path.join(home, ".danibot")],
     });
     const info = await sharing.identity(stub.env);
     // Lent as the picker lends it after its warning: the home folder itself, read only even when edits are asked for.
@@ -688,7 +688,7 @@ test("with the whole home folder lent, keys, a browser profile and this app's da
     assert.equal(results[secrets.length + 1].isError, undefined);
     assert.equal(payload(results[secrets.length + 1]).content, "an ordinary file");
     const listed = Object.fromEntries(payload(results[secrets.length + 2]).entries.map(({ name, type }) => [name, type]));
-    assert.deepEqual([listed[".ssh"], listed[".openmausbot"], listed.Documents], ["protected", "protected", "directory"]);
+    assert.deepEqual([listed[".ssh"], listed[".danibot"], listed.Documents], ["protected", "protected", "directory"]);
   } finally {
     sharing?.close();
     for (const [name, value] of Object.entries(saved)) if (value === undefined) delete process.env[name]; else process.env[name] = value;
@@ -699,11 +699,11 @@ test("with the whole home folder lent, keys, a browser profile and this app's da
 test("the harness data directory is protected through a broad share", async t => {
   const { dir } = await fixture(t);
   const shared = path.join(dir, "share");
-  const dataDir = path.join(shared, ".openmausbot");
+  const dataDir = path.join(shared, ".danibot");
   await mkdir(dataDir, { recursive: true });
   await writeFile(path.join(dataDir, "config.json"), JSON.stringify({ anthropicApiKey: "sk-fixture" }));
   const stub = stubWorkspace();
-  stub.state.work.push({ action: "read_file", path: ".openmausbot/config.json" });
+  stub.state.work.push({ action: "read_file", path: ".danibot/config.json" });
   const sharing = createComputerSharing({
     file: path.join(dir, "profile", "computer-sharing.json"), fetch: stub.fetchImpl,
     environments: () => [stub.env], enabled: async () => true, cuaConnection: async () => null, protectedPaths: [dataDir],
@@ -725,7 +725,7 @@ test("a harness data directory that does not exist yet still saves and connects"
   stub.state.work.push({ action: "read_file", path: "note.txt" });
   const sharing = createComputerSharing({
     file: path.join(dir, "profile", "computer-sharing.json"), fetch: stub.fetchImpl,
-    environments: () => [stub.env], enabled: async () => true, cuaConnection: async () => null, protectedPaths: [path.join(dir, "never-installed", ".openmausbot")],
+    environments: () => [stub.env], enabled: async () => true, cuaConnection: async () => null, protectedPaths: [path.join(dir, "never-installed", ".danibot")],
   });
   t.after(() => sharing.close());
   const info = await sharing.identity(stub.env);

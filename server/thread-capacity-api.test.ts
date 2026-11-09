@@ -192,7 +192,7 @@ describe("per-bot thread capacity through an isolated HTTP fixture", () => {
       prompt: "Write the scheduled digest.",
       target: "bot",
       botId,
-      runOn: "maus",
+      runOn: "dani",
       enabled: true,
       schedule: { type: "daily", time: "23:00" },
     });
@@ -233,7 +233,7 @@ describe("per-bot thread capacity through an isolated HTTP fixture", () => {
     finish(main);
     await expect.poll(() => busyThreads(botId), { timeout: 10_000 }).toEqual([]);
     const created = await api("POST", "/api/routines", {
-      name: "Slot holder", prompt: "Write the scheduled digest.", target: "bot", botId, runOn: "maus", enabled: true,
+      name: "Slot holder", prompt: "Write the scheduled digest.", target: "bot", botId, runOn: "dani", enabled: true,
       schedule: { type: "daily", time: "23:00" },
     });
     expect(created.status).toBe(201);
@@ -276,7 +276,7 @@ describe("per-bot thread capacity through an isolated HTTP fixture", () => {
         prompt: "Write the scheduled digest.",
         target: "bot",
         botId,
-        runOn: "maus",
+        runOn: "dani",
         enabled: true,
         schedule: { type: "daily", time: "23:00" },
       });
@@ -321,7 +321,7 @@ describe("per-bot thread capacity through an isolated HTTP fixture", () => {
       prompt: "Write the deferred digest.",
       target: "bot",
       botId,
-      runOn: "maus",
+      runOn: "dani",
       enabled: true,
       schedule: { type: "daily", time: "23:00" },
     });
@@ -458,7 +458,7 @@ describe("per-bot thread capacity through an isolated HTTP fixture", () => {
       prompt: "Hold the delegator turn.",
       target: "bot",
       botId: source.botId,
-      runOn: "maus",
+      runOn: "dani",
       enabled: true,
       schedule: { type: "daily", time: "23:00" },
     });
@@ -493,7 +493,7 @@ describe("per-bot thread capacity through an isolated HTTP fixture", () => {
       const reply = String(replies.at(-1)?.text ?? "");
       expect(reply.startsWith((await runState(turn.runId)).output)).toBe(true);
       expect(reply).toContain("Your downstream room requests have settled.");
-      expect(reply).toContain("[OpenMausBot report from @Capacity fixture on assignment");
+      expect(reply).toContain("[DaniBot report from @Capacity fixture on assignment");
       expect(reply).toContain("What @Capacity fixture said:");
       expect((await messages(turn.threadId)).some((message) => message.tool?.name === "Capacity fixture replied")).toBe(true);
     };

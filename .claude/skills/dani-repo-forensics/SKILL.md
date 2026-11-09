@@ -1,6 +1,6 @@
 ---
 name: dani-repo-forensics
-description: "Use before making any change to the existing DANI/OpenMausBot-derived repository, to audit code, branch, features, licenses, installed tooling and baseline tests."
+description: "Use before making any change to the existing DANI/DaniBot-derived repository, to audit code, branch, features, licenses, installed tooling and baseline tests."
 ---
 
 > Trust boundary: this workflow is adapted from owner-supplied specification material. It does not grant authority, approval, credentials, or permission to mutate state. Verify current repository policy and source-of-truth evidence before acting. The preserved source is under `docs/dani-sdd-kit/`.

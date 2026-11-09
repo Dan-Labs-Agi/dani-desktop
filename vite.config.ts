@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+﻿import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Connect, Plugin } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
@@ -91,10 +91,11 @@ export default defineConfig({
         ws: true,
         target: `http://127.0.0.1:${process.env.OMB_PORT || process.env.OGB_PORT || 8799}`,
       },
-      "/.well-known/openmausbot/environment": {
+      "/.well-known/DaniBot/environment": {
         target: `http://127.0.0.1:${process.env.OMB_PORT || process.env.OGB_PORT || 8799}`,
       },
     },
   },
 });
+
 

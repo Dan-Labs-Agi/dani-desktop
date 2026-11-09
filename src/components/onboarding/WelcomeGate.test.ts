@@ -85,7 +85,7 @@ describe("who gets the welcome flow", () => {
 
   it("lands in the chat with the bot the person chose on the Chief screen", () => {
     vi.stubGlobal("window", LOCAL_PAGE);
-    store.state = { ...store.state, bots: [{ id: "maus", chiefOfStaff: true }, { id: "research" }] };
+    store.state = { ...store.state, bots: [{ id: "dani", chiefOfStaff: true }, { id: "research" }] };
     gate(LOCAL_VIEWER).tree!.props.onDone!("research");
     expect(store.dispatch).toHaveBeenCalledWith({ type: "select", id: "research" });
     expect(store.dispatch).toHaveBeenCalledWith({ type: "toggleWelcome", open: false });

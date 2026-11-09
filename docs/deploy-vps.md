@@ -70,7 +70,7 @@ root, sign in again as `maus`; those accounts have different homes and credentia
 
 ## Path A: a public address with one command
 
-No domain, no proxy, no open port. The server gets an address like `https://c-7f3a9c.openmausbot.com` through a Cloudflare tunnel; only traffic through the tunnel reaches it, and that traffic still has to pair.
+No domain, no proxy, no open port. The server gets an address like `https://c-7f3a9c.danibot.com` through a Cloudflare tunnel; only traffic through the tunnel reaches it, and that traffic still has to pair.
 
 ```sh
 git clone https://github.com/somdipto/dani-desktop && cd dani-desktop   # once
@@ -124,7 +124,7 @@ One container for the server plus Caddy for HTTPS at `https://maus.example.com`.
 In this path, every `pnpm omb …` command below is run inside the container instead:
 
 ```sh
-docker compose exec omb node dist-server/openmausbot.js pair --label "My MacBook"
+docker compose exec omb node dist-server/danibot.js pair --label "My MacBook"
 ```
 
 ## Path C: only your Tailscale network
@@ -194,7 +194,7 @@ pnpm omb pair --label "Kitchen iPad"
 ```
 pairing code:  RR8Y-BLR6-H939
 expires:       10:59:45 AM (single use)
-open or scan:  https://c-7f3a9c.openmausbot.com/pair#code=RR8Y-BLR6-H939
+open or scan:  https://c-7f3a9c.danibot.com/pair#code=RR8Y-BLR6-H939
 ```
 
 - **A browser:** open the link. The code is filled in; press **Connect**. That browser is paired for 30 days, renewed on use as above.
@@ -287,7 +287,7 @@ credentials, and paired sessions). Run it from the service account's shell:
 ```sh
 umask 077
 backup_dir=$(mktemp -d "$PWD/dani-desktop-backup.XXXXXX")
-tar czf "$backup_dir/dani-desktop-data.tgz" -C "$HOME" .openmausbot
+tar czf "$backup_dir/dani-desktop-data.tgz" -C "$HOME" .danibot
 ```
 
 A full backup also needs your engine credential/configuration paths, such as
@@ -320,7 +320,7 @@ Read this before putting anything else in front of the server.
 - A request that arrives through a proxy or the tunnel is treated as remote and needs a session, whatever headers it carries. A proxy of your own (nginx, Traefik, Cloudflare Tunnel) must forward the real `Host` and add `X-Forwarded-For` and `X-Forwarded-Proto`, must not buffer the event stream, and must **not** rewrite `Host` to `127.0.0.1`.
 - Pairing is the login. Want a second wall in front of it? Path B's `Caddyfile` has a commented `basic_auth` block for a shared password.
 - The session cookie is marked `Secure`; do not serve this over plain HTTP on the public internet.
-- The one thing a stranger can read is `/.well-known/openmausbot/environment` (the server's id, label, version, capabilities) and `/api/health` (only the app name). Everything else answers "pair this device".
+- The one thing a stranger can read is `/.well-known/danibot/environment` (the server's id, label, version, capabilities) and `/api/health` (only the app name). Everything else answers "pair this device".
 
 ## Troubleshooting
 
@@ -336,7 +336,7 @@ Read this before putting anything else in front of the server.
 
 **A bot says the engine is not signed in.** Sign that engine in again on the server.
 
-**What does the server think it is?** `https://<address>/.well-known/openmausbot/environment` is public and shows its id, label, version and capabilities; `pnpm omb status` prints the same on the server.
+**What does the server think it is?** `https://<address>/.well-known/danibot/environment` is public and shows its id, label, version and capabilities; `pnpm omb status` prints the same on the server.
 
 **Something else.** `journalctl -u dani-desktop --since -10m` (or `docker compose logs omb --tail 100`) shows the server's startup lines. Paste them with your question in the community channel.
 
@@ -359,13 +359,13 @@ placeholder, not a fixed Chrome release. Copy the whole directory, including its
 libraries, to a new location that the service user cannot modify:
 
 ```sh
-sudo install -d -o root -g root -m 0755 /opt/openmausbot-browser
-sudo cp -R /home/maus/.agent-browser/browsers/chrome-VERSION /opt/openmausbot-browser/
-sudo chown -R root:root /opt/openmausbot-browser/chrome-VERSION
-sudo chmod -R go-w /opt/openmausbot-browser/chrome-VERSION
+sudo install -d -o root -g root -m 0755 /opt/danibot-browser
+sudo cp -R /home/maus/.agent-browser/browsers/chrome-VERSION /opt/danibot-browser/
+sudo chown -R root:root /opt/danibot-browser/chrome-VERSION
+sudo chmod -R go-w /opt/danibot-browser/chrome-VERSION
 ```
 
-Save this as the root-owned `/etc/apparmor.d/openmausbot-chrome`, replacing
+Save this as the root-owned `/etc/apparmor.d/danibot-chrome`, replacing
 `VERSION` with the same value. Keep the exact executable path: a wildcard under
 the writable service home would also allow replacement executables.
 
@@ -373,7 +373,7 @@ the writable service home would also allow replacement executables.
 abi <abi/4.0>,
 include <tunables/global>
 
-profile openmausbot-chrome /opt/openmausbot-browser/chrome-VERSION/chrome flags=(unconfined) {
+profile danibot-chrome /opt/danibot-browser/chrome-VERSION/chrome flags=(unconfined) {
   userns,
 }
 ```
@@ -381,7 +381,7 @@ profile openmausbot-chrome /opt/openmausbot-browser/chrome-VERSION/chrome flags=
 Load the profile:
 
 ```sh
-sudo apparmor_parser -r /etc/apparmor.d/openmausbot-chrome
+sudo apparmor_parser -r /etc/apparmor.d/danibot-chrome
 ```
 
 Add the following line under `[Service]` in the systemd unit above, again using
@@ -389,7 +389,7 @@ the exact installed version, then run `sudo systemctl daemon-reload` and
 `sudo systemctl restart dani-desktop`:
 
 ```ini
-Environment=AGENT_BROWSER_EXECUTABLE_PATH=/opt/openmausbot-browser/chrome-VERSION/chrome
+Environment=AGENT_BROWSER_EXECUTABLE_PATH=/opt/danibot-browser/chrome-VERSION/chrome
 ```
 
 For a foreground server, export `AGENT_BROWSER_EXECUTABLE_PATH` to that same

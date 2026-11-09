@@ -58,7 +58,7 @@ beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-one-on-one-goal-"));
   slowGate = join(home, "slow-finish");
   patientGate = join(home, "patient-finish");
-  const data = join(home, ".openmausbot");
+  const data = join(home, ".danibot");
   mkdirSync(data, { recursive: true });
   const fixture = (name: string, environment: Record<string, string>) => ({
     driver: "claudeAgent",
@@ -220,7 +220,7 @@ describe("one-on-one goal runs (a room of one)", () => {
       prompt: "Review the release",
       target: "room-goal",
       botId: bot.id,
-      runOn: "maus",
+      runOn: "dani",
       schedule: { type: "once", at: Date.now() + 60_000 },
       durationMinutes: 30,
     });

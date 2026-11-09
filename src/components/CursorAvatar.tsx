@@ -1,6 +1,6 @@
 /** The Dani avatar: the Bloub character (@norbert_bodziony/bloub, the Dani-Dex bot) behind this
  * app's long-standing CursorAvatar contract. The component's props, states, handle and catalog
- * re-exports are unchanged so every caller keeps working; the maus's cursor face is gone. App
+ * re-exports are unchanged so every caller keeps working; the dani's cursor face is gone. App
  * states map onto Bloub states and expressions in bloub-adapter.ts, and each bot's saved color
  * still inks its character, so existing bots keep their identity on the new face. */
 import React, { useEffect, useImperativeHandle, useRef } from 'react'
@@ -342,7 +342,7 @@ export interface StateEffects {
 
 interface EffectsByState extends Partial<Record<CursorState, StateEffects>> {}
 
-/** @deprecated old maus glyph artwork, kept only so EFFECTS' timing contract is intact. */
+/** @deprecated old dani glyph artwork, kept only so EFFECTS' timing contract is intact. */
 const GLYPH_BANG =
   '<path fill="{{GRADIENT}}" d="M99 58 Q99 43 114.3 43 Q129.6 43 129.6 58 L123 150 Q122 161 114.3 161 Q106.6 161 105.6 150 Z"/>' +
   '<circle fill="{{GRADIENT}}" cx="114.3" cy="188" r="15"/>'

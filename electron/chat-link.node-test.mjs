@@ -14,22 +14,22 @@ test("recognizes the links Copy link and a dashboard make", () => {
   assert.equal(chatLinkFrom("DaniBot://Bot/abc"), "DaniBot://Bot/abc");
 });
 
-test("still opens the openmausbot:// links made before the rename", () => {
-  const legacyThread = THREAD_LINK.replace("danibot://", "openmausbot://");
-  const legacyBot = BOT_LINK.replace("danibot://", "openmausbot://");
+test("still opens the danibot:// links made before the rename", () => {
+  const legacyThread = THREAD_LINK.replace("danibot://", "danibot://");
+  const legacyBot = BOT_LINK.replace("danibot://", "danibot://");
   assert.equal(chatLinkFrom(legacyThread), legacyThread);
   assert.equal(chatLinkFrom(legacyBot), legacyBot);
 });
 
 test("leaves every other link to its own handler", () => {
   for (const other of [
-    "openmausbot://cloud",
-    "openmausbot://organization",
-    "openmausbot://install?url=https://github.com/a/b/team.md",
-    "openmausbot://threads/abc",
-    "openmausbot://bots/abc",
-    "https://example.com/openmausbot://bot/abc",
-    `openmausbot://bot/${"x".repeat(1024)}`,
+    "danibot://cloud",
+    "danibot://organization",
+    "danibot://install?url=https://github.com/a/b/team.md",
+    "danibot://threads/abc",
+    "danibot://bots/abc",
+    "https://example.com/danibot://bot/abc",
+    `danibot://bot/${"x".repeat(1024)}`,
     undefined,
     42,
   ]) assert.equal(chatLinkFrom(other), null);
@@ -38,15 +38,15 @@ test("leaves every other link to its own handler", () => {
 // A published page's Open in the desktop app reaches main as desktop:open-external or window.open: both go to the
 // system browser through externalWebUrl, and no page link is ever taken for a chat link, so it never opens a chat.
 test("a published page's link opens in the browser, never as a chat", () => {
-  for (const page of ["https://abcdefghijklmnopqrstuvwxyz.mausbot.page/", "https://abcdefghijklmnopqrstuvwxyz.mausbot.page/thread/abc?bot=pepper"]) {
+  for (const page of ["https://abcdefghijklmnopqrstuvwxyz.danibot.page/", "https://abcdefghijklmnopqrstuvwxyz.danibot.page/thread/abc?bot=pepper"]) {
     assert.equal(chatLinkFrom(page), null);
-    assert.equal(chatLinkFromCommandLine(["/usr/bin/openmausbot", page]), null);
+    assert.equal(chatLinkFromCommandLine(["/usr/bin/danibot", page]), null);
     assert.equal(externalWebUrl(page), page);
   }
 });
 
 test("finds the link among a second launch's arguments", () => {
-  assert.equal(chatLinkFromCommandLine(["/usr/bin/openmausbot", "--no-sandbox", THREAD_LINK]), THREAD_LINK);
-  assert.equal(chatLinkFromCommandLine(["/usr/bin/openmausbot", "--no-sandbox", BOT_LINK]), BOT_LINK);
-  assert.equal(chatLinkFromCommandLine(["/usr/bin/openmausbot", "openmausbot://cloud"]), null);
+  assert.equal(chatLinkFromCommandLine(["/usr/bin/danibot", "--no-sandbox", THREAD_LINK]), THREAD_LINK);
+  assert.equal(chatLinkFromCommandLine(["/usr/bin/danibot", "--no-sandbox", BOT_LINK]), BOT_LINK);
+  assert.equal(chatLinkFromCommandLine(["/usr/bin/danibot", "danibot://cloud"]), null);
 });

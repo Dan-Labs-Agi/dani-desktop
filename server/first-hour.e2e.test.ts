@@ -77,11 +77,11 @@ describe("a new Cloud's first hour", () => {
   beforeAll(async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     home = mkdtempSync(join(tmpdir(), "omb-first-hour-"));
-    dataDir = join(home, ".openmausbot");
+    dataDir = join(home, ".danibot");
     mkdirSync(dataDir, { recursive: true });
     broker = await startBrokerFake();
     const markers = join(home, "markers.json");
-    writeFileSync(markers, JSON.stringify({ "OpenMausBot first look": LOOK_REPLY, "inbox is a mess": FIRST_REPLY }));
+    writeFileSync(markers, JSON.stringify({ "DaniBot first look": LOOK_REPLY, "inbox is a mess": FIRST_REPLY }));
     writeFileSync(toolCalls(), "[]");
     const cli = join(home, "fake-claude.mjs");
     writeFileSync(cli, `#!/usr/bin/env node
@@ -129,7 +129,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     person = broker.userFor(installation);
-    const pairing = await signed("/api/cloud/pairing", "POST", JSON.stringify({ label: "OpenMausBot app (Cloud)", ttlSeconds: 300 }));
+    const pairing = await signed("/api/cloud/pairing", "POST", JSON.stringify({ label: "DaniBot app (Cloud)", ttlSeconds: 300 }));
     token = (await api("POST", "/api/auth/pair", { code: pairing.code })).token;
     const bots = (await api("GET", "/api/bots")).bots as any[];
     const found = bots.find((bot) => bot.defaultBot && !bot.defaultBot.person);
@@ -190,10 +190,10 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     expect(tools).not.toContain(SEND);
     expect(tools).not.toContain(DELETE);
     const rows = await messages();
-    expect(rows.some((row) => row.role === "user" && String(row.text).includes("OpenMausBot first look")), "the first look's prompt is never the person's message").toBe(false);
+    expect(rows.some((row) => row.role === "user" && String(row.text).includes("DaniBot first look")), "the first look's prompt is never the person's message").toBe(false);
     expect(rows.find((row) => row.id === gmail.id).connector).toMatchObject({ status: "connected", resumed: true });
     const dump = JSON.parse(readFileSync(dumpFile(), "utf8"));
-    expect(JSON.stringify(dump.prompt)).toContain("OpenMausBot first look: Sam just connected Gmail.");
+    expect(JSON.stringify(dump.prompt)).toContain("DaniBot first look: Sam just connected Gmail.");
     const month = new Date().toISOString().slice(0, 7);
     const decisions = existsSync(join(dataDir, "decisions")) ? readdirSync(join(dataDir, "decisions")).filter((name) => name.startsWith(month)).map((name) => readFileSync(join(dataDir, "decisions", name), "utf8")).join("") : "";
     expect(decisions).toContain(`"tool":"${SEND}"`);

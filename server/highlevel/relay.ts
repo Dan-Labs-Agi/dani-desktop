@@ -1,8 +1,8 @@
-// The Dani Bot relay (accounts.openmausbot.com) holds HighLevel's client secret; this server only ever sees
+// The Dani Bot relay (accounts.danibot.com) holds HighLevel's client secret; this server only ever sees
 // tokens. Contract: spec §9 (start → authorizationUrl, claim once → tokens, refresh → new pair).
 import { z } from "zod";
 
-export const HIGHLEVEL_RELAY_URL_DEFAULT = "https://accounts.openmausbot.com";
+export const HIGHLEVEL_RELAY_URL_DEFAULT = "https://accounts.danibot.com";
 export const HIGHLEVEL_RELAY_ENV = "OMB_HIGHLEVEL_RELAY_URL";
 const RELAY_TIMEOUT_MS = 20_000;
 const MAX_RELAY_BYTES = 64_000;

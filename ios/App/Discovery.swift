@@ -37,7 +37,7 @@ final class Discovery: ObservableObject {
     private var generation = 0
     private var shouldBrowse = false
 
-    private static let serviceTypes = ["_danibot._tcp", "_openmausbot._tcp"]
+    private static let serviceTypes = ["_danibot._tcp", "_danibot._tcp"]
 
     func start() {
         guard !shouldBrowse else { return }

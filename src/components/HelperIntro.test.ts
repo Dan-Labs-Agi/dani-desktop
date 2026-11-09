@@ -53,7 +53,7 @@ const { SIMPLE_BOT_BUBBLE } = await import("./chat-bubble");
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const claude = (ready: boolean): InstanceInfo => ({ instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude",
   snapshot: { state: ready ? "available" : "unavailable", authenticated: ready }, models: { default: "m", options: [] } });
-const maus = (extra: Partial<Bot> = {}): Bot => ({ id: "maus", threadId: "t", name: "Dani", title: "", description: "", notifications: true,
+const dani = (extra: Partial<Bot> = {}): Bot => ({ id: "dani", threadId: "t", name: "Dani", title: "", description: "", notifications: true,
   color: "chrome", unread: false, modelSelection: { instanceId: "claude", model: "m" }, messages: [], defaultBot: {}, chiefOfStaff: true, ...extra });
 const intro: Message = { id: "intro", role: "bot", kind: "options", at: 1, helperIntro: true, text: "Hey! I'm Dani. I'm new here.",
   card: { title: "Hey! I'm Dani. I'm new here.", subtitle: "", options: ["What are my bots up to?"] } };
@@ -64,7 +64,7 @@ const lines = () => [...host.querySelectorAll("[data-helper-line]")].map((node) 
 const chips = () => [...host.querySelectorAll<HTMLElement>("[data-helper-step]")].map((node) => node.dataset.helperStep);
 const settle = async () => { for (let i = 0; i < 6; i++) await act(async () => {}); };
 const show = async (answered = false, followup?: Message) => {
-  await act(async () => { root.render(createElement(HelperIntro, { botId: "maus", threadId: "t", message: intro, answered, followup })); });
+  await act(async () => { root.render(createElement(HelperIntro, { botId: "dani", threadId: "t", message: intro, answered, followup })); });
   await settle();
 };
 const tick = async (ms: number) => {
@@ -87,7 +87,7 @@ beforeEach(() => {
   f.saves = true;
   f.bots = 0;
   f.routines = 0;
-  f.state = { bots: [maus()], instances: [claude(true)], config: { profile: { name: "" } } };
+  f.state = { bots: [dani()], instances: [claude(true)], config: { profile: { name: "" } } };
   stageIntro(null);
   setWelcomingBot(null);
   host = document.createElement("div");
@@ -201,7 +201,7 @@ describe("in the chat (Simple mode)", () => {
   });
 
   it("says nothing while the Chief step still introduces Dani", async () => {
-    setWelcomingBot("maus");
+    setWelcomingBot("dani");
     await show();
     expect(host.querySelector("[data-helper-intro]")).toBeNull();
   });
@@ -211,7 +211,7 @@ describe("as a first run lands in the chat", () => {
   it("arrives part by part: three lines, the bot typing, its follow-up (written once by the server), then the chips", async () => {
     vi.useFakeTimers();
     f.bots = 2;
-    stageIntro("maus");
+    stageIntro("dani");
     await show();
     expect(lines()).toEqual([]);
     expect(f.followups, "asked for once its look around settles").toEqual([{ threadId: "t", ai: "own", apps: [] }]);
@@ -239,7 +239,7 @@ describe("as a first run lands in the chat", () => {
   it("with no AI shows no typing row, and follows up soon after the last line", async () => {
     vi.useFakeTimers();
     f.state = { ...f.state, instances: [claude(false)] };
-    stageIntro("maus");
+    stageIntro("dani");
     await show();
     await tick(INTRO_TIMING.first);
     await tick(INTRO_TIMING.line);
@@ -253,7 +253,7 @@ describe("as a first run lands in the chat", () => {
   it("shows everything at once with reduced motion, and says what it saw itself when the server can't save it", async () => {
     f.reduced = true;
     f.saves = false;
-    stageIntro("maus");
+    stageIntro("dani");
     await show();
     expect(f.followups).toHaveLength(1);
     expect(lines()).toHaveLength(4);

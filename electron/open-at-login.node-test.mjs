@@ -109,7 +109,7 @@ test("Windows: turning it off removes every entry that starts the app, and lendi
 test("Linux: the person's autostart entry has no hidden flag and no lending mark, and lending never removes it", async t => {
   const dir = await temp(t);
   const config = path.join(dir, "config");
-  const entry = path.join(config, "autostart", "openmausbot.desktop");
+  const entry = path.join(config, "autostart", "danibot.desktop");
   const login = createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "linux.json"), platform: "linux", home: dir, env: { XDG_CONFIG_HOME: config, APPIMAGE: "/home/me/Dani Bot.AppImage" } });
   login.choose(true);
   assert.equal(await readFile(entry, "utf8"), autostartEntry("/home/me/Dani Bot.AppImage", { lending: false }));

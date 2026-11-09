@@ -1113,7 +1113,7 @@
       "mcp_server"
     ]
   },
-  "default+mausbot": {
+  "default+danibot": {
     "bytes": 58589,
     "sha256": "9a02dba6be87f95da8fa4fd863f0ba677bbb47807b6fe6290b1ad374f0f67f41",
     "tools": [
@@ -1165,7 +1165,7 @@
       "mark_notifications_read"
     ]
   },
-  "skills+shared+voice+mausbot": {
+  "skills+shared+voice+danibot": {
     "bytes": 64454,
     "sha256": "fa47022976ec4278938efe8a91c5152249e8db4469f44c7884ebfd25e387759c",
     "tools": [

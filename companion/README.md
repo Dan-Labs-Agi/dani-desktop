@@ -121,12 +121,12 @@ it is switched on, so the opt-in is never implicit.
 | `OMB_COMPANION_PORT` | `8810` | where devices connect |
 | `OMB_CONTROL_PORT` | `8811` | the pairing page, loopback only, behind a per-launch token |
 | `OMB_CONTROL_TOKEN` | random | that token (43 base64url characters), for a script that starts the sidecar; the desktop app ignores it |
-| `OMB_COMPANION_DIR` | `~/.openmausbot-companion` | paired devices live here |
+| `OMB_COMPANION_DIR` | `~/.danibot-companion` | paired devices live here |
 | `OMB_COMPANION_NAME` | your name, from the harness | what the phone calls this computer |
 
 `OMB_COMPANION_NAME` overrides a name the sidecar otherwise asks the harness
 for at startup — the profile from onboarding, as *"Ada's computer"*. It falls
-back to `OpenMausBot` (legacy default) when the harness is not up or has no profile. Read once
+back to `DaniBot` (legacy default) when the harness is not up or has no profile. Read once
 and cached: the name goes into the Bonjour record, and re-advertising under a
 new one later would show the phone two computers.
 

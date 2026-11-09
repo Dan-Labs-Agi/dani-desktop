@@ -357,7 +357,7 @@ export function createCloudSend({ local, cloud, handoff, store, onChange = () =>
 
   /** A move goes only to a Cloud that says it takes one: an older one would lose the owner's lines and the checks. */
   async function assertTakesMove(session) {
-    const described = await session.call("GET", "/.well-known/openmausbot/environment");
+    const described = await session.call("GET", "/.well-known/danibot/environment");
     if (!(Number(described.body?.capabilities?.move) >= 1)) throw new CloudSendError("outdated", OUTDATED_FOR_MOVE);
   }
 

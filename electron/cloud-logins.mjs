@@ -5,8 +5,8 @@
 // and is answered only to the process it was asked of; nothing here keeps or logs it.
 import { randomUUID } from "node:crypto";
 
-const REQUEST = "openmausbot:login-handoff";
-const RESULT = "openmausbot:login-handoff-result";
+const REQUEST = "danibot:login-handoff";
+const RESULT = "danibot:login-handoff-result";
 
 const record = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const sentence = value => (typeof value === "string" && value.trim() ? value.trim().slice(0, 300) : null);

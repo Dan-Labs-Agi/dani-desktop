@@ -7,7 +7,7 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct OpenMausWidgets: WidgetBundle {
+struct DaniWidgets: WidgetBundle {
     var body: some Widget {
         BotActivityWidget()
     }

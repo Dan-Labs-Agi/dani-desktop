@@ -147,7 +147,7 @@ describe("bots.json save failures", () => {
   it("names the unsaved action and keeps the raw error as its cause", () => {
     const fullDisk = new RegistrySaveError("the thread's usage", "bots.json", Object.assign(new Error("ENOSPC: no space left on device"), { code: "ENOSPC" }));
 
-    expect(fullDisk.message).toBe("Couldn't save the thread's usage: OpenMausBot couldn't write bots.json.");
+    expect(fullDisk.message).toBe("Couldn't save the thread's usage: DaniBot couldn't write bots.json.");
     expect(fullDisk.cause).toMatchObject({ code: "ENOSPC" });
   });
 });

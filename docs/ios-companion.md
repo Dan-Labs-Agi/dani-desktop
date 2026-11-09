@@ -8,14 +8,14 @@ a Dani Desktop account of its own.
 
 ## Use My Cloud on your phone
 
-With MausBot Cloud, pair the phone with your Cloud instead of your computer, and
+With DaniBot Cloud, pair the phone with your Cloud instead of your computer, and
 it keeps working while the computer is off.
 
 1. In the desktop app, open the menu under your name and choose **Get the
    phone app**: the App Store for iPhone, or the APK for Android. Scan its code
    with the phone's camera.
 2. In the same menu, choose **Connect your phone · to your Cloud (always on)**.
-   (**Settings → MausBot Cloud → Use My Cloud on your phone** does the same.) The
+   (**Settings → DaniBot Cloud → Use My Cloud on your phone** does the same.) The
    app opens your Cloud in its window, at the Cloud's phone pairing.
 3. Choose **Create pairing code** and scan the QR code with the phone app.
 
@@ -265,7 +265,7 @@ HTTPS route; the iPhone always uses the same QR trust flow.
 
 This is Password AutoFill, not a password-vault integration. A native
 `SecureField` marked as a password lets the user explicitly choose Apple
-Passwords or any enabled third-party AutoFill provider. OpenMausMobile does
+Passwords or any enabled third-party AutoFill provider. DaniMobile does
 not enumerate a vault, receive a provider token, or save the entered value in
 its own Keychain.
 
@@ -285,7 +285,7 @@ Each submission uses RFC 9180 base-mode HPKE with P-256/HKDF-SHA256/AES-GCM-256
 and authenticates this exact newline-separated context:
 
 ```text
-openmausbot-phone-credential-v1
+danibot-phone-credential-v1
 <key id>
 <authenticated companion device id>
 <bot id>

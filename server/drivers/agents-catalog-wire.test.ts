@@ -58,7 +58,7 @@ function profiles(): Record<string, Profile> {
     env: { ...all.default!.env, OMB_ROOM_TURN: "1", OMB_OWN_THREAD_CREATION: "1", OMB_EXTERNAL_RUNTIME: "1", OMB_ACTIVE_WAITS: "0" },
   };
   // The person's Dani holds a Chief's powers and adds its notification pair; MAUSBOT_ADDS bounds what that costs.
-  for (const name of ["default", "skills+shared+voice"]) all[`${name}+mausbot`] = { env: { ...all[name]!.env, OMB_MAUSBOT: "1" } };
+  for (const name of ["default", "skills+shared+voice"]) all[`${name}+danibot`] = { env: { ...all[name]!.env, OMB_MAUSBOT: "1" } };
   // A chat that can never pick its computer: its Works on is Off, or it works on its team's computer. A room is one too.
   all["default+no-computer-pick"] = { env: { ...all.default!.env, OMB_COMPUTER_SELECTION: "0" } };
   for (const name of ["default", "non-chief"]) all[`${name}+room`] = { env: { ...all[name]!.env, OMB_COMPUTER_SELECTION: "0", OMB_ROOM: "1" } };
@@ -100,8 +100,8 @@ const BUDGET_BASELINE: Record<string, number> = {
   "skills+shared+voice+cloud-home": 63096,
   "skills+shared+voice+non-chief+cloud-home": 53961,
   "default+legacy-switches": 56910,
-  "default+mausbot": 57561,
-  "skills+shared+voice+mausbot": 63392,
+  "default+danibot": 57561,
+  "skills+shared+voice+danibot": 63392,
   "skills+shared+voice+escalations": 63571,
   "skills+shared+voice+escalations+x": 67410,
   "skills+shared+voice+escalations+x+team": 68042,
@@ -114,7 +114,7 @@ const RPC_PREFIX = '{"jsonrpc":"2.0","id":1,"result":';
 
 /** One tools/list `result` from a fresh proxy, sliced out of the raw stdout line, never re-serialized. */
 async function toolsListWire(entry: string, env: Record<string, string>): Promise<string> {
-  // A developer shell or an OpenMausBot turn can carry OMB_* switches; the profile must be the only source.
+  // A developer shell or an DaniBot turn can carry OMB_* switches; the profile must be the only source.
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("OMB_")));
   const child = spawn(process.execPath, [entry], {
     env: { ...inherited, OMB_HARNESS_URL: "http://127.0.0.1:9", OMB_BOT_ID: "bot-golden", OMB_THREAD_ID: "thread-golden", OMB_COMMS_TOKEN: "unused", OMB_TURN_DEPTH: "0", ...env },
@@ -414,8 +414,8 @@ describe("agents proxy tools/list wire size", () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  it.each(Object.keys(PROFILES).filter((name) => name.endsWith("+mausbot")))("%s adds at most 2% to the same Chief's list", (name) => {
-    const without = name.slice(0, -"+mausbot".length);
+  it.each(Object.keys(PROFILES).filter((name) => name.endsWith("+danibot")))("%s adds at most 2% to the same Chief's list", (name) => {
+    const without = name.slice(0, -"+danibot".length);
     const tools = toolsOf(wires[name]!).map((tool) => tool.name);
     expect(tools.slice(-MAUSBOT_TOOLS.length)).toEqual(MAUSBOT_TOOLS);
     expect(tools.slice(0, -MAUSBOT_TOOLS.length)).toEqual(toolsOf(wires[without]!).map((tool) => tool.name));

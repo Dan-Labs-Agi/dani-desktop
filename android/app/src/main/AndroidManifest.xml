@@ -121,7 +121,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="pair"
-                    android:scheme="openmausbot" />
+                    android:scheme="danibot" />
             </intent-filter>
         </activity>
         <!--

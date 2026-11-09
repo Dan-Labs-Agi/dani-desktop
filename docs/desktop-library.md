@@ -93,14 +93,14 @@ Electron main → runtime, over the private utility-process port (never HTTP,
 never a remote server):
 
 ```jsonc
-{ "type": "openmausbot:managed-library", "requestId": "…",
+{ "type": "danibot:managed-library", "requestId": "…",
   "library": { "adminOrigin": "https://admin.example.com", "organizationId": "…", "organizationName": "Beta Clinic",
                "digest": "<sha256 of catalog.json>", "catalog": { /* the parsed catalog */ } } }
 // or "library": null: hide the shelf, change nothing else
 ```
 
 The runtime swaps its in-memory catalog and answers at once, before any
-install work, with `{ "type": "openmausbot:managed-desktop-result", "requestId", "ok": true }`
+install work, with `{ "type": "danibot:managed-desktop-result", "requestId", "ok": true }`
 (the relay gives up after 15 s). It reads release files from `blobs/` itself
 and checks their SHA-256 on every read.
 
@@ -108,7 +108,7 @@ Runtime → Electron main, unsolicited, after it processed a relayed catalog and
 after any change to what it added:
 
 ```jsonc
-{ "type": "openmausbot:managed-library-state", "digest": "<the relayed digest>",
+{ "type": "danibot:managed-library-state", "digest": "<the relayed digest>",
   "packages": [{ "packageId": "…", "release": "1.3.0", "sha256": "…", "state": "installed" }] }
 ```
 
@@ -137,7 +137,7 @@ Main waits 5 s after a snapshot arrives and sends only the newest one.
 | Dani Desktop with it | no library request, no shelf; file import and export work | the shelf |
 | No organization account | as before | — |
 
-This channel and the runtime's handler for `openmausbot:managed-library`
+This channel and the runtime's handler for `danibot:managed-library`
 (`server/org-library.ts`) ship in the same release. A runtime without that
 handler never acknowledges, so main would relay again on every sync and wait
 out the 15 s timeout each time.

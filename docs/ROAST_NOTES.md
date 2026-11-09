@@ -16,13 +16,13 @@ This is genuinely impressive for ~51 commits by essentially one person: a workin
 
 ## 2. The rebrand is half-done: this was "Maus Bot"
 
-The app is called "Dani Bot" but the bones say **OpenMaus Bot**:
+The app is called "Dani Bot" but the bones say **Dani Bot**:
 
-- `electron-builder.yml:1`: `appId: com.openmausbot.app` (productName is Dani Bot — the bundle ID still belongs to the old name).
+- `electron-builder.yml:1`: `appId: com.danibot.app` (productName is Dani Bot — the bundle ID still belongs to the old name).
 - `src/components/Avatar.tsx:2-5,81-83`: the avatar component and its public types are still literally named `MausAvatar`; comment says "in the app's historical MausAvatar API."
-- `server/index.ts` still serves `/.well-known/openmausbot/environment` alongside the new one.
-- `openmausbot` string survives in: localStorage keys (`ComputerPanel.tsx:983`, `src/lib/sidebar-preferences.ts`), drag MIME types (`Sidebar.tsx:1263,1530`), notification tags (`src/lib/notify.ts:29`), event names (`src/lib/transcription-status.ts`), placeholder URLs (`https://openmausbot.invalid` in `AttachmentPreview.tsx:148`, `ChatMarkdown.tsx:235`), and the voice storage key (`src/lib/local-voice.ts:11`).
-- `server/browser-connection.ts:199` migrates directories `[\"OpenMausBot\", \"openmausbot\", \"Dani Bot\", \"DaniBot\"]` — the fossil record of renames, in order.
+- `server/index.ts` still serves `/.well-known/danibot/environment` alongside the new one.
+- `danibot` string survives in: localStorage keys (`ComputerPanel.tsx:983`, `src/lib/sidebar-preferences.ts`), drag MIME types (`Sidebar.tsx:1263,1530`), notification tags (`src/lib/notify.ts:29`), event names (`src/lib/transcription-status.ts`), placeholder URLs (`https://danibot.invalid` in `AttachmentPreview.tsx:148`, `ChatMarkdown.tsx:235`), and the voice storage key (`src/lib/local-voice.ts:11`).
+- `server/browser-connection.ts:199` migrates directories `[\"DaniBot\", \"danibot\", \"Dani Bot\", \"DaniBot\"]` — the fossil record of renames, in order.
 - NOTICE says "relicensed from MIT to Apache-2.0 with the consent of all contributors." 51 commits, ~1 human (Somdipto Nandy / Sodan / Dan Labs aliases). CONTRIBUTING.md claims "community PRs have already shipped in this repo" — the merge PRs (#4–#7) are all from the author's own branches. There is no community yet; the docs describe one.
 
 ## 3. "Local-first" — with an email gate, PostHog, and a Cloudflare control plane
@@ -95,7 +95,7 @@ The packaged Electron app does this right:
 - "500+ apps through Composio" — that's Composio's catalog, not Dani's; the integration is real (`server/composio.ts` 51KB, `cloudflare/composio-broker`).
 - "Installers are published only after a version-tag build produces and verifies the complete macOS, Windows, and Linux set" — aspirational release gating for a 0.1.x.
 - Crypto disclaimer at the top of README ("Dani Bot has no token") — tells you someone already tried to scam with the name. Not a code issue, but it tells you about the project's threat model: it's popular enough to be impersonated, small enough that the defense is a README banner.
-- `desktopName: com.openmausbot.app.desktop` in package.json vs `appId: com.openmausbot.app` in electron-builder.yml — even the *packaging identifiers* disagree with each other, let alone the brand.
+- `desktopName: com.danibot.app.desktop` in package.json vs `appId: com.danibot.app` in electron-builder.yml — even the *packaging identifiers* disagree with each other, let alone the brand.
 
 ## 11. Small things that would get flagged in review
 

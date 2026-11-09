@@ -93,7 +93,7 @@ export function createUpdateChecker(options: {
     inflight ??= (async () => {
       try {
         const response = await fetchRelease(LATEST_RELEASE_URL, {
-          headers: { accept: "application/vnd.github+json", "user-agent": "openmausbot-update-check" },
+          headers: { accept: "application/vnd.github+json", "user-agent": "danibot-update-check" },
           signal: AbortSignal.timeout(8_000),
         });
         if (!response.ok) throw new Error(`GitHub answered ${response.status}`);

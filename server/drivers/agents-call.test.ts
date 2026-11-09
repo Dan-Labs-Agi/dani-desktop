@@ -254,7 +254,7 @@ describe("memory_update", () => {
     const ctx = context({ botId: bot, client: harness(bot) });
     expect((await callTool("memory_update", { action: "append", text: "The person prefers short answers" }, ctx)).isError).toBeFalsy();
     await callTool("memory_update", { action: "append", text: "The person is in India (IST)" }, ctx);
-    writeMemoryTopic(bot, "work.md", "---\ntitle: work\naliases: [job, short answers]\n---\n- 2026-10-27 · from chat \"Remember: short answers\" (noticed) · The person wants short answers at work\n- 2026-10-27 · The person works on OpenMausBot\n");
+    writeMemoryTopic(bot, "work.md", "---\ntitle: work\naliases: [job, short answers]\n---\n- 2026-10-27 · from chat \"Remember: short answers\" (noticed) · The person wants short answers at work\n- 2026-10-27 · The person works on DaniBot\n");
     profile.aboutMe = "I live in Pune.\n- 2026-10-27 · learned by Scout · The person prefers short answers";
 
     const forgot = await callTool("memory_update", { action: "forget", old_text: "short answers" }, ctx);
@@ -266,7 +266,7 @@ describe("memory_update", () => {
     const work = readMemoryTopic(bot, "work.md")!;
     expect(work).toContain("aliases: [job, short answers]");
     expect(work).not.toContain("wants short answers");
-    expect(work).toContain("The person works on OpenMausBot");
+    expect(work).toContain("The person works on DaniBot");
     expect(profile.aboutMe).toBe("I live in Pune.");
     expect(isForgotten("The person likes short answers")).toBe(true);
 
@@ -325,7 +325,7 @@ describe("X research tools", () => {
   it("sends each tool's arguments to its route and returns the JSON the route gave", async () => {
     for (const [tool, route] of Object.entries(ROUTES)) {
       const calls: Array<{ path: string; body: unknown }> = [];
-      const result = await callTool(tool, { query: "maus", handle: "@maus", post: "42" }, context({
+      const result = await callTool(tool, { query: "dani", handle: "@dani", post: "42" }, context({
         client: {
           api: async () => ({}),
           apiResponse: async (path, init) => {
@@ -334,14 +334,14 @@ describe("X research tools", () => {
           },
         },
       }));
-      expect(calls).toEqual([{ path: `/api/internal/x/${route}`, body: { query: "maus", handle: "@maus", post: "42" } }]);
+      expect(calls).toEqual([{ path: `/api/internal/x/${route}`, body: { query: "dani", handle: "@dani", post: "42" } }]);
       expect(result.isError).toBeUndefined();
       expect(JSON.parse(result.text)).toEqual({ posts: [{ id: "1" }], more: false });
     }
   });
 
   it("hands the bot the route's own sentence when it refuses", async () => {
-    const result = await callTool("x_search", { query: "maus" }, context({
+    const result = await callTool("x_search", { query: "dani" }, context({
       client: {
         api: async () => ({}),
         apiResponse: async () => ({ ok: false, status: 403, body: { error: "X research is off for this bot. Turn it on in this bot's settings under Access." } }),
@@ -354,10 +354,10 @@ describe("X research tools", () => {
 describe("page tools", () => {
   it("send the tool's arguments to their internal routes and hand back the sentence, or the refusal as an error", async () => {
     const calls: Array<{ path: string; body: unknown }> = [];
-    const answers = [{ ok: true, status: 200, body: { ok: true, text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.mausbot.page/" } },
+    const answers = [{ ok: true, status: 200, body: { ok: true, text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.danibot.page/" } },
       { ok: false, status: 402, body: { error: "You’ve used your 5 free pages. Cloud gives you more, and pages without the badge." } }];
     const client = { api: async () => ({}), apiResponse: async (path: string, init?: RequestInit) => { calls.push({ path, body: JSON.parse(String(init?.body)) }); return answers.shift()!; } };
-    expect(await callTool("publish_page", { path: "site", title: "Bake sale" }, context({ client }))).toEqual({ text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.mausbot.page/" });
+    expect(await callTool("publish_page", { path: "site", title: "Bake sale" }, context({ client }))).toEqual({ text: "Published “Bake sale” at https://abcdefghijklmnopqrstuvwxyz.danibot.page/" });
     expect(await callTool("unpublish_page", { page_id: "abcdefghijklmnopqrstuvwxyz" }, context({ client })))
       .toEqual({ text: "You’ve used your 5 free pages. Cloud gives you more, and pages without the badge.", isError: true });
     expect(calls).toEqual([{ path: "/api/internal/pages/publish", body: { path: "site", title: "Bake sale" } },

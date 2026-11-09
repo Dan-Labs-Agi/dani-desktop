@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import type { Home } from "../src/home.ts";
 import { jobRunner } from "../src/jobs.ts";
 import type { HostHealth, Job } from "../src/protocol.ts";
 
-const HOME = `ghcr.io/milind-soni/openmausbot-cloud-home@sha256:${"a".repeat(64)}`;
+const HOME = `ghcr.io/milind-soni/DaniBot-cloud-home@sha256:${"a".repeat(64)}`;
 
 function runner(overrides: Partial<Record<keyof Home, unknown>> = {}) {
   const calls: string[] = [];
@@ -50,3 +50,4 @@ describe("the jobs the connector runs", () => {
     expect((await Promise.all(waiting)).every((reply) => reply?.ok)).toBe(true);
   });
 });
+

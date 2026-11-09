@@ -114,7 +114,7 @@ final class PairingTests: XCTestCase {
             name: "Mac",
             host: "mac.tail1234.ts.net",
             port: 8810,
-            hosts: ["mac.tail1234.ts.net", "192.168.1.42", "openmausbot-aa.local"]
+            hosts: ["mac.tail1234.ts.net", "192.168.1.42", "danibot-aa.local"]
         )
 
         await XCTAssertThrowsErrorAsync(
@@ -403,7 +403,7 @@ final class PairingTests: XCTestCase {
             name: "Mac",
             host: "192.168.1.42",
             port: 8810,
-            hosts: ["openmausbot-aa.local"]
+            hosts: ["danibot-aa.local"]
         )
 
         do {

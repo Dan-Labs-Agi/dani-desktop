@@ -3,11 +3,11 @@
 import type { ServerResponse } from "node:http";
 
 import type { json as sendJson } from "../harness/http.ts";
-import { listUnread, markRead, type NotificationsHost } from "../mausbot-notifications.ts";
+import { listUnread, markRead, type NotificationsHost } from "../danibot-notifications.ts";
 import { markNotificationLogRead, recentNotificationLog } from "../message-db.ts";
 import { PASS } from "./table.ts";
 
-export interface MausBotNotificationsContext {
+export interface DaniBotNotificationsContext {
   method: string;
   path: string;
   res: ServerResponse;
@@ -22,7 +22,7 @@ export type LiveNotificationsDeps = Pick<NotificationsHost, "bot" | "team"> & { 
 const LIST = "/api/internal/notifications";
 const READ = "/api/internal/notifications/read";
 
-export function createMausBotNotificationRoutes(deps: LiveNotificationsDeps | NotificationsHost) {
+export function createDaniBotNotificationRoutes(deps: LiveNotificationsDeps | NotificationsHost) {
   const host: NotificationsHost = "recent" in deps ? deps : {
     bot: deps.bot,
     team: deps.team,
@@ -31,7 +31,7 @@ export function createMausBotNotificationRoutes(deps: LiveNotificationsDeps | No
     announceRead: (threadId, ids) => deps.broadcast({ kind: "notifications.read", threadId, ids }),
     now: Date.now,
   };
-  return async (ctx: MausBotNotificationsContext): Promise<typeof PASS | void> => {
+  return async (ctx: DaniBotNotificationsContext): Promise<typeof PASS | void> => {
     if (!((ctx.method === "GET" && ctx.path === LIST) || (ctx.method === "POST" && ctx.path === READ))) return PASS;
     let result;
     if (ctx.path === LIST) result = listUnread(host, ctx.botId);

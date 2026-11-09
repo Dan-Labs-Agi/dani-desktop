@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
 import type { WhatsNewAction, WhatsNewSlide, WhatsNewView } from "@/lib/whats-new";
 
-vi.mock("@/components/Avatar", () => ({ MausAvatar: ({ color }: { color: string }) => createElement("i", { "data-maus": color }) }));
+vi.mock("@/components/Avatar", () => ({ MausAvatar: ({ color }: { color: string }) => createElement("i", { "data-dani": color }) }));
 const { WhatsNewPopup } = await import("./WhatsNewPopup");
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -120,12 +120,12 @@ describe("the What's new popup", () => {
 
     vi.clearAllMocks(); await show();
     await click("See the new Cloud"); await flush();
-    expect(window.ogb!.openExternal).toHaveBeenCalledWith("https://cloud.openmausbot.com/cloud?src=app_whats_new_pro");
+    expect(window.ogb!.openExternal).toHaveBeenCalledWith("https://cloud.danibot.com/cloud?src=app_whats_new_pro");
     expect(props.onDone).toHaveBeenCalledOnce(); expect(steps.at(-1)).toEqual(["see_cloud", "pro"]);
 
     vi.clearAllMocks(); await show(); await click("Next");
     await click("Start a Team"); await flush();
-    expect(window.ogb!.openExternal).toHaveBeenCalledWith("https://cloud.openmausbot.com/pro/buy?plan=team&src=app_whats_new_team");
+    expect(window.ogb!.openExternal).toHaveBeenCalledWith("https://cloud.danibot.com/pro/buy?plan=team&src=app_whats_new_team");
     expect(props.onDone).toHaveBeenCalledOnce(); expect(steps.at(-1)).toEqual(["start_team", "team"]);
     expect(props.onBuy).not.toHaveBeenCalled();
   });

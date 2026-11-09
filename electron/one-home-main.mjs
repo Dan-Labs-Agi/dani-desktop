@@ -24,7 +24,7 @@ const KEEP_LABEL = "Bring this computer's bots home";
 /** This computer as the Admin knows it, the same across sign-outs and sign-ins: a hash of its own server's identity, so
  * the identity itself never leaves it. */
 export function installationOf(environmentId) {
-  return createHash("sha256").update(`openmausbot-installation:${environmentId}`).digest("base64url");
+  return createHash("sha256").update(`danibot-installation:${environmentId}`).digest("base64url");
 }
 
 /** One home's view of the person's Cloud, from the Admin's last verified word; null while nobody is signed in. An ended
@@ -177,7 +177,7 @@ export function installOneHome({ localRequest, account, journalFile, tempRoot, l
   /** This computer's installation (`installationOf`), once its server has said who it is; null until then. */
   const installation = async () => {
     if (known) return known;
-    const id = (await local.json("/.well-known/openmausbot/environment").catch(() => null))?.environmentId;
+    const id = (await local.json("/.well-known/danibot/environment").catch(() => null))?.environmentId;
     if (typeof id === "string" && id) known = installationOf(id);
     return known;
   };

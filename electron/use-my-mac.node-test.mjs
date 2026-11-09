@@ -31,7 +31,7 @@ function cloudHome({ link = true, chrome = false } = {}) {
     const route = new URL(url).pathname;
     state.calls.push(route);
     if (route === "/api/auth/session") return json({ kind: "session", id: state.sessionId, scopes: ["admin", "client"], cloudHome: true });
-    if (route === "/.well-known/openmausbot/environment") return json({ environmentId: state.environmentId, capabilities: { sharedComputers: true, lendingDetails: true, ...(link ? { deviceLink: true } : {}), ...(chrome ? { myChromeLink: true } : {}) } });
+    if (route === "/.well-known/danibot/environment") return json({ environmentId: state.environmentId, capabilities: { sharedComputers: true, lendingDetails: true, ...(link ? { deviceLink: true } : {}), ...(chrome ? { myChromeLink: true } : {}) } });
     const body = init?.body ? JSON.parse(init.body) : {};
     if (route === "/api/shared-computers/connect") { state.connects.push(body); state.registered.add(body.id); return json({ ok: true }); }
     if (route.endsWith("/poll")) {
@@ -253,16 +253,16 @@ test("lending on opens the app at login, out of sight; off removes only the logi
   const config = path.join(dir, "config");
   const linux = createOpenAtLogin({ app: fakeApp(), file: path.join(dir, "linux.json"), platform: "linux", home: dir, env: { XDG_CONFIG_HOME: config, APPIMAGE: "/home/me/Apps/Open Maus$Bot.AppImage" } });
   linux.follow(true);
-  const entry = path.join(config, "autostart", "openmausbot.desktop");
+  const entry = path.join(config, "autostart", "danibot.desktop");
   assert.equal(await readFile(entry, "utf8"), autostartEntry("/home/me/Apps/Open Maus$Bot.AppImage"));
   assert.match(await readFile(entry, "utf8"), /^Exec="\/home\/me\/Apps\/Open Maus\\\$Bot\.AppImage" --omb-hidden$/m);
   linux.follow(false);
   await assert.rejects(readFile(entry, "utf8"), { code: "ENOENT" });
   await mkdir(path.dirname(entry), { recursive: true });
-  await writeFile(entry, "[Desktop Entry]\nExec=openmausbot\n");
+  await writeFile(entry, "[Desktop Entry]\nExec=danibot\n");
   linux.follow(true);
   linux.follow(false);
-  assert.equal(await readFile(entry, "utf8"), "[Desktop Entry]\nExec=openmausbot\n", "an autostart entry the person wrote is never replaced or removed");
+  assert.equal(await readFile(entry, "utf8"), "[Desktop Entry]\nExec=danibot\n", "an autostart entry the person wrote is never replaced or removed");
   const unpackaged = { ...fakeApp(), isPackaged: false };
   createOpenAtLogin({ app: unpackaged, file: path.join(dir, "dev.json"), platform: "darwin", home: dir }).follow(true);
   assert.equal(unpackaged.settings.openAtLogin, false, "a development build never registers itself");

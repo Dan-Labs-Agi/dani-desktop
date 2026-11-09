@@ -1,4 +1,4 @@
-// ~/.openmausbot/config.json, with env vars overriding its credentials.
+// ~/.danibot/config.json, with env vars overriding its credentials.
 import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -735,7 +735,7 @@ export function changedInstanceIds(before: Record<string, unknown>, after: Recor
 
 // DANI_DATA_DIR (legacy OMB_DATA_DIR) isolates test/soak rigs from the user's real fleet.
 export const DATA_DIR = process.env.DANI_DATA_DIR ?? process.env.OMB_DATA_DIR ?? join(homedir(), ".danibot");
-const LEGACY_DATA_DIRS = [join(homedir(), ".openmausbot"), join(homedir(), ".opengrokbot")];
+const LEGACY_DATA_DIRS = [join(homedir(), ".danibot"), join(homedir(), ".opengrokbot")];
 export const EVENTS_DIR = join(DATA_DIR, "events");
 export const NATIVE_DIR = join(DATA_DIR, "native");
 
@@ -894,7 +894,7 @@ function openCodeProviderKeyNameRefusal(name: string): string | undefined {
   const reserved = name.startsWith("OPENCODE_") || name.startsWith("OMB_")
     || (WORKSPACE_CREDENTIAL_ENV as readonly string[]).includes(name)
     || ((PROVIDER_CREDENTIAL_ENV as readonly string[]).includes(name) && !(OPENCODE_PROVIDER_ENV as readonly string[]).includes(name));
-  return reserved ? `OpenMaus keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
+  return reserved ? `Dani keeps ${name} for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.` : undefined;
 }
 
 export function openCodeProviderKeys(cfg: Pick<AppConfig, "opencodeGo">): Record<string, string> {

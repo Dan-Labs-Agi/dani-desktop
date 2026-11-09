@@ -165,7 +165,7 @@ export function BotProfileAvatarCard({
             </div>
 
             <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-              {t("mausbotWelcome.look")}
+              {t("danibotWelcome.look")}
             </div>
             <div className="grid grid-cols-7 gap-1.5">
               {DANI_VARIANT_PICKS.map(({ variant, color, label }) => (

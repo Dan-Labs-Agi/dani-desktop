@@ -75,7 +75,7 @@ export function forgetDefaultBot(dataDir: string, person: string): void {
 
 /** A new install's own Dani from before it was marked: the place's oldest bot, still live, outside any department,
  * not installed from a package, and still named Dani or still in the colour a new install gave it. */
-export function seededMausBot(bots: readonly BotRecord[]): BotRecord | undefined {
+export function seededDaniBot(bots: readonly BotRecord[]): BotRecord | undefined {
   const oldest = bots.reduce<BotRecord | undefined>((first, bot) => !first || bot.createdAt < first.createdAt ? bot : first, undefined);
   if (!oldest || oldest.hidden || oldest.movedTo || oldest.section?.trim() || oldest.installedPackage) return undefined;
   return oldest.name === DEFAULT_BOT_NAME || oldest.color === STARTER_COLOR ? oldest : undefined;
@@ -121,7 +121,7 @@ export function ensureDefaultBot(store: DefaultBotStore, options: { dataDir: str
     return marked[0];
   }
   if (Object.hasOwn(ledger(options.dataDir), person)) return null;
-  const adoptable = person ? undefined : seededMausBot(store.bots);
+  const adoptable = person ? undefined : seededDaniBot(store.bots);
   const chief = !person && !store.bots.some((bot) => bot.chiefOfStaff && !bot.hidden) ? (id: string) => store.setChiefOfStaff(id) : undefined;
   let bot: BotRecord;
   if (adoptable) {

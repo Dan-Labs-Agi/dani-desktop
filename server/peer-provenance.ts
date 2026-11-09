@@ -104,7 +104,7 @@ export function reportNote(rawName: string): string {
 const DELIVERED_NOTES = ["message from", "delegated by", "thread opened by", "retry requested by", "aside from"];
 const NOTE_OPENINGS = [...DELIVERED_NOTES, "messages this conversation", "delivered earlier by", "posted by", "assigned by",
   "report from", "teammate report", "teammate result", "thread you opened", "incident report", "escalation notice"].map(opening => opening.split(" "));
-const HEADER_WORDS = new Set(["openmausbot", "omb", "dani", "danibot"]);
+const HEADER_WORDS = new Set(["danibot", "omb", "dani", "danibot"]);
 const FIRST_WORDS = new Set([...NOTE_OPENINGS.map(words => words[0]!), ...HEADER_WORDS]);
 const LEADING_NOTE = new RegExp(`^\\[(?:${DELIVERED_NOTES.map(opening => opening.replace(/ /g, "\\s+")).join("|")})\\b[^\\]\\n]*\\]`, "iu");
 const OPENER = /[[［【〔〖〘〚⟦⁅⦋]/gu;
@@ -167,6 +167,6 @@ export function peerLineText(rawName: string, text: string, kind: "report" | "de
 }
 
 export function peerProvenanceAuthor(text: string): string | null {
-  const opening = /^\[Message from @(.+?), another bot in this (?:OpenMausBot|Dani Bot) workspace/.exec(text);
+  const opening = /^\[Message from @(.+?), another bot in this (?:DaniBot|Dani Bot) workspace/.exec(text);
   return opening?.[1] ?? null;
 }

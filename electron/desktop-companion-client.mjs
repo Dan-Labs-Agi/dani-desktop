@@ -17,7 +17,7 @@ const MAX_ERROR_BYTES = 64 * 1024;
 export function desktopCompanionRendererArguments(localOrigin, remoteAccess) {
   return [
     `--omb-local-origin=${localOrigin}`,
-    ...(remoteAccess ? ["--openmausbot-remote-client"] : []),
+    ...(remoteAccess ? ["--danibot-remote-client"] : []),
   ];
 }
 
@@ -42,7 +42,7 @@ const cleanLabel = (value, fallback) => {
 };
 
 /** Only the control plane's `c-<32 hex>` names: any other name in those zones never receives a pairing code. Ship a new domain here first. */
-const MANAGED_COMPANION_HOSTNAME = /^c-[0-9a-f]{32}\.(?:openmausbot\.com|mausbot\.si)$/;
+const MANAGED_COMPANION_HOSTNAME = /^c-[0-9a-f]{32}\.(?:danibot\.com|danibot\.si)$/;
 
 /** HTTPS, or a Tailscale MagicDNS name (WireGuard protects its HTTP); a LAN IP would put the long-lived bearer on Wi-Fi in plaintext. */
 export function normalizeDesktopCompanionEndpoint(value) {

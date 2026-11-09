@@ -64,7 +64,7 @@ function profiles(): Record<string, Record<string, string>> {
   all["skills+shared+voice+escalations+x"] = { ...all["skills+shared+voice+escalations"]!, OMB_X_RESEARCH: "1", OMB_RESEARCH: "1" };
   all["skills+shared+voice+escalations+x+team"] = { ...all["skills+shared+voice+escalations+x"]!, OMB_TEAM_PEOPLE: "1" };
   all["default+legacy-switches"] = { ...all.default!, OMB_ROOM_TURN: "1", OMB_OWN_THREAD_CREATION: "1", OMB_EXTERNAL_RUNTIME: "1", OMB_ACTIVE_WAITS: "0" };
-  for (const name of ["default", "skills+shared+voice"]) all[`${name}+mausbot`] = { ...all[name]!, OMB_MAUSBOT: "1" };
+  for (const name of ["default", "skills+shared+voice"]) all[`${name}+danibot`] = { ...all[name]!, OMB_MAUSBOT: "1" };
   all["default+no-computer-pick"] = { ...all.default!, OMB_COMPUTER_SELECTION: "0" };
   for (const name of ["default", "non-chief"]) all[`${name}+room`] = { ...all[name]!, OMB_COMPUTER_SELECTION: "0", OMB_ROOM: "1" };
   return all;
@@ -103,8 +103,8 @@ const BUDGET_BASELINE: Record<string, number> = {
   "skills+shared+voice+escalations+x": 17629,
   "skills+shared+voice+escalations+x+team": 17645,
   "default+legacy-switches": 16688,
-  "default+mausbot": 16740,
-  "skills+shared+voice+mausbot": 17602,
+  "default+danibot": 16740,
+  "skills+shared+voice+danibot": 17602,
   "default+no-computer-pick": 15455,
   "default+room": 15415,
   "non-chief+room": 15298,
@@ -115,7 +115,7 @@ type RpcAnswer = { id: number; result?: { tools?: unknown[]; content?: Array<{ t
 /** One freshly spawned proxy's raw answer lines to `requests`, in the order
  * asked, read off its stdout as they arrive. */
 async function proxyLines(entry: string, env: Record<string, string>, requests: Array<{ method: string; params?: unknown }>): Promise<string[]> {
-  // A developer shell (or an OpenMausBot turn running this suite) can carry
+  // A developer shell (or an DaniBot turn running this suite) can carry
   // OMB_* switches of its own; the profile must be the only source.
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("OMB_")));
   const child = spawn(process.execPath, [entry], {

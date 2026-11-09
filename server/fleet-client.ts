@@ -8,7 +8,7 @@ export interface FleetReply {
 }
 
 export function fleetSocketPath(env: NodeJS.ProcessEnv = process.env): string {
-  return env.OMB_FLEET_SOCKET?.trim() || "/run/openmausbot/fleet.sock";
+  return env.OMB_FLEET_SOCKET?.trim() || "/run/danibot/fleet.sock";
 }
 
 export function fleetAvailable(socketPath = fleetSocketPath()): boolean {

@@ -1,4 +1,4 @@
-// mausbot-connector: `run` (the service), `enroll` (the code on stdin), `status`, `probe`, `version`.
+﻿// Danibot-connector: `run` (the service), `enroll` (the code on stdin), `status`, `probe`, `version`.
 import { readFileSync, statfsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -34,7 +34,7 @@ const reader: HostReader = {
   },
 };
 
-const identity = (): ConnectorIdentity => ({ version: CONNECTOR_VERSION, protocol: PROTOCOL_VERSION, image: process.env.MAUSBOT_CONNECTOR_IMAGE || null });
+const identity = (): ConnectorIdentity => ({ version: CONNECTOR_VERSION, protocol: PROTOCOL_VERSION, image: process.env.DaniBOT_CONNECTOR_IMAGE || null });
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function seccomp(): string {
@@ -53,7 +53,7 @@ function hostReporter(docker: SocketDocker, admin: () => string | null) {
     return info.value;
   };
   const probe = async (fresh: boolean) => {
-    const image = process.env.MAUSBOT_CONNECTOR_IMAGE;
+    const image = process.env.DaniBOT_CONNECTOR_IMAGE;
     if (!image) return null;
     if (fresh || !box || Date.now() - box.at > 6 * 60 * 60_000) {
       let value: BoxProbeResult | null;
@@ -91,12 +91,12 @@ function hostReporter(docker: SocketDocker, admin: () => string | null) {
 async function run(): Promise<void> {
   const state = new StateStore(PATHS.state);
   const docker = new SocketDocker(PATHS.docker);
-  const instance = process.env.MAUSBOT_INSTANCE || "unknown";
-  log(`MausBot connector ${CONNECTOR_VERSION} starting`);
+  const instance = process.env.DaniBOT_INSTANCE || "unknown";
+  log(`DaniBot connector ${CONNECTOR_VERSION} starting`);
   // A connector removed with SIGKILL never said it went offline.
   state.saveStatus({ connected: false });
   let record: AgentRecord | null = state.agent();
-  if (!record) log("waiting for this server to be connected: run the install command with the code MausBot shows");
+  if (!record) log("waiting for this server to be connected: run the install command with the code DaniBot shows");
   while (!record) {
     await sleep(2_000);
     record = state.agent();
@@ -107,7 +107,7 @@ async function run(): Promise<void> {
   const home = new Home({
     docker, state, log, readHealth, seccomp, transfer: httpTransfer,
     diskFree: () => reader.disk().free,
-    updateWindowMs: envSeconds("MAUSBOT_UPDATE_WAIT_S", 600, 60, 3600) * 1000,
+    updateWindowMs: envSeconds("DaniBOT_UPDATE_WAIT_S", 600, 60, 3600) * 1000,
   });
   const updater = new SelfUpdater({ docker, state, log, instance, identity });
   const heartbeat = async (): Promise<Heartbeat> => {
@@ -176,7 +176,7 @@ async function readStdin(): Promise<string> {
 }
 
 async function enrollCommand(): Promise<void> {
-  const admin = adminOrigin(process.env.MAUSBOT_ADMIN_URL);
+  const admin = adminOrigin(process.env.DaniBOT_ADMIN_URL);
   const code = (await readStdin()).trim();
   const state = new StateStore(PATHS.state);
   const docker = new SocketDocker(PATHS.docker);
@@ -184,7 +184,7 @@ async function enrollCommand(): Promise<void> {
   state.saveAgent(record);
   // Connected again only once the service has connected with this token.
   state.saveStatus({ connected: false, unauthorized: false, lastError: null });
-  console.log(`This server is connected to MausBot (server ${record.serverId}).`);
+  console.log(`This server is connected to DaniBot (server ${record.serverId}).`);
 }
 
 function statusCommand(): void {
@@ -202,7 +202,7 @@ function statusCommand(): void {
 /** One line per check for install.sh: `ok <id>`, `warn <id> <fix>` or `fail <id> <fix>`; exits 1 when any fails. */
 async function probeCommand(): Promise<void> {
   const docker = new SocketDocker(PATHS.docker);
-  const image = process.env.MAUSBOT_CONNECTOR_IMAGE;
+  const image = process.env.DaniBOT_CONNECTOR_IMAGE;
   let box: BoxProbeResult | null = null;
   try { box = image ? await probeBox(docker, image, seccomp()) : null; } catch (error) { box = { ok: false, fix: errorText(error) }; }
   const checks = hostChecks(await docker.info(), reader, { clockSkewS: null, box });
@@ -220,7 +220,7 @@ const commands: Record<string, () => Promise<void> | void> = {
 
 const command = commands[process.argv[2] ?? "run"];
 if (!command) {
-  console.error("usage: mausbot-connector run | enroll | status | probe | version");
+  console.error("usage: Danibot-connector run | enroll | status | probe | version");
   process.exitCode = 2;
 } else {
   Promise.resolve().then(command).catch((error) => {
@@ -228,3 +228,4 @@ if (!command) {
     process.exitCode = 1;
   });
 }
+

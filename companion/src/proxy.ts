@@ -1,4 +1,4 @@
-// The forwarding half of the sidecar. The harness serves only a loopback Host
+﻿// The forwarding half of the sidecar. The harness serves only a loopback Host
 // (a DNS-rebinding defence), so a device's request is replayed to 127.0.0.1
 // as this process, never with the device's Host or Origin.
 import { request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
@@ -175,13 +175,13 @@ const endpointSnapshot = (options: ProxyOptions): CompanionEndpointSnapshot => {
 export function companionIdentityHeaders(authenticatedDeviceId?: string, mutationToken?: string): Record<string, string> {
   const out: Record<string, string> = {
     // Carries no authority; it only narrows behavior at the harness.
-    "x-openmausbot-companion": "1",
+    "x-DaniBot-companion": "1",
   };
   // Never a caller-supplied header: this id comes only from the registry entry
   // that authenticated the bearer.
   if (authenticatedDeviceId && /^[\w-]{1,128}$/.test(authenticatedDeviceId)) {
-    out["x-openmausbot-companion-device"] = authenticatedDeviceId;
-    if (mutationToken) out["x-openmausbot-companion-auth"] = mutationToken;
+    out["x-DaniBot-companion-device"] = authenticatedDeviceId;
+    if (mutationToken) out["x-DaniBot-companion-auth"] = mutationToken;
   }
   return out;
 }
@@ -227,10 +227,10 @@ function harnessControlCheck(options: ProxyOptions) {
       accept: "application/json",
       "content-type": "application/json",
       "content-length": String(Buffer.byteLength(body)),
-      "x-openmausbot-companion": "1",
-      "x-openmausbot-companion-device": deviceId,
+      "x-DaniBot-companion": "1",
+      "x-DaniBot-companion-device": deviceId,
     };
-    if (mutationToken) headers["x-openmausbot-companion-auth"] = mutationToken;
+    if (mutationToken) headers["x-DaniBot-companion-auth"] = mutationToken;
     const request = httpRequest({
       hostname: "127.0.0.1",
       port: options.harnessPort,
@@ -415,13 +415,13 @@ export function createProxyHandler(options: ProxyOptions) {
             if (
               (harness.statusCode ?? 500) < 200 ||
               (harness.statusCode ?? 500) >= 300 ||
-              (identity as { app?: unknown } | null)?.app !== "openmausbot"
+              (identity as { app?: unknown } | null)?.app !== "DaniBot"
             ) {
               fail();
               return;
             }
             finished = true;
-            sendJson(res, 200, { app: "openmausbot" });
+            sendJson(res, 200, { app: "DaniBot" });
           });
           return;
         }
@@ -654,3 +654,4 @@ export function createProxyHandler(options: ProxyOptions) {
   };
   return handle;
 }
+

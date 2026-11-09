@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createReplyTracker, createTalkServer, findMausBot, readFrames } from "./talk-server.mjs";
+import { createReplyTracker, createTalkServer, findDaniBot, readFrames } from "./talk-server.mjs";
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const turn = turnId => (turnId ? { turnId } : {});
@@ -43,11 +43,11 @@ function fakeServer({ bots, saved = null, sendStatus = 202, sendBody = { ok: tru
 const asking = (server, { signal = new AbortController().signal, onUpdate = () => {} } = {}) =>
   server.talk.ask({ chat: CHAT, text: "hi", sendId: "s1", signal, onUpdate });
 
-test("findMausBot picks this computer's Dani, else the Chief of Staff", () => {
+test("findDaniBot picks this computer's Dani, else the Chief of Staff", () => {
   const mine = { id: "m", defaultBot: {} }, member = { id: "p", defaultBot: { person: "a@b.test" } }, chief = { id: "c", chiefOfStaff: true };
-  assert.equal(findMausBot([member, chief, mine]).id, "m");
-  assert.equal(findMausBot([member, chief]).id, "c");
-  assert.equal(findMausBot([{ id: "x" }, { ...chief, hidden: true }]), null);
+  assert.equal(findDaniBot([member, chief, mine]).id, "m");
+  assert.equal(findDaniBot([member, chief]).id, "c");
+  assert.equal(findDaniBot([{ id: "x" }, { ...chief, hidden: true }]), null);
 });
 
 test("prepare reuses the saved Quick asks chat while Dani still has it", async () => {
@@ -85,7 +85,7 @@ test("prepare says why it cannot ask", async () => {
   await assert.rejects(server.talk.prepare(), { code: "server-down" });
   server.listing.status = 200;
   assert.deepEqual(await server.talk.prepare(), { botId: "m", threadId: "t-new" });
-  await assert.rejects(fakeServer({ bots: [] }).talk.prepare(), { code: "no-mausbot" });
+  await assert.rejects(fakeServer({ bots: [] }).talk.prepare(), { code: "no-danibot" });
   await assert.rejects(fakeServer({ bots: [{ id: "m", defaultBot: {}, tasks: [] }], made: { status: 500, body: {} } }).talk.prepare(), { code: "refused" });
 });
 

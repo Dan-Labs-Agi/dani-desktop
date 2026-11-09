@@ -1,6 +1,6 @@
 # Files: lent folders on My Cloud, get your bots' work
 
-Files is a top-level page in the desktop app, for people with a MausBot Cloud ("My Cloud"). It does two jobs:
+Files is a top-level page in the desktop app, for people with a DaniBot Cloud ("My Cloud"). It does two jobs:
 
 - **Lent folders, even while this computer sleeps.** Every folder lent to My Cloud (each moved bot's project folder, a folder added here) also gets a copy on My Cloud, kept up to date while this computer is on. The home folder, which this computer lends My Cloud by itself (`docs/cloud-pro.md`, "This computer works for your Clouds"), is too broad for a copy and stays live only. While it is away, bots read that copy, and a change to a folder lent with editing waits on My Cloud and lands here when the computer is back. Nobody chooses anything: what fits is copied, the rest stays live only.
 - **Your bots' work.** What Cloud bots make comes down to `Documents/Dani Bot/<bot>/<conversation>` on this computer.
@@ -88,7 +88,7 @@ Folders shared from the Files page before lent folders keep working. Once this c
 - **Access.** `/api/sync/*` answers only on a Cloud home, and only to the owner's admin session.
 - **Where things live:**
   - Shared copies are under `/data/Synced/<computer>/<folder>`, outside the data folder, so workspace backups and Move to Cloud don't carry them, and bots read them there.
-  - Copies of lent folders are under `/data/.openmausbot/sync/lent/<computer>/<folder>` (`lentRoot`): in the data folder, which no bot's box shows, so only `shared_computer`, with lending's own rules (the owner's own conversations and routines, never a webhook or a guest), reaches them, and the prompt never names them. A folder shared from the Files page before it was lent keeps its copy in `/data/Synced`, where it was.
+  - Copies of lent folders are under `/data/.danibot/sync/lent/<computer>/<folder>` (`lentRoot`): in the data folder, which no bot's box shows, so only `shared_computer`, with lending's own rules (the owner's own conversations and routines, never a webhook or a guest), reaches them, and the prompt never names them. A folder shared from the Files page before it was lent keeps its copy in `/data/Synced`, where it was.
   - Both are on My Cloud's disk, in its daily backups.
   - Sync's own records (`sync/`) are left out of backups: `sync/lent.json` (what each computer lends and how fresh each copy is) and `sync/staged/` (bots' changes waiting for their computer) included.
 - **Changes.** Nothing watches the disk. When a bot's turn ends, `index.ts` tells the sync service (`noteSyncBotTurn`), which wakes the desktop's long poll for that conversation's folder. The desktop also runs a full pass every 5 minutes.

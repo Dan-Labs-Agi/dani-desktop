@@ -138,7 +138,7 @@ describe("composer thread approval persistence", () => {
 
 describe("independent bot threads", () => {
   const bot: Bot = {
-    id: "thread-bot", threadId: "first", name: "Maus", title: "Helper", description: "",
+    id: "thread-bot", threadId: "first", name: "Dani", title: "Helper", description: "",
     notifications: true, color: "green", unread: true, busy: true, activity: "waiting-on-you",
     modelSelection: { instanceId: "default", model: "default-model" }, approvalMode: "ask", alwaysAllow: [],
     messages: [{ id: "first-message", role: "user", kind: "text", text: "First conversation", at: 1 }],
@@ -394,7 +394,7 @@ describe("connector grants persistence", () => {
   const announcement = () => ({
     id: "bot-1",
     threadId: "thread-1",
-    name: "Maus",
+    name: "Dani",
     title: "Helper",
     description: "",
     notifications: true,
@@ -425,7 +425,7 @@ describe("trusted approval-mode persistence", () => {
   const announcement = (approvalMode: Bot["approvalMode"] = "ask") => ({
     id: "bot-1",
     threadId: "thread-1",
-    name: "Maus",
+    name: "Dani",
     title: "Helper",
     description: "",
     notifications: true,
@@ -1460,7 +1460,7 @@ describe("routine receipt retention", () => {
     routineName: "Check inbox",
     target: "bot",
     botId: "echo",
-    runOn: "maus",
+    runOn: "dani",
     scheduledFor,
     status,
     manual: false,
@@ -3129,7 +3129,7 @@ describe("notifications feed", () => {
 
 describe("a routine's answer and its broadcast", () => {
   it("applies whichever arrives first and never steps back to an older edit", () => {
-    const routine = { id: "r1", name: "Daily", prompt: "Summarize", target: "bot", botId: "b1", runOn: "maus", enabled: true,
+    const routine = { id: "r1", name: "Daily", prompt: "Summarize", target: "bot", botId: "b1", runOn: "dani", enabled: true,
       schedule: { type: "daily", time: "09:00", weekdays: [1] }, durationMinutes: 30, nextRunAt: 5, createdAt: 1, updatedAt: 10 } as AppState["routines"][number];
     const paused = { ...routine, enabled: false, nextRunAt: null, updatedAt: 11 };
     const resumed = { ...routine, updatedAt: 12 };

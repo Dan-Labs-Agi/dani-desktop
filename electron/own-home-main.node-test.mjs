@@ -23,7 +23,7 @@ function servers(answers) {
     if (server?.down) throw new TypeError("fetch failed");
     if (!server) return new Response("", { status: 502 });
     if (pathname === "/api/auth/session") return Response.json(server.signedIn === false ? { error: "unauthorized" } : { kind: "session", scopes: ["admin"], ...(server.own ? { own: true } : {}) }, { status: server.signedIn === false ? 401 : 200 });
-    if (pathname === "/.well-known/openmausbot/environment") return Response.json({ environmentId: server.environmentId ?? ID, capabilities: server.move === false ? {} : { move: 1 } });
+    if (pathname === "/.well-known/danibot/environment") return Response.json({ environmentId: server.environmentId ?? ID, capabilities: server.move === false ? {} : { move: 1 } });
     return new Response("", { status: 404 });
   };
   return { fetch, asked };

@@ -289,7 +289,7 @@ const COMPOSIO_SLUGS: Record<string, string> = {
   youtube: "youtube", linkedin: "linkedin", shopify: "shopify", calendly: "calendly", zoom: "zoom",
 };
 
-/** The Composio toolkit for an app a Grok Bot names, when Maus knows one. */
+/** The Composio toolkit for an app a Grok Bot names, when Dani knows one. */
 export const composioSlugFor = (label: string): string | undefined => COMPOSIO_SLUGS[label.trim().toLowerCase().replace(/\s+/g, " ")];
 
 const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -329,7 +329,7 @@ function looksLikeCron(value: string): boolean {
 
 function routineSchedule(routine: GrokExport["routines"][number], timeZone: string): { schedule: PackageRoutineSchedule } | { reason: string } {
   const expression = routine.cron || (looksLikeCron(routine.schedule) ? routine.schedule : "");
-  // A zone Maus cannot read falls back to the person's own; a cron it cannot read falls back to the plain words.
+  // A zone Dani cannot read falls back to the person's own; a cron it cannot read falls back to the plain words.
   for (const zone of expression ? [routine.timeZone || timeZone, timeZone] : []) {
     try {
       return { schedule: normalizeCronSchedule({ type: "cron", expression, timeZone: zone }) };
@@ -408,7 +408,7 @@ export function grokExportToPackage(
       name: label,
       agent: agentKey,
       prompt: routine.prompt.slice(0, 20_000),
-      runOn: "maus" as const,
+      runOn: "dani" as const,
       schedule: timing.schedule,
       durationMinutes: 30,
       enabledAfterInstall: false,

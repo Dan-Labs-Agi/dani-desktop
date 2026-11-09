@@ -2,14 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { NotificationLogEntry, NotifyKind } from "../shared/notification.ts";
 import { readTeamRolesWith } from "./chief-level.ts";
-import { MAUSBOT_TOOL_DEFINITIONS, MAUSBOT_TOOL_NAMES } from "./drivers/agents-mausbot-tools.ts";
-import { listUnread, markRead, type NotificationsHost } from "./mausbot-notifications.ts";
-import { createMausBotNotificationRoutes } from "./routes/mausbot-notifications.ts";
+import { MAUSBOT_TOOL_DEFINITIONS, MAUSBOT_TOOL_NAMES } from "./drivers/agents-danibot-tools.ts";
+import { listUnread, markRead, type NotificationsHost } from "./danibot-notifications.ts";
+import { createDaniBotNotificationRoutes } from "./routes/danibot-notifications.ts";
 import { PASS } from "./routes/table.ts";
 import type { BotRecord } from "./store.ts";
 
 const NOW = 1_000_000_000;
-const MAUS = { id: "maus", name: "Dani", defaultBot: {} } as BotRecord;
+const MAUS = { id: "dani", name: "Dani", defaultBot: {} } as BotRecord;
 const ALL_KINDS = ["approval", "question", "done", "routine-failed", "routine-deferred", "turn-failed", "incident", "sign-in", "delegation-settled", "mention", "spend", "brief", "wait"] satisfies NotifyKind[];
 const entry = (id: string, kind: string, extra: Partial<NotificationLogEntry> = {}): NotificationLogEntry =>
   ({ id, kind, botId: "pip", botName: "Pip", threadId: `t-${id}`, title: `Title ${id}`, body: `Body ${id}`, at: NOW - 5 * 60_000, read: false, ...extra }) as NotificationLogEntry;
@@ -33,7 +33,7 @@ afterEach(() => readTeamRolesWith(() => null));
 describe("reading unread notifications", () => {
   it("lists only unread ones with a lean, trimmed text, an age and where each opens", () => {
     const { host } = setup([entry("a", "done"), entry("b", "question", { body: "x".repeat(900) }), entry("c", "done", { read: true }), entry("d", "mystery")]);
-    const result = listUnread(host, "maus");
+    const result = listUnread(host, "dani");
     expect(result.ok).toBe(true);
     const [json, hint] = (result as { text: string }).text.split("\n");
     const parsed = JSON.parse(json!);
@@ -47,14 +47,14 @@ describe("reading unread notifications", () => {
 
   it("bounds the list and says how many are left out", () => {
     const { host } = setup(Array.from({ length: 55 }, (_, index) => entry(`n${index}`, "done")));
-    const text = (listUnread(host, "maus") as { text: string }).text;
+    const text = (listUnread(host, "dani") as { text: string }).text;
     expect(JSON.parse(text.split("\n")[0]!)).toMatchObject({ unread: 55, shown: 40 });
     expect(text).toContain("15 older unread are not shown");
   });
 
   it("classifies every kind the app knows", () => {
     const { host } = setup(ALL_KINDS.map((kind, index) => entry(`k${index}`, kind)));
-    const leans = JSON.parse((listUnread(host, "maus") as { text: string }).text.split("\n")[0]!).notifications.map((n: any) => n.lean);
+    const leans = JSON.parse((listUnread(host, "dani") as { text: string }).text.split("\n")[0]!).notifications.map((n: any) => n.lean);
     expect(leans).not.toContain("unrecognised");
   });
 });
@@ -62,7 +62,7 @@ describe("reading unread notifications", () => {
 describe("marking read", () => {
   it("marks finished work and notices, leaves what needs the person, and says both", () => {
     const { host, rows, announceRead } = setup([entry("a", "done"), entry("b", "approval"), entry("c", "delegation-settled", { threadId: "t-a" }), entry("d", "mystery"), entry("e", "turn-failed"), entry("f", "routine-deferred")]);
-    const result = markRead(host, "maus", ["a", "b", "c", "d", "e", "f", "gone", "a"]);
+    const result = markRead(host, "dani", ["a", "b", "c", "d", "e", "f", "gone", "a"]);
     expect(rows.map((row) => [row.id, row.read])).toEqual([["a", true], ["b", false], ["c", true], ["d", false], ["e", false], ["f", false]]);
     expect(announceRead).toHaveBeenCalledExactlyOnceWith("t-a", ["a", "c"]);
     const text = (result as { text: string }).text;
@@ -75,14 +75,14 @@ describe("marking read", () => {
 
   it.each(["approval", "question", "sign-in", "incident", "turn-failed", "routine-failed", "routine-deferred", "mention", "spend", "brief"] satisfies NotifyKind[])("never marks a %s", (kind) => {
     const { host, rows, announceRead } = setup([entry("x", kind)]);
-    expect((markRead(host, "maus", ["x"]) as { text: string }).text).toContain("Marked none read.");
+    expect((markRead(host, "dani", ["x"]) as { text: string }).text).toContain("Marked none read.");
     expect(rows[0]!.read).toBe(false);
     expect(announceRead).not.toHaveBeenCalled();
   });
 
   it.each([undefined, [], "all", [1], [""], Array.from({ length: 41 }, (_, index) => `n${index}`)])("refuses ids %j and teaches the shape", (ids) => {
     const { host, rows } = setup([entry("a", "done")]);
-    expect(markRead(host, "maus", ids)).toMatchObject({ ok: false, error: expect.stringContaining('{"ids":["…"]}') });
+    expect(markRead(host, "dani", ids)).toMatchObject({ ok: false, error: expect.stringContaining('{"ids":["…"]}') });
     expect(rows[0]!.read).toBe(false);
   });
 });
@@ -105,8 +105,8 @@ describe("who may", () => {
 
   it("refuses on any shared workspace, even for a Dani with no person", () => {
     const { host, rows } = setup([entry("a", "done")], [MAUS], true);
-    expect(listUnread(host, "maus")).toMatchObject({ ok: false, error: expect.stringContaining("read in the app") });
-    expect(markRead(host, "maus", ["a"])).toMatchObject({ ok: false });
+    expect(listUnread(host, "dani")).toMatchObject({ ok: false, error: expect.stringContaining("read in the app") });
+    expect(markRead(host, "dani", ["a"])).toMatchObject({ ok: false });
     expect(rows[0]!.read).toBe(false);
   });
 
@@ -126,20 +126,20 @@ describe("the internal route", () => {
   async function call(botId: string, method: string, path: string, body?: unknown) {
     const { host, rows } = setup([entry("a", "done"), entry("b", "question")], [MAUS, { id: "pip", name: "Pip" } as BotRecord]);
     const json = vi.fn();
-    const outcome = await createMausBotNotificationRoutes(host)({ method, path, res: {} as never, json, botId, readBody: async () => body });
+    const outcome = await createDaniBotNotificationRoutes(host)({ method, path, res: {} as never, json, botId, readBody: async () => body });
     const [, status, payload] = json.mock.calls[0] ?? [];
     return { outcome, status: status as number | undefined, payload: payload as { text?: string; error?: string } | undefined, rows };
   }
 
   it("lists and marks for Dani, 403 for any other bot, 400 for a bad body, and passes other paths", async () => {
-    expect((await call("maus", "GET", "/api/internal/notifications")).status).toBe(200);
-    const marked = await call("maus", "POST", "/api/internal/notifications/read", { ids: ["a", "b"] });
+    expect((await call("dani", "GET", "/api/internal/notifications")).status).toBe(200);
+    const marked = await call("dani", "POST", "/api/internal/notifications/read", { ids: ["a", "b"] });
     expect([marked.status, marked.rows.map((row) => row.read)]).toEqual([200, [true, false]]);
-    expect((await call("maus", "POST", "/api/internal/notifications/read", null)).status).toBe(400);
+    expect((await call("dani", "POST", "/api/internal/notifications/read", null)).status).toBe(400);
     expect((await call("pip", "GET", "/api/internal/notifications")).status).toBe(403);
     const denied = await call("pip", "POST", "/api/internal/notifications/read", { ids: ["a"] });
     expect([denied.status, denied.rows[0]!.read]).toEqual([403, false]);
-    expect((await call("maus", "DELETE", "/api/internal/notifications")).outcome).toBe(PASS);
-    expect((await call("maus", "POST", "/api/internal/notifications/read-all")).outcome).toBe(PASS);
+    expect((await call("dani", "DELETE", "/api/internal/notifications")).outcome).toBe(PASS);
+    expect((await call("dani", "POST", "/api/internal/notifications/read-all")).outcome).toBe(PASS);
   });
 });

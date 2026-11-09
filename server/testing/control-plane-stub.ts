@@ -40,7 +40,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 
 export async function startControlPlaneStub(options: { otp?: string; endpointUrl?: string } = {}): Promise<ControlPlaneStub> {
   const otp = options.otp ?? "24681357";
-  const endpointUrl = options.endpointUrl ?? "https://c-stub.openmausbot.invalid";
+  const endpointUrl = options.endpointUrl ?? "https://c-stub.danibot.invalid";
   const connectorToken = `stub-connector-${randomBytes(48).toString("base64url")}`;
   let issuedConnectorToken = connectorToken;
   let reclaimedUntilProvision: string | null = null;
@@ -80,7 +80,7 @@ export async function startControlPlaneStub(options: { otp?: string; endpointUrl
     const byCredential = () => [...installations.values()].find((inst) => inst.credential === bearer) ?? null;
     const account = accountTokens.has(bearer);
 
-    if (method === "GET" && path === "/healthz") return send(200, { ok: true, service: "openmausbot-control-plane" });
+    if (method === "GET" && path === "/healthz") return send(200, { ok: true, service: "danibot-control-plane" });
     if (method === "POST" && path === "/api/auth/email-otp/send-verification-otp") {
       await readJson(req);
       return send(200, { success: true });

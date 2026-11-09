@@ -4,7 +4,7 @@ export const HEADLESS_USAGE = `Drive a running workspace (scripts, CI, other age
   danibot doctor                    check the server answers and an engine is ready
   danibot bots | channels | models  your bots, your rooms, the engines and their models
   danibot run BOT "do this"         give a bot one job and wait until it and every teammate it asked are done
-  openmausbot send BOT "text"           send one message and return at once
+  danibot send BOT "text"           send one message and return at once
   danibot wait BOT                  wait on work already running
   danibot messages BOT              the latest messages of a conversation
   danibot interrupt BOT [--tree]    press Stop (--tree: and every teammate on its job)
@@ -15,13 +15,13 @@ export const HEADLESS_USAGE = `Drive a running workspace (scripts, CI, other age
   danibot connect URL --code CODE --out FILE              get a token for a workspace elsewhere
   danibot new-bot | new-channel | set-model | edit | mcp
 
-  Server: --url URL (or OPENMAUSBOT_URL), --port N (or OMB_PORT), else this computer's.
-  Token: OPENMAUSBOT_TOKEN or --token-file FILE. --json prints one JSON document;
+  Server: --url URL (or DANIBOT_URL), --port N (or OMB_PORT), else this computer's.
+  Token: DANIBOT_TOKEN or --token-file FILE. --json prints one JSON document;
   progress goes to stderr (--quiet drops it). danibot help VERB for the details.`;
 
-export const USAGE = `openmausbot — your team of AI bots, ready in a few steps
+export const USAGE = `danibot — your team of AI bots, ready in a few steps
 
-  openmausbot                         set up once, then open your workspace
+  danibot                         set up once, then open your workspace
   danibot setup [--data-dir DIR]
   danibot start [the same options as serve]
   danibot serve [--port 8799] [--data-dir DIR] [--label NAME]
@@ -31,7 +31,7 @@ export const USAGE = `openmausbot — your team of AI bots, ready in a few steps
   danibot sessions [revoke ID]
   danibot status
   danibot login [--email you@example.com]
-  openmausbot logout
+  danibot logout
   danibot access list | add EMAIL [--chat-only] | remove EMAIL
   danibot service install [--domain HOST | --tunnel | --tailscale] [--port N] [--data-dir DIR] | uninstall
                     [--sentinel]   (the health scan below, every two minutes, instead of the server)
@@ -44,7 +44,7 @@ export const USAGE = `openmausbot — your team of AI bots, ready in a few steps
                   | agent [--socket PATH] [--group USER]   (root; installed by init --operator)
 
 setup   choose AI access and optional phone access; keep existing bots and chats
-start   same as openmausbot: use your saved settings and open the workspace
+start   same as danibot: use your saved settings and open the workspace
 serve   starts the server without prompts and prints a pairing link + QR code
 pair    mints a pairing code against a running server (--client: chat only)
 sessions lists paired devices; "sessions revoke ID" signs one out
@@ -58,7 +58,7 @@ access  who may sign in with an emailed code at /pair: an address or
 service keep the server running across reboots: writes a systemd unit
         (Linux) or a launchd agent (macOS) for the same serve options and
         prints the commands that install it. Install the package
-        permanently first (npm install -g openmausbot).
+        permanently first (npm install -g danibot).
 browser install: the bots' browser engine (agent-browser, pinned) into the
         data dir, and Chrome for Testing into the user's browser cache.
         --with-deps also installs
@@ -90,6 +90,6 @@ fleet   many client workspaces on one Linux server, each its own account,
 
 ${HEADLESS_USAGE}
 
-Install once with \`npm install -g openmausbot\`, then type \`openmausbot\`.
-Or run without a global install: \`npx openmausbot\`. Node 24+ is required.
+Install once with \`npm install -g danibot\`, then type \`danibot\`.
+Or run without a global install: \`npx danibot\`. Node 24+ is required.
 `;

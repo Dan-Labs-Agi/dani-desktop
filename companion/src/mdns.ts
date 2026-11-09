@@ -1,4 +1,4 @@
-// mDNS / DNS-SD responder (RFC 6762/6763), answer-only: it neither browses
+﻿// mDNS / DNS-SD responder (RFC 6762/6763), answer-only: it neither browses
 // nor probes for name conflicts (§8.1).
 import { createHash } from "node:crypto";
 import { createSocket } from "node:dgram";
@@ -240,10 +240,10 @@ export function encodeResponse(
 export interface ServiceInfo {
   /** what a picker on the phone shows */
   name: string;
-  /** e.g. "_openmausbot._tcp" */
+  /** e.g. "_DaniBot._tcp" */
   type: string;
   port: number;
-  /** the name our A records claim, e.g. "openmausbot-1a2b3c4d.local" */
+  /** the name our A records claim, e.g. "DaniBot-1a2b3c4d.local" */
   host: string;
   addresses: string[];
   /** DNS-SD key=value pairs */
@@ -326,7 +326,7 @@ export function answersFor(
 
 
 /** No dots, no control characters, at most 63 bytes of UTF-8. */
-export function dnsLabel(text: string, fallback = "OpenMausBot"): string {
+export function dnsLabel(text: string, fallback = "DaniBot"): string {
   let label = text
     // oxlint-disable-next-line no-control-regex -- control characters are not valid in a DNS label
     .replace(/[\u0000-\u001f\u007f]/g, "")
@@ -354,7 +354,7 @@ export function clampBytes(text: string, limit: number): string {
 /** Not `<hostname>.local`: on macOS mDNSResponder owns and defends that name. */
 export function defaultHostName(machine = hostname()): string {
   const digest = createHash("sha256").update(machine).digest("hex").slice(0, 8);
-  return `openmausbot-${digest}.local`;
+  return `DaniBot-${digest}.local`;
 }
 
 export function advertisableAddresses(): string[] {
@@ -577,3 +577,4 @@ export class MdnsResponder {
     });
   }
 }
+

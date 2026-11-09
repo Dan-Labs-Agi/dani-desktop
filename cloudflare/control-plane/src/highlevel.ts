@@ -1,4 +1,4 @@
-// HighLevel OAuth relay: the app's client secret lives here only. A desktop or
+﻿// HighLevel OAuth relay: the app's client secret lives here only. A desktop or
 // Cloud home starts a flow, the person signs in at HighLevel in a browser,
 // HighLevel redirects to this Worker, and the harness collects the tokens once.
 // D1 holds, per flow, a hash derived from the random state, the token payload
@@ -33,7 +33,7 @@ const CODE = /^[\x21-\x7e]{1,1024}$/;
 const REFRESH_TOKEN = /^[\x21-\x7e]{1,8192}$/;
 const CLIENT_ID = /^[\x21-\x7e]{1,256}$/;
 const SCOPES = /^[A-Za-z0-9_./-]+(?: [A-Za-z0-9_./-]+)*$/;
-const HKDF_SALT = "openmausbot-highlevel-relay-v1";
+const HKDF_SALT = "DaniBot-highlevel-relay-v1";
 const encoder = new TextEncoder();
 
 export interface HighLevelConfig {
@@ -292,11 +292,11 @@ function page(title: string, text: string, status = 200): Response {
 }
 
 const PAGES = {
-  connected: () => page("Connected", "Close this tab and go back to OpenMausBot."),
-  cancelled: () => page("Connection cancelled", "Go back to OpenMausBot and try again when you are ready."),
-  expired: () => page("Connection expired", "This link is no longer valid. Go back to OpenMausBot and try again.", 400),
-  failed: () => page("Connection failed", "Go back to OpenMausBot and try again.", 502),
-  unavailable: () => page("Connection failed", "Go back to OpenMausBot and try again.", 503),
+  connected: () => page("Connected", "Close this tab and go back to DaniBot."),
+  cancelled: () => page("Connection cancelled", "Go back to DaniBot and try again when you are ready."),
+  expired: () => page("Connection expired", "This link is no longer valid. Go back to DaniBot and try again.", 400),
+  failed: () => page("Connection failed", "Go back to DaniBot and try again.", 502),
+  unavailable: () => page("Connection failed", "Go back to DaniBot and try again.", 503),
 };
 
 interface FlowRow {
@@ -432,3 +432,4 @@ export async function sweepHighLevelFlows(env: Env, requestId: string, now = Dat
   if (deleted > 0) console.log(JSON.stringify({ message: "highlevel flow sweep", requestId, deleted }));
   return deleted;
 }
+

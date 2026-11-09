@@ -200,7 +200,7 @@ test("startup and tray show Dani branding without changing the retained tray ide
   const html = startupScreenHtml(iconPath);
   assert.match(html, /<title>Dani Bot<\/title>/);
   assert.match(html, /<h1>Dani Bot<\/h1>/);
-  assert.doesNotMatch(html, /OpenMaus/);
+  assert.doesNotMatch(html, /Dani/);
   assert.equal(readFileSync(iconPath).readUInt32BE(16), 1024, "approved master resolution retained");
   const { trayInstance, splash, tray } = fixture();
   assert.equal(splash.window.options.title, "Dani Bot");

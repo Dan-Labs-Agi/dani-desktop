@@ -169,7 +169,7 @@ function idOf(...values: unknown[]): string | undefined {
   return undefined;
 }
 
-/** "@maus", "maus" or an x.com profile link (https:// optional) → "maus";
+/** "@dani", "dani" or an x.com profile link (https:// optional) → "dani";
  * anything else, X's own pages included, → null. */
 export function normalizeHandle(raw: string): string | null {
   let value = raw.trim();

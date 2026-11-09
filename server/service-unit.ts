@@ -106,7 +106,7 @@ export function launchdPlist(spec: ServiceSpec): string {
 export function unstableInstallWarning(script: string): string | null {
   const normalized = script.replace(/\\/g, "/");
   if (/\/_npx\//.test(normalized) || /\/\.npm\/_npx\//.test(normalized)) {
-    return `this command runs from an npx cache (${dirname(script)}), which npm may delete at any time. Install it permanently first (npm install -g openmausbot) and run \`danibot service install\` from that install.`;
+    return `this command runs from an npx cache (${dirname(script)}), which npm may delete at any time. Install it permanently first (npm install -g danibot) and run \`danibot service install\` from that install.`;
   }
   return null;
 }
@@ -134,7 +134,7 @@ export function servicePlan(platform: NodeJS.Platform, dataDir: string, home = h
 }
 
 export const SENTINEL_LAUNCHD_LABEL = "com.danibot.sentinel";
-export const SENTINEL_SYSTEMD_NAME = "openmausbot-sentinel";
+export const SENTINEL_SYSTEMD_NAME = "danibot-sentinel";
 export const SENTINEL_INTERVAL_SECONDS = 120;
 
 export type SentinelServiceSpec = Pick<ServiceSpec, "node" | "script" | "dataDir" | "home"> & {
@@ -149,9 +149,9 @@ export function shippedSentinelCli(
 ): { node: string; script: string } | null {
   const candidates = platform === "darwin"
     ? ["/Applications/Dani Bot.app", join(home, "Applications", "Dani Bot.app")].map((app) => ({
-      node: join(app, "Contents", "MacOS", "Dani Bot"), script: join(app, "Contents", "Resources", "server", "openmausbot.js"),
+      node: join(app, "Contents", "MacOS", "Dani Bot"), script: join(app, "Contents", "Resources", "server", "danibot.js"),
     }))
-    : platform === "linux" ? [{ node: "/opt/Dani Bot/danibot", script: "/opt/Dani Bot/resources/server/openmausbot.js" }] : [];
+    : platform === "linux" ? [{ node: "/opt/Dani Bot/danibot", script: "/opt/Dani Bot/resources/server/danibot.js" }] : [];
   return candidates.find((cli) => exists(cli.node) && exists(cli.script) && hasSentinel(cli.script)) ?? null;
 }
 
@@ -313,6 +313,6 @@ export function currentUser(): string {
   try {
     return userInfo().username;
   } catch {
-    return process.env.USER || process.env.USERNAME || "openmausbot";
+    return process.env.USER || process.env.USERNAME || "danibot";
   }
 }
