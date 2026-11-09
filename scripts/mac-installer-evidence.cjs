@@ -36,6 +36,11 @@ function inspectMacInstaller({installer,mount,bundle,directory,run=spawnSync,emi
  const finder=path.join(directory,'mounted-dmg.png');
  command('/usr/sbin/screencapture',['-x',finder]);
  image(finder,'MAC_MOUNTED_DMG');
+ // Finder may paint its labels before the bundled app icon is decoded.
+ command('/usr/bin/osascript',['-e','delay 10','-e','tell application "Finder" to activate']);
+ const settled=path.join(directory,'mounted-dmg-settled.png');
+ command('/usr/sbin/screencapture',['-x',settled]);
+ image(settled,'MAC_MOUNTED_DMG_SETTLED');
  fs.writeFileSync(path.join(directory,'security-verdicts.json'),JSON.stringify(commands,null,2));
  return commands;
 }

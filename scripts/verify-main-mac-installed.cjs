@@ -20,7 +20,9 @@ process.env.DANI_NATIVE_VERIFY='1';
 process.env.DANI_DATA_DIR=data;
 process.env.OMB_DATA_DIR=data;
 // Windows resolves its profile through OS APIs too; isolate product/app data, not USERPROFILE.
-if(process.platform!=='win32'){process.env.HOME=path.join(temp,'home');fs.mkdirSync(process.env.HOME,{recursive:true});}
+// macOS Keychain resolves the native account's existing home. A fake HOME breaks
+// safeStorage before startup; product state remains isolated by DANI/OMB_DATA_DIR.
+if(process.platform!=='win32' && process.platform!=='darwin'){process.env.HOME=path.join(temp,'home');fs.mkdirSync(process.env.HOME,{recursive:true});}
 fs.mkdirSync(process.env.APPDATA,{recursive:true});
 fs.mkdirSync(process.env.LOCALAPPDATA,{recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
@@ -51,7 +53,7 @@ function reportOwnedDiagnostics(){
  for(const match of profiles.slice(-1)) {
   try {
    const profile=JSON.parse(match[1]);
-   const expected=path.join(require('node:os').homedir(),'Library','Logs','danibot');
+   const expected=path.join(require('node:os').userInfo().homedir,'Library','Logs','danibot');
    if(profile.logs!==expected)throw Error('Unexpected native product logs path');
    for(const name of ['server.log','desktop-crashes.log']) {
     const file=path.join(profile.logs,name);

@@ -19,9 +19,19 @@ test('installed UI wait has one bounded deadline, checks exit, captures failures
 });
 test('failure log reads are only reported product logs, never credential files or global policy changes',()=>{
  assert.match(verifier,/profile.logs!==expected/);
+ assert.ok(verifier.includes("require('node:os').userInfo().homedir"));
+ assert.ok(!verifier.includes("require('node:os').homedir()"));
  assert.match(verifier,/\['server.log','desktop-crashes.log'\]/);
  assert.doesNotMatch(verifier,/readFileSync\([^\n]*(?:credentials\.bin|keychain)|xattr\s+-[dr]|spctl.*--master-disable|security\s+unlock-keychain/);
  assert.match(verifier,/DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS/);
  assert.match(verifier,/MAIN_INSTALLED_GRAPHICS_PASS/);
  assert.match(verifier,/MAIN_INSTALLED_RELAUNCH_PASS/);
+});
+
+test('macOS keeps native HOME and product data remains explicitly isolated',()=>{
+ assert.ok(verifier.includes("process.platform!=='win32' && process.platform!=='darwin'"));
+ assert.ok(verifier.includes('process.env.DANI_DATA_DIR=data;'));
+ assert.ok(verifier.includes('process.env.OMB_DATA_DIR=data;'));
+ assert.ok(verifier.includes('DANI_DATA_DIR:data,OMB_DATA_DIR:data'));
+ assert.doesNotMatch(verifier,/security.*(?:create-keychain|unlock-keychain|delete-keychain|set-keychain)/);
 });
