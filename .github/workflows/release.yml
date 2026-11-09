@@ -163,7 +163,7 @@ jobs:
           set -euo pipefail
           version=${{ needs.prepare.outputs.version }}
           cp "release/DaniBot-$version-setup.exe" release/DaniBot-setup.exe
-          cp "release/DaniBot-$version-x64.zip" release/DaniBot-Windows-Portable.zip
+          cp "release/DaniBot-$version-windows-x64.zip" release/DaniBot-Windows-Portable.zip
           test -s release/DaniBot-setup.exe
           test -s release/DaniBot-Windows-Portable.zip
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -172,6 +172,7 @@ jobs:
           path: |
             release/DaniBot-*.exe
             release/DaniBot-*.exe.blockmap
+            release/DaniBot-*-windows-x64.zip
             release/DaniBot-Windows-Portable.zip
             release/latest.yml
           if-no-files-found: error
@@ -268,6 +269,7 @@ jobs:
             "DaniBot-$VERSION-x86_64.AppImage"
             "DaniBot-$VERSION-amd64.deb"
             "DaniBot-$VERSION-setup.exe"
+            "DaniBot-$VERSION-windows-x64.zip"
             "DaniBot-$VERSION-x64.zip"
             "DaniBot-$VERSION-arm64.dmg"
             "DaniBot-$VERSION-arm64.zip"

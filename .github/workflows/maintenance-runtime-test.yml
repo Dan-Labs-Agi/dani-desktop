@@ -1,7 +1,8 @@
-name: Private Intel startup repair download
+name: Verified native runtime installers
 on:
   push:
-    branches: [fix/v0.1.58-cross-platform-runtime-20261108]
+    branches: [fix/native-runtime-release-*]
+    paths-ignore: [docs/**]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,18 +11,18 @@ concurrency:
   cancel-in-progress: true
 jobs:
   native:
-    name: Exact downloaded Intel startup repair
+    name: Native installed runtime (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - {os: macos-15-intel, target: darwin-x64, arch: x64}
+          - {os: macos-15, target: darwin-arm64, arch: arm64}
+          - {os: windows-latest, target: win32-x64, arch: x64}
+          - {os: ubuntu-24.04, target: linux-x64, arch: x64}
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
     timeout-minutes: 90
     env:
-      GH_TOKEN: ${{ github.token }}
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       DANIBOT_CUA_ARCHES: ${{ matrix.arch }}
       DANIBOT_CUA_ARCHES_PARTIAL: "1"
@@ -37,16 +38,24 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Verify native runner and isolate profiles
+        env:
+          NATIVE_TARGET: ${{ matrix.target }}
+        run: |
+          node --input-type=module -e 'if (`${process.platform}-${process.arch}` !== process.env.NATIVE_TARGET) throw new Error("Runner architecture differs from packaged target")'
+          echo "DANI_INSTALLER_VERIFICATION_ROOT=$RUNNER_TEMP/dani-native-profile-${{ matrix.target }}" >> "$GITHUB_ENV"
+          echo "DANI_NATIVE_EVIDENCE_DIR=$RUNNER_TEMP/dani-native-evidence-${{ matrix.target }}" >> "$GITHUB_ENV"
       - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec vitest run server/managed-runtime-retry.test.ts server/managed-runtime.test.ts server/drivers/acp/hermes.test.ts
+      - name: Runtime and packaging regressions
+        run: pnpm exec vitest run server/managed-runtime-retry.test.ts server/managed-runtime.test.ts server/drivers/acp/hermes.test.ts scripts/after-pack.test.mjs scripts/prepare-cloudflared.test.mjs
       - run: node --test scripts/mac-installer-evidence.node-test.cjs
       - run: python3 scripts/hermes_payload_recipe_test.py
         if: runner.os != 'Windows'
       - name: Linux native smoke tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y at-spi2-core dbus-x11 desktop-file-utils libxi6 libxkbcommon0 squashfs-tools x11-utils xdotool xvfb
-      - name: Build production app and native payloads
+      - name: Build production app and target-specific runtimes
         run: |
           pnpm build && pnpm build:server && pnpm build:companion && pnpm build:updater && pnpm build:android-tools && pnpm build:cloudflared && pnpm build:speech-models
           sh scripts/stage-runtimes.sh ${{ matrix.target }}
@@ -61,31 +70,54 @@ jobs:
         if: runner.os == 'Linux'
         run: pnpm build:cua:linux && pnpm exec electron-builder --linux --x64 --publish never
       - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - name: Actual NSIS install, app launch, activation, relaunch, damage recovery
+      - name: Real NSIS install, readiness, relaunch, and damaged-runtime repair
         if: runner.os == 'Windows'
         run: node scripts/verify-windows-installer.cjs
-      - name: Actual DMG copy, app launch, activation, relaunch, damage recovery
+      - name: Real DMG install, readiness, relaunch, and damaged-runtime repair
         if: runner.os == 'macOS'
-        run: |
-          set +e
-          node scripts/verify-intel-mac-installer.cjs > "$RUNNER_TEMP/native-built.log" 2>&1
-          result=$?
-          cat "$RUNNER_TEMP/native-built.log"
-          exit "$result"
-      - name: Actual DEB install, app launch, activation, relaunch, damage recovery
+        run: node scripts/verify-intel-mac-installer.cjs
+      - name: Real DEB install, readiness, relaunch, and damaged-runtime repair
         if: runner.os == 'Linux'
         run: dbus-run-session -- xvfb-run -a node scripts/verify-linux-runtime-installer.cjs
-      - name: Stage private draft and download exact tested bytes
-        run: node scripts/stage-private-intel-download.mjs
-      - name: Verify exact downloaded DMG install, activation, relaunch and recovery
-        run: |
-          rm -rf "$RUNNER_TEMP/dani-installed-verification"
-          set +e
-          node scripts/verify-intel-mac-installer.cjs > "$RUNNER_TEMP/native-downloaded.log" 2>&1
-          result=$?
-          cat "$RUNNER_TEMP/native-downloaded.log"
-          exit "$result"
-      # No public release, tag publication, Actions artifact/cache or deployment.
-      - name: Record candidate installer hashes
-        if: always()
-        run: python3 -c "import pathlib,hashlib; [(print(p.name,hashlib.sha256(p.read_bytes()).hexdigest())) for p in pathlib.Path('release').glob('*') if p.is_file() and p.suffix in ('.exe','.deb','.dmg')]"
+      - name: Stage exact verified package bytes and native proof
+        run: node scripts/stage-native-release.mjs stage ${{ matrix.target }}
+      - name: Upload verified native packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: verified-native-${{ matrix.target }}
+          path: native-artifacts/verified-native-${{ matrix.target }}/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve native evidence on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: failed-native-evidence-${{ matrix.target }}
+          path: ${{ runner.temp }}/dani-native-evidence-${{ matrix.target }}/
+          if-no-files-found: warn
+          retention-days: 14
+  candidate:
+    name: Hash-verified private all-platform candidate
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: verified-native-*
+          path: native-artifacts
+      - name: Verify downloaded bytes, feeds, and all native results before draft upload
+        run: node scripts/stage-native-release.mjs release

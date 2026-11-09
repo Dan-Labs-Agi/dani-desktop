@@ -1,5 +1,9 @@
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { chmod, lstat, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { Arch } from "electron-builder";
+import { parseManagedRuntimeManifest } from "../server/managed-runtime.ts";
 import { LICENSE_FILES } from "./cua-linux-release.mjs";
 import {
   executableTarget,
@@ -20,6 +24,53 @@ async function requireRegularFile(file, mode) {
     throw new Error(`Package resource must be a regular file: ${file}`);
   }
   if (mode !== undefined) await chmod(file, mode);
+  return details;
+}
+
+async function validateManagedRuntimes(resources, context) {
+  const arch = typeof context.arch === "number" ? Arch[context.arch] : undefined;
+  const target = `${context.electronPlatformName}-${arch}`;
+  if (!["darwin-arm64", "darwin-x64", "linux-x64", "win32-x64"].includes(target)) {
+    throw new Error(
+      `Unsupported electron-builder runtime target: ${context.electronPlatformName}, arch=${context.arch}. ` +
+      "afterPack requires the numeric target arch from electron-builder; the build host is not the app target.",
+    );
+  }
+  const root = path.join(resources, "managed-runtimes");
+  for (const kind of ["hermes", "opencode"]) {
+    try {
+      const manifestPath = path.join(root, "manifests", `${kind}-${target}.manifest.json`);
+      await requireRegularFile(manifestPath);
+      const manifest = parseManagedRuntimeManifest(JSON.parse(await readFile(manifestPath, "utf8")));
+      if (manifest.name !== `${kind}-runtime-payload` || manifest.target !== target) {
+        throw new Error(
+          `manifest identity mismatch in ${manifestPath}: expected ${kind}-runtime-payload/${target}, ` +
+          `received ${manifest.name}/${manifest.target}`,
+        );
+      }
+      const archive = path.join(root, "archives", `${manifest.name}-${target}.${manifest.format}`);
+      const details = await requireRegularFile(archive);
+      if (details.size !== manifest.archiveSize) {
+        throw new Error(
+          `archive size mismatch in ${archive}: expected ${manifest.archiveSize}, received ${details.size}`,
+        );
+      }
+      const hash = createHash("sha256");
+      for await (const chunk of createReadStream(archive)) hash.update(chunk);
+      const digest = hash.digest("hex");
+      if (digest !== manifest.archiveSha256) {
+        throw new Error(
+          `archive SHA-256 mismatch in ${archive}: expected ${manifest.archiveSha256}, received ${digest}`,
+        );
+      }
+    } catch (error) {
+      throw new Error(
+        `Packaged ${kind} runtime for ${target} is invalid: ${error.message}. ` +
+        `Restage with sh scripts/stage-runtimes.sh ${target} before packaging.`,
+        { cause: error },
+      );
+    }
+  }
 }
 
 async function validateCloudflared(resources, platform, required) {
@@ -74,6 +125,7 @@ export default async function afterPack(context) {
       ? path.join(context.appOutDir, "Dani Bot.app", "Contents", "Resources")
       : path.join(context.appOutDir, "resources")
   );
+  await validateManagedRuntimes(resources, context);
   await validateCloudflared(resources, context.electronPlatformName, Boolean(context.packager));
 
   if (context.electronPlatformName !== "linux") return;

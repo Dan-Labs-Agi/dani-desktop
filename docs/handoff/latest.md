@@ -1,18 +1,36 @@
 # Latest handoff
 
-Branch: `sdd-kit-integration`, replayed after the three infrastructure CI fixes on prod. This slice integrates owner-supplied SDD documentation and local skills only; it changes no production code.
+## Native runtime installer repair
 
-Added: preserved kit under `docs/dani-sdd-kit/` with trust/provenance notice; namespaced project skills under `.claude/skills/dani-*`; repository audit, feature parity, dependency notes, baseline, unknowns, constitution, ADR-001, runtime/Hermes specs and traceability.
+Candidate app version: `0.1.60`.
+Release branch: `fix/native-runtime-release-20261110`.
+Hermes-compatible source baseline: `d07150a5ca0b293dde9c7ba5e61b6a187c81d319`.
+The newer multi-harness `main` tree is not replaced by this maintenance release.
 
-## Staged application work
+### Changes
 
-1. RED tests and schema migration for canonical `UNKNOWN`, immutable attempts, full effect digest, precondition hashes, intent-before-dispatch and reconcile-before-retry.
-2. Fenced transitions, cancellation checks at admission/lease/dispatch, and one durable physical-desktop lease.
-3. Fresh source-linked success verifier, canonical duplicate result, untrusted page/tool/file provenance, broker-only writes and filesystem verification.
-4. Workspace and memory isolation, retention/delete, correction/retraction, staleness and procedural-vs-personal memory contracts.
-5. Trigger registry/evaluator/scheduler/wake, freshness/dedupe-window authorization, typed initiative levels, novelty/budgets and real quiet-hour/DST/deferred-coalescing enforcement.
-6. Wire the control plane into the live serving path; pin and license Hermes; run real ACP handshake/stream/model/permission/cancel/resume tests; measure warm versus per-turn processes; add deterministic no-model stop/status/cancel and durable delegation/crash/orphan handling.
-7. Add provider capability/quota/error contracts and broker-bypass negatives. Keep Computer MCP unavailable until controlled-device proof; keep `dani-free` absent from claims; block unattended high-impact Hermes native terminal/filesystem/network effects until broker enforcement is proven.
-8. Offline/recovery and controlled Windows WD/EF/PI/DL/EV/FG gauntlets. Keep the Windows slice `IMPLEMENTED_UNVERIFIED` until a real Windows device produces source-linked proof.
+- Reject a packaged app unless both Hermes and OpenCode have matching target manifests, regular archives, exact sizes and SHA-256 digests. The target comes from electron-builder's architecture, not the build host.
+- Preserve the maintenance implementation's fresh atomic activation, exact manifest binding and immutable Hermes dependency/probe environment.
+- Run native installed NSIS, Intel DMG, Apple Silicon DMG and Ubuntu DEB checks from one source revision. Require first-launch readiness, relaunch persistence and damaged-runtime replacement while preserving synthetic user data and the old activation.
+- Isolate product data, Electron appData, home and Hermes state. Save actual runtime status and screenshots rather than treating successful packaging as successful installation.
+- Give the Windows ZIP a platform-qualified filename so it cannot collide with the Intel Mac ZIP. Stable Windows portable aliases and release inventory use the new name.
+- Verify downloaded Actions package hashes and generated updater-feed hashes before creating a private all-platform draft. The draft records source, native evidence and package SHA-256 digests; it does not change public latest.
 
-Do not claim runtime/effects, memory/proactivity, CUA, provider, Laya or voice compliance until the mapped acceptance gates pass. The next application branch should begin with stages 1-2, preserve the existing skeleton, and avoid infrastructure-owned workflows/build/release paths.
+### Local evidence
+
+- `pnpm exec vitest run scripts/after-pack.test.mjs scripts/prepare-cloudflared.test.mjs server/managed-runtime-retry.test.ts server/managed-runtime.test.ts server/drivers/acp/hermes.test.ts`: 96 passed.
+- `node --test scripts/mac-installer-evidence.node-test.cjs`: 2 passed.
+- `python3 scripts/hermes_payload_recipe_test.py`: 3 passed.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: exited zero with warnings in existing unrelated files; not a warning-free result.
+- `pnpm build`: production UI/server TypeScript and Vite build passed, with the existing large-chunk warning.
+- `pnpm test:packaged-server`: a server copied outside the repository booted without reachable node_modules, all 10 proxy paths resolved, and packaged MCP stdio reached the isolated API and flushed its final frames.
+- Direct Node invocation of the new afterPack hook against the old installed Intel app rejected its ARM64-only runtime resources with the missing `hermes-darwin-x64.manifest.json` and the exact restaging target. This check read resources only and did not alter the installed app.
+
+### Native delivery gate
+
+This source revision requires its own `Verified native runtime installers` run; historical maintenance successes do not certify the new artifacts. Native statuses and screenshots are attached only after the corresponding real installed checks pass. The candidate job cannot run unless all four native target jobs succeed.
+
+macOS artifacts are ad-hoc signed, not Developer ID signed or notarized. Windows artifacts are unsigned. Keep the candidate private; do not claim Gatekeeper/SmartScreen acceptance or promote it as a signed public release. Linux installed lifecycle covers DEB; AppImage and portable ZIPs are built but their independent lifecycles are not certified. Native runtime readiness does not certify an ordinary live-provider turn or the full voice/computer-use matrix.
+
+The requested Intel Mac delivery must separately checksum and install the exact new DMG, preserve the current app and user data, launch an isolated real-runtime profile, exercise an ordinary turn without paid fallback, and capture the actual installed UI. No current-user chat mutation is a verification fixture.

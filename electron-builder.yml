@@ -151,6 +151,7 @@ dmg:
       path: /Applications
 
 win:
+  artifactName: DaniBot-${version}-windows-${arch}.${ext}
   target:
     - target: nsis
       arch: x64
