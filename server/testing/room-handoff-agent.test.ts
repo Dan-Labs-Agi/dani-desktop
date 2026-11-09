@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -70,3 +70,19 @@ it("runs the script entry a turn was itself asked for, a one-shot entry once, an
   const evidence = readFileSync(`${plan}.evidence.jsonl`, "utf8").trim().split("\n").map((line) => JSON.parse(line));
   expect(evidence.map((record) => record.planKey ?? (record.unplanned ? "unplanned" : null))).toEqual(["loop", "job", "unplanned", "loop"]);
 }));
+
+
+it("keeps boxed fixture evidence in the bot's own folder, not beside its read-only script", () => withMcp(RESPONDER, async (_run, dir) => {
+  const evidenceRoot = join(dir, "bot-workspaces");
+  mkdirSync(join(evidenceRoot, "fixture"), { recursive: true });
+  const plan = join(dir, "plan.json");
+  await expect(runRoomHandoffAgent(["--mcp-config", join(dir, "mcp.json"), "--append-system-prompt-file", join(dir, "system.txt")], plan, undefined, undefined, undefined, undefined, evidenceRoot)).resolves.toBe("Completed fixture");
+  expect(existsSync(`${plan}.evidence.jsonl`)).toBe(false);
+  const record = JSON.parse(readFileSync(join(evidenceRoot, "fixture", "room-plan.evidence.jsonl"), "utf8"));
+  expect(record.botId).toBe("fixture");
+}));
+
+it("includes bounded child stderr when the fixture MCP cannot start", () => withMcp(
+  'process.stderr.write("fixture missing dependency"); process.exit(7);',
+  async run => { await expect(run()).rejects.toThrow("Fixture MCP exited unexpectedly: 7: fixture missing dependency"); },
+));

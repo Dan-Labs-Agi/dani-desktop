@@ -187,7 +187,11 @@ export async function launchCloudSendFixture({ onePasswordToken, cloudOnePasswor
     const home = join(root, name);
     const dataDir = join(home, ".openmausbot");
     mkdirSync(dataDir, { recursive: true });
-    const cli = join(home, "fixture-claude.mjs");
+    // Synthetic engine code uses the same read-only install tree as real standalone engines. Team turns do not see
+    // the server's HOME, and must not gain that HOME merely to execute a fixture CLI.
+    const engineDir = join(dataDir, "tools", "standalone");
+    mkdirSync(engineDir, { recursive: true });
+    const cli = join(engineDir, "fixture-claude.mjs");
     const tools = calls ? JSON.stringify(Array.from({ length: calls }, (_, i) => ({ name: "Bash", input: { command: `echo step ${i}` } }))) : "";
     writeFileSync(cli, `#!/usr/bin/env node
 if (process.argv[2] === "auth") { console.log(JSON.stringify(${signedIn ? '{ loggedIn: true, email: "person@example.test" }' : '{ loggedIn: false, authMethod: "none" }'})); process.exit(0); }

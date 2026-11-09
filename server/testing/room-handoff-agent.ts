@@ -32,7 +32,7 @@ export function ownTurnText(prompt: unknown): string {
 
 async function askPermission(server: AgentsIntegration, ask: { tool_name: string; input: Record<string, unknown> }): Promise<{ behavior: string; message?: string }> {
   const child = spawn(server.command, server.args, { env: { ...process.env, ...server.env }, stdio: ["pipe", "pipe", "pipe"] });
-  child.stderr.resume();
+  child.stderr.on("data", (chunk) => { childError = (childError + chunk).slice(-2000); });
   try {
     return await new Promise((resolve, reject) => {
       createInterface({ input: child.stdout }).on("line", line => {
@@ -65,7 +65,7 @@ function withCaptured(value: unknown, captured: Record<string, string>): unknown
 
 async function serverToolCall(server: AgentsIntegration, name: string, args: unknown): Promise<any> {
   const child = spawn(server.command, server.args, { env: { ...process.env, ...server.env }, stdio: ["pipe", "pipe", "pipe"] });
-  child.stderr.resume();
+  child.stderr.on("data", (chunk) => { childError = (childError + chunk).slice(-2000); });
   try {
     return await new Promise((resolve, reject) => {
       createInterface({ input: child.stdout }).on("line", line => {
@@ -102,7 +102,7 @@ async function screenCalls(server: AgentsIntegration, count: number): Promise<Ar
  * `steered` says was sent into the turn while it ran. */
 export async function runRoomHandoffAgent(argv: string[], planPath: string, prompt?: unknown,
   launch?: { integration: AgentsIntegration; system: string; evidence?: Record<string, unknown> },
-  progress?: (text: string) => void, steered: () => readonly string[] = () => []): Promise<string> {
+  progress?: (text: string) => void, steered: () => readonly string[] = () => [], evidenceRoot?: string): Promise<string> {
   const arg = (flag: string) => argv[argv.indexOf(flag) + 1];
   const mounted = launch ? [] : Object.values(JSON.parse(readAtLaunch(arg("--mcp-config"))).mcpServers as Record<string, AgentsIntegration>);
   // With a tool selection every server sits behind the gate, which names its upstream in OMB_GATE_UPSTREAM.
@@ -129,6 +129,9 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   }
   const agent = agentEnv(integration);
   const botId = agent.OMB_BOT_ID;
+  if (evidenceRoot && !/^[A-Za-z0-9_-]{1,128}$/.test(botId)) throw new Error("Invalid fixture bot ID");
+  // In a boxed fixture the script is read-only installed code, while each bot writes only its own evidence folder.
+  const evidencePath = evidenceRoot ? join(evidenceRoot, botId, "room-plan.evidence.jsonl") : `${planPath}.evidence.jsonl`;
   const launchNote = splitLaunchNote(prompt);
   prompt = launchNote.prompt;
   const launchSystem = launch?.system ?? readAtLaunch(arg("--append-system-prompt-file"));
@@ -140,7 +143,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   const botPlan = JSON.parse(readFileSync(planPath, "utf8"))[botId] ?? {};
   const basePlan = (botPlan.byPrompt as Array<{ promptIncludes: string; plan: any }> | undefined)
     ?.find(rule => turnContext.includes(rule.promptIncludes))?.plan ?? botPlan;
-  const previous = existsSync(`${planPath}.evidence.jsonl`) ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
+  const previous = existsSync(evidencePath) ? readFileSync(evidencePath, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line)) : [];
   const turnIndex = previous.filter(p => p.botId === botId).length;
   // `script`: an unscripted turn fails loudly, and one-shot entries win over `repeat` ones.
   const script = botPlan.script as ScriptEntry[] | undefined;
@@ -149,7 +152,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   const matches = (entry: ScriptEntry) => entry.match.every(text => own.includes(text));
   const entry = script && (script.find(e => !e.repeat && !used.has(e.key) && matches(e)) ?? script.find(e => e.repeat && matches(e)));
   if (script && !entry) {
-    appendFileSync(`${planPath}.evidence.jsonl`, JSON.stringify({ botId, turnIndex, threadId: agent.OMB_THREAD_ID, unplanned: true, resumed, system, prompt }) + "\n");
+    appendFileSync(evidencePath, JSON.stringify({ botId, turnIndex, threadId: agent.OMB_THREAD_ID, unplanned: true, resumed, system, prompt }) + "\n");
     throw new Error(`Unplanned fixture turn for ${botId}: ${own.slice(0, 300)}`);
   }
   const plan: any = entry ?? (basePlan.turns ? basePlan.turns[turnIndex] : basePlan);
@@ -163,6 +166,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   let serial = 0;
   let closing = false;
   let failure: Error | undefined;
+  let childError = "";
   let rejectRun!: (error: Error) => void;
   const failed = new Promise<never>((_resolve, reject) => { rejectRun = reject; });
   const fail = (error: Error) => {
@@ -181,9 +185,9 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
     } catch { fail(new Error("Fixture MCP returned malformed JSON")); }
   });
   child.on("error", fail);
-  child.on("exit", (code, signal) => fail(new Error(`Fixture MCP exited unexpectedly: ${signal ?? code}`)));
+  child.on("exit", (code, signal) => fail(new Error(`Fixture MCP exited unexpectedly: ${signal ?? code}: ${childError.slice(-2000)}`)));
   child.stdin.on("error", fail);
-  child.stderr.resume();
+  child.stderr.on("data", (chunk) => { childError = (childError + chunk).slice(-2000); });
   const call = (method: string, params: unknown = {}) => new Promise<any>((resolve, reject) => {
     if (failure) { reject(failure); return; }
     const id = ++serial; pending.set(id, { resolve, reject });
@@ -255,7 +259,7 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
     closing = true;
     clearTimeout(timer); clearTimeout(delayTimer); clearInterval(gateTimer); lines.close(); child.stdin.destroy();
     await waitForExit(child, { signal: "SIGTERM", graceMs: 500 });
-    appendFileSync(`${planPath}.evidence.jsonl`, JSON.stringify({ botId, turnIndex, threadId: agent.OMB_THREAD_ID, pid: process.pid,
+    appendFileSync(evidencePath, JSON.stringify({ botId, turnIndex, threadId: agent.OMB_THREAD_ID, pid: process.pid,
       model: argv.includes("--model") ? arg("--model") : undefined,
       permissionMode: argv.includes("--permission-mode") ? arg("--permission-mode") : undefined,
       restricted: argv.includes("--restricted"), permissionPromptTool: argv.includes("--permission-prompt-tool"),

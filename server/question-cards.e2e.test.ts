@@ -17,7 +17,8 @@ const CHOICES = ["Yes, only the footer text", "Yes, the welcome text too", "No"]
 const OPEN = "What wording should the new footer text use?";
 const SETTLED = "Your downstream room requests have settled.";
 const ENGINE = `const dir = process.env.FAKE_CLAUDE_FIXTURE_DIR;
-process.env.FAKE_CLAUDE_ROOM_PLAN = dir + "/room-plan.json";`;
+process.env.FAKE_CLAUDE_ROOM_PLAN = dir + "/.openmausbot/tools/standalone/room-plan.json";
+process.env.FAKE_CLAUDE_ROOM_EVIDENCE_ROOT = dir + "/.openmausbot/workspaces";`;
 const TOKEN = `ops_fake-team-${randomBytes(8).toString("hex")}`;
 
 type Card = { requestId?: string; requestType?: string; options?: string[]; subtitle?: string; answered?: string; answeredText?: string; stopped?: boolean };
@@ -34,14 +35,14 @@ let inbox = "";
 const streams: AbortController[] = [];
 let frames: Frame[] = [];
 
-const file = (name: string) => join(team.home, name);
+const file = (name: string) => join(team.home, ".openmausbot", "tools", "standalone", name);
 const plan: Record<string, { script: unknown[] }> = {};
 const script = (botId: string, ...entries: unknown[]) => {
   (plan[botId] ??= { script: [] }).script.push(...entries);
   writeFileSync(file("room-plan.json"), JSON.stringify(plan));
 };
 const turns = (botId: string): Array<{ planKey?: string; threadId?: string; prompt: unknown }> => {
-  const path = file("room-plan.json.evidence.jsonl");
+  const path = join(team.home, ".openmausbot", "workspaces", botId, "room-plan.evidence.jsonl");
   return existsSync(path) ? readFileSync(path, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)).filter((turn) => turn.botId === botId) : [];
 };
 const told = (botId: string, key: string) => JSON.stringify(turns(botId).find((turn) => turn.planKey === key)?.prompt ?? "");
@@ -186,7 +187,7 @@ it("takes Cleo's own words in Ledger's chat as the answer to the card Ledger wai
 }, hostTimeout(150_000));
 
 it("turns Ledger's NEEDS INPUT question into the same card with a reply field, in its chat and in Cleo's inbox, and her reply there answers Ledger", async () => {
-  script(scout.id, ...handOn("QC3"), { key: "QC3-L-ASKED", match: ["stopped on a question for", "[OpenMausBot question from @Ledger", "QC3-JOB"], reply: "QC3-L-ASKED" });
+  script(scout.id, ...handOn("QC3"), { key: "QC3-L-ASKED", match: ["stopped on a question for", "[Dani Bot question from @Ledger", "QC3-JOB"], reply: "QC3-L-ASKED" });
   script(ledger.id,
     { key: "QC3-B2", match: ["QC3-BRIEF", "The person answered"], reply: "QC3-B2: Done, the new footer text is in." },
     { key: "QC3-B", match: ["QC3-BRIEF"], reply: `Checked: the footer text still uses the old template.\nNEEDS INPUT: ${OPEN}` });
@@ -215,7 +216,7 @@ it("turns Ledger's NEEDS INPUT question into the same card with a reply field, i
 }, hostTimeout(150_000));
 
 it("closes the open question as stopped when Cleo stops Ledger's work, in its chat and in her inbox", async () => {
-  script(scout.id, ...handOn("QC4"), { key: "QC4-L-ASKED", match: ["stopped on a question for", "[OpenMausBot question from @Ledger", "QC4-JOB"], reply: "QC4-L-ASKED" });
+  script(scout.id, ...handOn("QC4"), { key: "QC4-L-ASKED", match: ["stopped on a question for", "[Dani Bot question from @Ledger", "QC4-JOB"], reply: "QC4-L-ASKED" });
   script(ledger.id, { key: "QC4-B", match: ["QC4-BRIEF"], reply: `Checked.\nNEEDS INPUT: ${OPEN}` });
   const sinceQC4 = Date.now();
   await say(scout, inbox, "QC4-JOB: Have Ledger check the welcome text.");
