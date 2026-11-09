@@ -82,6 +82,9 @@ type Queued = z.infer<typeof queuedSchema>;
 type Tracked = z.infer<typeof trackedSchema>;
 /** What the person is told, and the words in a bot's reply that show it already told them. */
 type Told = { ok: boolean; line: string; marker: string };
+// Failure wording is localized and need not contain the app's name. Suppress the
+// fallback only when the bot actually relays this attempt's returned line.
+const failureReceipt = (line: string): Told => ({ ok: false, line, marker: line });
 type Author = { bot: BotRecord; summary: BotSummary } | { why: string };
 
 export interface DevsReportsDeps {
@@ -149,8 +152,6 @@ export const fixedLine = (version: string, language?: string) => serverLine(lang
 const fixedNote = (entry: Tracked, version: string) => `\n\n[From Dani Bot, not the person: the problem they reported with @devs on ${new Date(entry.at).toISOString().slice(0, 10)}${
   entry.words ? ` ("${entry.words}")` : ""} is fixed in ${version}, which this app now runs. The chat told them so and asked whether they want to try again; if their message answers that, help them try it again.]`;
 const droppedLine = (language: string | undefined) => serverLine(language, "server.reports.dropped");
-/** A failure line names Dani in every language: a bot reply that does has passed it on. */
-const FAILED_MARKER = "Dani";
 
 /** Rides on the turn that answers a @devs message. */
 const TURN_NOTE = "\n\n[From Dani Bot, not the person: this message tags @devs, so it is a bug report for the Dani team, Dani Bot's developers. Call report_bug once, first: what the person says went wrong; what you saw yourself in this conversation (errors, failed tools, stuck steps), or that you saw nothing unusual; and steps to reproduce. Leave out passwords, keys, tokens and file contents; Dani Bot adds the app's own diagnostics. Then tell the person, word for word, the line report_bug returns, and help with the problem if you can.]";
@@ -348,12 +349,12 @@ export function createDevsReports(deps: DevsReportsDeps) {
       track(entry, outcome.id, payload, person, entry.words);
       return { ok: true, line: sentLine(outcome.id, contact, language), marker: outcome.id };
     }
-    if (!outcome.retry) return { ok: false, line: refusedLine(outcome.detail, language), marker: FAILED_MARKER };
-    if (outbox.length >= MAX_OUTBOX) return { ok: false, line: fullLine(language), marker: FAILED_MARKER };
+    if (!outcome.retry) return failureReceipt(refusedLine(outcome.detail, language));
+    if (outbox.length >= MAX_OUTBOX) return failureReceipt(fullLine(language));
     outbox.push({ messageId: entry.messageId, threadId: entry.threadId, payload, firstAt: now(), attempts: 1,
       nextAt: now() + (outcome.retryAfterMs ?? RETRY_MS[0]), ...(person ? { person } : {}) });
     timer?.poke();
-    return { ok: false, line: notYetLine(outcome, language), marker: FAILED_MARKER };
+    return failureReceipt(notYetLine(outcome, language));
   }
 
   function deliver(entry: Waiting, author: Author): Promise<Told> {

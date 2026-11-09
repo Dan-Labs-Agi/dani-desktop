@@ -223,7 +223,7 @@ describe("what the person is told, in their language", () => {
     fx.busy.add("scout-main");
     fx.reports.note("scout-main", true);
     const answer = await fx.call("scout", "scout-main", { went_wrong: "Bilder laden nicht" });
-    const line = "An das Dani-Team gesendet (Bericht report-1). Milind und Omkar bekommen ihn per E-Mail und antworten dir an ada@example.com.";
+    const line = "An den Berichtsserver gesendet (Bericht report-1). Eine Antwort geht an ada@example.com.";
     expect(answer.body.text).toBe(`Sent. Tell the person this line in your reply, word for word: "${line}"`);
     fx.bot("scout-main", "Ich schaue mir das an.", { turnId: "t1", turnSucceeded: true });
     fx.busy.delete("scout-main");
@@ -238,7 +238,7 @@ describe("what the person is told, in their language", () => {
     fx.busy.add("scout-main");
     fx.reports.note("scout-main", true);
     const answer = await fx.call("scout", "scout-main", { went_wrong: "offline" });
-    const waiting = "Noch nicht gesendet: der Server des Dani-Teams war nicht erreichbar. Der Bericht ist gespeichert und wird so bald wie möglich von selbst gesendet, du musst ihn also nicht noch einmal senden.";
+    const waiting = "Noch nicht gesendet: der Berichtsserver war nicht erreichbar. Der Bericht ist gespeichert und wird so bald wie möglich von selbst gesendet, du musst ihn also nicht noch einmal senden.";
     expect(answer.body.text).toBe(`Not sent. Tell the person this line in your reply, word for word: "${waiting}"`);
     fx.bot("scout-main", waiting, { turnId: "t1", turnSucceeded: true });
     fx.busy.delete("scout-main");
@@ -246,7 +246,66 @@ describe("what the person is told, in their language", () => {
     expect(fx.notices("scout-main")).toEqual([]);
     fx.advance(RETRY_MS[0]);
     await fx.settle();
-    expect(fx.notices("scout-main")).toEqual(["notice: An das Dani-Team gesendet (Bericht report-2), nachdem ein früherer Versuch nicht geklappt hat. Milind und Omkar bekommen ihn per E-Mail."]);
+    expect(fx.notices("scout-main")).toEqual(["notice: An den Berichtsserver gesendet (Bericht report-2), nachdem ein früherer Versuch nicht durchkam."]);
+    fx.stop();
+  });
+});
+
+describe("localized failure-line receipts", () => {
+  it.each(["en", "de", "es", "fr", "hi", "it", "ja", "ko", "pl", "pt-br", "ru", "tr", "uk", "vi", "zh", "zh-tw"])("recognizes the exact relayed waiting and refusal lines in %s", async (language) => {
+    for (const outcome of [{ ok: false, retry: true, why: "offline" }, { ok: false, retry: false, why: "refused", detail: "Report refused." }] as SendOutcome[]) {
+      const fx = fixture({ outcomes: [outcome], lineLanguage: () => language });
+      fx.person("scout-main", "@devs a localized failure");
+      fx.busy.add("scout-main");
+      fx.reports.note("scout-main", true);
+      const answer = await fx.call("scout", "scout-main", { went_wrong: "a localized failure" });
+      const prefix = 'Not sent. Tell the person this line in your reply, word for word: "';
+      expect(String(answer.body.text).startsWith(prefix)).toBe(true);
+      const line = String(answer.body.text).slice(prefix.length, -1);
+      fx.bot("scout-main", line, { turnId: "receipt", turnSucceeded: true });
+      fx.busy.delete("scout-main");
+      await fx.settle();
+      await fx.settle();
+      expect(fx.notices("scout-main")).toEqual([]);
+      if (outcome.retry) {
+        fx.advance(RETRY_MS[0]);
+        await fx.settle();
+        expect(fx.sent).toHaveLength(2);
+        expect(fx.notices("scout-main")).toHaveLength(1);
+      }
+      fx.stop();
+    }
+  });
+
+  it("does not treat unrelated branded speech as a failure receipt", async () => {
+    const fx = fixture({ outcomes: [{ ok: false, retry: true, why: "offline" }] });
+    fx.person("scout-main", "@devs offline");
+    fx.busy.add("scout-main");
+    fx.reports.note("scout-main", true);
+    await fx.call("scout", "scout-main", { went_wrong: "offline" });
+    fx.bot("scout-main", "Dani Bot has a purple mascot.", { turnId: "not-a-receipt", turnSucceeded: true });
+    fx.busy.delete("scout-main");
+    await fx.settle();
+    await fx.settle();
+    expect(fx.notices("scout-main")).toHaveLength(1);
+    expect(fx.notices("scout-main")[0]).toContain("the report server could not be reached");
+    fx.stop();
+  });
+
+  it("ignores an earlier turn's receipt and a receipt in another conversation", async () => {
+    const fx = fixture({ outcomes: [{ ok: false, retry: true, why: "offline" }] });
+    const receipt = "Not sent yet: the report server could not be reached. The report is saved and goes on its own as soon as it can, so there is no need to send it again.";
+    fx.bot("scout-main", receipt, { turnId: "earlier", turnSucceeded: true });
+    fx.person("scout-main", "@devs a new request");
+    fx.busy.add("scout-main");
+    fx.reports.note("scout-main", true);
+    await fx.call("scout", "scout-main", { went_wrong: "a new request" });
+    fx.bot("rover-main", receipt, { turnId: "other-thread", turnSucceeded: true });
+    fx.bot("scout-main", "I am checking.", { turnId: "new-turn", turnSucceeded: true });
+    fx.busy.delete("scout-main");
+    await fx.settle();
+    expect(fx.notices("scout-main")).toEqual([`notice: ${receipt}`]);
+    expect(fx.notices("rover-main")).toEqual([]);
     fx.stop();
   });
 });
@@ -257,7 +316,7 @@ describe("a report that cannot go yet", () => {
     fx.person("scout-main", "@devs offline");
     fx.advance(NO_ANSWER_MS);
     await fx.settle();
-    expect(fx.notices("scout-main")).toEqual(["notice: Not sent yet: the Dani team's server could not be reached. The report is saved and goes on its own as soon as it can, so there is no need to send it again."]);
+    expect(fx.notices("scout-main")).toEqual(["notice: Not sent yet: the report server could not be reached. The report is saved and goes on its own as soon as it can, so there is no need to send it again."]);
     const saved = JSON.parse(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8"));
     expect(saved.outbox).toHaveLength(1);
     expect(saved.outbox[0].payload.description).toContain("offline");
@@ -272,7 +331,7 @@ describe("a report that cannot go yet", () => {
     await fx.settle();
     expect(fx.sent).toHaveLength(3);
     expect(fx.sent[2]).toEqual(fx.sent[0]);
-    expect(fx.notices("scout-main").at(-1)).toBe("notice: Sent to the Dani team (report report-3) after an earlier try did not go through. Milind and Omkar get it by email.");
+    expect(fx.notices("scout-main").at(-1)).toBe("notice: Sent to the report server (report report-3) after an earlier try did not go through.");
     expect(JSON.parse(readFileSync(join(fx.dataDir, DEVS_REPORTS_FILE), "utf8")).outbox).toEqual([]);
     fx.stop();
   });
@@ -297,7 +356,7 @@ describe("a report that cannot go yet", () => {
     const second = fixture({ dataDir: first.dataDir });
     await second.settle();
     expect(second.sent).toHaveLength(1);
-    expect(second.sent[0]!.description).toContain("OpenMausBot restarted before a bot wrote one");
+    expect(second.sent[0]!.description).toContain("Dani Bot restarted before a bot wrote one");
     second.stop();
     writeFileSync(join(first.dataDir, DEVS_REPORTS_FILE), "not json");
     const third = fixture({ dataDir: first.dataDir });
