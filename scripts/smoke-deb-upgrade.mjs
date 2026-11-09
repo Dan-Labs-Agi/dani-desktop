@@ -70,9 +70,9 @@ try {
     stdio: "inherit",
   });
   for (const directory of [
-    "/opt/Dani Bot",
-    "/opt/Dani Bot/resources",
-    "/opt/Dani Bot/resources/cua-linux-x64",
+    "/opt/danibot",
+    "/opt/danibot/resources",
+    "/opt/danibot/resources/cua-linux-x64",
   ]) {
     const details = fs.lstatSync(directory);
     if (!details.isDirectory() || details.isSymbolicLink()) fail(`unsafe upgraded directory: ${directory}`);
@@ -81,14 +81,14 @@ try {
     }
   }
   for (const executable of ["cua-driver", "cua-cursor-theme"]) {
-    const file = path.join("/opt/Dani Bot/resources/cua-linux-x64", executable);
+    const file = path.join("/opt/danibot/resources/cua-linux-x64", executable);
     const details = fs.lstatSync(file);
     if (!details.isFile() || details.isSymbolicLink()) fail(`unsafe upgraded executable: ${file}`);
     if (details.uid !== 0 || details.gid !== 0 || (details.mode & 0o777) !== 0o755) {
       fail(`upgraded executable is not root:root 0755: ${file}`);
     }
   }
-  const chromiumSandbox = "/opt/Dani Bot/chrome-sandbox";
+  const chromiumSandbox = "/opt/danibot/chrome-sandbox";
   const sandboxDetails = fs.lstatSync(chromiumSandbox);
   if (!sandboxDetails.isFile() || sandboxDetails.isSymbolicLink()) {
     fail(`unsafe upgraded Chromium sandbox: ${chromiumSandbox}`);
@@ -100,6 +100,10 @@ try {
   ) {
     fail(`upgraded Chromium sandbox is not root:root 4755: ${chromiumSandbox}`);
   }
+  if (fs.existsSync("/opt/Dani Bot/resources/legacy-upgrade-fixture")) fail("dpkg left its old tracked payload behind");
+  if (fs.realpathSync("/usr/bin/danibot") !== "/opt/danibot/danibot") fail("CLI still resolves to the old install root");
+  const desktop = fs.readFileSync("/usr/share/applications/danibot.desktop", "utf8");
+  if (!desktop.includes("Exec=/opt/danibot/danibot")) fail("desktop entry points at the wrong install root");
   const installedVersion = execFileSync("dpkg-query", ["-W", "-f=${Version}", "danibot"], {
     encoding: "utf8",
   }).trim();

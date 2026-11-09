@@ -24,6 +24,7 @@ directories:
 
 # electron-builder makes copied directories group-writable by default. The
 # Linux CUA trust boundary requires root-owned package ancestors to be 0755.
+beforePack: ./scripts/before-pack.mjs
 afterPack: ./scripts/after-pack.mjs
 
 # The app is three self-contained pieces, none needing node_modules at
@@ -237,6 +238,7 @@ linux:
       Keywords: AI;Agents;Chat;Productivity;
 
 deb:
+  appArmorProfile: build/linux-danibot-browser.apparmor
   packageCategory: utils
   priority: optional
   # Add the narrow browser policy's parser without replacing Electron's

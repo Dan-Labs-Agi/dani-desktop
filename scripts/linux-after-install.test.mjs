@@ -73,7 +73,7 @@ afterEach(() => {
 describe("Linux DEB sandbox policy", () => {
   it("allows user namespaces only for the exact installed desktop and browser executables", () => {
     const policy = fs.readFileSync(browserPolicy, "utf8").replace(/^\s*#.*$/gm, "");
-    expect(policy).toContain('profile danibot-browser "/opt/Dani Bot/{danibot,resources/browser-engine/chrome/chrome-headless-shell-linux64/chrome-headless-shell}" flags=(unconfined)');
+    expect(policy).toContain('profile danibot-browser "/opt/danibot/{danibot,resources/browser-engine/chrome/chrome-headless-shell-linux64/chrome-headless-shell}" flags=(unconfined)');
     expect(policy).toContain("userns,");
     expect(policy).not.toMatch(/\*|@\{HOME\}|\/home\/|\/tmp\//);
   });
@@ -339,8 +339,9 @@ describe.skipIf(process.platform !== "linux")("Linux DEB upgrade hook", () => {
 
 it("quotes the installed path when removing the alternatives entry", () => {
   const text = fs.readFileSync(removeHook, "utf8");
-  expect(text).toContain('update-alternatives --remove danibot "/opt/Dani Bot/danibot"');
-  expect(text).toContain('= "/opt/Dani Bot/danibot" ]');
+  expect(text).toContain('update-alternatives --remove danibot "$executable"');
+  expect(text).toContain('= "$executable" ]');
+  expect(text).toContain('"/opt/danibot/danibot" "/opt/Dani Bot/danibot"');
 });
 
 it("seeds the current Electron package-name profile in Linux lifecycle smoke", () => {
