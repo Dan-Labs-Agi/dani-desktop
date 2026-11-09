@@ -20,11 +20,18 @@ const evaluation = JSON.parse(readFileSync(new URL("./testing/fixtures/setup-sug
 };
 
 describe("the prompt", () => {
-  it("is the one the recorded run used, for every scenario", () => {
+  it("replays every recorded prompt with only the explicit product-label change", () => {
+    // The source record is a historical real-CLI evaluation, not a run of this version.
+    // Keep it immutable and compare every byte after this single exact legacy prefix.
+    const legacy = "You write the answer options for the first message of a new bot in OpenMausBot,";
+    const current = "You write the answer options for the first message of a new bot in Dani Bot,";
     for (const { id, ctx } of evaluation.scenarios) {
+      const recorded = evaluation.prompts[id];
+      expect(recorded.startsWith(legacy), id).toBe(true);
       const prompt = setupSuggestionPrompt({ name: ctx.name ?? undefined, title: ctx.title, department: ctx.department, apps: ctx.apps ?? [],
         aboutMe: ctx.about || undefined, otherJobs: ctx.jobs ?? [], language: ctx.language, canBrowse: ctx.canBrowse ?? true });
-      expect(prompt, id).toBe(evaluation.prompts[id]);
+      expect(prompt.startsWith(current), id).toBe(true);
+      expect(prompt, id).toBe(current + recorded.slice(legacy.length));
     }
   });
 
