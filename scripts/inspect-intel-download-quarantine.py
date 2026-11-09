@@ -99,7 +99,32 @@ def main():
             break
         time.sleep(2)
     else:
-        raise RuntimeError('Safari download did not complete; no curl substitute or acceptance claim')
+        # Observe only download-directory metadata, not file bodies or URLs.
+        entries = []
+        for entry in downloads.iterdir():
+            if entry.is_dir():
+                children = [{'name': child.name, 'bytes': child.stat().st_size}
+                            for child in entry.iterdir() if child.is_file() and child.name != 'Info.plist']
+            else:
+                children = []
+            entries.append({'name': entry.name, 'bytes': entry.stat().st_size,
+                            'directory': entry.is_dir(), 'children': children})
+        emit({'event': 'incomplete-safari-download-metadata', 'elapsed_seconds': 240, 'entries': entries})
+        # Closing tabs may fail if a first-run sheet is present. Only capture
+        # pixels once Safari confirms there is no sensitive URL in any tab.
+        closed = osa('tell application "Safari"\nclose every tab of every window\nreturn count of tabs of every window\nend tell', required=False)
+        if closed.returncode == 0 and closed.stdout.strip() and all(part.strip() == '0' for part in closed.stdout.strip().split(',') if part.strip()):
+            screenshot(directory, 'SAFARI_DOWNLOAD_DIAGNOSTIC')
+        else:
+            # A successful quit guarantees private browser URLs are off screen.
+            quit_result = osa('tell application "Safari" to quit', required=False)
+            if quit_result.returncode == 0:
+                time.sleep(2)
+                screenshot(directory, 'DOWNLOAD_DIAGNOSTIC_BROWSER_CLOSED')
+            emit({'event': 'diagnostic-url-safety', 'tabs_closed': False,
+                  'safari_quit': quit_result.returncode == 0,
+                  'screenshot_skipped_if_url_clearance_unverified': quit_result.returncode != 0})
+        raise RuntimeError('Safari download did not complete; metadata observed, no retry or curl substitute')
     osa('tell application "Safari" to quit')
     digest = hashlib.sha256(file.read_bytes()).hexdigest()
     if digest != EXPECTED_HASH:
