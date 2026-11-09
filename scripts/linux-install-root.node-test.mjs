@@ -37,3 +37,12 @@ test('published migration is exact real source and required before publication',
  assert.doesNotMatch(shell,/--no-sandbox|--disable-gpu-sandbox|chown[^\n]*\/opt/);
  assert.match(read('.github/workflows/release.yml'),/needs: \[prepare, linux, windows, macos, download_check, checks, published_deb_migration\]/);
 });
+
+test('DEB extraction and migration desktop assertions follow the real builder paths',()=>{
+ const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+ const verifier=read('scripts/verify-linux-package.mjs');
+ assert.ok(verifier.includes('path.join(extracted, "opt", "danibot")'));
+ assert.ok(verifier.includes("'Exec=/opt/danibot/danibot %U'"));
+ assert.ok(!verifier.includes('path.join(extracted, "opt", "Dani Bot")'));
+ assert.ok(read('scripts/verify-deb-published-migration.cjs').includes('/usr/share/applications/com.danibot.app.desktop'));
+});

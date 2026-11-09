@@ -432,7 +432,7 @@ for (const expected of [
 const extracted = mkdtempSync(path.join(tmpdir(), "omb-deb-verify-"));
 try {
   execFileSync("dpkg-deb", ["--extract", deb, extracted]);
-  const debAppRoot = path.join(extracted, "opt", "Dani Bot");
+  const debAppRoot = path.join(extracted, "opt", "danibot");
   requireDirectoryMode(debAppRoot, 0o755);
   const debResources = path.join(debAppRoot, "resources");
   // Routes the in-app updater to the package-manager hand-off.
@@ -469,7 +469,7 @@ try {
   const desktop = readFileSync(desktopFile, "utf8");
   for (const expected of [
     "Name=Dani Bot",
-    'Exec="/opt/danibot/danibot" %U',
+    'Exec=/opt/danibot/danibot %U',
     "Icon=danibot",
     "StartupWMClass=com.danibot.app",
     "Categories=Utility;",

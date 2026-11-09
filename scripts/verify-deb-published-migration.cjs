@@ -1,4 +1,4 @@
-// Main architecture, disposable Windows runner only. Exercise the installed app, not win-unpacked.
+// Real published DEB upgrade in one disposable Linux profile.
 const fs = require('node:fs');
 const {ownedProfileFiles}=require('./owned-profile-files.cjs');
 const path = require('node:path');
@@ -118,7 +118,7 @@ async function inspect(page,label) {
    assert.deepEqual(state,JSON.parse(fs.readFileSync(snapshot,'utf8')),'published onboarding/bot identity changed during upgrade');
    assert.equal(fs.existsSync('/opt/Dani Bot/danibot'),false,'dpkg left old tracked executable behind');
    assert.equal(fs.realpathSync('/usr/bin/danibot'),executable,'CLI maps to wrong installation');
-   assert.match(fs.readFileSync('/usr/share/applications/danibot.desktop','utf8'),/Exec=\/opt\/danibot\/danibot/);
+   assert.match(fs.readFileSync('/usr/share/applications/com.danibot.app.desktop','utf8'),/Exec=\/opt\/danibot\/danibot/);
  }
  await ui.browser.close();stop();await sleep(3000);
  ui=await open();await inspect(ui.page,'RELAUNCHED');
