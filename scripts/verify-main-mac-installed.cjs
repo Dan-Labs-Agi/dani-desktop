@@ -99,11 +99,11 @@ async function open() {
     throw Error('Installed app did not expose its local UI within120seconds');
   } catch(error) {
     if(browser) {
-      for(const [index,page] of browser.contexts().flatMap(c=>c.pages()).entries()) {
+      for(const [index,page] of browser.contexts().flatMap(c=>c.pages()).slice(0,2).entries()) {
         try {console.log('MAIN_STARTUP_PAGE',JSON.stringify({index,url:page.url().startsWith('http://127.0.0.1:') ? page.url().split('?')[0].slice(0,160) : 'non-local-startup-page'}));await capture(page,'STARTUP_FAILURE_'+index);}
         catch(captureError) {console.log('MAIN_STARTUP_CAPTURE_ERROR',captureError.message);}
       }
-      await browser.close().catch(()=>{});
+      await Promise.race([browser.close().catch(()=>{}),sleep(3000)]);
     }
     const desktop=path.join(temp,'startup-failure-desktop.png');
     const taken=spawnSync('/usr/sbin/screencapture',['-x',desktop],{encoding:'utf8',timeout:10000});
@@ -118,7 +118,7 @@ async function open() {
 
 async function capture(page,label) {
  await page.waitForTimeout(1500);
- const png=await page.screenshot({animations:'disabled'});const b64=png.toString('base64');
+ const png=await page.screenshot({animations:'disabled',timeout:3000});const b64=png.toString('base64');
  for(let i=0;i<b64.length;i+=32000) console.log('MAIN_'+label+'_SCREENSHOT_CHUNK:'+b64.slice(i,i+32000));
  console.log('MAIN_'+label+'_SCREENSHOT_END');
 }
