@@ -1,10 +1,10 @@
-name: Private Intel candidate acceptance
-on:
-  workflow_dispatch:
+name: Retained Intel exact-byte native revalidation
+true:
+  workflow_dispatch: null
 permissions:
   contents: read
 concurrency:
-  group: private-intel-candidate-f36ad5a
+  group: retained-intel-native-isolation
   cancel-in-progress: false
 jobs:
   build_install_download:
@@ -23,126 +23,51 @@ jobs:
       CANDIDATE_TAG: v0.1.139-intel-preview.1
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: f36ad5a776917c38c455e6beb1d285af3715e002
-          persist-credentials: false
-      - name: Verify exact source and unused candidate tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
-          gh api "repos/$GH_REPO/releases?per_page=100" > "$RUNNER_TEMP/existing-releases.json"
-          gh api "repos/$GH_REPO/git/matching-refs/tags/$CANDIDATE_TAG" > "$RUNNER_TEMP/existing-tags.json"
-          python3 - <<'PY'
-          import json, os
-          tag=os.environ['CANDIDATE_TAG']
-          releases=json.load(open(os.environ['RUNNER_TEMP']+'/existing-releases.json'))
-          refs=json.load(open(os.environ['RUNNER_TEMP']+'/existing-tags.json'))
-          assert not any(r['tag_name']==tag for r in releases), 'Candidate already exists; refuse replacement'
-          assert not any(r['ref']=='refs/tags/'+tag for r in refs), 'Tag already exists; refuse replacement'
-          PY
-      - name: Inspect existing native account Keychain metadata without changes
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os,pwd,pathlib,subprocess,json
-          home=pwd.getpwuid(os.getuid()).pw_dir
-          result=subprocess.run(['/usr/bin/security','default-keychain','-d','user'],capture_output=True,text=True,timeout=10)
-          default=result.stdout.strip().strip('"')
-          record={'HOME':os.environ.get('HOME'),'account_home':home,'keychain_directory_exists':pathlib.Path(home,'Library','Keychains').is_dir(),'default_query_status':result.returncode,'default_keychain':default,'default_exists':bool(default) and pathlib.Path(default).is_file()}
-          print('DANI_NATIVE_KEYCHAIN_METADATA '+json.dumps(record))
-          assert os.environ.get('HOME')==home,'Native HOME mismatch; do not alter Keychain'
-          assert result.returncode==0 and record['default_exists'],'No existing default Keychain; stop before build, no reset/create/unlock'
-          PY
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
-      - run: pnpm install --frozen-lockfile
-      - run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs scripts/release-pipeline.node-test.mjs
-      - run: pnpm package:prepare
-      - run: pnpm build:speech && pnpm build:cua
-      - run: pnpm exec electron-builder --mac --x64 --publish never -c.mac.identity=-
-      - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - name: Validate exact built DMG, Dani Free setup, avatar presentation, onboarding and relaunch
-        run: |
-          set -euo pipefail
-          GITHUB_SHA="$CANDIDATE_SOURCE" node scripts/verify-main-mac-installed.cjs | tee "$RUNNER_TEMP/built-native.log"
-          grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS "$RUNNER_TEMP/built-native.log"
-          grep -q MAIN_INSTALLED_RELAUNCH_PASS "$RUNNER_TEMP/built-native.log"
-          grep -q MAIN_INSTALLED_AVATAR_PRESENTATION_PASS "$RUNNER_TEMP/built-native.log"
-      - name: Retain only passed exact bytes in new private draft
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
-          test -f release/DaniBot-0.1.139-x64.dmg
-          shasum -a 256 release/DaniBot-0.1.139-x64.dmg > "$RUNNER_TEMP/INTEL-SHA256SUMS.txt"
-          python3 - <<'PY'
-          import hashlib,json,os,pathlib
-          file=pathlib.Path('release/DaniBot-0.1.139-x64.dmg')
-          record={'source':os.environ['CANDIDATE_SOURCE'],'filename':file.name,'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),'bytes':file.stat().st_size,'audience':'private test candidate','built_native_validation':'passed','downloaded_native_validation':'pending','limits':['Full test matrix is not passing; not production-ready.','WebGL 3D rendering on the runner is not verified; usable approved static crowned Dani fallback is tested when WebGL initialization fails.','Ad-hoc signing only; not Developer ID signed or notarized. macOS trust acceptance and the actual browser/Finder dialog are unverified.','Dani Free tools setup is tested without starting a model service. Live Kilo model response is unverified; no external model request was made.','No security exception is performed or authorized by this candidate.']}
-          pathlib.Path(os.environ['RUNNER_TEMP']+'/CANDIDATE.json').write_text(json.dumps(record,indent=2)+'\n')
-          PY
-          cat > "$RUNNER_TEMP/candidate-notes.txt" <<'EOF'
-          Private Intel test candidate of the new Dani Free architecture. Not production-ready and not a replacement for public/latest Downloads.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 31886634e959d73c5bdbe6a2ca7d015544a897f0
+        persist-credentials: false
+    - name: Inspect existing native account Keychain metadata without changes
+      run: 'set -euo pipefail
 
-          Exact built DMG native installation, Dani Free tool setup without a model service, onboarding, relaunch, synthetic profile preservation and usable avatar presentation checks passed. The runner uses an explicit decoded static fallback of the approved crowned Dani when WebGL is unavailable; 3D rendering on this runner is not verified. Downloaded-byte verification is pending until CANDIDATE.json says passed.
+        python3 - <<''PY''
 
-          Known limits: full test matrix is not passing; live Kilo model response is unverified; ad-hoc signing only, no Developer ID or notarization. Ordinary browser-download/macOS trust acceptance and the exact Finder dialog are unverified. No security exception was performed. Do not treat this page as an instruction to override a damaged or malware warning.
-          EOF
-          gh release create "$CANDIDATE_TAG" --target "$CANDIDATE_SOURCE" --draft --prerelease --title 'Dani Desktop Intel private test candidate' --notes-file "$RUNNER_TEMP/candidate-notes.txt"
-          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/before-upload.json"
-          python3 - <<'PY'
-          import json,os
-          r=json.load(open(os.environ['RUNNER_TEMP']+'/before-upload.json'))
-          assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']
-          PY
-          gh release upload "$CANDIDATE_TAG" release/DaniBot-0.1.139-x64.dmg "$RUNNER_TEMP/INTEL-SHA256SUMS.txt" "$RUNNER_TEMP/CANDIDATE.json"
-          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish,url,assets > "$RUNNER_TEMP/draft-state.json"
-          python3 - <<'PY'
-          import json,os
-          r=json.load(open(os.environ['RUNNER_TEMP']+'/draft-state.json'))
-          assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']
-          print('PRIVATE_DRAFT_RETAINED '+r['url'])
-          PY
-      - name: Download retained bytes and validate independently in a fresh disposable profile
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          mv release "$RUNNER_TEMP/built-release"
-          mkdir release
-          gh release download "$CANDIDATE_TAG" --pattern DaniBot-0.1.139-x64.dmg --dir release
-          python3 - <<'PY'
-          import hashlib,json,os,pathlib
-          meta=json.load(open(os.environ['RUNNER_TEMP']+'/CANDIDATE.json'))
-          file=pathlib.Path('release')/meta['filename']
-          assert file.stat().st_size==meta['bytes']
-          assert hashlib.sha256(file.read_bytes()).hexdigest()==meta['sha256']
-          print('PRIVATE_DOWNLOADED_EXACT_BYTES '+json.dumps({k:meta[k] for k in ['source','filename','sha256','bytes']}))
-          PY
-          mkdir "$RUNNER_TEMP/downloaded-profile"
-          ln -s "$RUNNER_TEMP/smoke-tools" "$RUNNER_TEMP/downloaded-profile/smoke-tools"
-          RUNNER_TEMP="$RUNNER_TEMP/downloaded-profile" GITHUB_SHA="$CANDIDATE_SOURCE" node scripts/verify-main-mac-installed.cjs | tee "$RUNNER_TEMP/downloaded-native.log"
-          grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS "$RUNNER_TEMP/downloaded-native.log"
-          grep -q MAIN_INSTALLED_RELAUNCH_PASS "$RUNNER_TEMP/downloaded-native.log"
-          grep -q MAIN_INSTALLED_AVATAR_PRESENTATION_PASS "$RUNNER_TEMP/downloaded-native.log"
-          python3 - <<'PY'
-          import json,os,pathlib
-          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'CANDIDATE.json'
-          r=json.loads(p.read_text());r['downloaded_native_validation']='passed';p.write_text(json.dumps(r,indent=2)+'\n')
-          PY
-          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/before-final-status.json"
-          python3 - <<'PY'
-          import json,os
-          r=json.load(open(os.environ['RUNNER_TEMP']+'/before-final-status.json'))
-          assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']
-          PY
-          gh release upload "$CANDIDATE_TAG" "$RUNNER_TEMP/CANDIDATE.json" --clobber
-          gh release view "$CANDIDATE_TAG" --json isDraft,targetCommitish,url,assets
-      # Never publish this draft, change latest, upload Actions storage, or click a macOS exception.
+        import os,pwd,pathlib,subprocess,json
+
+        home=pwd.getpwuid(os.getuid()).pw_dir
+
+        result=subprocess.run([''/usr/bin/security'',''default-keychain'',''-d'',''user''],capture_output=True,text=True,timeout=10)
+
+        default=result.stdout.strip().strip(''"'')
+
+        record={''HOME'':os.environ.get(''HOME''),''account_home'':home,''keychain_directory_exists'':pathlib.Path(home,''Library'',''Keychains'').is_dir(),''default_query_status'':result.returncode,''default_keychain'':default,''default_exists'':bool(default)
+        and pathlib.Path(default).is_file()}
+
+        print(''DANI_NATIVE_KEYCHAIN_METADATA ''+json.dumps(record))
+
+        assert os.environ.get(''HOME'')==home,''Native HOME mismatch; do not alter Keychain''
+
+        assert result.returncode==0 and record[''default_exists''],''No existing default Keychain; stop before build, no reset/create/unlock''
+
+        PY
+
+        '
+    - name: Verify retained exact bytes twice without rebuilding or replacing installer
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: "set -euo pipefail\nmkdir release\ngh release view \"$CANDIDATE_TAG\" --json isDraft,targetCommitish,url,assets > \"$RUNNER_TEMP/candidate.json\"\
+        \npython3 - <<'PY'\nimport json,os\nr=json.load(open(os.environ['RUNNER_TEMP']+'/candidate.json'))\nassert r['isDraft'] and\
+        \ r['targetCommitish']==os.environ['CANDIDATE_SOURCE']\nprint('RETAINED_CANDIDATE '+r['url'])\nPY\ngh release download \"$CANDIDATE_TAG\"\
+        \ --pattern DaniBot-0.1.139-x64.dmg --pattern CANDIDATE.json --dir release\npython3 - <<'PY'\nimport json,pathlib,hashlib,os\n\
+        r=json.load(open('release/CANDIDATE.json'));f=pathlib.Path('release')/r['filename']\nassert r['source']==os.environ['CANDIDATE_SOURCE']\n\
+        assert r['bytes']==327719528 and r['sha256']=='6d0ba0cb1cbf5b8b6304be720f627ac8f7dc807dc7f3021fef297ea513d5b37a'\nassert f.stat().st_size==r['bytes']\
+        \ and hashlib.sha256(f.read_bytes()).hexdigest()==r['sha256']\nprint('RETAINED_EXACT_BYTES '+json.dumps(r))\nPY\nnpm install\
+        \ --prefix \"$RUNNER_TEMP/smoke-tools\" --no-audit --no-fund playwright-core@1.56.1\nfor pass in first second; do\n  mkdir \"\
+        $RUNNER_TEMP/$pass-profile\"\n  ln -s \"$RUNNER_TEMP/smoke-tools\" \"$RUNNER_TEMP/$pass-profile/smoke-tools\"\n  RUNNER_TEMP=\"\
+        $RUNNER_TEMP/$pass-profile\" GITHUB_SHA=\"$CANDIDATE_SOURCE\" node scripts/verify-main-mac-installed.cjs | tee \"$RUNNER_TEMP/$pass-native.log\"\
+        \n  grep -q DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS \"$RUNNER_TEMP/$pass-native.log\"\n  grep -q MAIN_INSTALLED_RELAUNCH_PASS\
+        \ \"$RUNNER_TEMP/$pass-native.log\"\n  grep -q MAIN_INSTALLED_AVATAR_PRESENTATION_PASS \"$RUNNER_TEMP/$pass-native.log\"\ndone\n\
+        python3 - <<'PY'\nimport json,pathlib\np=pathlib.Path('release/CANDIDATE.json');r=json.loads(p.read_text());r['downloaded_native_validation']='passed';r['verification_source']='31886634e959d73c5bdbe6a2ca7d015544a897f0';r['downloaded_native_passes']=2;p.write_text(json.dumps(r,indent=2)+'\\\
+        n')\nPY\ngh release view \"$CANDIDATE_TAG\" --json isDraft,targetCommitish > \"$RUNNER_TEMP/final.json\"\npython3 - <<'PY'\n\
+        import json,os\nr=json.load(open(os.environ['RUNNER_TEMP']+'/final.json'));assert r['isDraft'] and r['targetCommitish']==os.environ['CANDIDATE_SOURCE']\n\
+        PY\ngh release upload \"$CANDIDATE_TAG\" release/CANDIDATE.json --clobber\ngh release view \"$CANDIDATE_TAG\" --json isDraft,targetCommitish,url,assets\n"
