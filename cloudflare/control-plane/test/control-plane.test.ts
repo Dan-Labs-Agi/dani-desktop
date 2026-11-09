@@ -8,7 +8,7 @@ import { buildOTPEmail, sendOTPEmail } from "../src/email";
 import worker from "../src/index";
 import { sha256 } from "../src/installations";
 
-const BASE_URL = "https://auth.DaniBot.test";
+const BASE_URL = "https://auth.danibot.test";
 
 interface CallOptions {
   method?: string;
@@ -386,7 +386,7 @@ describe("control-plane migrations and health", () => {
       COMPANION_HOST_SUFFIX: env.COMPANION_HOST_SUFFIX,
       CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN,
       CLOUDFLARE_ENDPOINT_ACCOUNTS: env.CLOUDFLARE_ENDPOINT_ACCOUNTS,
-      CLOUDFLARE_API_TOKEN_DaniBOT_SI: env.CLOUDFLARE_API_TOKEN_DaniBOT_SI,
+      CLOUDFLARE_API_TOKEN_MAUSBOT_SI: env.CLOUDFLARE_API_TOKEN_MAUSBOT_SI,
       HIGHLEVEL_CLIENT_ID: env.HIGHLEVEL_CLIENT_ID,
       HIGHLEVEL_REDIRECT_URL: env.HIGHLEVEL_REDIRECT_URL,
       HIGHLEVEL_SCOPES: env.HIGHLEVEL_SCOPES,
@@ -989,21 +989,21 @@ describe("HTTP boundary hardening", () => {
     blocked.headers.forEach((value, name) => { serializedHeaders += `${name}: ${value}\n`; });
     expect(serializedHeaders).not.toContain("*");
 
-    const allowed = await call("/v1/me", { origin: "https://app.DaniBot.test" });
+    const allowed = await call("/v1/me", { origin: "https://app.danibot.test" });
     expect(allowed.status).toBe(401);
-    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.DaniBot.test");
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("https://app.danibot.test");
     expect(allowed.headers.get("cache-control")).toBe("no-store");
 
     const deniedPreflight = await call("/v1/installations", {
       method: "OPTIONS",
-      origin: "https://app.DaniBot.test",
+      origin: "https://app.danibot.test",
       headers: {
         "access-control-request-method": "POST",
         "access-control-request-headers": "authorization, x-unexpected",
       },
     });
     expect(deniedPreflight.status).toBe(403);
-    expect(deniedPreflight.headers.get("access-control-allow-origin")).toBe("https://app.DaniBot.test");
+    expect(deniedPreflight.headers.get("access-control-allow-origin")).toBe("https://app.danibot.test");
   });
 });
 

@@ -16,12 +16,12 @@ import {
   type AccountSnapshot,
 } from "../src/endpoint-accounts";
 
-const TOKEN_SECRET = "CLOUDFLARE_API_TOKEN_DaniBOT_SI";
+const TOKEN_SECRET = "CLOUDFLARE_API_TOKEN_MAUSBOT_SI";
 const TOKEN = "test-only-Danibot-si-api-token-with-no-real-access";
 const SECOND_ENTRY = {
   accountId: "2B".repeat(16),
   zoneId: "3c".repeat(16),
-  companionHostSuffix: "Danibot.si",
+  companionHostSuffix: "danibot.si",
   apiTokenSecret: TOKEN_SECRET,
 };
 
@@ -55,7 +55,7 @@ describe("endpoint account configuration", () => {
     expect(configured.endpointAccountIssues).toEqual([]);
     expect(configured.endpointAccounts.slice(1).map(({ apiToken: _token, ...account }) => account)).toEqual([{
       accountId: "bbb5305f06e28a6f2abaac299f3b09dc",
-      companionHostSuffix: "Danibot.si",
+      companionHostSuffix: "danibot.si",
       dnsRecordLimit: 3500,
       minAppVersion: "0.1.104",
       newEndpoints: true,
@@ -76,8 +76,8 @@ describe("endpoint account configuration", () => {
     expect(deployed.map(({ companionHostSuffix, dnsRecordLimit, tunnelLimit }) => (
       { companionHostSuffix, dnsRecordLimit, tunnelLimit }
     ))).toEqual([
-      { companionHostSuffix: "DaniBot.com", dnsRecordLimit: 3500, tunnelLimit: 1000 },
-      { companionHostSuffix: "Danibot.si", dnsRecordLimit: 3500, tunnelLimit: 1000 },
+      { companionHostSuffix: "danibot.com", dnsRecordLimit: 3500, tunnelLimit: 1000 },
+      { companionHostSuffix: "danibot.si", dnsRecordLimit: 3500, tunnelLimit: 1000 },
     ]);
   });
 
@@ -89,7 +89,7 @@ describe("endpoint account configuration", () => {
       expect(config.endpointAccounts).toEqual([config.cloudflare, {
         accountId: "2b".repeat(16),
         apiToken: TOKEN,
-        companionHostSuffix: "Danibot.si",
+        companionHostSuffix: "danibot.si",
         dnsRecordLimit: 200,
         minAppVersion: "0.1.103",
         newEndpoints: true,
@@ -110,7 +110,7 @@ describe("endpoint account configuration", () => {
     // Closed to new endpoints, keeping the ones it holds.
     const closed = readConfig(withAccounts([{ ...SECOND_ENTRY, newEndpoints: false }]));
     expect(closed.endpointAccountIssues).toEqual([]);
-    expect(closed.endpointAccounts[1]).toMatchObject({ companionHostSuffix: "Danibot.si", newEndpoints: false });
+    expect(closed.endpointAccounts[1]).toMatchObject({ companionHostSuffix: "danibot.si", newEndpoints: false });
   });
 
   it("drops a bad entry with a redacted issue code and never throws", () => {
@@ -154,7 +154,7 @@ describe("endpoint account configuration", () => {
 const PRIMARY: EndpointAccount = {
   accountId: "0c92969a82eb9e173b013a7e7a02333d",
   apiToken: "primary-token-for-pure-tests-only",
-  companionHostSuffix: "DaniBot.com",
+  companionHostSuffix: "danibot.com",
   dnsRecordLimit: 1000,
   minAppVersion: null,
   newEndpoints: true,
@@ -164,7 +164,7 @@ const PRIMARY: EndpointAccount = {
 const SECOND: EndpointAccount = {
   accountId: "2b".repeat(16),
   apiToken: "second-token-for-pure-tests-only",
-  companionHostSuffix: "Danibot.si",
+  companionHostSuffix: "danibot.si",
   dnsRecordLimit: 200,
   minAppVersion: null,
   newEndpoints: true,

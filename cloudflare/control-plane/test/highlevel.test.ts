@@ -12,10 +12,10 @@ import {
 } from "../src/highlevel";
 import { createWorker } from "../src/index";
 
-const BASE_URL = "https://auth.DaniBot.test";
+const BASE_URL = "https://auth.danibot.test";
 const CLIENT_ID = "68e9f2a1b3c4d5e6f7a8b9c0-mf1x2y3z";
 const CLIENT_SECRET = "test-only-highlevel-client-secret-0123456789";
-const REDIRECT_URL = "https://auth.DaniBot.test/v1/highlevel/callback";
+const REDIRECT_URL = "https://auth.danibot.test/v1/highlevel/callback";
 const SCOPES = "contacts.readonly contacts.write locations.readonly";
 const CODE = "7676cjcbdc6t76cdcbkjcd09821jknnkj";
 const ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.access-token-for-location.sig";

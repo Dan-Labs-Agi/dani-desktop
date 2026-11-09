@@ -187,8 +187,8 @@ targets:
     sources:
       - path: Widgets
       - path: Shared
-      - path: App/MausAvatar.swift
-      - path: App/MausFaceData.swift
+      - path: App/DaniAvatar.swift
+      - path: App/DaniFaceData.swift
     dependencies:
       # MausAvatar draws whichever body a bot wears, and the body catalog and
       # its path parser live in CompanionCore. The extension shares the
