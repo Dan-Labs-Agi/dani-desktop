@@ -36,6 +36,7 @@ export type RobotAvatarProps = {
 export function RobotAvatar(props: RobotAvatarProps) {
   const elementRef = useRef<HTMLSpanElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fallbackRef = useRef<HTMLImageElement | null>(null);
   const instanceRef = useRef<AvatarInstance | null>(null);
   const previousMotionKey = useRef(props.motionKey);
   const [ready, setReady] = useState(false);
@@ -97,6 +98,13 @@ export function RobotAvatar(props: RobotAvatarProps) {
     };
   }, [size, label, role, props.variant, props.zoom, color, motion, animated]);
 
+  // A prop/motion update can retain an already decoded <img> without firing
+  // another load event. Read its actual cached state as well as onLoad.
+  useEffect(() => {
+    const image = fallbackRef.current;
+    if (failure && image?.complete && image.naturalWidth > 0) setFallbackReady(true);
+  });
+
   useEffect(() => {
     if (props.motionKey === previousMotionKey.current) return;
     previousMotionKey.current = props.motionKey;
@@ -126,6 +134,7 @@ export function RobotAvatar(props: RobotAvatarProps) {
     >
       {failure && !fallbackFailed ? (
         <img
+          ref={fallbackRef}
           className="mz-robot-static-fallback"
           src="/app-icon-512.png"
           alt=""
