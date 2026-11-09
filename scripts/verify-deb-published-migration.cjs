@@ -126,14 +126,31 @@ async function persistedState(page){
    assert.equal(fs.existsSync('/opt/Dani Bot/danibot'),false,'dpkg left old tracked executable behind');
    assert.equal(fs.realpathSync('/usr/bin/danibot'),executable,'CLI maps to wrong installation');
    assert.match(fs.readFileSync('/usr/share/applications/com.danibot.app.desktop','utf8'),/Exec=\/opt\/danibot\/danibot/);
-   const policy=fs.readFileSync('/etc/apparmor.d/danibot','utf8');
-   assert.ok(policy.includes('/opt/danibot/'),'AppArmor attachment lost the new root');
-   assert.ok(!policy.includes('/opt/Dani Bot/'),'AppArmor retains old attachment');
+   const bundledPolicy=fs.readFileSync(path.join(resources,'danibot-browser.apparmor'),'utf8');
+   assert.ok(bundledPolicy.includes('/opt/danibot/'),'bundled AppArmor attachment lost the new root');
+   assert.ok(!bundledPolicy.includes('/opt/Dani Bot/'),'bundled AppArmor retains old attachment');
+   const restriction='/proc/sys/kernel/apparmor_restrict_unprivileged_userns';
+   const restricted=fs.existsSync(restriction)?fs.readFileSync(restriction,'utf8').trim():'0';
+   assert.ok(['0','1'].includes(restricted),'invalid OS restriction');
+   const policyPath='/etc/apparmor.d/danibot-browser';
+   if(fs.existsSync('/etc/apparmor.d/abi/4.0')||restricted==='1'){
+     assert.equal(fs.readFileSync(policyPath,'utf8'),bundledPolicy,'installed AppArmor attachment differs');
+     console.log('PUBLISHED_DEB_APPARMOR_OS_ATTACHMENT_PRESENT');
+   }else console.log('PUBLISHED_DEB_APPARMOR_OS_OPTIONAL_SKIP_NO_ABI4_UNRESTRICTED');
    console.log('PUBLISHED_DEB_DPKG_CLI_DESKTOP_APPARMOR_STATE_PASS');
-   // Existing published workspaces retain their provider setup route. Do not
-   // impose the new fresh-install Welcome/Chief tour onto existing state.
+   // An old workspace can retain the new first-run overlay. Complete only
+   // the real current tour if it is visible, without starting a model.
+   if(await ui.page.locator('[data-welcome-later]').isVisible()){
+     await ui.page.locator('[data-welcome-later]').click();
+     await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
+     await capture(ui.page,'UPGRADED_CHIEF');await sleep(1000);
+     await ui.page.locator('[data-chief-create]').click();
+     await ui.page.locator('[data-welcome]').waitFor({state:'detached',timeout:15000});
+   }
    assert.ok((await ui.page.locator('body').innerText()).includes('Published migration test bot'),'migrated bot missing from real UI');
    await inspect(ui.page,'UPGRADED_EXISTING_WORKSPACE');
+   assertPreserved(JSON.parse(JSON.stringify(await persistedState(ui.page))),JSON.parse(JSON.stringify(state)),'post-tour preservation');
+
  }
  await capture(ui.page,'PERSISTED_STATE');
  await ui.browser.close();stop();await sleep(3000);

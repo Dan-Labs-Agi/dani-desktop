@@ -80,3 +80,11 @@ test('migration comparison preserves all old fields and message contents while a
  assert.throws(()=>compare({profile:{},messages:old.messages},old));
  assert.ok(source.includes('messages:body.messages??body'));
 });
+
+test('migration AppArmor check follows the actual hook filename and OS ABI condition',()=>{
+ const source=readFileSync(new URL('./verify-deb-published-migration.cjs',import.meta.url),'utf8');
+ assert.ok(source.includes("policyPath='/etc/apparmor.d/danibot-browser'"));
+ assert.ok(source.includes("fs.existsSync('/etc/apparmor.d/abi/4.0')||restricted==='1'"));
+ assert.ok(source.includes("path.join(resources,'danibot-browser.apparmor')"));
+ assert.ok(source.includes('PUBLISHED_DEB_APPARMOR_OS_OPTIONAL_SKIP_NO_ABI4_UNRESTRICTED'));
+});
