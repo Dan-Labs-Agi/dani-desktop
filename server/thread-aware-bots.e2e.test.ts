@@ -210,6 +210,7 @@ beforeAll(async () => {
       ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,
+      DANI_DATA_DIR: join(home, ".openmausbot"),
       USERPROFILE: home,
       OMB_PORT: String(port),
       OMB_WEBHOOK_PORT: String(port + 1),

@@ -831,6 +831,7 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
     base = `http://127.0.0.1:${port}`;
     const env: NodeJS.ProcessEnv = {
       HOME: home,
+      DANI_DATA_DIR: join(home, ".openmausbot"),
       USERPROFILE: home,
       OMB_PORT: String(port),
     };
