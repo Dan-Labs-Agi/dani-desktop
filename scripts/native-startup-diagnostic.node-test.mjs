@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const main=readFileSync(new URL('../electron/main.mjs',import.meta.url),'utf8');
+const verifier=readFileSync(new URL('./verify-main-mac-installed.cjs',import.meta.url),'utf8');
+test('phase diagnostics are opt-in labels, never credential values',()=>{
+ assert.match(main,/function nativeVerifyPhase\(phase\) \{\n  if \(process.env.DANI_NATIVE_VERIFY === "1"\) console.log\("DANI_NATIVE_PHASE", phase\);\n\}/);
+ for(const phase of ['data-lease-start','data-lease-ready','credential-load-start','credential-load-ready','credential-migration-start','credential-migration-ready','phone-identity-start','phone-identity-ready','server-start'])assert.ok(main.includes('nativeVerifyPhase("'+phase+'")'));
+ assert.doesNotMatch(main,/nativeVerifyPhase\([^)]*(secureCredentials|phoneSecretIdentity|credentials\.bin)/);
+});
+test('installed UI wait has one bounded deadline, checks exit, captures failures',()=>{
+ assert.match(verifier,/const deadline=Date.now\(\)\+120000/);
+ assert.match(verifier,/while\(Date.now\(\)<deadline\)/);
+ assert.match(verifier,/launched.exitCode!==null \|\| launched.signalCode!==null/);
+ assert.doesNotMatch(verifier,/for\(let i=0;i<120;i\+\+\)|for\(let j=0;j<90;j\+\+\)/);
+ assert.match(verifier,/connectOverCDP\('http:\/\/127.0.0.1:9333',\{timeout:3000\}\)/);
+ assert.match(verifier,/STARTUP_DESKTOP_SCREENSHOT_END/);
+ assert.match(verifier,/capture\(page,'STARTUP_FAILURE_'\+index\)/);
+});
+test('failure log reads are only reported product logs, never credential files or global policy changes',()=>{
+ assert.match(verifier,/profile.logs!==expected/);
+ assert.match(verifier,/\['server.log','desktop-crashes.log'\]/);
+ assert.doesNotMatch(verifier,/readFileSync\([^\n]*(?:credentials\.bin|keychain)|xattr\s+-[dr]|spctl.*--master-disable|security\s+unlock-keychain/);
+ assert.match(verifier,/DANI_FREE_PACKAGED_BUTTON_INSTALL_PASS/);
+ assert.match(verifier,/MAIN_INSTALLED_GRAPHICS_PASS/);
+ assert.match(verifier,/MAIN_INSTALLED_RELAUNCH_PASS/);
+});

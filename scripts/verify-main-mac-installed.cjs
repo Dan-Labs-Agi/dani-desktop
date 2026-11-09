@@ -45,35 +45,77 @@ function reportOwnedDiagnostics(){
  for(const file of fs.readdirSync(temp,{recursive:true}).filter(p=>/(?:server\.log|desktop-crashes\.log)$/.test(p))){
   try{console.error('DANI_OWNED_LOG',file,fs.readFileSync(path.join(temp,file),'utf8').slice(-16000));}catch{}
  }
+ // Electron's native macOS home/logs do not follow HOME. Read only the
+ // product log directory it reported, never credentials or other native files.
+ const profiles=[...launchOutput.matchAll(/DANI_NATIVE_PROFILE (\{[^\n]+\})/g)];
+ for(const match of profiles.slice(-1)) {
+  try {
+   const profile=JSON.parse(match[1]);
+   const expected=path.join(require('node:os').homedir(),'Library','Logs','danibot');
+   if(profile.logs!==expected)throw Error('Unexpected native product logs path');
+   for(const name of ['server.log','desktop-crashes.log']) {
+    const file=path.join(profile.logs,name);
+    if(fs.existsSync(file)) {
+      const text=fs.readFileSync(file,'utf8').slice(-24000)
+        .replace(/Bearer\s+[^\s"']+/gi,'Bearer [redacted]')
+        .replace(/((?:api[_-]?key|token|password|secret)\s*[=:]\s*)[^\s,;]+/gi,'$1[redacted]')
+        .replace(/(https?:\/\/[^\s?]+)\?[^\s]+/g,'$1?[redacted]');
+      console.error('DANI_NATIVE_OWNED_LOG',name,text);
+    }
+   }
+  } catch(error) {console.error('DANI_NATIVE_LOG_DIAGNOSTIC_ERROR',error.message);}
+ }
  console.error('DANI_CHILD_STATE',JSON.stringify({exitCode:launched?.exitCode,signalCode:launched?.signalCode}));
 }
 const graphicsFailures=[];
 function stop() {if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
   launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore','pipe','pipe'],detached:true});
-  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE')||text.includes('DANI_NATIVE_SERVER'))console.log(text)});
+  for(const stream of [launched.stdout,launched.stderr])stream.on('data',data=>{const text=data.toString();launchOutput=(launchOutput+text).slice(-20000);if(text.includes('DANI_NATIVE_PROFILE')||text.includes('DANI_NATIVE_SERVER')||text.includes('DANI_NATIVE_PHASE'))console.log(text)});
   launched.on('error',error=>{launchOutput+='\n'+error.message});
-  for(let i=0;i<120;i++) {
-    try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
-      for(let j=0;j<90;j++) {
-        const page=browser.contexts().flatMap(c=>c.pages()).find(p=> /^http:\/\/127\.0\.0\.1:\d+/.test(p.url()));
-        if(page) {
-          page.on('pageerror', error=>console.log('MAIN_RENDERER_ERROR',error.message));
-          page.on('console', message=>{if(['error','warning'].includes(message.type())) console.log('MAIN_RENDERER_CONSOLE',message.type(),message.text().slice(0,2000));});
-          await page.waitForLoadState('domcontentloaded');
-          try {
-            const cdp=await browser.newBrowserCDPSession();
-            console.log('MAIN_GPU_INFO',JSON.stringify(await cdp.send('SystemInfo.getInfo')));
-            await cdp.detach();
-          } catch(error) { console.log('MAIN_GPU_DIAGNOSTIC_ERROR',error.message); }
-          return {browser,page};
-        }
-        await sleep(1000);
+  const deadline=Date.now()+120000;
+  let browser;
+  try {
+    while(Date.now()<deadline) {
+      if(launched.exitCode!==null || launched.signalCode!==null) throw Error('Installed app exited before its UI was ready');
+      if(!browser) {
+        try {browser=await chromium.connectOverCDP('http://127.0.0.1:9333',{timeout:3000});}
+        catch {await sleep(500);continue;}
       }
-      throw Error('packaged UI not reachable');
-    }catch(e){if(i===119)throw e;await sleep(1000);}
+      const page=browser.contexts().flatMap(c=>c.pages()).find(p=> /^http:\/\/127\.0\.0\.1:\d+/.test(p.url()));
+      if(page) {
+        page.on('pageerror', error=>console.log('MAIN_RENDERER_ERROR',error.message));
+        page.on('console', message=>{if(['error','warning'].includes(message.type())) console.log('MAIN_RENDERER_CONSOLE',message.type(),message.text().slice(0,2000));});
+        await page.waitForLoadState('domcontentloaded',{timeout:Math.max(1,deadline-Date.now())});
+        try {
+          const cdp=await browser.newBrowserCDPSession();
+          console.log('MAIN_GPU_INFO',JSON.stringify(await cdp.send('SystemInfo.getInfo')));
+          await cdp.detach();
+        } catch(error) {console.log('MAIN_GPU_DIAGNOSTIC_ERROR',error.message);}
+        return {browser,page};
+      }
+      await sleep(500);
+    }
+    throw Error('Installed app did not expose its local UI within120seconds');
+  } catch(error) {
+    if(browser) {
+      for(const [index,page] of browser.contexts().flatMap(c=>c.pages()).entries()) {
+        try {console.log('MAIN_STARTUP_PAGE',JSON.stringify({index,url:page.url().startsWith('http://127.0.0.1:') ? page.url().split('?')[0].slice(0,160) : 'non-local-startup-page'}));await capture(page,'STARTUP_FAILURE_'+index);}
+        catch(captureError) {console.log('MAIN_STARTUP_CAPTURE_ERROR',captureError.message);}
+      }
+      await browser.close().catch(()=>{});
+    }
+    const desktop=path.join(temp,'startup-failure-desktop.png');
+    const taken=spawnSync('/usr/sbin/screencapture',['-x',desktop],{encoding:'utf8',timeout:10000});
+    if(taken.status===0) {
+      const b64=fs.readFileSync(desktop).toString('base64');
+      for(let i=0;i<b64.length;i+=32000)console.log('MAIN_STARTUP_DESKTOP_SCREENSHOT_CHUNK:'+b64.slice(i,i+32000));
+      console.log('MAIN_STARTUP_DESKTOP_SCREENSHOT_END');
+    }
+    throw error;
   }
 }
+
 async function capture(page,label) {
  await page.waitForTimeout(1500);
  const png=await page.screenshot({animations:'disabled'});const b64=png.toString('base64');

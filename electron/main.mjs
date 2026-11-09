@@ -2888,6 +2888,10 @@ setCuaStateListener((connection) => {
   });
 });
 
+function nativeVerifyPhase(phase) {
+  if (process.env.DANI_NATIVE_VERIFY === "1") console.log("DANI_NATIVE_PHASE", phase);
+}
+
 app.whenReady().then(async () => {
   await evictStartupCacheOnce({
     userData: app.getPath("userData"),
@@ -2947,10 +2951,12 @@ app.whenReady().then(async () => {
   if (app.isPackaged) {
     try {
       // Acquire before either plaintext credential migration touches config.json.
+      nativeVerifyPhase("data-lease-start");
       desktopDataDirLease = acquireDataDirLease(bootDataDir, {
         legacyDataDir: path.join(app.getPath("home"), ".opengrokbot"),
       });
       runningDataDir = bootDataDir;
+      nativeVerifyPhase("data-lease-ready");
     } catch (error) {
       dialog.showErrorBox(
         "Dani Bot could not start safely",
@@ -2965,7 +2971,9 @@ app.whenReady().then(async () => {
   if (app.isPackaged) app.setAsDefaultProtocolClient("danibot");
   if (app.isPackaged) app.setAsDefaultProtocolClient("openmausbot");
   if (process.platform === "darwin") app.dock.setIcon(APP_ICON);
+  nativeVerifyPhase("credential-load-start");
   secureCredentials = await loadSecureCredentials();
+  nativeVerifyPhase("credential-load-ready");
   // An orphaned third-party key with no clear handler left: drop it rather than keep it at rest.
   if (secureCredentials && Object.hasOwn(secureCredentials, "assemblyAiApiKey") && !credentialStoreUnavailable) {
     try {
@@ -2977,15 +2985,21 @@ app.whenReady().then(async () => {
     }
   }
   if (app.isPackaged) {
+    nativeVerifyPhase("credential-migration-start");
     await secureComposioConfig();
     await secureWorkspaceConfig();
+    nativeVerifyPhase("credential-migration-ready");
   }
   // From here on every credential writer must go through this serialized state.
   secureCredentialState = createSecureCredentialState(secureCredentials, saveSecureCredentials, {
     writable: !credentialStoreUnavailable,
   });
   secureCredentials = secureCredentialState.read();
-  if (app.isPackaged) await ensurePhoneSecretIdentity();
+  if (app.isPackaged) {
+    nativeVerifyPhase("phone-identity-start");
+    await ensurePhoneSecretIdentity();
+    nativeVerifyPhase("phone-identity-ready");
+  }
   desktopRemoteAccess = desktopCompanionAccess(secureCredentials);
   const hostedAccount = desktopRemoteAccess ? null : ensureCompanionAccountService();
   // Display capture needs a one-shot renderer intent from the same frame/origin, no audio, and a user gesture.
@@ -3071,7 +3085,9 @@ app.whenReady().then(async () => {
       slog(`desktop companion relay failed: ${error?.message ?? error}`);
     }
   } else if (app.isPackaged) {
+    nativeVerifyPhase("server-start");
     const booted = await startServerPackaged();
+    nativeVerifyPhase(booted ? "server-ready" : "server-not-ready");
     if (!booted && !desktopShutdownStarted && bootDataDir !== desktopDataDir()) {
       slog(`boot environment ${bootDataDir} did not start; falling back to the default data dir`);
       persistEnvironments({ ...environmentsState, activeId: LOCAL_ID });
