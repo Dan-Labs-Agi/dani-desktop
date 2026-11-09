@@ -356,11 +356,11 @@ describe("the sidecar in front of an unmodified harness", () => {
     expect(shape.status, JSON.stringify(shape.body)).toBe(200);
     expect(shape.body.bot).toMatchObject({ color: "purple", avatarCrop: "square", avatarZoom: 1.5, avatarFocusX: 0.25, avatarFocusY: 0.75 });
 
-    const reset = await device("PATCH", path, { body: { avatarCrop: "mascot", color: "green", mascotExpression: null, mascotBody: "cursor" } });
+    const reset = await device("PATCH", path, { body: { avatarCrop: "mascot", color: "green", mascotExpression: null, mascotBody: "blob" } });
     expect(reset.status, JSON.stringify(reset.body)).toBe(200);
     const host = await fetch(`${HARNESS}/api/bots`).then((response) => response.json()) as { bots: Array<{ id: string }> };
     expect(host.bots.find((candidate) => candidate.id === bot.id))
-      .toMatchObject({ avatarCrop: "mascot", color: "green", mascotBody: "cursor" });
+      .toMatchObject({ avatarCrop: "mascot", color: "green", mascotBody: "blob" });
     expect((await device("PATCH", path, { body: { avatarUrl: "/etc/passwd" } })).status).toBe(400);
   });
 
