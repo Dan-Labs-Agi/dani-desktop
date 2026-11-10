@@ -11,6 +11,7 @@ const {
   OMB_CONTROL_URL: url,
   OMB_CONTROL_TOKEN: token,
   OMB_COMPUTER_JOURNAL: journal,
+  OMB_COMPUTER_VERIFY: verifyEffects,
   ...childEnv
 } = process.env;
 
@@ -38,5 +39,5 @@ runMcpBridge({
   gate: { url: url!, token: token!, describe: localComputerCallQuery },
   ...(journal === "1" ? { journal: { url: journalUrl(url!), token: token! } } : {}),
   rewriteResponse: localComputerResultLine,
-  relay: localComputerRelay(platform ?? process.platform),
+  relay: localComputerRelay(platform ?? process.platform, verifyEffects === "1"),
 });

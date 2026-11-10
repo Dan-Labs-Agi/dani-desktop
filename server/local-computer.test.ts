@@ -97,7 +97,7 @@ describe("local computer descriptor contract", () => {
     };
     const gated = gatedLocalComputer(connection, { url: "http://127.0.0.1:1234/control", token: "fixture-token" });
     expect(gated).toMatchObject({ command: process.execPath, args: ["--experimental-strip-types", SPAWNED_PROXIES.localComputer], platform: "linux", scope: "local-computer", generation: connection.generation });
-    expect(gated.env).toEqual({ ...connection.env, ELECTRON_RUN_AS_NODE: "1", OMB_CUA_COMMAND: connection.command, OMB_CUA_ARGS: JSON.stringify(connection.args), OMB_CUA_PLATFORM: "linux", OMB_CONTROL_URL: "http://127.0.0.1:1234/control", OMB_CONTROL_TOKEN: "fixture-token", OMB_COMPUTER_JOURNAL: "0" });
+    expect(gated.env).toEqual({ ...connection.env, ELECTRON_RUN_AS_NODE: "1", OMB_CUA_COMMAND: connection.command, OMB_CUA_ARGS: JSON.stringify(connection.args), OMB_CUA_PLATFORM: "linux", OMB_CONTROL_URL: "http://127.0.0.1:1234/control", OMB_CONTROL_TOKEN: "fixture-token", OMB_COMPUTER_JOURNAL: "0", OMB_COMPUTER_VERIFY: "0" });
     expect(gated.args.join(" ")).not.toContain("fixture-token");
     expect(connection.env).not.toHaveProperty("OMB_CONTROL_TOKEN");
   });
@@ -107,6 +107,13 @@ describe("local computer descriptor contract", () => {
     expect(gatedLocalComputer({ ...connection, env: {} }, control, true).env.OMB_COMPUTER_JOURNAL).toBe("1");
     expect(gatedLocalComputer({ ...connection, env: {} }, control).env.OMB_COMPUTER_JOURNAL).toBe("0");
     expect(gatedLocalComputer(connection, control, false).env.OMB_COMPUTER_JOURNAL).toBe("0");
+  });
+  it("verifies the effect of every action only when the mount asks, and never because journalling is on", () => {
+    const connection = { command: "/trusted/cua-driver", args: ["mcp"], env: {}, platform: "darwin" as const, scope: "local-computer" as const };
+    const control = { url: "http://127.0.0.1:1234/control", token: "fixture-token" };
+    expect(gatedLocalComputer(connection, control, false, true).env.OMB_COMPUTER_VERIFY).toBe("1");
+    expect(gatedLocalComputer(connection, control, true).env.OMB_COMPUTER_VERIFY).toBe("0");
+    expect(gatedLocalComputer(connection, control).env.OMB_COMPUTER_VERIFY).toBe("0");
   });
   it("owns the helper's Node mode even when the daemon environment disagrees", () => {
     const gated = gatedLocalComputer({ command: "/trusted/cua-driver", args: ["mcp"], env: { ELECTRON_RUN_AS_NODE: "0" }, platform: "darwin", scope: "local-computer" }, { url: "http://127.0.0.1:1234/control", token: "fixture-token" });
