@@ -22,6 +22,7 @@ vi.mock("../procs.ts", async (importOriginal) => {
 vi.mock("./native.ts", () => ({ appendNative: vi.fn() }));
 
 import { DATA_DIR } from "../config.ts";
+import { removeTempDir } from "../testing/cleanup.ts";
 import { recordEvents } from "../testing/events.ts";
 import { createOpenCodeDriver, openCodeLogPath } from "./acp/opencode-go.ts";
 import * as quietStatus from "./acp/quiet-status.ts";
@@ -56,7 +57,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   rmSync(join(DATA_DIR, "providers", "dani-free"), { recursive: true, force: true });
 });
-afterAll(() => rmSync(DATA_DIR, { recursive: true, force: true }));
+afterAll(() => removeTempDir(DATA_DIR));
 
 describe("Dani ordinary free chat refusal presentation", () => {
   it.each([
