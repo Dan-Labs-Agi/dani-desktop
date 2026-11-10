@@ -1,0 +1,36 @@
+# Browser-use constitution
+
+Status: proposed constraints for the approval gate. Baseline truth is in [baseline.md](baseline.md); a requirement below is not a claim that main already satisfies it.
+
+## Principles
+
+| ID | Checkable principle | Required evidence before any candidate is enabled |
+|---|---|---|
+| C1 | **One planner.** Dani's existing harness decides the next action. A browser executor cannot create an autonomous planner, remint/repair itself, choose an unapproved provider, or execute hidden model-selected follow-up writes. | Trace all model calls and outbound model destinations; deny candidate provider traffic in deterministic mode; fail on extra agent loops, self-heal or cache fallback that changes actions. Optional model-backed perception needs a separately approved bounded call contract. |
+| C2 | **Turn-scoped capability.** Every operation is bound to the active bot, thread, generation, authorized profile and audience through the existing browser host/proxy boundary. | Wrong-turn/wrong-profile requests, expired/revoked grants and late results are refused. Profile paths, native SDK handles and arbitrary CDP endpoints never become agent-controlled arguments. Stable bearer bytes do not replace current-generation checks. |
+| C3 | **One enforcement path.** Backend choice cannot bypass permissions, audience, egress, write approval or secret scrubbing. Policy uncertainty denies execution. | A write needs a one-use approval or recorded owner grant with exact scope, bound to tool/artifact revision, effect, destinations and arguments. Unknown effect is not read-only. Test redirects, subprocess/direct-network bypass, mutation after approval and unavailable policy service. |
+| C4 | **Human takeover wins.** Reserve the entire profile against new agent calls immediately; invalidate queued actions and stale refs. Do not claim an accepted native action stopped merely because its promise timed out. | Measured stop/drain bounds, no new dispatch after takeover, no late result exposure, explicit uncertain-outcome handling and clean hand-back. Failure to establish exclusive control keeps the candidate unavailable; no blind retry of a possibly committed action. |
+| C5 | **Free-first onboarding is untouched.** Optional keys, authoring costs or hosted services are absent from first run and default browser use. | Disabled/unconfigured candidate produces no download, startup process, model charge, key prompt or terminal instructions. Optional BYOK uses the existing encrypted credential boundary and fails closed if it is unavailable. |
+| C6 | **Preserve the product.** Both existing browser engines, intentional profile sharing, My Chrome and physical computer use remain separate and unchanged by the docs/evidence phase. | No production diff now. Later compare exact existing test identities/outcomes, not only totals. Any change to existing write semantics needs explicit scope approval; do not disguise it as a backend swap. |
+| C7 | **Evidence over claims.** Same tasks, planner model/settings, conditions and metrics; repeated runs, all failures, setup/repair costs and uncertainty disclosed. | Frozen manifest, raw per-run outcomes, independent final-state checks, actual token/cost records and run counts. Missing telemetry is unknown, not zero. Vendor claims and functional smoke times cannot establish superiority. |
+| C8 | **Default off until accepted.** No candidate is installed, routed or enabled by this proposal. A later product candidate requires a default-off flag plus all acceptance evidence and Som's separate enablement approval. | Disabled-path regression, explicit activation/rollback, native evidence for every advertised platform, and a recorded owner decision. Passing a test or merging docs is not enablement. |
+| C9 | **Smallest justified change.** No stack swap or second profile, scheduler, permission, credential or telemetry owner. Adopt neither if safe measurable benefit is absent. | Existing-engine comparison first; candidate disqualified if it requires bypassing ownership/egress/approval or replacing Electron, the harness, model layer, package manager or test runner. |
+
+## Non-negotiable workflow
+
+1. Steps 0–5 produce this documentation only. Existing baseline tests and isolated existing-program smoke checks are evidence collection, not candidate implementation. New spikes/harnesses wait for approval and live outside the product checkout until their scope is accepted.
+2. Implementation requires Som's explicit **go**. Later permission to use independent worktrees and open PRs authorizes this **docs-only PR**, not implementation, merge, release, spending or feature enablement.
+3. Keep this work on its own branch/worktree and own only `specs/browser-use/`. The harness-experiment session owns a separate path and branch. Exchange scope/receipts through the local coordination mailbox; never edit its files or share live fixture state.
+4. Before every commit, inspect effective `git config user.name` and `user.email`; both author and committer must be `somdipto <somdiptonandy@gmail.com>`. Use scoped identity settings, not global changes affecting the peer.
+5. Secret-scan the exact staged diff before each commit. Commit no keys, tokens, cookies, `.env` files or personal trace data. Enforce the owner's prohibited-wording rule on added text and commit/PR messages.
+6. No force-push, published-history rewrite, amended pushed commit or direct push to main. Only tested/reviewed authorized branch contents may be published. Docs-only validation does not make a failing product baseline green.
+7. Never ask the owner to execute terminal commands. Research-answerable questions are answered here; an unresolved owner decision needs only a plain-language approval or refusal, and defaults to no adoption while the owner is unavailable.
+8. Label scripted models, planted secrets, loopback pages and simulated providers as synthetic. A real browser on a synthetic site is native functional evidence, not a live website/model demonstration.
+9. Every execution claim names the command, exact source commit and real output. Unexecuted integration/platform/performance checks say **not run** or **not tested**.
+
+## Interpretation boundaries
+
+- Isolation means different authorized profiles/audiences cannot leak state. An owner-configured shared profile intentionally shares sign-ins and tabs, but simultaneous unauthorized turn use is still refused. Removing intentional sharing would violate C6 and is not approved.
+- C3/C4 are **candidate admission bars**, not retroactive claims about main. Main lacks a universal browser-write approval gate and hard cancellation of already accepted actions; [clarify.md](clarify.md) records this conflict explicitly.
+- Redaction targets held/registered secrets, credential patterns, URLs/headers, sensitive fields and supplied test sentinels before any output sink. Arbitrary pixels and novel secrets cannot be promised universally safe; uncertain captures must be withheld, not claimed scrubbed.
+- A deterministic integration is not trustworthy merely because it has a read-only MCP hint. Minted source, manifests, schemas, redirects, subprocesses and artifact changes are untrusted until admitted under C2–C3.
