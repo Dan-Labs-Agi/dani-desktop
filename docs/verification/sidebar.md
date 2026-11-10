@@ -97,6 +97,25 @@ reads after Settings unmounts, and the silent flag sent to the desktop bridge.
 Actual operating-system sound delivery requires a native Electron smoke test;
 the isolated browser cannot prove it.
 
+## Compact bot identity
+
+The icon-only rail shows one bot avatar, not an overlapping provider logo and
+extra Chief crown. Chief/model details remain in the row's tooltip and accessible
+name; working, waiting, queued, unread and live-call signals are retained.
+Expanded rows keep their provider/role presentation.
+
+```sh
+pnpm exec vitest run src/components/Sidebar.simple-mode.test.ts src/components/SidebarBotListItem.test.ts src/components/SidebarTiles.test.ts src/components/Sidebar.simple-layout.test.ts src/lib/sidebar-layout.test.ts src/lib/sidebar-preferences.density.test.ts
+```
+
+Native Intel Mac verification on `0.1.140-local.3` expanded and collapsed the
+actual installed sidebar through its resize handle. Both rendered compact bot
+rows had one avatar, no provider badge, no Chief overlay and a populated tooltip.
+The selected row retained its current-page state. The 144 focused sidebar cases
+passed. Verification used the isolated desktop profile, not the original user
+workspace.
+
+
 ## Departments: dragging bots and naming them in place
 
 Run `node --experimental-strip-types scripts/verify-sidebar-groups.ts`. It

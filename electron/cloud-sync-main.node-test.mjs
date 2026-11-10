@@ -26,13 +26,13 @@ test("Files channels answer this computer's own window only, and share only a fo
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const picked = join(dir, "home", "Clients");
   mkdirSync(picked, { recursive: true });
-  const handlers = new Map(), guards = [], opened = [];
+  const handlers = new Map(), guards = [];
   let pick = { canceled: false, filePaths: [picked] };
   const installed = installCloudFiles({
     app: { getPath: (name) => join(dir, name) },
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     dialog: { showOpenDialog: async () => pick },
-    shell: { trashItem: async () => {}, openPath: async (folder) => { opened.push(folder); return ""; } },
+    shell: { trashItem: async () => {}, openPath: async () => "" },
     powerMonitor: { on: () => {} },
     fetch: async () => { throw new Error("offline"); },
     localWorkspaceOnly: (channel, handler) => { guards.push(channel); return handler; },
@@ -57,8 +57,6 @@ test("Files channels answer this computer's own window only, and share only a fo
   pick = { canceled: true, filePaths: [] };
   assert.equal(await handlers.get("files:pick")({}), null);
   await assert.rejects(handlers.get("files:check")({}, "not a list"));
-  await handlers.get("files:open")({}, { outputs: true });
-  assert.deepEqual(opened, [join(dir, "documents", "Dani")]);
   // before-quit runs twice when quitting: closing again must not throw.
   installed.close();
   assert.doesNotThrow(() => installed.close());

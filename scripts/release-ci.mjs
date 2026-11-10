@@ -1,53 +1,40 @@
-// The release's CI gate: ship only a commit whose code passed CI with every
-// platform's vitest shards run, on the commit itself, on a commit with the same
-// tree, or (for a version-only bump) on its parent.
-//
-// A push to main or a merge group runs no macOS shards, so the release
-// commit's own run proves nothing; CI then starts on a `release-ci/v<version>`
-// branch no merge on main can touch, as a manual run of every platform. A main
-// run is never re-run in place: the re-run would join main's group and cancel
-// the newest merge's waiting run.
+// A release needs the adopted CI's native platform tests and package checks
+// on its pinned commit, an identical tree, or a version-only parent.
 import { pathToFileURL } from "node:url";
-import { FULL_LANE_EVENTS, VITEST_SHARDS, versionOnlyPackageJson } from "./ci-scope.mjs";
+import { versionOnlyPackageJson } from "./ci-scope.mjs";
 
-const RELEASE_EVENTS = new Set(["push", "merge_group", ...FULL_LANE_EVENTS]);
-/** Every platform's every shard, by job name. */
-const FULL_MATRIX = Object.entries(VITEST_SHARDS)
-  .flatMap(([os, shards]) => Array.from({ length: shards }, (_, i) => `vitest (${os}, shard ${i + 1}/${shards})`));
+/** @type {Record<string, true>} */
+const RELEASE_EVENTS = { push: true, merge_group: true, schedule: true, workflow_dispatch: true };
+/** @type {Record<string, true>} */
+const FINISHED_CONCLUSIONS = { success: true, skipped: true, neutral: true };
+const REQUIRED_JOBS = [
+  "typecheck + test (macos-latest)",
+  "typecheck + test (ubuntu-latest)",
+  "typecheck + test (windows-latest)",
+  "package + smoke (Ubuntu 24.04 x64)",
+  "control-plane check + workerd tests + dry run",
+  "Detect optional jobs",
+];
 export const POLL_MS = 60_000;
 export const MAX_WAIT_MS = 170 * 60_000;
 
 /** @typedef {{ name: string, status?: string, conclusion: string | null, steps?: Array<{ status?: string, conclusion?: string | null }> }} Job */
 /** @typedef {{ id: number, event: string, status: string, head_branch: string, head_sha?: string, created_at: string, run_attempt?: number, head_commit?: { tree_id?: string } | null }} Run */
 
-const isVitestJob = (job) => job.name === "vitest" || job.name.startsWith("vitest (");
 /** A job that never started a step never got a runner: GitHub gave up acquiring one. */
 const neverStarted = (job) => !(job.steps ?? []).some((step) => step.conclusion != null || step.status === "in_progress");
 
-/**
- * What one finished CI run proves.
- * - "green": the gate passed and every platform's every vitest shard ran and passed.
- * - "partial": the gate passed and every vitest job that ran passed, but not every platform's shards ran (a push to
- *   main or a merge group runs no macOS shards).
- * - "scoped": the gate passed but vitest did not run (docs- or version-only).
- * - "runner-lost": the gate failed, and every other failed job never started.
- * - "red": the gate failed for any other reason.
- * - anything else: the gate's own conclusion, or "no gate job".
- * @param {Job[]} jobs
- */
+/** @param {Job[]} jobs */
 export function judgeRun(jobs) {
-  const gate = jobs.find((job) => job.name === "CI");
-  if (!gate) return "no gate job";
-  if (gate.conclusion === "success") {
-    const vitest = jobs.filter(isVitestJob);
-    if (vitest.length === 0 || !vitest.every((job) => job.conclusion === "success")) return "scoped";
-    return FULL_MATRIX.every((name) => vitest.some((job) => job.name === name)) ? "green" : "partial";
-  }
-  if (gate.conclusion === "failure") {
-    const failed = jobs.filter((job) => job !== gate && !["success", "skipped", "neutral"].includes(job.conclusion ?? ""));
-    return failed.length > 0 && failed.every(neverStarted) ? "runner-lost" : "red";
-  }
-  return gate.conclusion ?? "no gate job";
+  if (jobs.length === 0) return "no required jobs";
+  const failed = jobs.filter((job) => job.conclusion === "failure");
+  if (failed.length > 0) return failed.every(neverStarted) ? "runner-lost" : "red";
+  const unsettled = jobs.find((job) => !Object.hasOwn(FINISHED_CONCLUSIONS, job.conclusion ?? ""));
+  if (unsettled) return unsettled.conclusion ?? "no verdict";
+  if (REQUIRED_JOBS.every((name) => jobs.some((job) => job.name === name && job.conclusion === "success"))) return "green";
+  const platforms = jobs.filter((job) => job.name.startsWith("typecheck + test ("));
+  if (platforms.length === 0 || platforms.some((job) => job.conclusion !== "success")) return "scoped";
+  return "partial";
 }
 
 /**
@@ -81,7 +68,7 @@ export async function waitForReleaseCi({ api, sha, version, sleep = (ms) => new 
     if (!verdicts.has(key)) verdicts.set(key, judgeRun(await api.runJobs(run.id)));
     return verdicts.get(key);
   };
-  const releaseRuns = (runs) => runs.filter((run) => RELEASE_EVENTS.has(run.event))
+  const releaseRuns = (runs) => runs.filter((run) => Object.hasOwn(RELEASE_EVENTS, run.event))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   /** The run this gate starts: its own concurrency group, so a re-run there cancels nothing on main. */
   const inLane = (run) => run.event === "workflow_dispatch" && run.head_branch === lane;
@@ -170,10 +157,8 @@ export async function waitForReleaseCi({ api, sha, version, sleep = (ms) => new 
           else if (result === "red" || (result === "runner-lost" && inLane(run))) return { ok: false, reason: `The CI check on ${sha} failed: run ${run.id}` };
           else if (result === "runner-lost") log(`CI run ${run.id} on ${sha} failed only because jobs never got a runner; it is not re-run in ${run.head_branch}'s queue.`);
         }
-        // Only a run of every platform can prove the commit, so a push's or merge group's run still going is not waited for.
-        const provable = (run) => run.status !== "completed" && FULL_LANE_EVENTS.includes(run.event);
-        const live = runs.find(provable);
-        const parentLive = parent && (await runsFor(parent.sha)).find(provable);
+        const live = runs.find((run) => run.status !== "completed");
+        const parentLive = parent && (await runsFor(parent.sha)).find((run) => run.status !== "completed");
         if (live || rerunning) {
           log(`CI on ${sha} is ${live ? `${live.status} (run ${live.id})` : "re-running"}; waiting.`);
         } else if (parentLive) {
@@ -227,7 +212,7 @@ export function githubApi({ token, repository, apiUrl = "https://api.github.com"
     },
     async recentRuns() {
       // Finished runs carry head_commit.tree_id; one page per release event.
-      const pages = await Promise.all([...RELEASE_EVENTS].map((event) =>
+      const pages = await Promise.all(Object.keys(RELEASE_EVENTS).map((event) =>
         call("GET", `/actions/workflows/ci.yml/runs?status=completed&event=${event}&per_page=100`)));
       return pages.flatMap((page) => page.workflow_runs);
     },

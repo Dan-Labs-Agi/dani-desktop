@@ -20,10 +20,8 @@ permissions:
   contents: read
 
 concurrency:
-  # A newer push to the same branch supersedes an older build. Tags and manual
-  # runs use their own refs, so they do not cancel branch releases.
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
 
 jobs:
   prepare:
@@ -33,7 +31,6 @@ jobs:
     outputs:
       sha: ${{ steps.release.outputs.sha }}
       version: ${{ steps.release.outputs.version }}
-      published: ${{ steps.release.outputs.published }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,28 +55,22 @@ jobs:
               exit 1
             }
           fi
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            test "$GITHUB_REF" = "refs/tags/$release_tag" || {
-              echo "::error::tag must be $release_tag to match package.json"
-              exit 1
-            }
-          fi
-          # A branch push whose package.json version is already published has
-          # nothing new to release: still build every package (that is the
-          # cross-platform packaging signal), but skip the draft step instead
-          # of failing on "already published". Bump package.json to cut the
-          # next release. A tag push for a published version still fails.
-          published=false
-          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
-            is_draft=$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)
-            if [[ "$is_draft" == false ]]; then
-              published=true
-              echo "::notice::$release_tag is already published; packages are built but no draft release is created. Bump package.json to release."
+          if [[ "$GITHUB_REF" == refs/tags/* || "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            node scripts/release-version.mjs validate "$version" "$GITHUB_REF"
+            tag_sha=$(git rev-parse --verify "$release_tag^{commit}" 2>/dev/null || true)
+            release_json=$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish 2>/dev/null || true)
+            draft_sha=""
+            if [[ -n "$release_json" ]]; then
+              test "$(jq -r .isDraft <<< "$release_json")" = true || {
+                echo "::error::$release_tag is already published; refusing to overwrite it"
+                exit 1
+              }
+              draft_sha=$(jq -r .targetCommitish <<< "$release_json")
             fi
+            node scripts/release-version.mjs identity "$sha" "$tag_sha" "$draft_sha"
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "published=$published" >> "$GITHUB_OUTPUT"
 
   linux:
     name: Linux x64 (AppImage + deb)
@@ -167,7 +158,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f release/DaniBot-${{ needs.prepare.outputs.version }}-setup.exe
-          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-x64.zip
+          test -f release/DaniBot-${{ needs.prepare.outputs.version }}-win-x64.zip
           test -f release/latest.yml
       - name: Create stable download name
         shell: bash
@@ -175,7 +166,7 @@ jobs:
           set -euo pipefail
           version=${{ needs.prepare.outputs.version }}
           cp "release/DaniBot-$version-setup.exe" release/DaniBot-setup.exe
-          cp "release/DaniBot-$version-x64.zip" release/DaniBot-Windows-Portable.zip
+          cp "release/DaniBot-$version-win-x64.zip" release/DaniBot-Windows-Portable.zip
           test -s release/DaniBot-setup.exe
           test -s release/DaniBot-Windows-Portable.zip
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -184,6 +175,7 @@ jobs:
           path: |
             release/DaniBot-*.exe
             release/DaniBot-*.exe.blockmap
+            release/DaniBot-${{ needs.prepare.outputs.version }}-win-x64.zip
             release/DaniBot-Windows-Portable.zip
             release/latest.yml
           if-no-files-found: error
@@ -194,9 +186,10 @@ jobs:
     needs: prepare
     runs-on: macos-latest
     timeout-minutes: 75
+    outputs:
+      signed: ${{ steps.signed.outputs.signed }}
     env:
-      # No Apple Developer ID is configured yet. electron-builder may apply an
-      # ad-hoc signature, but these builds are not Developer ID signed or notarized.
+      # Squirrel.Mac validates updates against the installed app's signing identity.
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       # The arm64 runner has 7 GB of memory; keep the ceiling below it.
       NODE_OPTIONS: "--max-old-space-size=5120"
@@ -213,8 +206,50 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Stage pinned cloudflared for both Mac architectures
         run: node scripts/prepare-cloudflared.mjs
-      - name: Build macOS packages
+      - name: Build unsigned macOS draft packages
+        if: vars.DANI_MAC_SIGNING != 'true' || (github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/v'))
         run: pnpm package:mac
+      - name: Build and verify Developer ID signed, notarized macOS packages
+        id: signed
+        if: vars.DANI_MAC_SIGNING == 'true' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "true"
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          for credential in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            test -n "${!credential}" || { echo "::error::DANI_MAC_SIGNING requires $credential"; exit 1; }
+          done
+          pnpm package:mac -c.forceCodeSigning=true -c.mac.notarize=true
+          for arch in arm64 x64; do
+            extracted=$(mktemp -d "$RUNNER_TEMP/dani-signed-$arch.XXXXXX")
+            ditto -xk "release/DaniBot-$VERSION-$arch.zip" "$extracted"
+            app="$extracted/Dani Bot.app"
+            codesign --verify --deep --strict "$app"
+            identity=$(codesign -dv --verbose=4 "$app" 2>&1)
+            printf '%s\n' "$identity" | grep -F 'Authority=Developer ID Application:'
+            printf '%s\n' "$identity" | grep -Fx "TeamIdentifier=$APPLE_TEAM_ID"
+            expected=arm64
+            if [[ "$arch" == x64 ]]; then expected=x86_64; fi
+            lipo -archs "$app/Contents/MacOS/Dani Bot" | grep -Fx "$expected"
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose=4 "$app"
+            dmg="release/DaniBot-$VERSION-$arch.dmg"
+            xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+              --wait --output-format json | jq -e '.status == "Accepted"'
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+            node scripts/regenerate-blockmaps.mjs "$dmg"
+          done
+          node scripts/regenerate-mac-feed.mjs
+          echo "signed=true" >> "$GITHUB_OUTPUT"
       - name: Verify release files
         shell: bash
         run: |
@@ -254,22 +289,65 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  candidate-ci:
+    name: Verify pinned release candidate CI
+    needs: prepare
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      group: release-ci-${{ needs.prepare.outputs.version }}
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Require complete native-platform CI for this candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: node scripts/release-ci.mjs
+
   release:
     name: Create draft release
-    needs: [prepare, linux, windows, macos]
+    needs: [prepare, candidate-ci, linux, windows, macos]
     # Release hold: an ordinary branch push only validates the packaging above.
     # Tags and draft releases are created only by a v* tag push or an explicit
     # manual dispatch, after the required checks have passed.
-    if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && needs.prepare.outputs.published != 'true'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    concurrency:
+      group: release-draft-${{ needs.prepare.outputs.version }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: release-assets
-          merge-multiple: true
+          pattern: "*-release"
+          merge-multiple: false
       - name: Verify complete artifact set
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -278,14 +356,8 @@ jobs:
           set -euo pipefail
           echo "Downloaded release asset inventory:"
           find release-assets -maxdepth 2 -type f -printf '%P\n' | sort
+          node scripts/release-artifacts.mjs release-assets "$VERSION"
           required=(
-            "DaniBot-$VERSION-x86_64.AppImage"
-            "DaniBot-$VERSION-amd64.deb"
-            "DaniBot-$VERSION-setup.exe"
-            "DaniBot-$VERSION-x64.zip"
-            "DaniBot-$VERSION-arm64.dmg"
-            "DaniBot-$VERSION-arm64.zip"
-            "DaniBot-$VERSION-x64.dmg"
             DaniBot.AppImage
             danibot-amd64.deb
             DaniBot-setup.exe
@@ -297,7 +369,7 @@ jobs:
             latest-linux.yml latest.yml latest-mac.yml
           )
           for file in "${required[@]}"; do
-            test -s "release-assets/$file" || {
+            test -s "$(find release-assets -type f -name "$file")" || {
               echo "::error::missing release asset: $file"
               exit 1
             }
@@ -307,10 +379,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.prepare.outputs.version }}
           SHA: ${{ needs.prepare.outputs.sha }}
+          MAC_SIGNED: ${{ needs.macos.outputs.signed }}
         shell: bash
         run: |
           set -euo pipefail
           tag="v$VERSION"
+          mac_trust="macOS is not Developer ID signed or notarized; Gatekeeper may block it. This is an untrusted review draft, not a Mac automatic-update bootstrap."
+          if [[ "$MAC_SIGNED" == true ]]; then
+            mac_trust="macOS ZIP apps passed Developer ID signature, team, architecture, stapled ticket and Gatekeeper checks; DMGs passed notarization and stapling. Native installed-app and automatic-upgrade verification are still required."
+          fi
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           ## Downloads
 
@@ -327,17 +404,30 @@ jobs:
 
           ## Notes
 
-          - Built from commit \`$SHA\` on native GitHub-hosted Windows, macOS, and Linux runners.
+          - Built from pinned commit \`$SHA\`; full native-platform CI was required for this commit, an identical source tree, or its version-only parent.
           - Windows builds are unsigned and may show a SmartScreen warning.
-          - macOS uses hardened runtime but is not signed with an Apple Developer ID or notarized, so Gatekeeper may block it.
+          - $mac_trust
           - Windows passed an isolated NSIS install, onboarding, and relaunch check on a native Windows runner.
-          - Test macOS and Linux installers on clean machines before publishing this draft.
+          - These exact macOS and Linux release installers have not passed clean-machine install and upgrade checks in this workflow. Test both Mac architectures and Linux packages before publishing this draft.
+          - Do not publish until signing trust and native install/upgrade checks pass. Existing ad-hoc Mac installations may need a one-time signed installer bootstrap.
 
           Blockmap files and \`latest.yml\`, \`latest-mac.yml\`, and \`latest-linux.yml\` are auto-update metadata, not manual downloads.
           EOF
+          # Creating a ref is atomic: never let an existing version tag move to
+          # a different commit, including when another actor creates it mid-run.
+          if ! gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$tag" -f "sha=$SHA"; then
+            echo "Version tag already exists or could not be created; verifying its commit."
+          fi
+          tag_refs=$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")
+          test -n "$tag_refs" || { echo "::error::release tag does not exist"; exit 1; }
+          tag_sha=$(printf '%s\n' "$tag_refs" | tail -n 1 | cut -f1)
+          node scripts/release-version.mjs identity "$SHA" "$tag_sha"
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             is_draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+            existing_sha=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)
+            node scripts/release-version.mjs identity "$SHA" "$tag_sha" "$existing_sha"
             test "$is_draft" = true || {
               echo "::error::$tag is already published; refusing to overwrite it"
               exit 1
@@ -354,7 +444,7 @@ jobs:
           # fail after partially succeeding, which makes a rerun ambiguous.
           # Per-file clobber plus bounded retries makes this step idempotent.
           declare -A uploaded=()
-          find release-assets -maxdepth 1 -type f -print0 \
+          find release-assets -type f -print0 \
             | sort -z \
             | while IFS= read -r -d '' asset; do
                 name=$(basename "$asset")
@@ -364,6 +454,12 @@ jobs:
                 fi
                 uploaded[$name]=1
                 for attempt in 1 2 3; do
+                  state=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish)
+                  test "$(jq -r .isDraft <<< "$state")" = true || {
+                    echo "::error::$tag is no longer a draft; refusing to overwrite it"
+                    exit 1
+                  }
+                  node scripts/release-version.mjs identity "$SHA" "" "$(jq -r .targetCommitish <<< "$state")"
                   if gh release upload "$tag" "$asset" \
                     --repo "$GITHUB_REPOSITORY" --clobber; then
                     break

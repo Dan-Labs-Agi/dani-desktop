@@ -1,8 +1,7 @@
-// Which of a person's AIs a new bot uses, and which one the welcome offers first: one ranking for the server's new-bot
-// default and the welcome. A Claude account, then a ChatGPT plan, then Gemini, then Grok, then every other AI in the
-// order the app lists them; OpenCode running only its free no-login models comes last, as a backup.
+import { isDaniFreeInstance } from "./dani-free.ts";
 
 export interface RankableAi {
+  instanceId?: string;
   driverKind: string;
   snapshot?: { freeFallback?: boolean };
 }
@@ -27,6 +26,7 @@ export function freeFallback(instance: RankableAi): boolean {
 }
 
 function tier(instance: RankableAi): number {
+  if (isDaniFreeInstance(instance)) return -1;
   return freeFallback(instance) ? FREE_FALLBACK : TIERS[instance.driverKind] ?? OTHER;
 }
 

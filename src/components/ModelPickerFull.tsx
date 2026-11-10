@@ -1,11 +1,16 @@
+import { useState, type ReactNode } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Check, KeyRound, Plus, Search } from "lucide-react";
 import type { InstanceInfo } from "@/state/store";
 import { isClaudeAccount, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail, type SignInFamily } from "@/lib/engine-rail";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import { daniModelDetails, daniModelLabel } from "@/lib/model-choices";
+import { openExternalLink } from "@/lib/app-links";
 import { InstanceProviderMark } from "./ProviderIcons";
 import { hasSavedApiKey, needsCli, needsSignIn } from "./EngineSetup";
-import { MENU_META, MENU_ROW, MENU_STROKE } from "./menu-recipe";
+import { MENU_META, MENU_ROW, MENU_STROKE, SIMPLE_MENU_ROW } from "./menu-recipe";
 import { Select } from "./Select";
 
 type ModelOption = InstanceInfo["models"]["options"][number];
@@ -20,29 +25,61 @@ export function apiKeysLabel(instances: InstanceInfo[]): string {
   return t(instances.some(hasSavedApiKey) ? "model.addOrChangeApiKeys" : "model.addApiKeys");
 }
 
-export function ModelRow({ option, current, defaultId, botModel = false, onPick }: {
+function NoticeLink({ href, children }: { href?: string; children?: ReactNode }) {
+  if (!href || !/^https?:\/\//i.test(href)) return <span>{children}</span>;
+  return <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-2" onClick={(event) => {
+    if (window.ogb?.openExternal) { event.preventDefault(); void openExternalLink(href); }
+  }}>{children}</a>;
+}
+
+/** The catalog is untrusted Markdown, not HTML; legal notices never become model-selection button copy. */
+export function DaniModelNotice({ option }: { option: ModelOption }) {
+  const [open, setOpen] = useState(false);
+  if (!option.privacyNotice?.trim()) return null;
+  return <details data-dani-model-notice open={open} className="min-w-0 px-2 pb-1 text-[11px] leading-4 text-ink-secondary">
+    <summary data-menu-row tabIndex={-1} aria-label={t("daniSetup.privacyTermsFor", { model: daniModelLabel(option) })}
+      className="cursor-pointer rounded px-1 py-0.5 hover:bg-ink/[0.06] focus:bg-ink/[0.06]"
+      onClick={(event) => { event.preventDefault(); setOpen(!open); }}>
+      {t("daniSetup.privacyTerms")}
+    </summary>
+    {open && <div data-dani-notice-text className="mt-1 whitespace-normal break-words rounded bg-ink/[0.03] p-2 [overflow-wrap:anywhere] [&_p+p]:mt-2">
+      <Markdown remarkPlugins={[remarkGfm]} skipHtml disallowedElements={["img"]} components={{ a: NoticeLink }}>{option.privacyNotice}</Markdown>
+    </div>}
+  </details>;
+}
+
+export function ModelRow({ option, current, defaultId, botModel = false, daniFree = false, onPick }: {
   option: ModelOption;
   current: boolean;
   defaultId: string;
   botModel?: boolean;
+  daniFree?: boolean;
   onPick: () => void;
 }) {
-  const blocked = option.orgBlocked === true;
-  const meta = blocked ? t("model.orgBlocked") : [option.provider, option.id === defaultId ? t("model.effort.default") : undefined].filter(Boolean).join(" · ");
+  const unavailable = option.availability !== undefined && option.availability !== "available";
+  const blocked = option.orgBlocked === true || unavailable;
+  const label = daniFree ? daniModelLabel(option) : option.label;
+  const reason = option.orgBlocked ? t("model.orgBlocked") : unavailable ? t(daniFree ? "daniSetup.unavailableHint" : "model.simple.unavailable") : undefined;
+  const details = daniFree ? daniModelDetails(option).join(" · ") : undefined;
+  const meta = !daniFree && !reason ? [option.provider, option.id === defaultId ? t("model.effort.default") : undefined].filter(Boolean).join(" · ") : undefined;
   return (
-    <button
+    <><button
       type="button"
       data-menu-row
       data-current-model={current || undefined}
-      data-org-blocked={blocked || undefined}
+      data-org-blocked={option.orgBlocked || undefined}
       disabled={blocked}
       aria-pressed={current}
-      aria-label={blocked ? `${option.label} · ${t("model.orgBlocked")}` : undefined}
-      title={blocked ? t("model.orgBlocked") : option.provider ? t("model.provider", { name: option.provider }) : undefined}
-      onClick={onPick}
-      className={MENU_ROW}
+      aria-label={[label, reason, details].filter(Boolean).join(" · ")}
+      title={reason ?? details ?? (option.provider ? t("model.provider", { name: option.provider }) : undefined)}
+      onClick={() => { if (!blocked) onPick(); }}
+      className={daniFree || reason ? SIMPLE_MENU_ROW : MENU_ROW}
     >
-      <span className="min-w-0 flex-1 truncate">{option.label}</span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{label}</span>
+        {details && <span className="whitespace-normal text-[11px] leading-4 text-ink-tertiary [overflow-wrap:anywhere]">{details}</span>}
+        {reason && <span className="whitespace-normal text-[12px] leading-4 text-ink-tertiary">{reason}</span>}
+      </span>
       {botModel && <span data-bot-model className="shrink-0 text-[12px] leading-4 text-ink-tertiary">{t("model.botModelTag")}</span>}
       {meta && <span className={MENU_META}>{meta}</span>}
       {option.loaded && (
@@ -53,6 +90,7 @@ export function ModelRow({ option, current, defaultId, botModel = false, onPick 
       )}
       {current && <Check size={14} className="shrink-0 text-accent" aria-hidden="true" />}
     </button>
+    {daniFree && <DaniModelNotice option={option} />}</>
   );
 }
 

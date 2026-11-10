@@ -18,6 +18,7 @@ import { parseOpenCodeLogLine } from "./quiet-status.ts";
 import type { ModelCatalog, ModelVariantOption, ProviderDriver, ProviderErrorCode } from "../../contracts.ts";
 import { titleCaseModelId } from "../../contracts.ts";
 import { execCli, killCliTree, spawnCli } from "../../procs.ts";
+import { createDaniFreeClient } from "../dani-free-client.ts";
 
 const NO_MODELS: ModelCatalog = { default: "", options: [] };
 
@@ -946,13 +947,29 @@ export function classifyOpenCodeError(error: unknown): ProviderErrorCode | undef
 
 export const classifyOpenCodeGoError = classifyOpenCodeError;
 
+export interface OpenCodeConfig extends AcpConfig {
+  freeOnly?: boolean;
+}
+
 /** Its status says `freeFallback` while only Zen's free no-login models make it ready (contracts.ts). */
-export function createOpenCodeDriver(loadCatalog: OpenCodeCatalogLoader = discoverOpenCodeModels): ProviderDriver<AcpConfig> {
+export function createOpenCodeDriver(loadCatalog: OpenCodeCatalogLoader = discoverOpenCodeModels): ProviderDriver<OpenCodeConfig> {
   const ownAccess = new Map<string, boolean>();
   const driver = createAcpDriver(support(loadCatalog, ownAccess));
   return {
     ...driver,
+    decodeConfig(raw) {
+      const freeOnly = raw && typeof raw === "object" && "freeOnly" in raw ? raw.freeOnly : undefined;
+      if (freeOnly !== undefined && typeof freeOnly !== "boolean") throw new Error("freeOnly must be a boolean");
+      return { ...driver.decodeConfig(raw), ...(freeOnly !== undefined ? { freeOnly } : {}) };
+    },
     async create(input) {
+      if (input.config.freeOnly === true) {
+        return createDaniFreeClient(input, support(loadCatalog), loadCatalog !== discoverOpenCodeModels ? loadCatalog : async (environment, cli) => {
+          await refreshOpenCodeModelCache(cli, environment);
+          const probe = await probeOpenCodeSession(cli, environment);
+          return catalogFromOpenCodeSession(probe.session) ?? NO_MODELS;
+        });
+      }
       const instance = await driver.create(input);
       const read = instance.snapshot.bind(instance);
       instance.snapshot = async () => {

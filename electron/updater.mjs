@@ -158,6 +158,11 @@ export function startUpdater(signals = null) {
     setState({ status: "error", message: "updater unavailable" });
     return;
   }
+  // electron-updater 6.8.9 infers prerelease channels from local build versions.
+  autoUpdater.allowPrerelease = false;
+  autoUpdater.channel = "latest";
+  // electron-updater 6.8.9 enables downgrades when channel is set.
+  autoUpdater.allowDowngrade = false;
   // The coordinator starts each download itself, so it owns macOS staging and quiet failures.
   autoUpdater.autoDownload = false;
   autoUpdater.logger = updaterLogger();

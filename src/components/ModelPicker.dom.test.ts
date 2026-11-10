@@ -99,6 +99,40 @@ afterEach(() => {
 });
 
 describe("choosing a model with the keyboard", () => {
+  it("picks a free family model using its own native route without exposing upstream branding", async () => {
+    fixture.instances = [
+      { instanceId: "dani", driverKind: "daniFree", displayName: "Dani", snapshot: { state: "available", authenticated: true },
+        models: { default: "gateway/one", options: [{ id: "gateway/one", label: "Helpful One", provider: "KiloCode" }] } },
+      { instanceId: "dani-client", driverKind: "opencodeGo", displayName: "Dani", snapshot: { state: "available", authenticated: true },
+        models: { default: "client/two", options: [{ id: "client/two", label: "Helpful Two", provider: "OpenCode" }] } },
+    ];
+    render({ ...scout(), modelSelection: { instanceId: "dani", model: "gateway/one" } });
+    await openWith("click");
+    expect(menu()?.textContent).toContain("Dani free models");
+    expect(menu()?.innerHTML).not.toMatch(/OpenCode|KiloCode|gateway\/one|client\/two/);
+    const choice = [...menu()!.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.startsWith("Helpful Two"))!;
+    flushSync(() => choice.click());
+    await settle();
+    expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      type: "setModel", selection: { instanceId: "dani-client", model: "client/two" },
+    }));
+  });
+
+  it("retains unavailable additional free models as disabled choices beside a working route", async () => {
+    fixture.instances = [
+      { instanceId: "dani", driverKind: "daniFree", displayName: "Dani", snapshot: { state: "available", authenticated: true },
+        models: { default: "one", options: [{ id: "one", label: "Helpful One", availability: "available" }] } },
+      { instanceId: "dani-client", driverKind: "opencodeGo", displayName: "Dani", snapshot: { state: "unavailable", authenticated: false },
+        models: { default: "two", options: [{ id: "two", label: "Helpful Two", availability: "preparing" }] } },
+    ];
+    render({ ...scout(), modelSelection: { instanceId: "dani", model: "one" } });
+    await openWith("click");
+    const choice = [...menu()!.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.startsWith("Helpful Two"))!;
+    expect(choice.disabled).toBe(true);
+    expect(menu()?.textContent).toContain("Set up Dani");
+    expect(fixture.dispatch).not.toHaveBeenCalled();
+  });
+
   it("opens from the chip, starts on the current model, moves with the arrows and picks with Enter", async () => {
     await openWith("ArrowDown");
     expect(menu()).not.toBeNull();

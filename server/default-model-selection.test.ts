@@ -24,6 +24,40 @@ const claude = {
 };
 
 describe("new bot default model selection", () => {
+  describe("Dani free default", () => {
+    const dani: SelectableInstance = {
+      instanceId: "dani",
+      driverKind: "daniFree",
+      access: "api",
+      snapshot: { state: "available", authenticated: true },
+      models: { default: "free-model", options: [{ id: "free-model", label: "Free model" }] },
+    };
+
+    it("uses Dani before an installed subscription agent on an unconfigured profile", () => {
+      expect(selectDefaultModelSelection([claude, dani], undefined, {
+        answered: instance => instance.instanceId === "claude" ? true : undefined,
+      })).toEqual({ instanceId: "dani", model: "free-model" });
+    });
+
+    it.each([
+      { ...dani, snapshot: { state: "unavailable" as const, reason: "Set up Dani" } },
+      { ...dani, snapshot: { state: "available" as const, authenticated: false } },
+      { ...dani, enabled: false },
+    ])("does not silently replace an unready Dani service with a subscription agent", instance => {
+      expect(selectDefaultModelSelection([claude, instance])).toEqual({ instanceId: "", model: "" });
+    });
+
+    it("keeps an explicitly selected agent instead of forcing Dani", () => {
+      const preferred = { instanceId: "claude", model: "claude-default" };
+      expect(selectDefaultModelSelection([dani, claude], preferred)).toEqual(preferred);
+    });
+
+    it("does not treat a disabled fixture shadow as a real Dani service", () => {
+      expect(selectDefaultModelSelection([claude, { ...dani, driverKind: "not-a-real-driver", enabled: false }]))
+        .toEqual({ instanceId: "claude", model: "claude-default" });
+    });
+  });
+
   it("accepts a configured API-key provider", () => {
     const instance = { ...codex, instanceId: "mistral", driverKind: "mistral", access: "api" as const };
     const preferred = { instanceId: "mistral", model: "selected-model" };

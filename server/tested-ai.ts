@@ -17,7 +17,7 @@ import { dirname } from "node:path";
 import { aiSignInKey, rankAis, type AiTestState } from "../shared/ai-ranking.ts";
 import { writeFileAtomic } from "./atomic.ts";
 import type { ModelSelection, ProviderSnapshot } from "./contracts.ts";
-import { readyToRun, signedOut, type DefaultSelectionContext, type SelectableInstance } from "./default-model-selection.ts";
+import { automaticModelCandidates, readyToRun, signedOut, type DefaultSelectionContext, type SelectableInstance } from "./default-model-selection.ts";
 import { checkEngine, type CheckableEngine, type EngineCheck } from "./engine-check.ts";
 import type { Store } from "./store.ts";
 
@@ -241,7 +241,7 @@ export function createTestedAi(deps: TestedAiDeps) {
    * to look after. One miss waits for its retry; two hand over to the next AI. */
   const sweep = () => {
     if (!background || fixed()) return;
-    const own = lastInstances.filter((instance) => readyToRun(instance, deps.context) && hasModel(instance)
+    const own = automaticModelCandidates(lastInstances).filter((instance) => readyToRun(instance, deps.context) && hasModel(instance)
       && deps.context.company?.(instance.instanceId) !== true);
     for (const instance of rankAis(own)) {
       if (running.has(instance.instanceId)) return;

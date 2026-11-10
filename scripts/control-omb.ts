@@ -15,6 +15,7 @@ import { launchUi, runControlOmbUi } from "./testing/control-omb-ui.ts";
 import { removeTempDir, waitForExit } from "../server/testing/cleanup.ts";
 import { hostTimeout } from "../server/testing/host-timeout.ts";
 import { freePortBlock } from "../server/testing/ports.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 /** Outside the bot name pool, so no suite can plan a bot that collides with the
@@ -300,6 +301,11 @@ export async function launchVerificationServer(
     // A setup card's answers would be one more engine call at every new bot, taking replies a test scripts for its turns.
     features: { smartSetupChoices: false },
     instances: {
+      // A sealed PATH does not isolate local HTTP engines. Shadow the whole product
+      // fleet so config migrations cannot add real providers beside these explicit fakes.
+      ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+        id, { driver: "not-a-real-driver", enabled: false },
+      ])),
       ...(extraProviders.includes("codex") ? { codex: {
         driver: "codex", displayName: "Verification Codex", config: { cli: fileURLToPath(new URL("../server/testing/fake-codex-app-server.ts", import.meta.url)) },
       } } : {}),

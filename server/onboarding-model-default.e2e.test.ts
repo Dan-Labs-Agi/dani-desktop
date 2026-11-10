@@ -4,8 +4,10 @@ import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "no
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
+import { z } from "zod";
 import { launchVerificationServer, runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
 import { waitForExit } from "./testing/cleanup.ts";
+import type { WireMessage } from "../shared/wire.ts";
 
 const EMPTY = { instanceId: "", model: "" };
 const DEFAULT = { instanceId: "claude", model: "claude-sonnet-5" };
@@ -16,7 +18,7 @@ type Fixture = {
   api: (method: string, path: string, body?: unknown) => Promise<any>;
   request: (method: string, path: string, body?: unknown) => Promise<{ status: number; body: any }>;
   control: (...args: string[]) => Promise<any>;
-  restart: (options?: { clearStarter?: boolean; enabled?: boolean; signedOut?: boolean }) => Promise<void>;
+  restart: (options?: { clearStarter?: boolean; enabled?: boolean; signedOut?: boolean; daniUnavailable?: boolean }) => Promise<void>;
   connect: () => Promise<void>;
   makeCliAvailable: (holdProbe?: boolean) => { started: () => boolean; release: () => void; dispatched: () => boolean };
   saved: () => any[];
@@ -56,6 +58,9 @@ async function withUnselectedStarter(check: (fixture: Fixture) => Promise<void>)
       config: { ...config.instances.claude.config, cli: lateCli },
       environment: options.signedOut ? { FAKE_CLAUDE_AUTH: "out", FAKE_CLAUDE_MODE: "not-logged-in" } : {},
     };
+    if (options.daniUnavailable) config.instances.dani = {
+      driver: "daniFree", displayName: "Dani", enabled: true, config: { endpoint: "https://example.invalid" },
+    };
     writeFileSync(configPath, JSON.stringify(config));
     const log = openSync(logPath, "a", 0o600);
     server = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./index.ts", import.meta.url))], {
@@ -70,7 +75,13 @@ async function withUnselectedStarter(check: (fixture: Fixture) => Promise<void>)
   try {
     await check({ api, request, saved, restart,
       control: (...args) => runControlOmb([...args, "--url", url]) as Promise<any>,
-      connect: async () => { await api("PATCH", "/api/instances/claude", { cli: FAKE_CLI }); },
+      connect: async () => {
+        const result = await api("PATCH", "/api/instances/claude", { cli: FAKE_CLI });
+        const provider = result.instances.find((instance: { instanceId: string }) => instance.instanceId === "claude");
+        expect(provider.snapshot, JSON.stringify({
+          state: provider.snapshot.state, reason: provider.snapshot.reason, authenticated: provider.snapshot.authenticated,
+        })).toMatchObject({ state: "available", authenticated: true });
+      },
       makeCliAvailable: (holdProbe = false) => {
         const gate = join(dataDir, "probe-release");
         const probes = join(dataDir, "probe-log");
@@ -101,9 +112,13 @@ async function withUnselectedStarter(check: (fixture: Fixture) => Promise<void>)
 
 async function send(fixture: Fixture, botId: string, threadId: string, text: string) {
   await fixture.control("send", "--bot", botId, "--task", threadId, "--text", text);
-  expect((await fixture.control("wait", "--bot", botId, "--task", threadId, "--timeout", "30")).status).toBe("settled");
+  const outcome = await fixture.control("wait", "--bot", botId, "--task", threadId, "--timeout", "30");
   const messages = (await fixture.api("GET", `/api/threads/${threadId}/messages?limit=20`)).messages;
-  expect(messages.findLast((message: any) => message.role === "bot" && message.kind === "text")).toMatchObject({ turnSucceeded: true });
+  const reply = messages.findLast((message: WireMessage) => message.role === "bot" && message.kind === "text");
+  expect(outcome.status, JSON.stringify({ status: outcome.status, reply: reply && {
+    text: reply.text, turnSucceeded: reply.turnSucceeded,
+  } })).toBe("settled");
+  expect(reply).toMatchObject({ turnSucceeded: true });
   expect(fixture.receipt().model).toBe(DEFAULT.model);
   expect(JSON.stringify(fixture.receipt().prompt)).toContain(text);
 }
@@ -164,6 +179,26 @@ it.each(["signed-out", "disabled"] as const)("does not select a %s provider for 
     else expect(claude.enabled).toBe(false);
     expect((await fixture.api("GET", "/api/bots")).bots[0].modelSelection).toEqual(EMPTY);
     expect(fixture.saved()[0].modelSelection).toEqual(EMPTY);
+  });
+}, 120_000);
+
+it("keeps automatic starter and new-bot choices empty when Dani cannot start even with a ready optional agent", async () => {
+  await withUnselectedStarter(async (fixture) => {
+    fixture.makeCliAvailable();
+    await fixture.restart({ clearStarter: true, daniUnavailable: true });
+    const { instances } = z.object({ instances: z.array(z.object({
+      instanceId: z.string(), driverKind: z.string(),
+      snapshot: z.object({ state: z.string(), authenticated: z.boolean().optional() }),
+    })) }).parse(await fixture.api("GET", "/api/instances"));
+    expect(instances.find((instance) => instance.instanceId === "dani")).toMatchObject({
+      driverKind: "daniFree", snapshot: { state: "unavailable" },
+    });
+    expect(instances.find((instance) => instance.instanceId === "claude")).toMatchObject({
+      snapshot: { state: "available", authenticated: true },
+    });
+    expect((await fixture.api("GET", "/api/bots")).bots[0].modelSelection).toEqual(EMPTY);
+    expect((await fixture.api("GET", "/api/bot-defaults")).modelSelection).toEqual(EMPTY);
+    expect((await fixture.control("new-bot", "--name", "Wait for Dani")).bot.modelSelection).toEqual(EMPTY);
   });
 }, 120_000);
 

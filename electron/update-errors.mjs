@@ -33,6 +33,9 @@ export function updateErrorMessage(error) {
   if (/certificate/i.test(detail)) {
     return "The update connection could not be verified. Check your clock, VPN or proxy; do not disable certificate checks.";
   }
+  if (/ERR_UPDATER_NO_PUBLISHED_VERSIONS|No published versions on GitHub/i.test(detail)) {
+    return "Automatic updates need the first published stable release on GitHub. Check the official release page, or try again later.";
+  }
   if (/\b404\b|cannot find .*\.yml|cannot parse update info|no files provided|ERR_UPDATER_INVALID_RELEASE_FEED/i.test(detail)) {
     return "The update files are missing or invalid. Check the official release page, or try again later.";
   }

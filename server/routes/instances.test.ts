@@ -114,12 +114,26 @@ describe("the engine list", () => {
   });
 });
 
-describe("an engine's check", () => {
-  it("goes through the server's tested-AI record, so the welcome's test also settles the new-bot default", async () => {
-    const asked: string[] = [];
-    const { call } = await serve({ checkInstance: async (instance) => { asked.push(instance.instanceId); return { ok: false, error: "no answer" }; } });
-    expect(await call("POST", "/api/instances/a/check", {})).toEqual({ ok: false, error: "no answer" });
-    expect(asked).toEqual(["a"]);
+describe("organization policy on model setup", () => {
+  it.each([
+    { instanceId: "a", action: "check" },
+    { instanceId: "dani", action: "install" },
+  ])("rejects $action before inference or initial fleet changes", async ({ instanceId, action }) => {
+    const checked: string[] = [];
+    let ensured = 0;
+    const reason = "This organization allows only its approved model services.";
+    const { base } = await serve({
+      modelRefusal: () => reason,
+      ensureDaniInstances: async () => { ensured++; },
+      checkInstance: async (instance) => { checked.push(instance.instanceId); return { ok: true }; },
+    });
+    const response = await fetch(`${base}/api/instances/${instanceId}/${action}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: reason });
+    expect(checked).toEqual([]);
+    expect(ensured).toBe(0);
   });
 });
 

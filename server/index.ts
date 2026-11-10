@@ -10,6 +10,7 @@ import { ToolResults, TOOL_RESULT_MAX_CHARS } from "./tool-results.ts";
 import { join } from "node:path";
 import { authorizeExternalRuntime, externalRuntimeIsActive, type ExternalRuntimeGrant } from "./external-runtime.ts";
 import { z } from "zod";
+import { DANI_FREE_FLEET } from "./instance-fleets.ts";
 import { selectReplay, replayToolCalls, DEFAULT_REBUILD_BYTES, MAX_SUMMARY_BYTES } from "./context-rebuild.ts";
 import { draftSummary, foldPoint } from "./compaction-summary.ts";
 import { compactBudget, compactionReading, contextWindowFor, shouldCompact } from "./context-budget.ts";
@@ -2569,7 +2570,9 @@ async function refreshUnsetModelSelections(instances?: readonly SelectableInstan
   if (registry.provisional(instances)) return;
   const selectable = selectableInstances(instances ?? await registry.describe());
   creditMoves?.settle(selectable); routineHolds?.engines(Boolean(creditMoves?.away(selectable)));
-  bootSelection = testedAi.settle(await defaultSelection(undefined, selectable.filter(instance => readyToRun(instance, selectionContext))), selectable, read);
+  const proposedSelection = await defaultSelection(undefined, selectable);
+  const ready = selectable.some((instance) => instance.instanceId === proposedSelection.instanceId && readyToRun(instance, selectionContext));
+  bootSelection = testedAi.settle(ready ? proposedSelection : { instanceId: "", model: "" }, selectable, read);
   if (hostedModels || !bootSelection.instanceId || !bootSelection.model) return;
   const selection = withNewBotEffort(bootSelection, cfg.newBots?.effort,
     registry.get(bootSelection.instanceId)?.adapter.capabilities.effortLevels);
@@ -12099,6 +12102,28 @@ async function persistProviderInstance(instanceId: string, instances: NonNullabl
   resetPathCache();
 }
 
+let daniInstancesPreparing: Promise<void> | null = null;
+function ensureDaniInstances(): Promise<void> {
+  if (!daniInstancesPreparing) {
+    daniInstancesPreparing = (async () => {
+      if (enginesRead) await enginesRead;
+      const current = persistableInstanceConfigs(cfg);
+      const missing = Object.entries(DANI_FREE_FLEET).filter(([id]) => !Object.hasOwn(current, id));
+      if (!missing.length) return;
+      if (providerConfigBusy) throw new Error("Provider settings are already being updated. Try again.");
+      providerConfigBusy = true;
+      try {
+        for (const [id, entry] of missing) {
+          await persistProviderInstance(id, { ...persistableInstanceConfigs(cfg), [id]: entry });
+        }
+      } finally {
+        providerConfigBusy = false;
+      }
+    })().finally(() => { daniInstancesPreparing = null; });
+  }
+  return daniInstancesPreparing;
+}
+
 /** The engine a bot's process in a conversation runs on: the running turn's when it is the bot's, else the bot's selection there. */
 function threadEngineId(botId: string, threadId: string): string | undefined {
   const speaking = (groupSpeakers.get(threadId)?.botId ?? botId) === botId;
@@ -12532,6 +12557,11 @@ ROUTES.push(createInstanceRoutes({
   hostedModels: Boolean(hostedModels),
   providerConfigBusy: { get: () => providerConfigBusy, set: (busy) => { providerConfigBusy = busy; } },
   providerInstancesChanging, describeInstances, persistProviderInstance, configStatus, broadcast, testCliBinary,
+  ensureDaniInstances,
+  modelRefusal: (instanceId) => {
+    const driverKind = registry.get(instanceId)?.driverKind ?? DANI_FREE_FLEET[instanceId]?.driver;
+    return driverKind ? policyModelRefusal({ instanceId, driverKind }) : undefined;
+  },
   cliProbeEnvironment, threadBusy, botForThread, activeGroupTurnForBot, checkInstance: testedAi.check,
 }));
 ROUTES.push(createMcpServerRoutes({

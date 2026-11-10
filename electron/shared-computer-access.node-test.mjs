@@ -519,15 +519,15 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n'); });`
 test("a protected directory spelled in another case is still refused", async t => {
   const { dir, folder, grant, run } = await fixture(t);
   if (!(await spellings(dir)).case) return t.skip("this filesystem is case-sensitive, so no case variant names the same directory");
-  await mkdir(path.join(dir, "Dani Bot"));
-  await writeFile(path.join(dir, "Dani Bot", "credentials.bin"), "credential blob");
-  grant.protectedPaths = [path.join(dir, "Dani Bot")];
+  await mkdir(path.join(dir, "PrivateVault"));
+  await writeFile(path.join(dir, "PrivateVault", "credentials.bin"), "credential blob");
+  grant.protectedPaths = [path.join(dir, "PrivateVault")];
   folder.write = true;
-  await assert.rejects(run({ action: "read_file", path: "Dani Bot/credentials.bin" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "read_file", path: "danibot/credentials.bin" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "read_file", path: "DANIBOT/credentials.bin" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "list_files", path: "danibot" }), /Desktop credentials/);
-  await assert.rejects(run({ action: "write_file", path: "danibot/computer-sharing.json", content: "{}" }), /sharing settings/);
+  await assert.rejects(run({ action: "read_file", path: "PrivateVault/credentials.bin" }), /Desktop credentials/);
+  await assert.rejects(run({ action: "read_file", path: "privatevault/credentials.bin" }), /Desktop credentials/);
+  await assert.rejects(run({ action: "read_file", path: "PRIVATEVAULT/credentials.bin" }), /Desktop credentials/);
+  await assert.rejects(run({ action: "list_files", path: "privatevault" }), /Desktop credentials/);
+  await assert.rejects(run({ action: "write_file", path: "privatevault/computer-sharing.json", content: "{}" }), /sharing settings/);
 });
 
 test("a protected directory spelled in another Unicode normalization is still refused", async t => {

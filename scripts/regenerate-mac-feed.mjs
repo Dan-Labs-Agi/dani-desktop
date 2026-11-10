@@ -1,71 +1,59 @@
-// Refresh latest-mac.yml after notarization stapling rewrote the dmg and the
-// updater zip: a stale sha512 makes electron-updater reject the download. The
-// file list and its ORDER stay exactly as electron-builder wrote them
-// (electron-updater filters it by arch on macOS, and the top-level path/sha512
-// is the legacy fallback from the first entry); only sha512 and size are
-// recomputed. Blockmaps go stale the same way: regenerate-blockmaps.mjs.
-import { createHash } from "node:crypto";
-import { readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+// Refresh latest-mac.yml after notarization stapling rewrote the artifacts.
+// Preserve electron-builder's file order: the first entry remains the legacy
+// path/sha512 fallback. Blockmaps need regeneration separately.
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { lstat, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { parse, stringify } from "yaml";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const feedPath = process.argv[2] ?? join(root, "release", "latest-mac.yml");
-const releaseDir = dirname(feedPath);
 
-const sha512 = (file) => createHash("sha512").update(readFileSync(file)).digest("base64");
+export async function regenerateMacFeed(feedPath = join(root, "release", "latest-mac.yml")) {
+  const releaseDir = dirname(feedPath);
+  const feed = parse(await readFile(feedPath, "utf8"));
+  if (!feed || typeof feed !== "object" || Array.isArray(feed) || !Array.isArray(feed.files) || feed.files.length === 0) {
+    throw new Error("latest-mac.yml must contain a non-empty files array");
+  }
 
-const original = readFileSync(feedPath, "utf8");
-const lines = original.split("\n");
+  for (const entry of feed.files) {
+    const url = entry?.url;
+    // Release artifacts live beside the feed, never at URLs or external paths.
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof url !== "string" ||
+        !url || url === "." || url === ".." || basename(url) !== url || /[\\:\0]/.test(url)) {
+      throw new Error(`Invalid artifact URL/reference in latest-mac.yml: ${url}`);
+    }
+    const file = join(releaseDir, url);
+    if (!(await lstat(file)).isFile()) {
+      throw new Error(`Artifact must be a regular file, not a symlink: ${url}`);
+    }
+    const hash = createHash("sha512");
+    let size = 0;
+    for await (const chunk of createReadStream(file)) {
+      hash.update(chunk);
+      size += chunk.length;
+    }
+    entry.size = size;
+    entry.sha512 = hash.digest("base64");
+  }
+  feed.path = feed.files[0].url;
+  feed.sha512 = feed.files[0].sha512;
+  feed.releaseDate = new Date().toISOString();
 
-let currentUrl = null;
-let firstUrl = null;
-const out = lines.map((line) => {
-  const url = line.match(/^\s*-\s+url:\s+(\S+)\s*$/);
-  if (url) {
-    currentUrl = url[1];
-    firstUrl ??= currentUrl;
-    return line;
+  // Validate and hash every artifact before replacing the previous feed.
+  const updated = stringify(feed);
+  const temporary = `${feedPath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, updated, { flag: "wx" });
+    await rename(temporary, feedPath);
+  } finally {
+    await rm(temporary, { force: true });
   }
-  // top-level path introduces the legacy fallback block: hash the first file
-  if (/^path:\s+/.test(line)) {
-    currentUrl = firstUrl;
-    return `path: ${firstUrl}`;
-  }
-  if (currentUrl && /^\s*sha512:\s+/.test(line)) {
-    const indent = line.match(/^\s*/)[0];
-    return `${indent}sha512: ${sha512(join(releaseDir, currentUrl))}`;
-  }
-  if (currentUrl && /^\s*size:\s+/.test(line)) {
-    const indent = line.match(/^\s*/)[0];
-    return `${indent}size: ${statSync(join(releaseDir, currentUrl)).size}`;
-  }
-  if (/^sha512:\s+/.test(line)) {
-    return `sha512: ${sha512(join(releaseDir, firstUrl))}`;
-  }
-  if (line.startsWith("releaseDate:")) {
-    return `releaseDate: '${new Date().toISOString()}'`;
-  }
-  return line;
-});
-
-const updated = out.join("\n");
-if (updated === original) {
-  console.log("latest-mac.yml already matches the bytes on disk");
-} else {
-  writeFileSync(feedPath, updated);
+  for (const { url, size } of feed.files) console.log(`  ok ${url} (${size} bytes)`);
+  console.log(`latest-mac.yml verified against ${feed.files.length} artifacts`);
 }
 
-// Refuse to end with a feed that lies: verify every entry against the disk.
-const entries = [...updated.matchAll(/-\s+url:\s+(\S+)[\s\S]*?sha512:\s+(\S+)\n\s+size:\s+(\d+)/g)];
-if (entries.length === 0) throw new Error("no file entries found in latest-mac.yml");
-for (const [, url, hash, size] of entries) {
-  const file = join(releaseDir, url);
-  const actualHash = sha512(file);
-  const actualSize = statSync(file).size;
-  if (actualHash !== hash || actualSize !== Number(size)) {
-    throw new Error(`feed mismatch for ${url}: hash/size do not match the file on disk`);
-  }
-  console.log(`  ok ${url} (${actualSize} bytes)`);
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  await regenerateMacFeed(process.argv[2]);
 }
-console.log(`latest-mac.yml verified against ${entries.length} artifacts`);

@@ -1,6 +1,7 @@
 // The engine instances a fresh install starts with, and the ones an existing product fleet gains.
 // instanceConfigs (config.ts) copies every entry before it changes one.
 import type { InstanceConfigMap } from "./contracts.ts";
+import { DANI_FREE_CLIENT_INSTANCE_ID, DANI_FREE_INSTANCE_ID } from "../shared/dani-free.ts";
 
 export const OPENAI_API_INSTANCE = "openai";
 export const OPENROUTER_API_INSTANCE = "openrouter";
@@ -22,9 +23,15 @@ export const API_KEY_FLEET: InstanceConfigMap = {
   },
 };
 
+export const DANI_FREE_FLEET: InstanceConfigMap = {
+  [DANI_FREE_INSTANCE_ID]: { driver: "daniFree", displayName: "Dani" },
+  [DANI_FREE_CLIENT_INSTANCE_ID]: { driver: "opencodeGo", displayName: "Dani", config: { freeOnly: true } },
+};
+
 // Google retired Gemini CLI for the free/Pro/Ultra tiers on 2026-06-18; enterprise licences restore it with
 // `{"instances": {"gemini": {"driver": "geminiAgent"}}}`.
 export const DEFAULT_FLEET: InstanceConfigMap = {
+  ...DANI_FREE_FLEET,
   grok: { driver: "grokAgent" },
   kimi: { driver: "kimiAgent" },
   droid: { driver: "droidAgent" },

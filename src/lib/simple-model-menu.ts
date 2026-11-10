@@ -4,7 +4,8 @@ import { t } from "./i18n";
 import { filterCustomModels, partitionCustomModels, suggestedModels } from "./custom-models";
 import { isCustomOnly, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail } from "./engine-rail";
 import { displayModelLabel, shortModelLabel } from "./model-friendly";
-import { choiceIsSelected, modelChoices, takesTypedModels, type ModelChoice } from "./model-choices";
+import { choiceIsSelected, daniModelLabel, modelChoices, takesTypedModels, type ModelChoice } from "./model-choices";
+import { DANI_FREE_INSTANCE_IDS, isDaniFreeInstance } from "../../shared/dani-free";
 
 export type ModelOption = InstanceInfo["models"]["options"][number];
 
@@ -14,6 +15,8 @@ export const GROUP_SUGGESTIONS = 3;
 
 export interface MenuModelRow {
   option: ModelChoice;
+  instance?: InstanceInfo;
+  unavailable?: boolean;
   model?: string;
   variant?: string;
   label: string;
@@ -35,6 +38,7 @@ export type MenuGroupBody =
     localFrom: number | null;
     signInForOwn: boolean;
     probing: boolean;
+    unavailableRoutes?: InstanceInfo[];
   };
 
 export interface MenuGroup {
@@ -80,6 +84,7 @@ export interface SimpleMenuInput {
 }
 
 export function providerName(instance: InstanceInfo): string {
+  if (isDaniFreeInstance(instance)) return "Dani";
   const family = signInFamily(instance);
   if (family) return SIGN_IN_FAMILY_LABEL[family];
   if (instance.access !== "api") return instance.displayName;
@@ -88,6 +93,7 @@ export function providerName(instance: InstanceInfo): string {
 
 export function modelName(instance: InstanceInfo | undefined, model: string): string {
   const option = instance?.models.options.find((candidate) => candidate.id === model);
+  if (instance && isDaniFreeInstance(instance)) return option ? daniModelLabel(option) : t("daniSetup.unavailableModel");
   if (!instance || !option) return model;
   return displayModelLabel(option.label, providerName(instance), option.custom);
 }
@@ -125,15 +131,18 @@ function currentRow(input: SimpleMenuInput): MenuCurrent {
   const { instances, selection, bot, loading } = input;
   const active = instances.find((instance) => instance.instanceId === selection.instanceId);
   const option = active?.models.options.find((candidate) => candidate.id === selection.model);
-  const name = option?.label ?? selection.model;
-  const row = { instance: active, label: modelName(active, selection.model), title: active ? `${active.displayName} · ${name}` : name, warning: false, pending: false };
+  const free = active ? isDaniFreeInstance(active) : DANI_FREE_INSTANCE_IDS[selection.instanceId] === true;
+  const name = free ? (option ? daniModelLabel(option) : t("daniSetup.unavailableModel")) : option?.label ?? selection.model;
+  const row = { instance: active, label: free ? name : modelName(active, selection.model), title: active ? `${free ? "Dani" : active.displayName} · ${name}` : name, warning: false, pending: false };
   if (!active) return loading ? { ...row, pending: true } : { ...row, meta: t("model.simple.unavailable"), warning: true };
   if (!option && input.refreshing === active.instanceId) return { ...row, pending: true };
+  if (free && (!option || (option.availability !== undefined && option.availability !== "available"))) return { ...row, meta: t("model.simple.unavailable"), warning: true };
   if (option?.orgBlocked) return { ...row, meta: t("model.orgBlocked"), warning: true, blocked: true };
   if (active.policy) return { ...row, meta: t("policy.managedBy", { organization: active.policy.organizationName }), warning: true };
   if (needsCli(active)) return { ...row, meta: t("model.setupRequired"), warning: true };
   if (needsSignIn(active) && !isCustomOnly(active) && !option?.custom) return { ...row, meta: t("model.signInRequired"), warning: true };
   if (bot.follows === true) return { ...row, meta: t("model.simple.botsModel", { name: bot.name }) };
+  if (free) return row;
   const family = signInFamily(active);
   const accounts = family ? instances.filter((instance) => signInFamily(instance) === family).length : 0;
   if (accounts > 1 || active.snapshot.chatgptPlan) return { ...row, meta: active.displayName };
@@ -190,11 +199,31 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
     };
   }
 
-  const groups = (current ? [current, ...ordered.filter((instance) => instance !== current)] : ordered).flatMap((instance): MenuGroup[] => {
+  const groups = (current ? [current, ...ordered.filter((instance) => instance !== current)] : ordered).filter((instance) => !isDaniFreeInstance(instance)).flatMap((instance): MenuGroup[] => {
     const named = heading(instance, listed);
     const body = groupBody(instance, named.provider);
     return body ? [{ instance, ...named, body }] : [];
   });
+
+  const free = listed.filter(isDaniFreeInstance);
+  if (free.length) {
+    const unavailableRoutes = free.filter((instance) => !instance.policy && (needsCli(instance) || needsSignIn(instance) || instance.models.options.some((option) => option.availability !== undefined && option.availability !== "available")));
+    const rows: MenuModelRow[] = free.flatMap((instance) => instance.models.options
+      .filter((option) => !query || daniModelLabel(option).toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+      .map((option) => ({
+        instance, option, label: daniModelLabel(option),
+        current: instance.instanceId === selection.instanceId && choiceIsSelected(option, selection),
+        blocked: Boolean(instance.policy) || option.orgBlocked === true,
+        unavailable: needsCli(instance) || needsSignIn(instance) || (option.availability !== undefined && option.availability !== "available"),
+      })));
+    if (!query || rows.length) groups.unshift({
+      instance: free[0]!, label: t("daniSetup.group"), provider: "Dani",
+      body: rows.length ? { kind: "models", rows, total: rows.length, toggle: null, localFrom: null, signInForOwn: false, probing: false,
+        ...(unavailableRoutes.length ? { unavailableRoutes } : {}) }
+        : free.every((instance) => instance.policy) ? { kind: "policy", organization: free[0]!.policy!.organizationName }
+        : unavailableRoutes.length ? { kind: "setUp" } : { kind: "empty", loading: free.some((instance) => input.refreshing === instance.instanceId) },
+    });
+  }
 
   return {
     current: query ? null : currentRow(input),

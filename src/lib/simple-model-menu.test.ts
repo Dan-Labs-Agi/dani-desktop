@@ -52,6 +52,22 @@ const rows = (built: Menu, index = 0) => {
 const body = (built: Menu, index = 0) => built.groups[index]!.body;
 
 describe("the Simple model menu", () => {
+  it("groups both native free routes under Dani without upstream metadata and preserves each route when picked", () => {
+    const free = engine("dani", "daniFree", "Dani", "subscription", [{ id: "kilo/one", label: "Helpful One", provider: "KiloCode" }]);
+    const client = engine("dani-client", "opencodeGo", "OpenCode", "subscription", [{ id: "opencode/two", label: "Helpful Two", provider: "OpenCode" }]);
+    const built = menu([free, client]);
+    expect(built.groups.map((group) => group.label)).toEqual(["Dani free models"]);
+    const freeBody = built.groups[0]!.body;
+    expect(freeBody.kind).toBe("models");
+    if (freeBody.kind !== "models") throw new Error("Expected free models");
+    expect(freeBody.rows.map((row) => [row.label, row.instance?.instanceId, row.route])).toEqual([
+      ["Helpful One", "dani", undefined], ["Helpful Two", "dani-client", undefined],
+    ]);
+    const selected = menu([free, client], { selection: { instanceId: "dani-client", model: "opencode/two" } });
+    expect(selected.current).toMatchObject({ label: "Helpful Two", title: "Dani · Helpful Two" });
+    expect(selected.current?.meta).toBeUndefined();
+  });
+
   it("puts the current model on top, then the rest of its provider under a heading, in short names", () => {
     const built = menu([claude()]);
     expect(built.current).toMatchObject({ label: "Claude Sonnet 5", title: "Claude · Claude Sonnet 5", warning: false, pending: false });

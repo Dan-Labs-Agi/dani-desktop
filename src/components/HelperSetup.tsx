@@ -9,7 +9,6 @@ import type { LocaleKey } from "@/locales";
 import { useStore, type Action } from "@/state/store";
 import { engineReady } from "./EngineLibrary";
 import { ConnectAiDialog } from "./onboarding/ConnectAi";
-import { useWelcomeAi } from "./onboarding/welcome-ai";
 
 const STEPS: Record<SetupStep, { label: LocaleKey; icon: LucideIcon }> = {
   ai: { label: "helperIntro.step.ai", icon: Sparkles },
@@ -80,10 +79,6 @@ export function chipAction(chip: Exclude<IntroChip, "ai">): Action {
   }
 }
 
-function IntroConnectAi({ onClose }: { onClose: () => void }) {
-  const { state } = useStore();
-  return <ConnectAiDialog tested={useWelcomeAi(state.instances, true)} onClose={onClose} />;
-}
 
 /** What is still missing, as chips under DaniBot's follow-up (Simple mode): at most INTRO_CHIPS, and one that was tapped
  * leaves for the next. */
@@ -113,7 +108,7 @@ export function IntroChips({ chips }: { chips: readonly IntroChip[] }) {
           })}
         </div>
       )}
-      {connecting && <IntroConnectAi onClose={() => setConnecting(false)} />}
+      {connecting && <ConnectAiDialog onClose={() => setConnecting(false)} />}
     </>
   );
 }

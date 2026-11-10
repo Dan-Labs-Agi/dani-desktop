@@ -162,15 +162,21 @@ describe("bot-first sidebar", () => {
     expect(markup).toMatch(/data-bot-actions="atlas"[^>]*class="[^"]*\bright-2 top-1 translate-y-0\b/);
   });
 
-  it("fades the collapsed rail's engine badge in both modes", () => {
+  it.each([false, true])("keeps one compact identity and preserves chief/model details in its tooltip (advanced: %s)", (advanced) => {
+    fixture.advanced = advanced;
     fixture.showThreads = false;
-    fixture.state = { ...fixture.state, instances: [{ instanceId: "fake", driverKind: "claudeAgent", displayName: "Claude" }] as unknown as AppState["instances"] };
-    const candidate = { ...bot, tasks: [], projects: [] };
+    fixture.state = { ...fixture.state, instances: [{
+      instanceId: "dani", driverKind: "daniFree", displayName: "Dani",
+      snapshot: { state: "available", authenticated: true },
+      models: { default: "free-model", options: [{ id: "free-model", label: "Free model" }] },
+    }] };
+    const candidate: Bot = { ...bot, name: "Dani", color: "chrome", chiefOfStaff: true, unread: false,
+      modelSelection: { instanceId: "dani", model: "free-model" }, tasks: [], projects: [] };
     const rail = renderToStaticMarkup(createElement(BotListItem, rowProps("icons", candidate)));
-    expect(rail).toMatch(/<span data-testid="model-badge"[^>]*><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
-    fixture.advanced = true;
-    const advanced = renderToStaticMarkup(createElement(BotListItem, rowProps("icons", candidate)));
-    expect(advanced).toMatch(/<span data-testid="model-badge"[^>]*><span data-provider-mark="brand" class="[^"]*\bopacity-60\b/);
+    expect(rail).not.toContain('data-testid="model-badge"');
+    expect(rail).not.toContain('data-testid="chief-crown"');
+    expect(rail).toContain('aria-label="Dani · Chief of Staff"');
+    expect(rail).toContain('title="Dani · Chief of Staff · Model: Free model (Dani)"');
   });
 
   it("shows a waiting Simple row as an amber dot and preview, and a working one as a ring-cut dot on the avatar, with no badge or live region", () => {

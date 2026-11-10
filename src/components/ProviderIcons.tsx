@@ -6,6 +6,8 @@ import { GrokBotMark } from "./GrokBotMark";
 import type { InstanceInfo } from "@/state/store";
 import type { ProviderIconPreset } from "../../shared/provider-icon";
 import { FADED_PROVIDER_MARK, providerMarkTone } from "./provider-mark-fade";
+import { DANI_FREE_INSTANCE_IDS } from "../../shared/dani-free";
+import { RobotAvatar } from "./robot/RobotAvatar";
 
 export { HermesMark, CursorMark, GrokBotMark };
 
@@ -216,9 +218,12 @@ export function PresetProviderMark({ preset, size = 16, className }: IconProps &
 }
 
 export function InstanceProviderMark({ instance, size = 16, className, subtle = false }: IconProps & {
-  instance: Pick<InstanceInfo, "driverKind" | "icon">;
+  instance: Pick<InstanceInfo, "driverKind" | "icon"> & { instanceId?: string };
   subtle?: boolean;
 }) {
+  if (instance.instanceId && DANI_FREE_INSTANCE_IDS[instance.instanceId] === true) {
+    return <span className={cn("inline-flex shrink-0", className)} aria-hidden="true"><RobotAvatar variant="dani" size={size} animated={false} label="" zoom={1.35} /></span>;
+  }
   if (subtle) {
     const tone = providerMarkTone(instance);
     return (

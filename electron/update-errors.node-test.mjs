@@ -24,6 +24,21 @@ test("update failures keep integrity and certificate errors distinct from recove
   assert.equal(updateErrorMessage(new Error("unknown failure")), "unknown failure");
 });
 
+test("an unpublished stable release feed explains the first-release prerequisite without hiding the failure", async () => {
+  const error = Object.assign(new Error("No published versions on GitHub"), { code: "ERR_UPDATER_NO_PUBLISHED_VERSIONS" });
+  assert.match(updateErrorMessage(error), /first.*published.*stable release/i);
+  assert.match(updateErrorMessage(error), /official release page/i);
+  assert.equal(updateErrorMessage(new Error("No published versions on GitHub")), updateErrorMessage(error));
+  assert.equal(updateErrorNeedsPerson(error), false, "publishing a first release is not a user's machine problem");
+  const updater = new EventEmitter();
+  updater.checkForUpdates = async () => { updater.emit("error", error); throw error; };
+  let state = {};
+  const coordinator = createUpdaterCoordinator(updater, (patch) => { state = { ...state, ...patch }; });
+  await coordinator.check(true);
+  assert.equal(state.status, "error");
+  assert.equal(state.message, updateErrorMessage(error));
+});
+
 test("only failures the person must fix are theirs to see when nobody asked", () => {
   for (const message of ["sha512 checksum mismatch", "code signature is invalid", "ENOSPC: write failed", "EPERM: unlink C:\\cache.zip", "EBUSY: rename"]) {
     assert.equal(updateErrorNeedsPerson(new Error(message)), true, message);

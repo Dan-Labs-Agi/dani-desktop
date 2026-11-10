@@ -36,6 +36,25 @@ describe("configuredModelInstances", () => {
     ...overrides,
   });
 
+  it("keeps both free routes and installed signed-out agents even before they list models, but not missing CLIs", () => {
+    const free = instance({ instanceId: "dani", snapshot: { state: "unavailable" }, models: { default: "", options: [] } });
+    const client = instance({ instanceId: "dani-client", snapshot: { state: "unavailable" }, models: { default: "", options: [] } });
+    const signedOut = instance({ snapshot: { state: "available", authenticated: false }, install: { docsUrl: "https://example.test" }, models: { default: "", options: [] } });
+    const missing = instance({ instanceId: "missing", snapshot: { state: "unavailable" }, install: { docsUrl: "https://example.test" } });
+    expect(configuredModelInstances([free, client, signedOut, missing])).toEqual([free, client, signedOut]);
+  });
+
+  it("folds the built-in free-only duplicate into Dani without hiding personal accounts or an explicit choice", () => {
+    const free = instance({ instanceId: "dani", driverKind: "daniFree" });
+    const client = instance({ instanceId: "dani-client", driverKind: "opencodeGo" });
+    const duplicate = instance({ instanceId: "opencodeGo", driverKind: "opencodeGo", snapshot: { state: "available", authenticated: true, freeFallback: true } });
+    const personal = instance({ instanceId: "coding-account", driverKind: "opencodeGo" });
+    const signedOut = instance({ instanceId: "claude", driverKind: "claudeAgent", snapshot: { state: "available", authenticated: false } });
+    expect(configuredModelInstances([free, client, duplicate, personal, signedOut])).toEqual([free, client, personal, signedOut]);
+    expect(configuredModelInstances([free, client, duplicate, personal], duplicate.instanceId)).toEqual([free, client, duplicate, personal]);
+    expect(configuredModelInstances([duplicate, personal])).toEqual([duplicate, personal]);
+  });
+
   it("hides engines that are not installed, and engines without selectable models, when the bot is not on them", () => {
     const ready = instance();
     const unavailable = instance({ instanceId: "unavailable", snapshot: { state: "unavailable", authenticated: true } });
