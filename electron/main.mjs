@@ -115,6 +115,7 @@ import { createOrgLibrary } from "./org-library.mjs";
 import { createCompanyBackups } from "./company-backups.mjs";
 import { createCompanyBackupSchedule } from "./company-backup-schedule.mjs";
 import { installServerSessions, reportOwnListeners } from "./server-session.mjs";
+import { installDesktopZoom } from "./desktop-zoom.mjs";
 
 const { desktopCapabilities, nativeDesktopActions } = capabilitiesModule;
 const nativeActions = nativeDesktopActions(process.platform);
@@ -2038,6 +2039,7 @@ function createWindow({ deferNavigation = false } = {}) {
     },
   });
   mainWindow = win; hiddenStart = false; chromeRail.attach(win);
+  installDesktopZoom(win.webContents);
   win.on("show", () => desktopTray?.windowShown(win));
   win.on("focus", () => { if (cloudAccount?.checkoutPending()) void cloudAccount.refresh().catch(() => {}); });
   win.on("close", (event) => {
