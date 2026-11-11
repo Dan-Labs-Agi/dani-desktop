@@ -469,7 +469,7 @@ try {
   const desktop = readFileSync(desktopFile, "utf8");
   for (const expected of [
     "Name=Dani Bot",
-    'Exec="/opt/danibot/danibot" %U',
+    "Exec=/opt/danibot/danibot %U",
     "Icon=danibot",
     "StartupWMClass=com.danibot.app",
     "Categories=Utility;",
