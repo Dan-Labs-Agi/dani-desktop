@@ -44,4 +44,5 @@ test("the package hooks and policy use the same Linux install root", () => {
   assert.match(read("build/linux-after-install.sh"), /APP_ROOT="\/opt\/danibot"/);
   assert.match(read("build/linux-danibot-browser.apparmor"), /\/opt\/danibot\/\{/);
   assert.match(read("build/linux-after-remove.sh"), /"\/opt\/danibot\/danibot" "\/opt\/Dani Bot\/danibot"/);
+  assert.match(read("scripts/verify-linux-package.mjs"), /path\.join\(extracted, "opt", "danibot"\)/);
 });
