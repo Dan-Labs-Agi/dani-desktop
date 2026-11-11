@@ -111,4 +111,44 @@ describe("localComputerRelay", () => {
     expect(await localComputerRelay("win32")({ name: "click", arguments: {} }, child(() => refused).relayed)).toBe(refused);
     expect(localComputerRelay("win32")({ name: "get_window_state", arguments: {} }, child(() => ({})).relayed)).toBeNull();
   });
+
+  describe("with effects verified", () => {
+    const window = (title: string) => ({ content: [{ type: "text", text: "read" }], structuredContent: { pid: 4242, window_id: 7, app_name: "Notes", window_title: title, elements: [] } });
+    const clicked = { name: "click", arguments: { pid: 4242, window_id: 7, element_index: 1 } };
+
+    it("reads the window on both sides of an action, on every platform", async () => {
+      for (const platform of ["darwin", "linux", "win32"]) {
+        let reads = 0;
+        const { calls, relayed } = child((name) => (name === "get_window_state" ? window(`Untitled ${++reads}`) : typed));
+        await localComputerRelay(platform, true)(clicked, relayed);
+        expect(calls.map(([name]) => name)).toEqual(["get_window_state", "click", "get_window_state"]);
+      }
+    });
+
+    it("tells the bot when the window did not move, and says nothing extra when it did", async () => {
+      const still = child((name) => (name === "get_window_state" ? window("Untitled") : typed));
+      const held = await localComputerRelay("darwin", true)(clicked, still.relayed) as { content: unknown[] };
+      expect(held.content).toHaveLength(2);
+      expect(JSON.stringify(held.content)).toMatch(/did not change/);
+      let reads = 0;
+      const moved = child((name) => (name === "get_window_state" ? window(`Untitled ${++reads}`) : typed));
+      expect(await localComputerRelay("darwin", true)(clicked, moved.relayed)).toEqual(typed);
+    });
+
+    it("keeps the Windows sent-click answer and verifies it too", async () => {
+      let reads = 0;
+      const { calls, relayed } = child((name) => (name === "get_window_state" ? window(`Untitled ${++reads}`)
+        : { content: [{ type: "text", text: after }], isError: true }));
+      const answer = await localComputerRelay("win32", true)(clicked, relayed);
+      expect(calls.map(([name]) => name)).toEqual(["get_window_state", "click", "get_window_state"]);
+      expect(answer).toMatchObject({ content: [{ type: "text", text: CLICK_SENT_UNCONFIRMED }] });
+    });
+
+    it("leaves an action with no window to read back, and every observation, to the driver", async () => {
+      const { calls, relayed } = child(() => typed);
+      expect(localComputerRelay("darwin", true)({ name: "click", arguments: { x: 1, y: 2 } }, relayed)).toBeNull();
+      expect(localComputerRelay("darwin", true)({ name: "get_window_state", arguments: { pid: 4242, window_id: 7 } }, relayed)).toBeNull();
+      expect(calls).toEqual([]);
+    });
+  });
 });

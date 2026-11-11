@@ -30,6 +30,7 @@ export function gatedLocalComputer(
   connection: LocalComputerConnection,
   control: { url: string; token: string },
   journal = false,
+  verifyEffects = false,
 ): LocalComputerConnection {
   return {
     ...connection,
@@ -45,6 +46,7 @@ export function gatedLocalComputer(
       OMB_CONTROL_URL: control.url,
       OMB_CONTROL_TOKEN: control.token,
       OMB_COMPUTER_JOURNAL: journal ? "1" : "0",
+      OMB_COMPUTER_VERIFY: verifyEffects ? "1" : "0",
     },
   };
 }

@@ -4,6 +4,7 @@
 import { typeOneCharacterAtATime, typesInOneBurst } from "../electron/paced-typing.mjs";
 import { describeComputerCall } from "../shared/your-computer.ts";
 import type { ChildCalls, ToolCall } from "./mcp-bridge.ts";
+import { canVerifyEffect, withVerifiedEffect } from "./computer-effect.ts";
 import { CLICK_TOOLS, unconfirmedClickResult } from "./unconfirmed-click.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -49,15 +50,20 @@ export function localComputerCallQuery(frame: unknown): Record<string, string> {
   return { ...(app ? { app } : {}), ...(site ? { site } : {}) };
 }
 
-/** The calls this computer's driver gets in a form of its own. Only on Windows: there foreground text is typed one
- * character at a time, and a click whose after-check failed is answered as the sent click it was. */
-export function localComputerRelay(platform: string) {
+/** The calls this computer's driver gets in a form of its own. On Windows foreground text is typed one character at a
+ * time, and a click whose after-check failed is answered as the sent click it was. With effects verified, every action
+ * on a window is answered by what reading that window back shows it did. */
+export function localComputerRelay(platform: string, verifyEffects = false) {
   return (call: ToolCall, child: ChildCalls): Promise<unknown> | null => {
-    if (platform !== "win32") return null;
-    if (typesInOneBurst(platform, child.driverVersion, call.name, call.arguments)) {
+    const windows = platform === "win32";
+    if (windows && typesInOneBurst(platform, child.driverVersion, call.name, call.arguments)) {
       return typeOneCharacterAtATime(child.call, call.arguments as ToolCall["arguments"] & { text: string });
     }
-    if (!CLICK_TOOLS.has(call.name)) return null;
-    return child.call(call.name, call.arguments).then((result) => unconfirmedClickResult(result) ?? result);
+    const clicking = windows && CLICK_TOOLS.has(call.name);
+    const act = clicking
+      ? () => child.call(call.name, call.arguments).then((result) => unconfirmedClickResult(result) ?? result)
+      : undefined;
+    if (verifyEffects && canVerifyEffect(call)) return withVerifiedEffect(call, child, act ? { act } : {});
+    return act ? act() : null;
   };
 }
