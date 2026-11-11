@@ -68,7 +68,7 @@ const installed = inContainer(
     prepare,
     command,
     'dpkg-query -W -f="INSTALLED=\\${Version} \\${db:Status-Abbrev}\\n" danibot',
-    'test -x "/opt/Dani Bot/danibot" && echo "EXECUTABLE=yes"',
+    'test -x "/opt/danibot/danibot" && echo "EXECUTABLE=yes"',
   ].join("\n"),
 );
 

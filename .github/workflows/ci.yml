@@ -141,14 +141,14 @@ jobs:
           deb=(release/*.deb)
           test "${#deb[@]}" -eq 1
           sudo --preserve-env=CI,RUNNER_TEMP node scripts/smoke-deb-upgrade.mjs "${deb[0]}"
-      - name: Configure Chromium sandbox for the unpacked app
+      - name: Configure Chromium sandboxes
         run: |
           sudo chown root:root release/linux-unpacked/chrome-sandbox
           sudo chmod 4755 release/linux-unpacked/chrome-sandbox
           test "$(stat -c '%U:%G %a' release/linux-unpacked/chrome-sandbox)" = "root:root 4755"
-          sudo chown root:root '/opt/Dani Bot/chrome-sandbox'
-          sudo chmod 4755 '/opt/Dani Bot/chrome-sandbox'
-          test "$(stat -c '%U:%G %a' '/opt/Dani Bot/chrome-sandbox')" = "root:root 4755"
+          sudo chown root:root /opt/danibot/chrome-sandbox
+          sudo chmod 4755 /opt/danibot/chrome-sandbox
+          test "$(stat -c '%U:%G %a' /opt/danibot/chrome-sandbox)" = "root:root 4755"
       - name: Launch packaged app and verify lifecycle
         env:
           OMB_KEEP_SMOKE_DIR: "1"

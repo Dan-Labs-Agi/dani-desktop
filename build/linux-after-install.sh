@@ -24,7 +24,7 @@ if [ -n "${DANIBOT_POSTINSTALL_TEST_ROOT:-}" ]; then
   APPARMOR_STATUS=$APP_ROOT/test-system/apparmor_status
   USERNS_RESTRICTION=$APP_ROOT/test-system/apparmor_restrict_unprivileged_userns
 else
-  APP_ROOT="/opt/Dani Bot"
+  APP_ROOT="/opt/danibot"
   EXPECTED_OWNER=root:root
   TEST_MODE=0
   APPARMOR_DIR=/etc/apparmor.d
@@ -188,3 +188,8 @@ BROWSER_ROOT=$APP_ROOT/resources/browser-engine
 repair_directory "$BROWSER_ROOT"
 secure_browser_tree
 install_browser_apparmor_profile
+
+if [ "$TEST_MODE" -eq 0 ]; then
+  update-alternatives --remove danibot "/opt/Dani Bot/danibot"
+  update-alternatives --install /usr/bin/danibot danibot "/opt/danibot/danibot" 100
+fi
