@@ -65,7 +65,7 @@ let slots: Map<string, ProviderInstance>;
 let engine: ReturnType<typeof engineStub>;
 let start: Mock<(input: SendTurnInput) => Promise<TurnStartResult>>;
 let close: Mock<() => Promise<void>>;
-let recipes: { find: Mock<(botId: string, key: string) => Recipe | undefined>; forget: Mock<(botId: string, recipeId: string) => boolean> };
+let recipes: { find: Mock<(botId: string, key: string) => Recipe | undefined>; findRefill: Mock<(botId: string, request: string) => Recipe | undefined>; forget: Mock<(botId: string, recipeId: string) => boolean> };
 let openCaller: Mock<DispatchDeps["openCaller"]>;
 let taint: Mock<(threadId: string) => boolean>;
 let handOn: Mock<(turnId: string) => void>;
@@ -115,7 +115,7 @@ beforeEach(() => {
   slots = new Map([["t1", engine as ProviderInstance]]);
   start = vi.fn(async () => ({ turnId: "e1" }));
   close = vi.fn(async () => {});
-  recipes = { find: vi.fn((botId: string, key: string) => (botId === "b1" && key === RECIPE.key ? RECIPE : undefined)), forget: vi.fn(() => true) };
+  recipes = { find: vi.fn((botId: string, key: string) => (botId === "b1" && key === RECIPE.key ? RECIPE : undefined)), findRefill: vi.fn(() => undefined as Recipe | undefined), forget: vi.fn(() => true) };
   openCaller = vi.fn(async () => ({ ...computer(), close }));
   taint = vi.fn(() => true);
   handOn = vi.fn();
@@ -141,6 +141,24 @@ beforeEach(() => {
 });
 
 describe("SavedStepsDispatch.sendTurn", () => {
+  it("never asks for a shape while a recipe answers the request word for word", async () => {
+    await dispatch.sendTurn(engine, REQ, INPUT, start);
+    await settled();
+    expect(recipes.find).toHaveBeenCalled();
+    expect(recipes.findRefill).not.toHaveBeenCalled();
+  });
+
+  it("answers from a recipe whose shape the request fits, once no recipe matches it word for word", async () => {
+    recipes.find.mockReturnValue(undefined);
+    recipes.findRefill.mockReturnValue(RECIPE);
+    const { turnId } = await dispatch.sendTurn(engine, REQ, INPUT, start);
+    await settled();
+    expect(recipes.findRefill).toHaveBeenCalledWith("b1", REQ.turnText);
+    expect(start).not.toHaveBeenCalled();
+    expect(acted).toEqual(["click", "set_value"]);
+    expect(dispatch.replayed("t1", turnId)).toBe(RECIPE.id);
+  });
+
   it.each([
     ["no request", null, INPUT],
     ["Ask", REQ, { ...INPUT, approvalMode: "ask" }],
