@@ -102,7 +102,7 @@ try {
   }
   if (fs.existsSync("/opt/Dani Bot/resources/legacy-upgrade-fixture")) fail("dpkg left its old tracked payload behind");
   if (fs.realpathSync("/usr/bin/danibot") !== "/opt/danibot/danibot") fail("CLI still resolves to the old install root");
-  const desktop = fs.readFileSync("/usr/share/applications/danibot.desktop", "utf8");
+  const desktop = fs.readFileSync("/usr/share/applications/com.danibot.app.desktop", "utf8");
   if (!desktop.includes("Exec=/opt/danibot/danibot")) fail("desktop entry points at the wrong install root");
   const installedVersion = execFileSync("dpkg-query", ["-W", "-f=${Version}", "danibot"], {
     encoding: "utf8",
