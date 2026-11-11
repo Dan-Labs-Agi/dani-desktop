@@ -287,17 +287,17 @@ describe("endpoint account rules", () => {
   it("ties a row to its own configured account and that account's suffix only", () => {
     const config = accounts(PRIMARY, SECOND);
     const label = `c-${"0123456789abcdef".repeat(2)}`;
-    expect(endpointAccountFor(config, { hostname: `${label}.Danibot.si`, provider_account: SECOND.accountId })).toBe(SECOND);
-    expect(endpointAccountFor(config, { hostname: `${label}.DaniBot.com`, provider_account: PRIMARY.accountId })).toBe(PRIMARY);
+    expect(endpointAccountFor(config, { hostname: `${label}.danibot.si`, provider_account: SECOND.accountId })).toBe(SECOND);
+    expect(endpointAccountFor(config, { hostname: `${label}.danibot.com`, provider_account: PRIMARY.accountId })).toBe(PRIMARY);
     for (const [providerAccount, hostname] of [
-      [SECOND.accountId, `${label}.DaniBot.com`],
-      [PRIMARY.accountId, `${label}.Danibot.si`],
-      ["9".repeat(32), `${label}.Danibot.si`],
-      [SECOND.accountId, `www.${label}.Danibot.si`],
+      [SECOND.accountId, `${label}.danibot.com`],
+      [PRIMARY.accountId, `${label}.danibot.si`],
+      ["9".repeat(32), `${label}.danibot.si`],
+      [SECOND.accountId, `www.${label}.danibot.si`],
       [SECOND.accountId, `${label.toUpperCase()}.Danibot.si`],
-      [SECOND.accountId, "c-abc.Danibot.si"],
-      [SECOND.accountId, `${label}.evilDanibot.si`],
-      [SECOND.accountId, "Danibot.si"],
+      [SECOND.accountId, "c-abc.danibot.si"],
+      [SECOND.accountId, `${label}.evildanibot.si`],
+      [SECOND.accountId, "danibot.si"],
     ]) {
       expect(endpointAccountFor(config, { hostname, provider_account: providerAccount }), hostname).toBeNull();
     }
@@ -307,23 +307,23 @@ describe("endpoint account rules", () => {
     const config = accounts(PRIMARY, SECOND);
     const label = (index: number) => `c-${index.toString(16).padStart(32, "0")}`;
     const cases: Array<[string, string]> = [
-      [SECOND.accountId, `${label(1)}.Danibot.si`],
-      [PRIMARY.accountId, `${label(2)}.DaniBot.com`],
-      [SECOND.accountId, `c-${"0123456789abcdef".repeat(2)}.Danibot.si`],
-      [SECOND.accountId, `${label(3)}.DaniBot.com`],
-      [PRIMARY.accountId, `${label(4)}.Danibot.si`],
-      ["9".repeat(32), `${label(5)}.Danibot.si`],
-      [SECOND.accountId, `www.${label(6)}.Danibot.si`],
-      [SECOND.accountId, `${label(7).toUpperCase()}.Danibot.si`],
-      [SECOND.accountId, `c-${"0123456789abcdeg".repeat(2)}.Danibot.si`],
-      [SECOND.accountId, "c-abc.Danibot.si"],
-      [SECOND.accountId, `${label(8)}0.Danibot.si`],
-      [SECOND.accountId, `${label(9)}.evilDanibot.si`],
-      [SECOND.accountId, `${label(10)}.Danibot.si.evil.test`],
-      [SECOND.accountId, `${label(11)}.Danibot.si.`],
-      [SECOND.accountId, `d-${"0".repeat(31)}c.Danibot.si`],
-      [SECOND.accountId, `${label(12)}Danibot.si`],
-      [SECOND.accountId, "Danibot.si"],
+      [SECOND.accountId, `${label(1)}.danibot.si`],
+      [PRIMARY.accountId, `${label(2)}.danibot.com`],
+      [SECOND.accountId, `c-${"0123456789abcdef".repeat(2)}.danibot.si`],
+      [SECOND.accountId, `${label(3)}.danibot.com`],
+      [PRIMARY.accountId, `${label(4)}.danibot.si`],
+      ["9".repeat(32), `${label(5)}.danibot.si`],
+      [SECOND.accountId, `www.${label(6)}.danibot.si`],
+      [SECOND.accountId, `${label(7).toUpperCase()}.danibot.si`],
+      [SECOND.accountId, `c-${"0123456789abcdeg".repeat(2)}.danibot.si`],
+      [SECOND.accountId, "c-abc.danibot.si"],
+      [SECOND.accountId, `${label(8)}0.danibot.si`],
+      [SECOND.accountId, `${label(9)}.evildanibot.si`],
+      [SECOND.accountId, `${label(10)}.danibot.si.evil.test`],
+      [SECOND.accountId, `${label(11)}.danibot.si.`],
+      [SECOND.accountId, `d-${"0".repeat(31)}c.danibot.si`],
+      [SECOND.accountId, `${label(12)}danibot.si`],
+      [SECOND.accountId, "danibot.si"],
     ];
     const now = Date.now();
     await env.DB.batch(cases.map(([providerAccount, hostname], index) => env.DB.prepare(

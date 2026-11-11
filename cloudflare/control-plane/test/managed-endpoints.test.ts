@@ -9,7 +9,7 @@ import { cleanupEndpointRow, sweepManagedEndpointCleanup } from "../src/endpoint
 import { createWorker } from "../src/index";
 import { forgetCachedCapacity } from "../src/tunnel-capacity";
 
-const BASE_URL = "https://auth.DaniBot.test";
+const BASE_URL = "https://auth.danibot.test";
 const CONNECTOR_TOKEN = "eyJhbGciOiJIUzI1NiJ9.test-only-connector-token.signature";
 /** An endpoint whose hostname is not under its account's suffix refuses to act. */
 const HOST_SUFFIX = env.COMPANION_HOST_SUFFIX;
@@ -1192,7 +1192,7 @@ describe("managed companion endpoints", () => {
     cloudflare.dns.set(hostname, {
       ...record,
       content: "203.0.113.50",
-      name: "repurposed.DaniBot.test",
+      name: "repurposed.danibot.test",
       proxied: false,
       type: "A",
     });
@@ -1206,7 +1206,7 @@ describe("managed companion endpoints", () => {
     expect(cloudflare.calls.some((entry) => entry.method === "DELETE")).toBe(false);
     expect(cloudflare.dns.get(hostname)).toMatchObject({
       content: "203.0.113.50",
-      name: "repurposed.DaniBot.test",
+      name: "repurposed.danibot.test",
       type: "A",
     });
     const retained = await env.DB.prepare(
@@ -2229,8 +2229,8 @@ describe("managed endpoint provider capacity", () => {
 const ENDPOINT_PATH = "/v1/installations/self/endpoint";
 const SECOND_ACCOUNT_ID = "2b".repeat(16);
 const SECOND_ZONE_ID = "3c".repeat(16);
-const SECOND_SUFFIX = "Danibot.si";
-const SECOND_TOKEN_SECRET = "CLOUDFLARE_API_TOKEN_DaniBOT_SI";
+const SECOND_SUFFIX = "danibot.si";
+const SECOND_TOKEN_SECRET = "CLOUDFLARE_API_TOKEN_MAUSBOT_SI";
 const SECOND_TOKEN = "test-only-Danibot-si-api-token-with-no-real-access";
 
 interface AccountsFixture {
@@ -2390,7 +2390,7 @@ async function orphanIn(
   return { hostname, installationId, tunnelName };
 }
 
-const ON_SECOND_ACCOUNT = /^c-[0-9a-f]{32}\.Danibot\.si$/;
+const ON_SECOND_ACCOUNT = /^c-[0-9a-f]{32}\.danibot\.si$/;
 
 describe("managed endpoints in several Cloudflare accounts", () => {
   afterEach(() => {
