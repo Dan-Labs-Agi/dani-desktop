@@ -20,7 +20,7 @@ export interface ReplayRequest {
   placePicked: boolean;
 }
 export interface DispatchDeps {
-  recipes: Pick<RecipeStore, "find" | "forget">;
+  recipes: Pick<RecipeStore, "find" | "findRefill" | "forget">;
   enabled(): boolean;
   publish(event: RuntimeEvent): void;
   engines: EngineSlots;
@@ -164,7 +164,8 @@ export class SavedStepsDispatch {
   private recipeFor(request: ReplayRequest, input: SendTurnInput): Recipe | undefined {
     if (!this.replayHolds(request, input)) return undefined;
     const text = request.turnText;
-    const recipe = this.deps.recipes.find(request.botId, requestKey(text));
+    const exact = this.deps.recipes.find(request.botId, requestKey(text));
+    const recipe = exact && recipeFitsRequest(exact, text) ? exact : this.deps.recipes.findRefill(request.botId, text);
     return recipe && recipeFitsRequest(recipe, text) && toolsAllowed(recipe, input.toolScope) ? recipe : undefined;
   }
 

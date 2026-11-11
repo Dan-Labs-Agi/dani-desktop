@@ -231,6 +231,23 @@ describe("RecipeStore", () => {
     expect(store.find("b1", "open mail")!.id).toBe("open mail");
   });
 
+  it("finds a recipe whose shape a new request fits, refilled from that request", () => {
+    const app = { name: "Expenses" };
+    const element = { role: "AXTextField", label: "Period", path: [] };
+    store.save("b1", {
+      id: "r1", key: requestKey("file my august expense report"), request: "file my august expense report",
+      steps: [{ tool: "set_value", args: { value: "august" }, app, window: { title: "New expense" }, element }],
+      createdAt: 1_000, lastUsedAt: 1_000,
+    });
+    const filled = store.findRefill("b1", "file my september expense report")!;
+    expect(filled.id).toBe("r1");
+    expect(filled.steps[0]!.args.value).toBe("september");
+    expect(store.findRefill("b1", "book a flight to Berlin")).toBeUndefined();
+    expect(store.findRefill("b2", "file my september expense report")).toBeUndefined();
+    // Refilling never writes: the shape answers the turn, the stored recipe keeps the words it learned.
+    expect(onDisk().recipes[0]!.steps[0]!.args.value).toBe("august");
+  });
+
   it("refuses a bot id that is not a single folder name", () => {
     for (const botId of ["../x", "a/b", "a\\b", "..", ""]) {
       store.save(botId, recipe("r1", "open notes"));

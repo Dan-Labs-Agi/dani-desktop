@@ -4,6 +4,7 @@ import { z } from "zod";
 import { writeFileAtomic } from "../atomic.ts";
 import { exactRequest, requestKey } from "./key.ts";
 import { ELEMENT_TOOLS, KEPT_ARGS, KEY_TOOLS, flipsToggle, holdsPersonWords, recipeFitsRequest, unsafeStep, windowScoped, type Recipe } from "./rules.ts";
+import { refillRecipe } from "./slots.ts";
 
 export const MAX_RECIPES = 200;
 export const UNUSED_MS = 60 * 24 * 60 * 60 * 1000;
@@ -48,6 +49,16 @@ export class RecipeStore {
 
   find(botId: string, key: string): Recipe | undefined {
     return this.read(botId).recipes.find((recipe) => recipe.key === key);
+  }
+
+  /** The recipe whose shape this request fits, with its typed words refilled from it. Only reached when no recipe
+   * answers the request word for word, so an exact match is never overtaken by a shape. */
+  findRefill(botId: string, request: string): Recipe | undefined {
+    for (const recipe of this.read(botId).recipes) {
+      const refilled = refillRecipe(recipe, request);
+      if (refilled) return refilled;
+    }
+    return undefined;
   }
 
   save(botId: string, recipe: Recipe): void {

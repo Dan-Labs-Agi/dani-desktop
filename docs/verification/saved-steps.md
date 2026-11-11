@@ -15,6 +15,15 @@ person sends the same words again (design:
 - The same words replay those steps with no engine call: each target is found
   fresh, each action is approved through the normal Full-access handler, and
   the reply says what the steps did, marked `savedSteps.replayed`.
+- A request the person worded differently, whose shape the recipe fits, replays
+  with the typed words refilled from that request: a recipe learned from "file
+  my august expense report" answers "file my september expense report" by
+  typing `september`, with the same targets and the same approvals, and the
+  stored recipe keeps the words it learned. The words it types are the person's
+  own, as they wrote them, and are checked exactly as a learned recipe's are: no
+  moment words ("this", "the latest", "today"), no secret, no final action. An
+  exact key always answers first, so a shape never overtakes a recipe that
+  matches word for word.
 - Stop during a replay ends the turn with no AI and keeps the steps.
 - Forget deletes the steps.
 - Approvals and replies name targets and keys, never the typed text.
@@ -184,6 +193,17 @@ typed text, the fake driver's document text); their tests are in
 `server/saved-steps` and `server/testing/fake-cua-driver.test.ts`.
 
 ## Limits
+
+Shapes refill typed text only. A step that opens a link is never refilled: a
+different host is a different place, not a new value, so a recipe holding one
+only ever answers its own request. A shape carries at most four slots, needs at
+least four characters of the recipe's own words left around them, and refuses
+spans it cannot tell apart (one that appears twice in the request it was learned
+from, or one that is part of another). The targets never vary: the app, window
+title, element role, label and path are the ones that were learned, found fresh
+at replay, and every step still goes through the normal Full-access handler.
+Shapes are proven by `server/saved-steps/slots.test.ts`, `store.test.ts` and
+`dispatch.test.ts` only; no shape has been replayed against a real driver.
 
 No real app has been driven by a replay: the driver and the engine are
 fakes. This proves the harness path (journal, save, fresh target resolution,
