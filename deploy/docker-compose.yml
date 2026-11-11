@@ -14,7 +14,7 @@ services:
       args:
         ENGINES: ${ENGINES:-}
     # prebuilt on every main push; `docker compose up --build` builds from source instead
-    image: ghcr.io/milind-soni/danibot:latest
+    image: ghcr.io/dan-labs-agi/dani-desktop:latest
     restart: unless-stopped
     # The bots' browsers (docs/browser-packaging.md, "Process hygiene"): an
     # init collects the browser processes whose parents exit, and Chrome
