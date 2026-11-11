@@ -32,9 +32,9 @@ const claude = (ready: boolean, aiTest?: InstanceInfo["aiTest"]): InstanceInfo =
   instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", install: { docsUrl: "https://example.test" },
   snapshot: { state: ready ? "available" : "unavailable", authenticated: ready }, models: { default: "m", options: [] }, ...(aiTest ? { aiTest } : {}),
 });
-const freeOpenCode: InstanceInfo = {
-  instanceId: "opencodeGo", driverKind: "opencodeGo", displayName: "OpenCode", install: { docsUrl: "https://example.test" },
-  snapshot: { state: "available", authenticated: true, freeFallback: true }, models: { default: "opencode/big-pickle", options: [] }, aiTest: "passed",
+const freeDani: InstanceInfo = {
+  ...claude(true), instanceId: "dani", driverKind: "daniFree", displayName: "Dani",
+  models: { default: "m", options: [{ id: "m", label: "Helpful model", availability: "available" }] },
 };
 const signIn = (): InstanceInfo => ({ ...claude(false), snapshot: { state: "available", authenticated: false }, authentication: { method: "paste-code" } } as InstanceInfo);
 const dani = { id: "dani", threadId: "t", name: "DaniBot", title: "", description: "", notifications: true, color: "chrome", unread: false,
@@ -84,7 +84,7 @@ beforeEach(() => {
     if (path.endsWith("/check")) { f.checks.push(path); return { ok: true }; }
     return path === "/api/instances" ? { instances: f.state.instances } : JSON.parse(init?.body ?? "{}");
   });
-  f.state = { instances: [claude(true)], config: { onboarding: EMPTY_ONBOARDING, profile: { name: "" } }, bots: [dani], cloudAdd: null };
+  f.state = { instances: [freeDani], config: { onboarding: EMPTY_ONBOARDING, profile: { name: "" } }, bots: [dani], cloudAdd: null };
   stageIntro(null);
   host = document.createElement("div");
   document.body.append(host);
@@ -126,7 +126,7 @@ describe("a new install's first run", () => {
 
   it("counts an AI once it answered one tiny test message, and never before", async () => {
     await show();
-    expect(f.checks).toEqual(["/api/instances/claude/check"]);
+    expect(f.checks).toEqual(["/api/instances/dani/check"]);
     expect(button("Next")!.disabled).toBe(false);
     expect(host.querySelector("[data-sign-in]")).toBeNull();
   });
@@ -180,76 +180,119 @@ describe("What's new", () => {
 });
 
 describe("with no AI working yet", () => {
-  it("keeps the screen's shape: the pill signs in, and the line under it offers other ways or later", async () => {
+  it("does not send hosted checks through optional agents before the local person chooses one", async () => {
+    f.state = { ...f.state, instances: [claude(true)] };
+    await show();
+    expect(f.checks).toEqual([]);
+    expect(button("Set up Dani")).toBeDefined();
+    expect(button("Next")).toBeUndefined();
+  });
+
+  it("retains an explicit selected user bot without checking other optional agents", async () => {
+    const chosen = { ...dani, id: "chosen", defaultBot: undefined, chiefOfStaff: false };
+    f.state = { ...f.state, selectedId: "chosen", bots: [dani, chosen], instances: [claude(true), {
+      ...claude(true), instanceId: "codex", driverKind: "codex", displayName: "Codex",
+    }] };
+    await show();
+    expect(f.checks).toEqual(["/api/instances/claude/check"]);
+    expect(button("Next")).toBeDefined();
+  });
+
+  it("keeps the robot welcome and offers free setup before any optional agent", async () => {
     f.state = { ...f.state, instances: [signIn()] };
     await show();
     expect(host.querySelector("h1")?.textContent).toBe("Meet Dani Bot");
     expect(button("Next")).toBeUndefined();
-    expect(button("Sign in with Claude")).toBeDefined();
-    expect(button("Other ways to connect")).toBeDefined();
-    expect(host.querySelector("[data-engine-setup]"), "no setup card on the screen itself").toBeNull();
+    expect(button("Set up Dani")).toBeDefined();
+    expect(button("Sign in with Claude")).toBeUndefined();
+    expect(text()).toMatch(/retain.*train/i);
+    expect(host.querySelector("[data-engine-setup]")).toBeNull();
     await toChief("Set up later");
     expect(text()).toContain("Introducing your Chief of Staff");
   });
 
-  it("opens every other way in the Connect an AI dialog, where OpenCode's free model is only a backup", async () => {
-    f.state = { ...f.state, instances: [freeOpenCode, claude(false)] };
+  it("opens installed optional agents only, and Escape closes the dialog without leaving welcome", async () => {
+    f.state = { ...f.state, instances: [signIn(), { ...claude(false), instanceId: "missing", displayName: "Missing agent" }] };
     await show();
-    expect(button("Connect Claude"), "an AI set up in Terminal opens the dialog").toBeDefined();
-    expect(f.checks).toEqual([]);
     await press("Other ways to connect");
     const dialog = host.querySelector("[data-connect-ai]")!;
-    expect(dialog.textContent).toContain("Connect an AI");
-    expect(dialog.textContent).toContain("OpenCode's free model is ready as a backup");
-    expect(dialog.querySelector('[data-engine-setup="claude"]')).not.toBeNull();
+    expect(dialog.textContent).toContain("Set up Dani");
+    expect(dialog.textContent).toContain("Claude");
+    expect(dialog.textContent).toContain("Sign-in required");
+    expect(dialog.textContent).not.toContain("Missing agent");
     await act(async () => { dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     expect(host.querySelector("[data-connect-ai]")).toBeNull();
-    expect(text(), "Escape closed the dialog only").toContain("Meet Dani Bot");
+    expect(text()).toContain("Meet Dani Bot");
   });
 
-  it("says why an AI didn't answer its test, under the pill and in the dialog with Check again", async () => {
-    f.state = { ...f.state, instances: [freeOpenCode, claude(true, "failed")] };
+  it("keeps setup available after a previously chosen agent failed its check", async () => {
+    f.state = { ...f.state, instances: [claude(true, "failed")] };
     await show();
-    expect(host.querySelector("[role=alert]")?.textContent).toContain("Claude");
-    await press("Other ways to connect");
-    expect(host.querySelector("[data-connect-ai] [data-ai-silent]")).not.toBeNull();
+    expect(button("Set up Dani")).toBeDefined();
+    expect(button("Next")).toBeUndefined();
   });
 
-  it("leaves the AI out for one that answered the server's own test", async () => {
-    f.state = { ...f.state, instances: [freeOpenCode, claude(true, "passed")] };
+  it("preserves an already working chosen agent without forcing free setup", async () => {
+    f.state = { ...f.state, selectedId: "chosen", bots: [{ ...dani, id: "chosen", defaultBot: undefined }], instances: [claude(true, "passed")] };
     await show();
     expect(button("Next")!.disabled).toBe(false);
     expect(f.checks).toEqual([]);
+    expect(button("Set up Dani")).toBeUndefined();
   });
 
-  it("doesn't count an AI that offers no model yet, such as OpenCode still listing its models", async () => {
-    f.state = { ...f.state, instances: [{ ...freeOpenCode, snapshot: { state: "available", authenticated: true }, models: { default: "", options: [] }, aiTest: undefined }, claude(false)] };
+  it("does not infer free readiness from a catalog before activation", async () => {
+    f.state = { ...f.state, instances: [{
+      instanceId: "dani", driverKind: "daniFree", displayName: "Dani",
+      snapshot: { state: "unavailable", authenticated: false },
+      models: { default: "free", options: [{ id: "free", label: "Helpful model" }] },
+    }] };
     await show();
     expect(button("Next")).toBeUndefined();
+    expect(button("Set up Dani")).toBeDefined();
     expect(f.checks).toEqual([]);
   });
 
-  it("turns the pill into Next once the AI connects, with the confirmation above it", async () => {
-    f.state = { ...f.state, instances: [claude(false)] };
+  it.each(["instance", "model"] as const)("does not probe or trust a policy-blocked free %s after a prior success", async (where) => {
+    const blocked: InstanceInfo = where === "instance"
+      ? { ...freeDani, policy: { organizationName: "Acme", reason: "Company models only." } }
+      : { ...freeDani, models: { ...freeDani.models, options: freeDani.models.options.map((option) => ({ ...option, orgBlocked: true })) } };
+    f.state = { ...f.state, instances: [blocked] };
+    await show();
+    expect(f.checks).toEqual([]);
+    expect(button("Next")).toBeUndefined();
+    f.state = { ...f.state, instances: [freeDani] };
+    await show();
+    expect(button("Next")).toBeDefined();
+    expect(f.checks).toEqual(["/api/instances/dani/check"]);
+    f.state = { ...f.state, instances: [{ ...blocked, aiTest: "passed" }] };
+    await show();
+    expect(button("Next")).toBeUndefined();
+    expect(f.checks).toEqual(["/api/instances/dani/check"]);
+  });
+
+  it("shows Next once an installed agent actually answers", async () => {
+    f.state = { ...f.state, selectedId: "chosen", bots: [{ ...dani, id: "chosen", defaultBot: undefined }], instances: [claude(false)] };
     await show();
     f.state = { ...f.state, instances: [claude(true)] };
     await show();
-    await act(async () => {});
-    expect(text()).toContain("Connected to Claude");
     expect(button("Next")!.disabled).toBe(false);
     expect(button("Set up later")).toBeUndefined();
   });
 
-  it("moves on with Escape, and Enter presses the pill, never past an AI still to connect", async () => {
+  it("keeps Escape as a nonblocking way to continue when setup is deferred", async () => {
     f.state = { ...f.state, instances: [claude(false)] };
     await show();
-    await key("Enter");
-    expect(host.querySelector("[data-connect-ai]"), "Enter pressed Connect Claude").not.toBeNull();
-    expect(text()).toContain("Meet Dani Bot");
-    await act(async () => { host.querySelector("[data-connect-ai]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     await key("Escape");
     await tick(100);
     expect(text()).toContain("Introducing your Chief of Staff");
+  });
+
+  it("still enters chat when saving welcome completion fails", async () => {
+    f.state = { ...f.state, bots: [], instances: [] };
+    f.api.mockRejectedValue(new Error("offline"));
+    await show();
+    await press("Set up later");
+    expect(f.onDone).toHaveBeenCalledExactlyOnceWith(null);
   });
 });
 

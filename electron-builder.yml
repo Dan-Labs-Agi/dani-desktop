@@ -135,8 +135,8 @@ mac:
     NSSpeechRecognitionUsageDescription: Dani Bot transcribes your voice on-device to type messages for you.
     NSAccessibilityUsageDescription: Dani Bot uses Accessibility when you let a bot control this Mac.
     NSScreenCaptureUsageDescription: Dani Bot uses Screen Recording so bots can see this Mac before acting.
-  # Notarization runs manually after the build (notarytool + staple),
-  # mirroring the BlueyLite ship_release.sh flow.
+  # Developer ID Application credentials and notarization are not configured.
+  # Draft/ad-hoc builds are not a verified Mac automatic-update bootstrap.
   notarize: false
 
 dmg:
@@ -158,6 +158,7 @@ dmg:
       path: /Applications
 
 win:
+  artifactName: DaniBot-${version}-win-${arch}.${ext}
   target:
     - target: nsis
       arch: x64

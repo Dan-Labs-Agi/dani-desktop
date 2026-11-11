@@ -17,13 +17,12 @@ makes a PR easy to merge. Read it once before opening anything; it's short on pu
 
 ## Dev setup
 
-Requirements: **Node 24+**, **pnpm**, and for actually chatting with a bot, at least one agent CLI
-([`claude`](https://claude.com/claude-code) or [`codex`](https://github.com/openai/codex)) installed
-and logged in. macOS is the primary release platform and Ubuntu 24.04 x64 is the Linux desktop beta;
-the harness server itself is portable Node and the test suite runs on macOS, Linux, and Windows.
+Requirements: **Node 24+** and **pnpm**. Choose **Set up Dani** for the default free
+models; installed agent CLIs and existing accounts are optional. The harness
+server is portable Node, and CI tests macOS, Linux, and Windows.
 
 ```sh
-git clone https://github.com/milind-soni/DaniBot && cd DaniBot
+git clone https://github.com/Dan-Labs-Agi/dani-desktop && cd dani-desktop
 pnpm install
 
 pnpm dev:server    # harness server → 127.0.0.1:8799
@@ -63,11 +62,95 @@ and produces one release artifact containing:
 - stable `DaniBot-amd64.deb` and `DaniBot.AppImage` copies used by the latest-download links;
 - `SHA256SUMS-ubuntu-x64.txt` covering both versioned and stable names.
 
-Before publishing, confirm that `package.json` has the release version and dispatch the workflow against the same
-commit used for the other platforms. Attach all five Ubuntu files to the matching release in the separate
-[DaniBot releases](https://github.com/milind-soni/DaniBot/releases). Then verify the checksum
-file and install the `.deb` plus launch the AppImage in a clean Ubuntu 24.04 x86_64 GNOME environment. Never combine
-packages built from different commits under one version.
+Before publishing, confirm that `package.json` has the stable release version and
+build every platform from the same pinned commit. Assemble assets in
+[this repository's release](https://github.com/Dan-Labs-Agi/dani-desktop/releases),
+not an upstream repository. Verify update manifests and artifact hashes, then
+install the `.deb` and launch the AppImage in a clean Ubuntu 24.04 x86_64 GNOME
+environment. Never combine packages built from different commits under one
+version.
+
+## Desktop releases and automatic updates
+
+Source development and distribution are separate. Push normal work to `main`;
+CI and native packaging run without publishing public binaries. A version tag
+or an explicit **Release** workflow run pins one commit and assembles a review
+draft. Later pushes to `main` do not cancel that candidate. Published versions,
+tags and assets are immutable: ship another version rather than replacing bytes.
+
+1. Commit the intended source changes, including new source/test files, before
+   pulling or resetting again. Generated `dist*`, `release/`, helper app bundles
+   and `.omb-scratch/` stay out of source commits.
+2. Run **Prepare next release** with `patch`, then merge its version-bump PR.
+   `0.1.140-local.3` graduates to `0.1.140`; the next stable patch is `0.1.141`.
+   The version calculation can be checked locally without changing Git:
+
+   ```sh
+   node scripts/release-version.mjs next 0.1.140-local.3 patch
+   ```
+
+3. Tag the merged release commit, then push that tag. For the first stable
+   release of this local work:
+
+   ```sh
+   git tag -a v0.1.140 -m "Dani Bot 0.1.140"
+   git push origin v0.1.140
+   ```
+
+   Run those commands only at the intended merged commit. Tag/package versions
+   must match. You can continue development on `main` while the tagged release
+   builds.
+4. Review the resulting draft's exact native artifacts and installed-app/upgrade
+   evidence. Publish it as a **stable/latest release** only after signing trust
+   and native checks pass. A draft, prerelease, Actions artifact or source push
+   is not a public update.
+
+The updater reads public stable releases from
+[`Dan-Labs-Agi/dani-desktop`](https://github.com/Dan-Labs-Agi/dani-desktop/releases),
+checks shortly after startup and hourly, and supports a manual check. Local
+candidates use the same `latest` channel, ignore prerelease tags and never
+downgrade. “No published versions on GitHub” requires the first public stable
+release; retrying before publication cannot create one.
+
+### Mac signing bootstrap
+
+Set repository variable `DANI_MAC_SIGNING=true` and configure these **Actions
+secrets**, never committed files or app-embedded tokens:
+
+- `MAC_CSC_LINK`: exported **Developer ID Application** certificate and private
+  key in a password-protected `.p12`, supplied as base64 or a supported URL.
+- `MAC_CSC_KEY_PASSWORD`: the `.p12` password.
+- `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`: notarization
+  credentials for the same team.
+
+The release-candidate path forces code signing and notarization, verifies both
+Mac architectures' Developer ID authority/team, Gatekeeper and stapled tickets,
+and recomputes DMG blockmaps/feed hashes after stapling. Ordinary development
+pushes do not use those signing credentials. Without opt-in, Mac artifacts are
+untrusted review drafts, not an automatic-update bootstrap. Apple Development
+and iPhone Distribution certificates are not Developer ID Application
+certificates.
+
+Install the first trusted signed public Mac release manually when moving from
+the local ad-hoc app. Keep the bundle identifier, app/data names and Developer ID
+team stable afterwards. Do not disable signature verification to bridge signing
+identities. Windows is currently unsigned; its trust and native upgrade checks
+remain release prerequisites, not evidence supplied by a Mac build.
+
+### Update artifact contract
+
+Build and upload `latest.yml`, `latest-mac.yml` and `latest-linux.yml` with their
+exact referenced files. Mac updates require ZIPs for **both** architectures, not
+just DMGs. A local DMG-only feed is not publishable update metadata. Windows
+portable ZIPs use `-win-x64.zip`, so they cannot overwrite Mac Intel `-x64.zip`.
+Stable manual-download aliases remain unchanged.
+
+The release preserves separate platform artifact directories until
+`node scripts/release-artifacts.mjs release-assets VERSION` verifies the stable
+version, unique basenames, required files, platform ZIP contents, sizes,
+SHA-512 hashes and ZIP payload integrity. Keep the generated manifests; never
+hand-edit them or combine artifacts from different commits.
+
 
 ## Repo map
 

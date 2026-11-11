@@ -1,10 +1,27 @@
 import type { InstanceInfo, ModelSelection } from "@/state/store";
 import { typedOpenCodeModel, typedOpenCodeModelId } from "../../shared/opencode-model-id";
+import { DANI_FREE_INSTANCE_IDS } from "../../shared/dani-free";
 import { t } from "./i18n";
 
 type ModelOption = InstanceInfo["models"]["options"][number];
 
 export type ModelChoice = ModelOption & { nativeModel?: string; variant?: string };
+
+/** Public free-model presentation keeps routing and upstream service identities out of picker copy. */
+export function daniModelLabel(option: Pick<ModelOption, "id" | "label">): string {
+  const label = option.label
+    .replace(/^(?:OpenCode(?:\s+Zen)?|Kilo(?:Code)?|Zen)(?:\s*[·:|/-]\s*|\s+)/i, "")
+    .replace(/\b(?:OpenCode(?:\s+Zen)?|Kilo(?:Code)?)\b/gi, "Dani").trim();
+  return !label || label.includes("/") ? t("daniSetup.unavailableModel") : label;
+}
+
+export function daniModelDetails(option: ModelOption): string[] {
+  return [
+    t(option.tools === true ? "daniSetup.tools" : option.tools === false ? "daniSetup.noTools" : "daniSetup.unknownTools"),
+    t(option.imageInput === true ? "daniSetup.images" : option.imageInput === false ? "daniSetup.textOnly" : "daniSetup.unknownImages"),
+    t(option.mayTrainOnYourPrompts === true ? "daniSetup.training" : option.mayTrainOnYourPrompts === false ? "daniSetup.noTrainingReported" : "daniSetup.unknownTraining"),
+  ];
+}
 
 /** Antigravity exposes one model plus a thinking level; present its levels wherever models are picked. */
 export function modelChoices(instance: InstanceInfo, options: readonly ModelOption[]): ModelChoice[] {
@@ -34,7 +51,7 @@ export function modelSelectionForPick(selection: ModelSelection, instance: Insta
 }
 
 export function takesTypedModels(instance: InstanceInfo | undefined): boolean {
-  return instance?.driverKind === "opencodeGo";
+  return instance?.driverKind === "opencodeGo" && DANI_FREE_INSTANCE_IDS[instance.instanceId] !== true;
 }
 
 /** OpenCode runs a `provider/model` id its catalog lacks: offer the one in the search box, and keep the selected one listed. */

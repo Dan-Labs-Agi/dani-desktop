@@ -166,6 +166,73 @@ beforeEach(() => {
 });
 
 describe("the model picker in Simple mode", () => {
+  it("discloses Dani model capabilities and training uncertainty without upstream branding", () => {
+    fixture.instances = [
+      engine("dani", "daniFree", "Dani", "subscription", [
+        { id: "one", label: "OpenCode · Helpful One", provider: "KiloCode", tools: false, imageInput: false,
+          mayTrainOnYourPrompts: true, privacyNotice: "KiloCode retains prompts for service operation." },
+        { id: "two", label: "Helpful Two" },
+        { id: "three", label: "Helpful Three", tools: true, imageInput: true, mayTrainOnYourPrompts: false },
+      ]),
+    ];
+    const html = menu(open(bot(undefined, "dani", "one")).html);
+    for (const text of ["Helpful One", "No tools", "Text only", "Prompts may train models", "Tools unknown", "Image support unknown", "Prompt training policy unknown", "Tools supported", "Images supported", "Provider reports no prompt training", "Privacy &amp; terms"]) expect(html).toContain(text);
+    expect(html).not.toMatch(/OpenCode|KiloCode|Private|private/);
+    expect(html).not.toContain("retains prompts");
+  });
+
+  it("blocks policy restricted Dani models with the organization explanation", () => {
+    fixture.instances = [{
+      ...engine("dani", "daniFree", "Dani", "subscription", [{ id: "one", label: "Helpful One" }]),
+      policy: { organizationName: "Acme", reason: "Company models only." },
+    }];
+    const opened = open(bot(undefined, "dani", "one"));
+    const body = list(opened).groups[0]!.body;
+    expect(body).toMatchObject({ kind: "models", rows: [{ blocked: true }] });
+    expect(menu(opened.html)).toContain("Managed by Acme");
+    expect(menu(opened.html)).toContain("Company models only.");
+    expect(menu(opened.html)).toContain("disabled");
+  });
+
+  it("disables preparing Dani models in advanced rows and refuses direct picks of unavailable rows", () => {
+    fixture.advanced = true;
+    fixture.instances = [engine("dani-client", "opencodeGo", "Dani", "subscription", [
+      { id: "ready", label: "Helpful Ready", availability: "available" },
+      { id: "preparing", label: "OpenCode · Helpful Preparing", provider: "OpenCode", availability: "preparing" },
+      { id: "unavailable", label: "Helpful Unavailable", availability: "unavailable" },
+    ])];
+    const opened = open(bot(undefined, "dani-client", "ready"));
+    const rows = opened.nodes.filter((node) => node.type === ModelRow);
+    const preparing = rows.find((node) => {
+      const props = node.props as ComponentProps<typeof ModelRow>;
+      return props.option.id === "preparing";
+    })!;
+    const props = preparing.props as ComponentProps<typeof ModelRow>;
+    const html = renderToStaticMarkup(createElement(ModelRow, props));
+    expect(html).toContain("disabled");
+    expect(html).toContain("Set up Dani or try again");
+    expect(html).not.toMatch(/OpenCode|opencode/);
+    for (const row of rows) {
+      const rowProps = row.props as ComponentProps<typeof ModelRow>;
+      if (rowProps.option.id !== "ready") rowProps.onPick();
+    }
+    expect(fixture.dispatch).not.toHaveBeenCalled();
+  });
+
+  it("shows both free routes as one Dani family without upstream badges, titles, or route labels", () => {
+    fixture.instances = [
+      engine("dani", "daniFree", "Dani", "subscription", [{ id: "kilo/free-one", label: "Helpful One", provider: "KiloCode" }]),
+      engine("dani-client", "opencodeGo", "Dani", "subscription", [{ id: "opencode/free-two", label: "Helpful Two", provider: "OpenCode" }]),
+    ];
+    const opened = open(bot(undefined, "dani", "kilo/free-one"));
+    expect(list(opened).groups.map((entry) => entry.label)).toEqual(["Dani free models"]);
+    expect(labels(opened, "dani")).toEqual(["Helpful One", "Helpful Two"]);
+    expect(menu(opened.html)).not.toMatch(/OpenCode|KiloCode|opencode\/|kilo\//);
+    const body = list(opened).groups[0]!.body;
+    if (body.kind !== "models") throw new Error("Expected free models");
+    expect(body.rows.map((row) => row.instance?.instanceId)).toEqual(["dani", "dani-client"]);
+  });
+
   it("opens one calm list: the current model on top, its provider's other models below, then Thinking and a way to accounts", () => {
     const opened = open(bot("high"));
     const html = menu(opened.html);

@@ -3,6 +3,8 @@ import { Check, ChevronDown, ChevronRight, ChevronUp, Download, Loader2, LogIn, 
 import type { Bot, InstanceInfo } from "@/state/store";
 import type { EffortLevel } from "../../shared/wire";
 import type { MenuGroup, MenuModelRow, SimpleMenu } from "@/lib/simple-model-menu";
+import { isDaniFreeInstance } from "../../shared/dani-free";
+import { daniModelDetails } from "@/lib/model-choices";
 import { modelBlurb } from "@/lib/model-friendly";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -10,6 +12,7 @@ import { BotAvatar } from "./Avatar";
 import { InstanceProviderMark } from "./ProviderIcons";
 import { MENU_GUTTER, MENU_ICON, MENU_LABEL, MENU_LINE, MENU_NOTE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING, SIMPLE_MENU_META, SIMPLE_MENU_ROW } from "./menu-recipe";
 import { effortLabel } from "./ModelPicker";
+import { DaniModelNotice } from "./ModelPickerFull";
 
 export type SimpleThinking =
   | { levels: readonly EffortLevel[]; current?: EffortLevel; onPick: (level: EffortLevel) => void; onReset: () => void }
@@ -51,27 +54,33 @@ function RowLines({ label, children }: { label: ReactNode; children?: ReactNode 
 
 function MenuModel({ instance, row, onPick }: { instance: InstanceInfo; row: MenuModelRow; onPick: SimpleMenuActions["onPick"] }) {
   const { option } = row;
-  const reason = row.blocked ? t("model.orgBlocked") : undefined;
+  const free = isDaniFreeInstance(instance);
+  const details = free ? daniModelDetails(option).join(" · ") : undefined;
+  const policyReason = instance.policy ? [t("policy.managedBy", { organization: instance.policy.organizationName }), instance.policy.reason]
+    .filter(Boolean).join(" · ").replace(/\b(?:OpenCode(?:\s+Zen)?|Kilo(?:Code)?)\b/gi, t("daniSetup.freeService")) : undefined;
+  const reason = policyReason ?? (row.blocked ? t("model.orgBlocked") : row.unavailable ? t("daniSetup.unavailableHint") : undefined);
   return (
-    <button
+    <><button
       type="button"
       data-menu-row
       data-org-blocked={row.blocked || undefined}
-      disabled={row.blocked}
+      disabled={row.blocked || row.unavailable}
       aria-pressed={row.current}
-      aria-label={[option.label, option.provider, reason].filter(Boolean).join(" · ")}
-      title={[option.label, option.provider, reason ?? modelBlurb(option)].filter(Boolean).join(" · ")}
+      aria-label={[free ? row.label : option.label, free ? undefined : option.provider, details, reason].filter(Boolean).join(" · ")}
+      title={[free ? row.label : option.label, free ? undefined : option.provider, details, reason ?? (free ? undefined : modelBlurb(option))].filter(Boolean).join(" · ")}
       tabIndex={-1}
-      onClick={() => onPick(instance, row.model ?? option.id, row.variant)}
+      onClick={() => { if (!row.blocked && !row.unavailable) onPick(instance, row.model ?? option.id, row.variant); }}
       className={SIMPLE_MENU_ROW}
     >
       <Gutter />
       <RowLines label={row.label}>
+        {details && <span data-dani-model-details className="whitespace-normal text-[11px] leading-4 text-ink-tertiary [overflow-wrap:anywhere]">{details}</span>}
         {row.route && <span data-simple-route className={SIMPLE_MENU_META}>{row.route}</span>}
-        {reason && <span data-simple-org-blocked className={SIMPLE_MENU_META}>{reason}</span>}
+        {reason && <span data-simple-org-blocked className="whitespace-normal text-[12px] leading-4 text-ink-tertiary [overflow-wrap:anywhere]">{reason}</span>}
       </RowLines>
       {row.current && <Check size={14} className="shrink-0 text-accent" aria-hidden="true" />}
     </button>
+    {free && <DaniModelNotice option={option} />}</>
   );
 }
 
@@ -118,11 +127,16 @@ function GroupBody({ group, props }: { group: MenuGroup; props: SimpleModelMenuP
       return (
         <>
           {body.rows.map((row, index) => (
-            <div key={row.option.id} className="contents">
+            <div key={`${row.instance?.instanceId ?? instance.instanceId}/${row.option.id}`} className="contents">
               {index === body.localFrom && <div className={cn(MENU_LABEL, "pl-8 font-normal")}>{t("model.localModels")}</div>}
-              <MenuModel instance={instance} row={row} onPick={props.onPick} />
+              <MenuModel instance={row.instance ?? instance} row={row} onPick={props.onPick} />
             </div>
           ))}
+          {body.unavailableRoutes && <button type="button" data-menu-row data-simple-set-up tabIndex={-1}
+            onClick={(event) => props.onSetUp(body.unavailableRoutes![0]!, event.detail === 0)} className={MENU_ROW}>
+            <Gutter><Download size={16} className={MENU_ICON} aria-hidden="true" /></Gutter>
+            <span className="min-w-0 flex-1">{t("daniSetup.action")}</span><Forward />
+          </button>}
           {body.probing && (
             <div role="status" className={cn(MENU_LINE, "text-ink-tertiary")}>
               <Gutter><Loader2 size={14} className="animate-spin" aria-hidden="true" /></Gutter>

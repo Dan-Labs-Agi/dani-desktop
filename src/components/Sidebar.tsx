@@ -710,7 +710,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
   const simpleList = !advanced && !iconOnly;
   const railTile = iconOnly && !advanced;
   const avatarSize = iconOnly ? (railTile ? 36 : 44) : showThreads ? 32 : simpleRow ? 36 : 44;
-  const tooltip = simpleList ? botTooltip(bot, instances) : undefined;
+  const tooltip = iconOnly || simpleList ? botTooltip(bot, instances) : undefined;
   const visible = useVisibleMessages(bot);
   const last = lastNonReceipt(visible);
   const title = bot.title.trim();
@@ -739,8 +739,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
           motionKey={mascotMotion?.nonce ?? 0}
           animated={working || noticing || (mascotMotion?.kind ?? "none") !== "none"}
         />
-        {/* Bottom-left, clear of the status dots on the right and of the row's hover actions. */}
-        {(iconOnly || !simpleList) && <BotModelBadge bot={bot} instances={instances} avatarSize={avatarSize} />}
+        {!iconOnly && !simpleList && <BotModelBadge bot={bot} instances={instances} avatarSize={avatarSize} />}
         {simpleRow && <AvatarActivityDot activity={working ? "working" : teammateWait ? "teammate" : queued && !waiting ? "queued" : null} />}
         {!simpleRow && working && (
           <span
@@ -757,7 +756,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
           className={cn("absolute -right-0.5 -bottom-0.5 rounded-full border-2 border-panel bg-accent", iconOnly ? "size-3" : "size-2.5")} />}
         {!simpleRow && !teammateWait && !waiting && !working && queued && <span data-testid="queued-dot" role="status" aria-label={t("task.queued")} title={t("task.queued")}
           className={cn("absolute -right-0.5 -bottom-0.5 rounded-full border-2 border-panel bg-ink-secondary", iconOnly ? "size-3" : "size-2.5")} />}
-        {bot.chiefOfStaff && (iconOnly || simpleRow) && (
+        {bot.chiefOfStaff && simpleRow && (
           <span className="absolute -left-1 -top-1 flex rounded-full bg-raised p-[3px]">
             <Crown size={11} strokeWidth={2.25} className="shrink-0 text-accent" role="img" aria-label={t("sidebar.bot.chiefOfStaff")} data-testid="chief-crown">
               <title>{t("sidebar.bot.chiefOfStaff")}</title>
@@ -794,7 +793,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
               className="truncate"
               inputClassName={cn("w-full rounded bg-inset px-1 py-0.5", simpleRow ? "text-[14px] font-medium" : "text-[15px] font-semibold")}
             />
-            {!simpleList && bot.chiefOfStaff && !renaming && (
+            {!iconOnly && !simpleList && bot.chiefOfStaff && !renaming && (
               <Crown size={13} strokeWidth={2.25} className="shrink-0 text-accent" role="img" aria-label={t("sidebar.bot.chiefOfStaff")} data-testid="chief-crown">
                 <title>{t("sidebar.bot.chiefOfStaff")}</title>
               </Crown>
@@ -854,8 +853,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
 
   return (
     <>
-    <div className={cn("group relative", railTile && "mx-auto w-[54px]", botRowDropClass(drop, dragging))} data-bot-drop={drop ?? undefined} {...(drag && !renaming ? drag.row(bot.id) : {})}
-      title={railTile ? botTooltip(bot, instances) : iconOnly ? [bot.name, bot.title?.trim()].filter(Boolean).join(" · ") : undefined}><BotDropLine place={drop} />
+    <div className={cn("group relative", railTile && "mx-auto w-[54px]", botRowDropClass(drop, dragging))} data-bot-drop={drop ?? undefined} {...(drag && !renaming ? drag.row(bot.id) : {})}><BotDropLine place={drop} />
       {/* Keep this wrapper mounted: replacing it remounts RenameTitle and leaves the row stuck in rename mode. */}
       <div
         role={renaming ? undefined : "button"}

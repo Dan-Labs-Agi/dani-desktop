@@ -2,7 +2,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { isTypeaheadKey, TYPEAHEAD_RESET_MS, typeaheadMatch, typeaheadText, type Typeahead } from "@/lib/menu-keys";
 import { nextMenuIndex } from "./SidebarPopoverMenu";
 
-const FOCUSABLE = "button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]";
+const FOCUSABLE = "button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex]";
 const FORWARD_ROWS = "[data-simple-set-up], [data-simple-sign-in], [data-simple-manage], [data-model-local-entry]";
 
 /** A model menu's keys other than Escape: Tab past its last stop closes it; the arrows, Home and End move between its

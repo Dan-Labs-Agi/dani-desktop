@@ -6,18 +6,28 @@ const {createHash} = require('node:crypto');
 const assert = require('node:assert/strict');
 const {chromium} = require(path.join(process.env.RUNNER_TEMP, 'smoke-tools/node_modules/playwright-core'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const temp = path.join(process.env.RUNNER_TEMP, 'dani-installed-verification');
-// Isolate appData as well as product data. Only this disposable profile is read.
-process.env.APPDATA=path.join(temp,'appdata');
-process.env.LOCALAPPDATA=path.join(temp,'localappdata');
-fs.mkdirSync(temp, {recursive:true});
+const temp = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, 'dani-installed-verification-'));
+const home = path.join(temp, 'home');
+fs.mkdirSync(home);
+process.env.HOME = home;
+process.env.CFFIXED_USER_HOME = home;
+process.env.USERPROFILE = home;
+process.env.APPDATA = path.join(temp, 'appdata');
+process.env.LOCALAPPDATA = path.join(temp, 'localappdata');
+process.env.XDG_CONFIG_HOME = path.join(home, '.config');
+process.env.XDG_CACHE_HOME = path.join(home, '.cache');
+process.env.XDG_DATA_HOME = path.join(home, '.local', 'share');
+process.env.OMB_AI_CHECKS = '0';
+process.env.OMB_WEBHOOK_PORT = '0';
 const install = path.join(temp, 'app');
 const data = path.join(temp, 'profile');
 fs.mkdirSync(data, {recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
 fs.writeFileSync(marker, 'preserve synthetic customer data');
-const installer=path.resolve('release',fs.readdirSync('release').find(f=>f.endsWith('-x64.dmg'))||'missing.dmg');
-console.log(JSON.stringify({event:'intel-candidate',source:process.env.GITHUB_SHA,sha256:createHash('sha256').update(fs.readFileSync(installer)).digest('hex'),bytes:fs.statSync(installer).size}));
+const installers=fs.readdirSync('release').filter(file=>file.endsWith('-x64.dmg'));
+assert.ok(process.env.DANI_INSTALLER_PATH || installers.length===1,'Set DANI_INSTALLER_PATH when the release folder does not contain exactly one Intel installer');
+const installer=path.resolve(process.env.DANI_INSTALLER_PATH ?? path.join('release',installers[0]));
+console.log(JSON.stringify({event:'intel-candidate',source:process.env.GITHUB_SHA,installer,fixture:temp,sha256:createHash('sha256').update(fs.readFileSync(installer)).digest('hex'),bytes:fs.statSync(installer).size}));
 const mount=path.join(temp,'mounted');fs.mkdirSync(mount,{recursive:true});
 let result=spawnSync('hdiutil',['attach',installer,'-nobrowse','-mountpoint',mount],{encoding:'utf8',timeout:120000});assert.equal(result.status,0,result.stderr);
 result=spawnSync('codesign',['--verify','--deep','--strict',path.join(mount,'Dani Bot.app')],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
@@ -32,31 +42,36 @@ let launched;
 const graphicsFailures=[];
 function stop() {if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
-  launched=spawn(executable,['--remote-debugging-port=9333'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:'ignore',detached:true});
-  for(let i=0;i<120;i++) {
-    try {const browser=await chromium.connectOverCDP('http://127.0.0.1:9333');
-      for(let j=0;j<90;j++) {
-        const page=browser.contexts().flatMap(c=>c.pages()).find(p=> /^http:\/\/127\.0\.0\.1:\d+/.test(p.url()));
-        if(page) {
-          page.on('pageerror', error=>console.log('MAIN_RENDERER_ERROR',error.message));
-          page.on('console', message=>{if(['error','warning'].includes(message.type())) console.log('MAIN_RENDERER_CONSOLE',message.type(),message.text().slice(0,2000));});
-          await page.waitForLoadState('domcontentloaded');
-          try {
-            const cdp=await browser.newBrowserCDPSession();
-            console.log('MAIN_GPU_INFO',JSON.stringify(await cdp.send('SystemInfo.getInfo')));
-            await cdp.detach();
-          } catch(error) { console.log('MAIN_GPU_DIAGNOSTIC_ERROR',error.message); }
-          return {browser,page};
-        }
-        await sleep(1000);
+  const output = fs.openSync(path.join(temp,'desktop-launch.log'),'w');
+  launched=spawn(executable,['--remote-debugging-port=0'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore',output,output],detached:true});
+  fs.closeSync(output);
+  const deadline = Date.now() + 120000;
+  let browser;
+  while(Date.now()<deadline) {
+    if(launched.exitCode!==null || launched.signalCode!==null) throw Error('Installed app exited: '+fs.readFileSync(path.join(temp,'desktop-launch.log'),'utf8').slice(-8000));
+    if(!browser) {
+      const endpoint=fs.readFileSync(path.join(temp,'desktop-launch.log'),'utf8').match(/DevTools listening on (ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/[^\s]+)/)?.[1];
+      if(endpoint) {
+        try {browser=await chromium.connectOverCDP(endpoint,{timeout:3000});} catch {}
       }
-      throw Error('packaged UI not reachable');
-    }catch(e){if(i===119)throw e;await sleep(1000);}
+    }
+    const page=browser?.contexts().flatMap(c=>c.pages()).find(p=>/^http:\/\/127\.0\.0\.1:\d+/.test(p.url()));
+    if(page) {
+      page.on('pageerror',error=>console.log('MAIN_RENDERER_ERROR',error.message));
+      page.setDefaultTimeout(15000);
+      await page.waitForLoadState('domcontentloaded',{timeout:15000});
+      return {browser,page};
+    }
+    await sleep(250);
   }
+  const pages=browser?.contexts().flatMap(c=>c.pages())??[];
+  for(let index=0;index<pages.length;index++) await pages[index].screenshot({path:path.join(temp,'startup-failure-'+index+'.png'),timeout:10000}).catch(()=>{});
+  throw Error('Packaged UI did not become reachable: '+fs.readFileSync(path.join(temp,'desktop-launch.log'),'utf8').slice(-8000));
 }
 async function capture(page,label) {
  await page.waitForTimeout(1500);
  const png=await page.screenshot({animations:'disabled'});const b64=png.toString('base64');
+ fs.writeFileSync(path.join(temp,label+'.png'),png);
  for(let i=0;i<b64.length;i+=32000) console.log('MAIN_'+label+'_SCREENSHOT_CHUNK:'+b64.slice(i,i+32000));
  console.log('MAIN_'+label+'_SCREENSHOT_END');
 }
@@ -78,7 +93,10 @@ async function inspect(page,label) {
 }
 (async()=>{
  stop();let ui=await open();await inspect(ui.page,'INSTALLED');
- await ui.page.locator('[data-welcome-later]').click();
+ await ui.page.locator('[data-welcome] [data-dani-setup] [data-primary]').click();
+ await ui.page.locator('[data-welcome] [data-dani-setup]').waitFor({state:'detached',timeout:180000});
+ await capture(ui.page,'DANI_READY');
+ await ui.page.locator('[data-welcome] [data-primary]').click();
  await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
  await capture(ui.page,'CHIEF');
  await ui.page.waitForTimeout(1000); // Respect the real Chief intro's accidental-click guard.

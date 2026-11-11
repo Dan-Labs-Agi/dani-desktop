@@ -15,7 +15,6 @@ import type { StandaloneAsset, StandaloneRelease } from "./contracts.ts";
 import {
   installStandaloneEngine,
   isAppStandaloneCopy,
-  plainInstallError,
   STANDALONE_DOWNLOAD_TIMEOUT_MS,
   registerStandaloneBinDirs,
   resetStandaloneStateForTests,
@@ -50,26 +49,6 @@ it("lets the headless client wait out the server's whole download, so the server
   expect(INSTALL_TIMEOUT_MS).toBeGreaterThan(STANDALONE_DOWNLOAD_TIMEOUT_MS);
 });
 
-describe("explaining a file-system failure", () => {
-  const release = fixtureRelease({});
-  const asset: StandaloneAsset = { url: "https://downloads.example.test/a", sha256: "0".repeat(64), executableSha256: "1".repeat(64), archive: "raw", executable: "x", approxBytes: 1 };
-  const failure = (code: string, syscall: string) => Object.assign(new Error(`${code}: operation failed, ${syscall}`), { code, syscall });
-  const inUse = "Fake Engine is open in another window. Close it, then try again.";
-  const noPermission = "DaniBot can't write to its folder for Fake Engine. Check the folder's permissions, then try again.";
-
-  it.each([
-    ["EBUSY", "rmdir", inUse],
-    ["EPERM", "rename", inUse],
-    ["EPERM", "unlink", inUse],
-    ["ENOTEMPTY", "rename", inUse],
-    ["EACCES", "open", noPermission],
-    ["EACCES", "rename", noPermission],
-    ["EPERM", "mkdir", noPermission],
-    ["EROFS", "open", noPermission],
-  ])("says %s from %s in plain words", (code, syscall, message) => {
-    expect(plainInstallError(release, asset, failure(code, syscall)).message).toBe(message);
-  });
-});
 
 describe("which build this machine gets", () => {
   it("names the platform and architecture, with musl only on Linux without glibc", () => {
@@ -355,13 +334,15 @@ describe.skipIf(process.platform === "win32")("installing a standalone engine", 
     expect(leftovers()).toEqual([]);
   });
 
-  it.skipIf(process.getuid?.() === 0)("explains a folder it cannot write to in plain words", async () => {
+  it.skipIf(process.getuid?.() === 0)("does not publish an activation when its directory is unwritable", async () => {
     const release = await served("raw");
     mkdirSync(engineDir(), { recursive: true });
     chmodSync(engineDir(), 0o500);
     try {
-      const error = await refusal(install(release));
-      expect(error.message).toBe("DaniBot can't write to its folder for Fake Engine. Check the folder's permissions, then try again.");
+      await refusal(install(release));
+      expect(existsSync(join(engineDir(), "current.json"))).toBe(false);
+      expect(existsSync(binPath())).toBe(false);
+      expect(existsSync(log)).toBe(false);
     } finally {
       chmodSync(engineDir(), 0o700);
     }

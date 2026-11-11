@@ -24,6 +24,7 @@ import type { SessionRegistry } from "../sessions.ts";
 import type { Store } from "../store.ts";
 import type { BusyFlag, ConfigStatus } from "./config.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { DANI_FREE_INSTANCE_IDS } from "../../shared/dani-free.ts";
 
 export interface InstanceRouteDeps {
   store: Pick<Store, "bots" | "tasks">;
@@ -36,6 +37,8 @@ export interface InstanceRouteDeps {
   providerInstancesChanging: Pick<Set<string>, "add" | "delete">;
   describeInstances(): Promise<unknown>;
   persistProviderInstance(instanceId: string, instances: InstanceConfigMap): Promise<void>;
+  ensureDaniInstances?(): Promise<void>;
+  modelRefusal?(instanceId: string): string | undefined;
   configStatus(): ConfigStatus;
   broadcast(payload: Record<string, unknown>): void;
   testCliBinary(cli: string, driver: (typeof BUILT_IN_DRIVERS)[number] | undefined): Promise<unknown>;
@@ -180,6 +183,10 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
       }
       const instanceId = instanceAction[1];
       const action = instanceAction[2];
+      if (action === "install" || action === "check") {
+        const refusal = deps.modelRefusal?.(instanceId);
+        if (refusal) return json(res, 403, { error: refusal });
+      }
       const owner = auth.kind === "session" ? auth.session.id : "loopback";
       if (action.startsWith("auth/")) res.setHeader("cache-control", "no-store");
       try {
@@ -194,6 +201,7 @@ export function createInstanceRoutes(deps: InstanceRouteDeps): RouteHandler {
           return json(res, 200, { instances: await describeInstances() });
         }
         if (action === "install") {
+          if (DANI_FREE_INSTANCE_IDS[instanceId] === true) await deps.ensureDaniInstances?.();
           const installed = await registry.installRuntime(instanceId);
           if (!installed) return json(res, 404, { error: "Installing this engine from Settings is not available on this server. Use the install command on the machine running Dani Bot." });
           const usingAppCopy = installed !== true && await useAppCopy(instanceId, installed.useCli);

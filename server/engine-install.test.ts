@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { chmodSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StandaloneRelease } from "./contracts.ts";
 import { enginesBinDir, enginesPrefix, installNpmEngine, npmPackageOf, registerEnginesBinDir, serverInstallFor, standaloneEnginePath } from "./engine-install.ts";
@@ -55,7 +55,7 @@ function writeFakeNpm(dir: string): void {
   chmodSync(join(dir, "npm"), 0o755);
 }
 
-/** A scratch data dir and a PATH holding only the stand-in npm. */
+/** A scratch data dir and a PATH holding the stand-in npm and this test runner's Node. */
 function useFakeNpm() {
   const ctx = { scratch: "", binDir: "", base: "" };
   let originalPath: string | undefined;
@@ -66,7 +66,7 @@ function useFakeNpm() {
     mkdirSync(ctx.binDir);
     writeFakeNpm(ctx.binDir);
     originalPath = process.env.PATH;
-    process.env.PATH = ctx.binDir;
+    process.env.PATH = [ctx.binDir, dirname(process.execPath)].join(delimiter);
     process.env.FAKE_NPM_LOG = join(ctx.scratch, "calls.jsonl");
     delete process.env.FAKE_NPM_MODE;
     resetPathCacheForTests();

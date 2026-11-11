@@ -24,8 +24,10 @@ import { GreenferenceDriver } from "./greenference.ts";
 import { MetaDriver } from "./meta.ts";
 import { MuseCodeDriver } from "./muse-code.ts";
 import { MinimaxDriver } from "./minimax.ts";
+import { DaniFreeDriver } from "./dani-free.ts";
 
 export const BUILT_IN_DRIVERS: readonly AnyProviderDriver[] = [
+  DaniFreeDriver,
   GrokDriver,
   GrokAgentDriver,
   GeminiAgentDriver,

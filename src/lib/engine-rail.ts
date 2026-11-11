@@ -1,9 +1,15 @@
 import type { InstanceInfo } from "@/state/store";
+import { DANI_FREE_INSTANCE_IDS, isDaniFreeInstance } from "../../shared/dani-free";
 
 export function configuredModelInstances(instances: readonly InstanceInfo[], selectedInstanceId?: string): InstanceInfo[] {
-  return instances.filter((instance) =>
-    instance.instanceId === selectedInstanceId
-      || (instance.snapshot.state === "available" && (instance.models.options.length > 0 || instance.snapshot.chatgptPlan === true)));
+  const hasDaniFree = instances.some(isDaniFreeInstance);
+  return instances.filter((instance) => {
+    if (hasDaniFree && instance.instanceId === "opencodeGo" && instance.driverKind === "opencodeGo"
+      && instance.snapshot.freeFallback === true && instance.instanceId !== selectedInstanceId) return false;
+    return DANI_FREE_INSTANCE_IDS[instance.instanceId] === true
+      || instance.instanceId === selectedInstanceId
+      || (instance.snapshot.state === "available" && (instance.install !== undefined || instance.models.options.length > 0 || instance.snapshot.chatgptPlan === true));
+  });
 }
 
 export function isCustomOnly(instance: { access?: InstanceInfo["access"] } | undefined): boolean {

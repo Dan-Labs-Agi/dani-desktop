@@ -1282,7 +1282,7 @@ describe("saving OpenCode provider keys", () => {
     expect(parseConfigPatch({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v", GROQ_API_KEY: "" } } }))
       .toEqual({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v", GROQ_API_KEY: "" } } });
     expect(() => parseConfigPatch({ opencodeGo: { providerKeys: { VENICE_API_KEY: 42 } } })).toThrow("opencodeGo.providerKeys");
-    expect(reloaded({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v" } } })).toEqual(["opencodeGo"]);
+    expect(reloaded({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v" } } })).toEqual(["dani-client", "opencodeGo"]);
     expect(reloaded({ opencodeGo: { providerKeys: {} } })).toEqual([]);
   });
 });

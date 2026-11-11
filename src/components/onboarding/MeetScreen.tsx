@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, Check, Plus } from "lucide-react";
+import { ArrowUp, Plus } from "lucide-react";
 import { BotAvatar } from "@/components/Avatar";
 import { RobotAvatar } from "@/components/robot/RobotAvatar";
-import { engineReady } from "@/components/EngineLibrary";
 import { usePrefersReducedMotion } from "@/components/mascot-clock";
 import { brand, productName } from "@/lib/brand";
 import { cn } from "@/lib/cn";
 import { DEFAULT_BOT_NAME, myDefaultBot, useViewerEmail } from "@/lib/default-bot";
 import { activeLocale, t } from "@/lib/i18n";
-import { aiChoices, aiWorks } from "@/lib/onboarding";
+import { aiWorks } from "@/lib/onboarding";
 import { useStore } from "@/state/store";
-import { ConnectAiDialog } from "./ConnectAi";
-import { PILL, SignInPill, useSignInPill } from "./SignInPill";
+import { ConnectAiDialog, DaniSetup } from "./ConnectAi";
 import { useWelcomeAi } from "./welcome-ai";
+import { isDaniFreeInstance } from "../../../shared/dani-free";
 
 const MASCOT_SIZE = 132;
 const PLACEHOLDER_MS = 700;
@@ -42,7 +41,7 @@ function DemoComposer({ reduced, onTyping }: { reduced: boolean; onTyping: (typi
   return (
     <div aria-hidden="true" data-demo-composer=""
       className="absolute left-1/2 top-[calc(50%-14px)] flex min-h-[76px] w-[348px] max-w-[calc(100%-32px)] -translate-x-1/2 select-none flex-col gap-2.5 rounded-[22px] border-[0.5px] border-ink/10 bg-composer px-2 pb-2 pt-3 text-left [:root[data-skin=daylight]_&]:shadow-[0_2px_8px_-1px_rgb(0_0_0/0.05),0_1px_2px_rgb(0_0_0/0.03)]">
-      <div className="mx-2 whitespace-nowrap text-[14px] leading-5">
+      <div className="mx-2 break-words text-[14px] leading-5">
         {waiting ? <span className="text-ink-tertiary">{t("onboarding.meet.placeholder", { app: productName() })}</span> : <span className="text-ink">{text}</span>}
         {!reduced && (waiting || typing) && <span className="animate-meet-caret ml-px inline-block h-[15px] w-[1.5px] translate-y-[2px] bg-ink align-[-2px]" />}
       </div>
@@ -54,29 +53,22 @@ function DemoComposer({ reduced, onTyping }: { reduced: boolean; onTyping: (typi
   );
 }
 
-/** The first run's first screen: the app's name, its mascot and a composer typing one sentence, then one pill. With
- * no AI working yet the pill is the sign-in, and Next comes once the AI has answered its test message. */
-export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => void }) {
+/** The approved robot welcome keeps setup and consent on the first screen. */
+export function MeetScreen({ hosted, replay = false, onNext }: { hosted: boolean; replay?: boolean; onNext: () => void }) {
   const { state } = useStore();
   const reduced = usePrefersReducedMotion();
   const dani = myDefaultBot(state.bots, useViewerEmail());
-  // An AI counts once it answered a test message (or cannot be sent one); OpenCode's free model never does.
-  const tested = useWelcomeAi(state.instances, !hosted);
+  const existing = replay || Boolean(state.config?.onboarding?.completedAt);
+  const chosen = state.bots.find((bot) => bot.id === state.selectedId) ?? (existing ? dani : undefined);
+  const explicit = chosen && (existing || !chosen.defaultBot || chosen.welcomed) ? chosen.modelSelection.instanceId : undefined;
+  const candidates = hosted ? state.instances : state.instances.filter((instance) => isDaniFreeInstance(instance) || instance.instanceId === explicit);
+  const tested = useWelcomeAi(candidates, !hosted);
   const ready = aiWorks(tested);
-  const known = state.instances.length > 0;
-  const [asking, setAsking] = useState(false);
-  useEffect(() => {
-    if (!hosted && known && !ready && tested?.state !== "testing") setAsking(true);
-  }, [hosted, known, ready, tested?.state]);
-  const { recommended } = aiChoices(state.instances.filter((instance) => instance.install && !engineReady(instance)));
-  const pill = useSignInPill(recommended);
   const [dialog, setDialog] = useState(false);
   const [typing, setTyping] = useState(false);
-
   const logo = brand().logo;
   const face = typing ? "listening" : "idle";
-  const failure = pill.error ?? (tested?.state === "failed" ? tested.error ?? t("onboarding.engines.noAnswer", { name: tested.instance.displayName }) : null);
-  const signingIn = asking && !ready;
+  const signingIn = !hosted && !ready;
   return (
     <div className="relative h-full min-h-[600px] w-full text-center">
       <h1 id="welcome-title" className="absolute left-1/2 top-[calc(50%-264px)] w-max max-w-[min(560px,calc(100%-32px))] -translate-x-1/2 text-[28px] font-normal leading-[34px] tracking-[-0.02em] text-ink">
@@ -97,16 +89,11 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
           {t("onboarding.hosted.intro")}
         </p>
       )}
-      <div className="absolute left-1/2 top-[calc(50%+200px)] flex w-[320px] max-w-[calc(100%-32px)] -translate-x-1/2 flex-col items-center">
-        {asking && ready && tested && (
-          <p role="status" data-ai-connected="" className="absolute -top-8 flex items-center gap-1.5 whitespace-nowrap text-[13px] leading-[18px] text-success">
-            <Check size={14} strokeWidth={2.5} aria-hidden="true" />{t("onboarding.meet.connected", { name: tested.instance.displayName })}
-          </p>
-        )}
+      <div className="absolute left-1/2 top-[calc(50%+130px)] flex w-[320px] max-w-[calc(100%-32px)] -translate-x-1/2 flex-col items-center pb-8">
         {signingIn ? (
-          <SignInPill pill={pill} instance={recommended} waiting={tested?.state === "testing"} onDialog={() => setDialog(true)} />
+          <DaniSetup compact />
         ) : (
-          <button type="button" data-primary="" onClick={onNext} className={cn(PILL, asking && "animate-fade-in [animation-duration:150ms]")}>
+          <button type="button" data-primary="" onClick={onNext} className={cn("ui-button ui-button-pill ui-button-lg ui-button-primary w-[288px] max-w-full", "animate-fade-in [animation-duration:150ms]")}>
             {t("onboarding.meet.next")}
           </button>
         )}
@@ -117,9 +104,8 @@ export function MeetScreen({ hosted, onNext }: { hosted: boolean; onNext: () => 
             <button type="button" data-welcome-later="" onClick={onNext} className="rounded transition-colors hover:text-ink">{t("onboarding.meet.setupLater")}</button>
           </p>
         )}
-        {signingIn && failure && <p role="alert" className="mt-2 text-[13px] leading-[18px] text-danger">{failure}</p>}
       </div>
-      {dialog && <ConnectAiDialog hosted={hosted} tested={tested} onClose={() => setDialog(false)} />}
+      {dialog && <ConnectAiDialog hosted={hosted} onClose={() => setDialog(false)} />}
     </div>
   );
 }

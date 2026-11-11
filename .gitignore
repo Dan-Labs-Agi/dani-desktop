@@ -11,9 +11,7 @@ dist-server
 .DS_Store
 *.tsbuildinfo
 electron/resources/speech-helper
-electron/resources/DaniBot Speech.app
-# stale helper from the removed Teach a skill recorder
-electron/resources/DaniBot Recorder.app
+electron/resources/*.app/
 release
 .omb-scratch
 .wrangler/

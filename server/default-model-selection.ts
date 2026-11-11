@@ -1,4 +1,5 @@
 import { freeFallback, rankAis } from "../shared/ai-ranking.ts";
+import { isDaniFreeInstance } from "../shared/dani-free.ts";
 import type { EffortLevel, EngineAccess, InstanceConfigMap, ModelCatalog, ModelSelection, ProviderSnapshot } from "./contracts.ts";
 
 export interface SelectableInstance {
@@ -45,6 +46,11 @@ export function readyToRun(instance: SelectableInstance, context: DefaultSelecti
   return instance.enabled !== false && instance.snapshot.state === "available" && context.refusal?.(instance) === undefined && !signedOut(instance);
 }
 
+export function automaticModelCandidates(instances: readonly SelectableInstance[]): readonly SelectableInstance[] {
+  const dani = instances.filter(isDaniFreeInstance);
+  return dani.length ? dani : instances;
+}
+
 const defaultModel = (instance: SelectableInstance) => instance.models.default.trim()
   ? instance.models.default
   : instance.models.options.find((model) => model.id.trim())?.id ?? "";
@@ -75,7 +81,12 @@ export function selectDefaultModelSelection(
     if (selection.effort && !instance.capabilities?.effortLevels?.includes(selection.effort)) delete selection.effort;
     return selection;
   }
-  const available = instances.filter((instance) => instance.enabled !== false && instance.snapshot.state === "available" && context.refusal?.(instance) === undefined && defaultModel(instance));
+  const automatic = automaticModelCandidates(instances);
+  if (automatic.some(isDaniFreeInstance)) {
+    const pick = best(automatic.filter(instance => readyToRun(instance, context) && defaultModel(instance)), context);
+    return { instanceId: pick?.instanceId ?? "", model: pick ? defaultModel(pick) : "" };
+  }
+  const available = automatic.filter((instance) => instance.enabled !== false && instance.snapshot.state === "available" && context.refusal?.(instance) === undefined && defaultModel(instance));
   const ready = available.filter((instance) => readyToRun(instance, context));
   const company = context.company;
   const personal = company && instances.some((instance) => company(instance.instanceId))

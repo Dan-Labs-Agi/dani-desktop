@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://github.com/somdipto/dani-desktop/releases/latest">
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest">
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="docs/assets/readme/hero-static.webp">
     <img src="docs/assets/readme/hero.webp" width="100%" alt="Dani Bot: your own team of AI bots, in a chat app. Seven 3D robots stand in a row. Dani, in the middle, wears a crown.">
@@ -10,11 +10,11 @@
 <br>
 <br>
 
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-mac-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-mac-light.png"><img src="docs/assets/readme/btn-mac-light.png" width="226" alt="Download for macOS (Apple silicon)"></picture></a>&nbsp;
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-setup.exe"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-win-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-win-light.png"><img src="docs/assets/readme/btn-win-light.png" width="226" alt="Download for Windows (installer)"></picture></a>&nbsp;
-<a href="https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot.AppImage"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-lin-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-lin-light.png"><img src="docs/assets/readme/btn-lin-light.png" width="226" alt="Download for Ubuntu (AppImage)"></picture></a>
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Silicon.dmg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-mac-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-mac-light.png"><img src="docs/assets/readme/btn-mac-light.png" width="226" alt="Download for macOS (Apple silicon)"></picture></a>&nbsp;
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-setup.exe"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-win-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-win-light.png"><img src="docs/assets/readme/btn-win-light.png" width="226" alt="Download for Windows (installer)"></picture></a>&nbsp;
+<a href="https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot.AppImage"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/btn-lin-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/btn-lin-light.png"><img src="docs/assets/readme/btn-lin-light.png" width="226" alt="Download for Ubuntu (AppImage)"></picture></a>
 
-<sub>Also: [Mac (Intel)](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Intel.dmg) · [Windows portable](https://github.com/somdipto/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip) · [Ubuntu .deb](https://github.com/somdipto/dani-desktop/releases/latest/download/danibot-amd64.deb) · [All releases](https://github.com/somdipto/dani-desktop/releases/latest)</sub>
+<sub>Also: [Mac (Intel)](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Intel.dmg) · [Windows portable](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/DaniBot-Windows-Portable.zip) · [Ubuntu .deb](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest/download/danibot-amd64.deb) · [All releases](https://github.com/Dan-Labs-Agi/dani-desktop/releases/latest)</sub>
 
 <br>
 
@@ -46,7 +46,7 @@ Right-click any bot to pin it, mark it unread, edit its profile, duplicate it, c
 
 ### A different brain for every bot
 
-Each bot's picker shows the models its engine can actually run: local models through Hermes out of the box, cloud providers once their keys are in Settings. Switch mid-conversation.
+Each bot starts with Dani free models. Installed agents, your provider accounts, and discovered local models remain optional choices in the model picker. Switch mid-conversation.
 
 <img src="docs/assets/readme/models.webp" width="100%" alt="The per-bot model picker open over a chat with Dani, listing the models available to its engine.">
 
@@ -133,19 +133,25 @@ Two processes. The app holds no transports of its own: it sends typed commands o
 
 **Download an installer** with the buttons at the top. First launch opens the setup wizard on every platform. The Windows installer is unsigned, so SmartScreen shows an "unknown publisher" prompt on first run.
 
+Automatic updates come from this repository's **published stable releases**,
+not directly from `main`, a draft, or an Actions artifact. “No published versions
+on GitHub” means the first public stable release is still required. Local ad-hoc
+Mac builds need a one-time trusted signed installer before relying on future
+automatic upgrades. See [releasing and updates](CONTRIBUTING.md#desktop-releases-and-automatic-updates).
+
 **Or build one from source** with a single command. It clones or reuses the repo, installs dependencies, packages the desktop app for your platform, and prints the installer path. It's safe to re-run.
 
 ```sh
 # macOS / Ubuntu
-curl -fsSL https://raw.githubusercontent.com/somdipto/dani-desktop/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Dan-Labs-Agi/dani-desktop/main/install.sh | sh
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/somdipto/dani-desktop/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Dan-Labs-Agi/dani-desktop/main/install.ps1 | iex
 ```
 
-**You'll need** macOS, Windows, or Ubuntu 24.04 x64, plus Node 24+ and pnpm to build from source. Install and log in to at least one agent CLI (`claude`, `codex`, or `grok`) and it appears in the model picker automatically.
+**You'll need** macOS, Windows, or Ubuntu 24.04 x64, plus Node 24+ and pnpm to build from source. Choose **Set up Dani** for the default free models. Supported installed agent CLIs appear automatically; their own models may require signing in.
 
 Any desktop build can also pair as a client to another Windows, macOS, or Ubuntu host over Tailscale. See [desktop-to-desktop companion mode](docs/desktop-companion.md) and the [Ubuntu Desktop guide](docs/linux-desktop.md).
 
@@ -155,7 +161,7 @@ Any desktop build can also pair as a client to another Windows, macOS, or Ubuntu
 <br>
 
 ```sh
-git clone https://github.com/somdipto/dani-desktop && cd dani-desktop
+git clone https://github.com/Dan-Labs-Agi/dani-desktop && cd dani-desktop
 pnpm install
 
 pnpm dev:server    # harness server → 127.0.0.1:8799

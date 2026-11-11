@@ -183,7 +183,7 @@ function executableHasPinnedVersion(binary, target) {
   const result = spawnSync(binary, ["version"], {
     encoding: "utf8",
     windowsHide: true,
-    timeout: 10_000,
+    timeout: process.platform === "darwin" ? 30_000 : 10_000,
   });
   return result.status === 0 && `${result.stdout}\n${result.stderr}`.includes(CLOUDFLARED_VERSION);
 }

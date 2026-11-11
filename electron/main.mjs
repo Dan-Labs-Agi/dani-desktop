@@ -77,7 +77,7 @@ import {
   withoutDesktopCompanionAccess,
 } from "./desktop-companion-client.mjs";
 import { isKnownSkin, skinChrome } from "./skin-overlay.cjs";
-import { readSecureCredentials } from "./secure-credentials.mjs";
+import { readSecureCredentials, withSecureStorageDeadline } from "./secure-credentials.mjs";
 import { createControlPlaneClient } from "./control-plane-client.mjs";
 import {
   companionAccountCleanupPending,
@@ -335,8 +335,7 @@ const serverSupervisor = createServerSupervisor({
 });
 
 function desktopDataDir() {
-  // An empty OMB_DATA_DIR falls back here too; server/config.ts would not, so the child gets this path.
-  return process.env.OMB_DATA_DIR || path.join(app.getPath("home"), ".danibot");
+  return process.env.DANI_DATA_DIR || process.env.OMB_DATA_DIR || path.join(app.getPath("home"), ".danibot");
 }
 
 async function stopUtilityServer(proc, timeoutMs = UTILITY_SERVER_STOP_TIMEOUT_MS) {
@@ -385,11 +384,11 @@ async function saveSecureCredentials(credentials) {
   if (credentialStoreUnavailable) {
     throw new Error("The operating-system credential store could not be read this launch");
   }
-  if (!(await safeStorage.isAsyncEncryptionAvailable())) {
+  if (!(await withSecureStorageDeadline(() => safeStorage.isAsyncEncryptionAvailable()))) {
     throw new Error("The operating-system credential store is unavailable");
   }
   fs.mkdirSync(path.dirname(CREDENTIALS_FILE), { recursive: true });
-  const encrypted = await safeStorage.encryptStringAsync(JSON.stringify(credentials));
+  const encrypted = await withSecureStorageDeadline(() => safeStorage.encryptStringAsync(JSON.stringify(credentials)));
   const temporary = `${CREDENTIALS_FILE}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, encrypted, { mode: 0o600 });
   fs.renameSync(temporary, CREDENTIALS_FILE);
@@ -825,9 +824,9 @@ function ensureCloudAccount() {
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Cloud sign-in requires the local desktop app.");
   cloudAccount = createCloudAccountClient({
     store: createCloudAccountStore({ file: path.join(app.getPath("userData"), cloudTarget(process.env).file), encryption: {
-      available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
+      available: async () => (await withSecureStorageDeadline(() => safeStorage.isAsyncEncryptionAvailable())) &&
         (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
-      encrypt: value => safeStorage.encryptStringAsync(value), decrypt: value => safeStorage.decryptStringAsync(value),
+      encrypt: value => withSecureStorageDeadline(() => safeStorage.encryptStringAsync(value)), decrypt: value => withSecureStorageDeadline(() => safeStorage.decryptStringAsync(value)),
     } }),
     platform: process.platform, deviceName: os.hostname().slice(0, 100) || "My computer", appVersion: app.getVersion(), origin: cloudTarget(process.env).origin,
     openBrowser: url => shell.openExternal(url), awaitingWake: () => cloudPower.awaiting(),
@@ -908,10 +907,10 @@ function ensureManagedDesktop() {
   if (managedDesktop) return managedDesktop;
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Organization sign-in requires the installed desktop app running on this computer.");
   const encryption = {
-    available: async () => (await safeStorage.isAsyncEncryptionAvailable()) &&
+    available: async () => (await withSecureStorageDeadline(() => safeStorage.isAsyncEncryptionAvailable())) &&
       (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
-    encrypt: value => safeStorage.encryptStringAsync(value),
-    decrypt: value => safeStorage.decryptStringAsync(value),
+    encrypt: value => withSecureStorageDeadline(() => safeStorage.encryptStringAsync(value)),
+    decrypt: value => withSecureStorageDeadline(() => safeStorage.decryptStringAsync(value)),
   };
   const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption });
   orgLibrary = createOrgLibrary({
@@ -1139,8 +1138,11 @@ async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmen
   });
   const childEnv = managedComposioChildEnvironment(composioBrokerUrl(), secureCredentials, {
     ...process.env,
+    ...(process.platform === "darwin" && !process.env.NODE_EXTRA_CA_CERTS && fs.existsSync("/etc/ssl/cert.pem")
+      ? { NODE_EXTRA_CA_CERTS: "/etc/ssl/cert.pem" } : {}),
     // The parent owns the data-dir lease; a child only validates it, so fallback-port children never replace it.
     ...desktopDataDirLease.utilityServerLeaseEnvironment(),
+    DANI_DATA_DIR: dataDir,
     OMB_DATA_DIR: dataDir,
     // Fail-closed until this process sends the private connection; never a descriptor inherited from the shell.
     OMB_DESKTOP_PARENT: "1",

@@ -1,14 +1,18 @@
 # Welcome flow and guided tour
 
-The first run is two screens, then the chat (Oct 27 2026): "Meet DaniBot"
-(a composer typing one sentence and Next; with no AI working, the same pill
-signs one in, with "Other ways to connect · Set up later" under it), then
-"Introducing your Chief of Staff" over an empty app (Create Chief of Staff, and
-Choose an existing bot where the person has bots). The Chief step shows only
-for a DaniBot not yet introduced where no other bot is the Chief. It lands in
-the Chief's chat, where DaniBot's three lines, its follow-up (written once by
-the server, `POST /api/bots/:id/helper-followup`) and chips offer only what is
-still missing. The app tour starts only from Settings → Replay app tour.
+The local first run is two screens, then the chat. "Meet Dani Bot" shows the
+current crowned robot and a composer typing one sentence. A fresh profile starts
+with **Set up Dani**, preceded by the free-service privacy disclosure. Setup
+activates the free routes, prepares the additional client and checks a real
+answer. One working free route is enough to continue; another service failing
+must not block it or select a paid agent. Installed agents are optional under
+**Other ways to connect**; missing agents are not an initial installation wall.
+
+The second screen introduces the Chief of Staff over the empty app. It offers
+Create Chief of Staff and, where appropriate, Choose an existing bot. It lands in
+the Chief's chat, where Dani Bot's three lines, its server-written follow-up
+(`POST /api/bots/:id/helper-followup`) and chips offer only what is still missing.
+The app tour starts only from Settings → Replay app tour.
 
 Launch the isolated full-app fixture following [Chat UI](chat-ui.md):
 
@@ -62,16 +66,70 @@ pnpm exec vitest run server/onboarding-model-default.e2e.test.ts server/default-
 ```
 
 The server tests launch only disposable homes and repository-owned fake engines.
-They cover a genuinely signed-out first install, a missing CLI connected later,
-and first-send discovery without opening settings. They assert the selected model
-in persisted bot records and fake-provider arguments, settled turns and bounded
+They cover a signed-out custom fleet, a missing CLI connected later, and
+first-send discovery without opening settings. They assert the selected model in
+persisted bot records and fake-provider arguments, settled turns and bounded
 transcripts. Existing bot choices and explicitly pinned thread models survive
-both automatic repair and a restart. Disabled and signed-out engines stay unset.
-Guarded messages recheck permissions after held provider discovery before starting.
-Pure-picker tests cover API/custom engines, empty catalogs, fallback model options
-and organization policy. Dialog tests cover blank saved new-bot templates without
-replacing deliberate choices. Real provider authentication and packaged native
-installation are not exercised by these offline fixtures.
+automatic repair and a restart. Disabled and signed-out engines stay unset. An
+unavailable Dani route must not disappear from automatic-selection policy and
+cause a subscription agent to be chosen. Guarded messages recheck permissions
+after held provider discovery before starting. Pure-picker tests cover
+API/custom engines, empty catalogs, fallback model options and organization
+policy. These offline fixtures do not exercise real provider authentication or
+packaged native installation.
+
+## Dani free models
+
+Catalog discovery is not consent or a successful model check. Fresh local
+onboarding probes only Dani free routes after activation, never an optional
+subscription agent. Previously selected user agents and welcome replay retain
+the person's choice. Organization-blocked routes cannot be activated, checked or
+counted ready, even when an earlier check passed.
+
+Both authoritative catalogs admit only current text-chat models with explicit
+zero pricing for every advertised charge. Unknown, paid, expired and non-chat
+entries are ineligible. Free routers remain listed, but a concrete free model is
+preferred for the initial choice. An explicitly selected model is never
+silently replaced. Installed supported agents remain optional picker choices;
+missing agents are not the first-run screen.
+
+Catalogs refresh every 24 hours while the app runs and on stale startup.
+Successful empty responses remove eligibility. Failed refreshes do not advance
+freshness, and stale evidence cannot authorize inference. Ordinary model rows
+show concise tool, image and training information; the separate privacy and
+terms disclosure preserves full model-specific notices and legal links.
+
+```sh
+pnpm exec vitest run server/drivers/dani-free.test.ts server/drivers/dani-free-client.test.ts server/drivers/dani-free-catalog.test.ts server/drivers/dani-free-runtime.test.ts server/routes/instances.test.ts src/components/onboarding/ConnectAi.test.ts src/components/onboarding/WelcomeFlow.test.ts src/components/DaniModelPrivacy.test.ts
+```
+
+The native Intel recipe is `scripts/verify-main-intel-installed.cjs`. Pass the
+exact candidate with `DANI_INSTALLER_PATH`; it refuses an ambiguous release
+folder rather than choosing an older installer. Its `RUNNER_TEMP` must contain
+the runner's `smoke-tools/node_modules/playwright-core`. It installs into its own
+temporary directory, seals both HOME and macOS Foundation's profile root,
+captures the real robot welcome, sets up Dani, completes onboarding and restarts
+without losing its synthetic data. Native Windows and Linux installation need
+their own platform runners; Mac contract tests are not native OS evidence.
+
+### Secure-storage startup boundary
+
+The desktop keeps Electron's asynchronous OS encryption API; it does not fall
+back to plaintext or the deprecated synchronous API. Each OS operation has a
+10-second deadline, and reading an existing credential file has one total
+10-second budget across retries. A nonresponding store is **unavailable**, never
+an empty installation, and cannot authorize overwriting saved credentials.
+Timed-out encryption cannot commit a late result over a newer update.
+
+The native fixture exposed an indefinitely pending Keychain availability call
+before the server fork. The bounded failure leaves the phone secret key
+unavailable rather than holding local free chat at the splash screen forever.
+See [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage)
+for its platform-specific providers and asynchronous API.
+
+```sh
+pnpm exec vitest run electron/secure-credentials.test.mjs electron/secure-credential-state.test.mjs electron/workspace-credentials.test.mjs
+```
 
 ## Organization row, hosted beats and member note (Sep 23 2026)
 

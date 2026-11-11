@@ -7,7 +7,7 @@ import type { ModelVariantOption } from "../../shared/runtime-events";
 import { filterCustomModels, partitionCustomModels, suggestedModels } from "@/lib/custom-models";
 import { configuredModelInstances, isClaudeAccount, isCustomOnly, SIGN_IN_FAMILY_LABEL, signInFamily } from "@/lib/engine-rail";
 import { modelName, simpleModelMenu } from "@/lib/simple-model-menu";
-import { choiceIsSelected, modelChoices, modelSelectionForPick, takesTypedModels, withTypedModels, type ModelChoice } from "@/lib/model-choices";
+import { choiceIsSelected, daniModelLabel, modelChoices, modelSelectionForPick, takesTypedModels, withTypedModels, type ModelChoice } from "@/lib/model-choices";
 export { modelSelectionForPick } from "@/lib/model-choices";
 import { pickerPlacement, type PickerPlacement } from "@/lib/picker-placement";
 import type { Typeahead } from "@/lib/menu-keys";
@@ -36,13 +36,16 @@ import { threadsOnOwnModel } from "../../shared/thread-model";
 import { ThreadModelsLine } from "./ThreadModelsLine";
 import { Select } from "./Select";
 
+import { DANI_FREE_INSTANCE_IDS, isDaniFreeInstance } from "../../shared/dani-free";
+import { ConnectAiDialog, DaniSetup } from "./onboarding/ConnectAi";
 const COMPACT_MODEL_COUNT = 5;
 
 function modelLabel(instance: InstanceInfo | undefined, model: string): string {
-  return instance?.models.options.find((option) => option.id === model)?.label ?? model;
+  return instance && isDaniFreeInstance(instance) ? modelName(instance, model) : instance?.models.options.find((option) => option.id === model)?.label ?? model;
 }
 
 function modelProvider(instance: InstanceInfo | undefined, model: string): string | undefined {
+  if (instance && isDaniFreeInstance(instance)) return undefined;
   return instance?.models.options.find((option) => option.id === model)?.provider;
 }
 
@@ -120,8 +123,10 @@ export function EffortRow({
   );
 }
 
-const variantLabel = (option: ModelVariantOption, driverKind?: string): string =>
-  option.id === "default" && driverKind === "opencodeGo" ? t("model.variant.openCodeDefault") : option.label;
+const variantLabel = (option: ModelVariantOption, instance?: InstanceInfo): string => {
+  if (instance && isDaniFreeInstance(instance)) return option.id === "default" ? t("model.effort.default") : daniModelLabel(option);
+  return option.id === "default" && instance?.driverKind === "opencodeGo" ? t("model.variant.openCodeDefault") : option.label;
+};
 
 /** ACP variant ids are opaque; their model/session declares the available choices. */
 function variantChoices(state: Pick<AppState, "instances" | "modelVariantSessions">, selection: ModelSelection, threadId: string | undefined) {
@@ -166,7 +171,7 @@ export function ModelVariantRow({ bot, threadId, updateBotDefault, className, la
           onChange={(event) => choose(options[Number(event.target.value)]?.id)}>
           <option value="unset">{t("model.variant.session")}</option>
           {missing && <option value="missing" disabled>{selection.variant} ({unavailable ? t("model.variant.unavailable") : t("model.variant.unverified")})</option>}
-          {options.map((option, index) => <option key={option.id} value={String(index)}>{variantLabel(option, instance.driverKind)}</option>)}
+          {options.map((option, index) => <option key={option.id} value={String(index)}>{variantLabel(option, instance)}</option>)}
         </Select>
       </label>
       {missing && <p className={cn("mt-1 text-ink-secondary", quiet ? "text-[12px] leading-4 text-ink-tertiary" : "text-[11px]")}>{unavailable ? t("model.variant.unavailableHelp") : t("model.variant.unverifiedHelp")}</p>}
@@ -179,7 +184,7 @@ export function ModelVariantRow({ bot, threadId, updateBotDefault, className, la
         <p className="mt-2 text-[12px] text-ink-secondary">
           {unavailable ? t("model.variant.unavailableChoice", { variant: selection.variant ?? "" })
             : missing ? t("model.variant.unverifiedChoice", { variant: selection.variant ?? "" }) : t("model.variant.none")}
-          {current !== undefined && ` ${t("model.variant.sessionValue", { variant: variantLabel(options.find((option) => option.id === current) ?? { id: current, label: current }, instance.driverKind) })}`}
+          {current !== undefined && ` ${t("model.variant.sessionValue", { variant: variantLabel(options.find((option) => option.id === current) ?? { id: current, label: current }, instance) })}`}
         </p>
       )}
       {selection.variant !== undefined && (
@@ -197,14 +202,14 @@ export function ModelVariantRow({ bot, threadId, updateBotDefault, className, la
               type="button"
               disabled={bot.busy}
               aria-pressed={selection.variant === option.id}
-              title={t("model.variant.use", { variant: variantLabel(option, instance.driverKind) })}
+              title={t("model.variant.use", { variant: variantLabel(option, instance) })}
               onClick={() => choose(option.id)}
               className={cn(
                 "rounded-full border px-2.5 py-1 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 disabled:opacity-50",
                 selection.variant === option.id ? "border-accent/60 bg-control text-ink" : "border-hairline/40 text-ink-secondary hover:bg-control/60 hover:text-ink",
               )}
             >
-              {variantLabel(option, instance.driverKind)}
+              {variantLabel(option, instance)}
             </button>
           ))}
         </div>
@@ -250,6 +255,7 @@ export function ModelPicker({
   // A guest changes only their own conversation's model, never the shared bot's default; thread-only until authority loads.
   const simpleUpdatesBotDefault = ownerOrAdmin === true;
   const [fullView, setFullView] = useState(false);
+  const [freeSetup, setFreeSetup] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<{ botId: string; threadId: string;
     selection: ModelSelection; updateBotDefault: boolean; name: string } | null>(null);
   const [placement, setPlacement] = useState<PickerPlacement | null>(null);
@@ -308,11 +314,13 @@ export function ModelPicker({
   const selection = bot.modelSelection;
   const instances = withTypedModels(state.instances, selection, query);
   const active = instances.find((instance) => instance.instanceId === selection.instanceId);
+  const selectedModelLabel = active ? modelLabel(active, selection.model)
+    : DANI_FREE_INSTANCE_IDS[selection.instanceId] === true ? t("daniSetup.unavailableModel") : selection.model;
   const pickerInstances = configuredModelInstances(instances, selection.instanceId);
   const selectedVariantLabel = selection.variant === undefined ? undefined : variantLabel(
     active?.models.options.find((option) => option.id === selection.model)?.variants?.find((option) => option.id === selection.variant)
       ?? { id: selection.variant, label: selection.variant },
-    active?.driverKind,
+    active,
   );
   const claudeAccounts = pickerInstances.filter(isClaudeAccount);
   const openaiAccounts = pickerInstances.filter((instance) => signInFamily(instance) === "openai");
@@ -455,9 +463,11 @@ export function ModelPicker({
   const profile = state.bots.find((candidate) => candidate.id === bot.id) ?? bot;
   const follows = threadId ? profile.tasks?.find((task) => task.threadId === threadId)?.followsBotModel : undefined;
   const botModelInstance = state.instances.find((instance) => instance.instanceId === profile.modelSelection.instanceId);
+  const botModelLabel = botModelInstance ? modelName(botModelInstance, profile.modelSelection.model)
+    : DANI_FREE_INSTANCE_IDS[profile.modelSelection.instanceId] === true ? t("daniSetup.unavailableModel") : profile.modelSelection.model;
   const botModelName = botModelInstance
-    ? `${botModelInstance.displayName} · ${modelLabel(botModelInstance, profile.modelSelection.model)}`
-    : profile.modelSelection.model;
+    ? `${DANI_FREE_INSTANCE_IDS[botModelInstance.instanceId] === true ? "Dani" : botModelInstance.displayName} · ${modelLabel(botModelInstance, profile.modelSelection.model)}`
+    : botModelLabel;
   const ownModelThreads = threadsOnOwnModel(profile.modelSelection, profile.tasks ?? []).length;
 
   const pickBotModel = () => {
@@ -480,6 +490,9 @@ export function ModelPicker({
 
   const pick = (instance: InstanceInfo, model: string, variant?: string) => {
     if (bot.busy || instance.policy) return;
+    const option = instance.models.options.find((candidate) => candidate.id === model);
+    if (option?.orgBlocked || (option?.availability !== undefined && option.availability !== "available")
+      || (isDaniFreeInstance(instance) && (!option || needsCli(instance) || needsSignIn(instance)))) return;
     const nextSelection = modelSelectionForPick(selection, instance, model);
     if (variant !== undefined) nextSelection.variant = variant;
     const updateBotDefault = !threadId || (simpleView ? simpleUpdatesBotDefault : scope === "bot");
@@ -558,6 +571,7 @@ export function ModelPicker({
     <ModelRow
       key={option.id}
       option={option}
+      daniFree={railInstance !== undefined && isDaniFreeInstance(railInstance)}
       current={selection.instanceId === railInstance?.instanceId && choiceIsSelected(option, selection)}
       defaultId={railInstance?.models.default ?? ""}
       botModel={botModelSelection ? choiceIsSelected(option, botModelSelection) : false}
@@ -582,11 +596,11 @@ export function ModelPicker({
       : needsCli(active) ? t("model.setupRequired")
         : needsSignIn(active) && !isCustomOnly(active) && !currentOption?.custom ? t("model.signInRequired") : currentOption?.orgBlocked ? t("model.orgBlocked") : undefined;
   const summary = active
-    ? `${active.displayName} · ${modelLabel(active, selection.model)}${
+    ? `${DANI_FREE_INSTANCE_IDS[active.instanceId] === true ? "Dani" : active.displayName} · ${selectedModelLabel}${
         modelProvider(active, selection.model) ? ` · ${modelProvider(active, selection.model)}` : ""
       }${selectedVariantLabel ? ` · ${selectedVariantLabel}` : selection.effort
         ? ` · ${t(advanced ? "model.effort.summary" : "model.simple.thinkingSummary", { level: effortLabel(selection.effort) })}` : ""}`
-    : selection.model;
+    : selectedModelLabel;
   const followLine = follows === true ? `\n${t("model.followsBot", { name: profile.name })}` : follows === false ? `\n${t("model.ownModel")}` : "";
   const attentionLine = !advanced && attention ? `\n${attention}` : "";
   const busyLine = bot.busy ? `\n${t(threadId ? "model.threadBusy" : "model.busy")}` : "";
@@ -635,7 +649,7 @@ export function ModelPicker({
           {active && showActiveAccount && (
             <span data-model-account className="text-ink-secondary">{active.displayName} · </span>
           )}
-          {modelLabel(active, selection.model)}
+          {selectedModelLabel}
           {active && modelProvider(active, selection.model) && (
             <span className="text-ink-secondary"> · {modelProvider(active, selection.model)}</span>
           )}
@@ -803,7 +817,7 @@ export function ModelPicker({
                 </div>
               ) : blocked ? (
                 <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-1">
-                  <EngineSetup instance={railInstance} intent={pane === "custom" ? "inject" : "cloud"} quiet={!advanced} />
+                  {DANI_FREE_INSTANCE_IDS[railInstance.instanceId] === true ? <DaniSetup /> : <EngineSetup instance={railInstance} intent={pane === "custom" ? "inject" : "cloud"} quiet={!advanced} />}
                   {railInstance.claudeAccount && needsSignIn(railInstance) && pane !== "custom" && (
                     <p className="mt-2 px-1.5 text-[12px] leading-4 text-ink-tertiary">
                       {railInstance.claudeAccount.signInShell === "powershell" && `${t("engines.account.powershell")} `}
@@ -978,7 +992,7 @@ export function ModelPicker({
           menu={simpleMenu}
           query={query}
           bot={profile}
-          botModel={{ label: modelName(botModelInstance, profile.modelSelection.model), title: botModelName }}
+          botModel={{ label: botModelLabel, title: botModelName }}
           thinking={thinking}
           idPrefix={menuId}
           onQuery={setQuery}
@@ -995,7 +1009,10 @@ export function ModelPicker({
             });
             if (opening) lookForLocalIn(instance);
           }}
-          onSetUp={openFull}
+          onSetUp={(instance, keyboard) => {
+            if (DANI_FREE_INSTANCE_IDS[instance.instanceId] === true) { close(false); setFreeSetup(true); }
+            else openFull(instance, keyboard);
+          }}
           onCheckAgain={(instance) => refreshModels(instance.instanceId)}
           onManage={openEngines}
           onResetVariant={resetVariant}
@@ -1015,6 +1032,7 @@ export function ModelPicker({
         trigger
       )}
       {menu && floating ? createPortal(menu, document.body) : menu}
+      {freeSetup && <ConnectAiDialog onClose={() => { setFreeSetup(false); triggerRef.current?.focus(); }} />}
       {!contained && changedBotModel && !open && ownModelThreads > 0 && (
         <div data-thread-models-notice role="status"
           className="menu-surface absolute right-0 top-full z-30 mt-1 flex w-max max-w-[min(300px,calc(100vw-2rem))] items-center gap-2 py-1.5 pl-3 pr-1.5 text-[13px] leading-[18px]">

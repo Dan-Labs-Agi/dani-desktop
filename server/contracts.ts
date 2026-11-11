@@ -464,6 +464,12 @@ export interface ModelCatalog {
     variants?: ModelVariantOption[];
     /** The organization of the signed-in account turned this model off: the engine would answer with another. */
     orgBlocked?: true;
+    tools?: boolean;
+    imageInput?: boolean;
+    mayTrainOnYourPrompts?: boolean;
+    privacyNotice?: string;
+    availability?: "available" | "preparing" | "unavailable";
+    unavailableReason?: string;
   }>;
 }
 

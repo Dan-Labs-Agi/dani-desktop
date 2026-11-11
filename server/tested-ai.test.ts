@@ -145,6 +145,35 @@ describe("testing an AI with one tiny message before a new bot's default trusts 
     rmSync(data, { recursive: true, force: true });
   });
 
+  it("does not run optional agents while Dani awaits activation", async () => {
+    instances.unshift({ ...ready("dani", "daniFree"), snapshot: { state: "unavailable", reason: "Set up Dani" } });
+    answers.dani = async () => "OK";
+    await boot();
+    expect(pick).toEqual({ instanceId: "", model: "" });
+    expect(sent("claude")).toBe(0);
+    expect(sent("grok")).toBe(0);
+    instances[0] = ready("dani", "daniFree");
+    refresh();
+    await settled();
+    expect(pick).toEqual({ instanceId: "dani", model: "dani-model" });
+    expect(sent("dani")).toBe(1);
+    expect(sent("claude")).toBe(0);
+    expect(sent("grok")).toBe(0);
+  });
+
+  it("permits an explicit optional-agent check without selecting it as the default", async () => {
+    instances.unshift({ ...ready("dani", "daniFree"), snapshot: { state: "unavailable", reason: "Set up Dani" } });
+    refresh();
+    const result = await tested.check({
+      ...engineFor("claude"),
+      snapshot: async () => instances.find(instance => instance.instanceId === "claude")!.snapshot,
+    });
+    await settled();
+    expect(result.ok).toBe(true);
+    expect(sent("claude")).toBe(1);
+    expect(pick).toEqual({ instanceId: "", model: "" });
+  });
+
   it("picks by ranking at once, tests the pick in the background, and keeps it when it answers", async () => {
     refresh();
     expect(pick).toEqual(on("claude"));

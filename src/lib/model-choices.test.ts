@@ -42,6 +42,16 @@ describe("OpenCode models typed by hand", () => {
   const onPickle: ModelSelection = { instanceId: "opencode", model: "opencode/big-pickle" };
   const added = (instances: InstanceInfo[]) => instances[0]!.models.options.slice(opencode.models.options.length);
 
+  it("never offers hand-typed unverified routes in the managed free client", () => {
+    const free = { ...opencode, instanceId: "dani-client" };
+    const selected = { instanceId: "dani-client", model: `typed::${typed}` };
+    expect(withTypedModels([free], selected, typed)).toEqual([free]);
+    const menu = simpleModelMenu({ instances: [free], listed: [free], selection: selected,
+      bot: { name: "Dani", selection: selected }, query: typed, expanded: new Set(), probing: new Set(), loading: false });
+    expect(menu.search).toBe(false);
+    expect(menu.current?.label).toBe("Unavailable free model");
+  });
+
   it("offers a provider/model id typed in the search box, saved as typed and labelled typed by hand", () => {
     expect(added(withTypedModels([opencode], onPickle, ` ${typed} `))).toEqual([{ id: `typed::${typed}`, label: `${typed} · typed by hand` }]);
     const menu = simpleModelMenu({ instances: [opencode], listed: withTypedModels([opencode], onPickle, typed), selection: onPickle,

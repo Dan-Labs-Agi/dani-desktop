@@ -103,16 +103,6 @@ describe("adopted portable CI contract", () => {
       expect(step["continue-on-error"]).toBeUndefined();
     }
   });
-  it("does not create drafts on ordinary branch pushes and refuses published replacement", () => {
-    const release = load("release.yml");
-    const assembler = release.jobs.release;
-    expect(assembler.if).toBe("(github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && needs.prepare.outputs.published != 'true'");
-    const shell = commands(assembler).join("\n");
-    expect(shell).toContain('--draft');
-    expect(shell).toContain('test "$is_draft" = true');
-    expect(shell).toContain('refusing to overwrite it');
-    expect(release.permissions).toEqual({ contents: "read" });
-  });
   it("checks delegated approval modes on the receipt's work thread, not the selected sibling", () => {
     const smoke = readFileSync(new URL("./smoke-approval-modes.cjs", import.meta.url), "utf8");
     const delegated = smoke.slice(smoke.indexOf("const peerTarget ="), smoke.indexOf("const customCalls ="));

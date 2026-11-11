@@ -94,6 +94,7 @@ interface RuntimeOptions<Config> {
   input: DriverCreateInput<Config>;
   driverKind: string;
   apiKey: string;
+  anonymous?: boolean;
   apiUrl: string;
   models: () => ModelCatalog;
   requestBody(model: string, messages: OpenAIChatMessage[], stream: boolean): Record<string, unknown>;
@@ -116,6 +117,7 @@ interface RuntimeOptions<Config> {
   noBodyError?: string;
   retryScale?: number;
   tools?: boolean;
+  modelTools?: (model: string) => boolean;
   computerUse?: boolean;
   /** A text-only model keeps the computer and browser tools but never receives a screenshot or attachment. */
   imageInput?: (model: string) => boolean;
@@ -253,7 +255,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
   const watchServer = (everyMs: number, stop: (reason: Error) => void) => {
     let misses = 0;
     const timer = setInterval(() => {
-      fetch(`${options.apiUrl}/models`, { headers: { authorization: `Bearer ${options.apiKey}` }, signal: AbortSignal.timeout(everyMs) })
+      fetch(`${options.apiUrl}/models`, { headers: options.anonymous ? {} : { authorization: `Bearer ${options.apiKey}` }, signal: AbortSignal.timeout(everyMs) })
         .then((response) => { misses = 0; void response.body?.cancel(); })
         .catch(() => {
           if (++misses === LIVENESS_MISSES) stop(new Error(`The model server at ${new URL(options.apiUrl).host} stopped answering, so the reply was stopped.`));
@@ -302,7 +304,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
       const response = await send(`${options.apiUrl}/${route === "responses" ? "responses" : "chat/completions"}`, {
         method: "POST",
         ...(messages.some(message => Array.isArray(message.content) && message.content.some(part => part.type === "image_url")) ? { redirect: "error" as const } : {}),
-        headers: { authorization: `Bearer ${options.apiKey}`, "content-type": "application/json" },
+        headers: { ...(!options.anonymous ? { authorization: `Bearer ${options.apiKey}` } : {}), "content-type": "application/json" },
         body: payload,
         signal: activeSignal,
       });
@@ -310,7 +312,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         const message = `${options.httpErrorLabel} HTTP ${status}${body ? `: ${httpErrorDetail(body)}` : ""}`;
         const refused = tools.length ? routeRefusal(route, status, body) : null;
         if (refused) return new ModelRouteRefused(refused, message);
-        if (rejectsKey(status, body)) noteKeyRejected(options.apiUrl, options.apiKey);
+        if (!options.anonymous && rejectsKey(status, body)) noteKeyRejected(options.apiUrl, options.apiKey);
         if (refusesRequestSize(status, body)) return new RequestTooLargeError(message, Buffer.byteLength(payload));
         if (rejectsToolsParameter(status, body)) return new UnsupportedChatToolsError(message);
         const refusal = refusedToolCall(status, body);
@@ -321,7 +323,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         return new Error(message);
       };
       if (!response.ok) throw failure(response.status, await response.text().catch(() => ""));
-      noteKeyAccepted(options.apiUrl, options.apiKey);
+      if (!options.anonymous) noteKeyAccepted(options.apiUrl, options.apiKey);
       if (route === "responses") {
         const reply = await readResponsesStream(response.body, { reasoning: Boolean(options.reasoning), onBytes: resetIdleTimer, onDelta: (text, kind) => onDelta?.(text, kind), fail: failure });
         activeSignal.throwIfAborted();
@@ -522,7 +524,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
   };
 
   const sendTurn = async (turn: SendTurnInput) => {
-    if (!options.apiKey) throw new Error(options.missingKeyError);
+    if (!options.anonymous && !options.apiKey) throw new Error(options.missingKeyError);
     if (active.has(turn.threadId)) throw new Error("a turn is already running on this thread");
     if (options.computerUse && (turn.images?.length || turn.integrations?.localComputer || turn.integrations?.browser)) assertImageTransport(options.apiUrl);
 
@@ -533,6 +535,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
     const retainImages = chatImageBudget();
     for (const message of messages) retainImages(message.content);
     const model = turn.model || options.models().default;
+    const toolsAllowed = options.tools !== false && (options.modelTools?.(model) ?? true);
     const secrets = [options.apiKey].filter((value): value is string => Boolean(value));
     for (const integration of Object.values(turn.integrations ?? {})) {
       const entries = object(integration);
@@ -610,11 +613,11 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         const parsed = parseToolScope(turn.toolScope);
         if (!parsed.ok) throw new Error(parsed.error);
         const scope = parsed.scope;
-        tools = await mountChatTools(options.tools === false ? undefined : turn.integrations, abort.signal, options.computerUse, scope, turn.mcpCallTimeoutMs,
+        tools = await mountChatTools(!toolsAllowed ? undefined : turn.integrations, abort.signal, options.computerUse, scope, turn.mcpCallTimeoutMs,
           toolSchemaProfileFor({ url: options.apiUrl, model }));
         noteToolBudget(turn.botId, tools.budget);
         for (const message of chatToolNotices(tools)) emit({ ...base(turn.threadId, turnId), type: "runtime.notice", message: safeText(message) });
-        const questionAllowed = options.tools !== false && allowsTool(scope, { kind: "native", name: ASK_USER_TOOL });
+        const questionAllowed = toolsAllowed && allowsTool(scope, { kind: "native", name: ASK_USER_TOOL });
         let optionalQuestionOnly = questionAllowed && tools.definitions.length === 0;
           // An MCP server squatting ask_user cannot shadow it (dispatch intercepts the name); skip its definition.
         if (questionAllowed && !tools.definitions.some((definition) => definition.function.name === ASK_USER_TOOL)) {
@@ -932,8 +935,8 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
     },
     ...(options.refreshModels ? { refreshModels: options.refreshModels } : {}),
     snapshot: async () => {
-      if (!options.apiKey) return { state: "unavailable", reason: options.unavailableReason };
-      if (keyRejected(options.apiUrl, options.apiKey)) return { state: "available", authenticated: false, reason: KEY_REJECTED_REASON, version: null };
+      if (!options.anonymous && !options.apiKey) return { state: "unavailable", reason: options.unavailableReason };
+      if (!options.anonymous && keyRejected(options.apiUrl, options.apiKey)) return { state: "available", authenticated: false, reason: KEY_REJECTED_REASON, version: null };
       return { state: "available", authenticated: true, version: null, ...(options.billing ? { billing: options.billing } : {}) };
     },
     adapter: {

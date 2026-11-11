@@ -248,13 +248,11 @@ describe("BotListItem", () => {
     expect(renderRow(bot())).not.toContain("Chief of Staff");
   });
 
-  it("keeps the title in an icons-only row's name and tooltip", () => {
+  it("names icon-only rows with the bot's role and chief status", () => {
     const icons = renderRow(bot({ chiefOfStaff: true, title: "  Developer " }), "icons");
     expect(icons).toContain('aria-label="Atlas · Developer · Chief of Staff"');
-    expect(icons).toContain('title="Atlas · Developer"');
     const untitled = renderRow(bot(), "icons");
     expect(untitled).toContain('aria-label="Atlas"');
-    expect(untitled).toContain('title="Atlas"');
   });
 
   const titleLine = /<div class="truncate text-\[11px\][^"]*">([^<]*)<\/div>/;
