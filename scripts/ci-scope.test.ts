@@ -116,7 +116,7 @@ describe("CI path scope", () => {
   });
 
   it.each([
-    ["server/index.ts"], ["shared/types.ts"], ["companion/src/index.ts"], ["enterprise/license.ts"], ["evals/runners/run-evals.ts"],
+    ["server/index.ts"], ["computeruse/service.ts"], ["shared/types.ts"], ["companion/src/index.ts"], ["enterprise/license.ts"], ["evals/runners/run-evals.ts"],
     ["skills/pdf/SKILL.md"], ["cloudflare/composio-broker/src/index.ts"], ["Dockerfile"], ["deploy/podman/run.sh"],
     ...SRC_OUTSIDE_RENDERER.map((file) => [file]),
   ])("runs every check that runs the server for %j", (file) => {
@@ -419,17 +419,15 @@ describe("the repository's import graph", () => {
 
   it("runs every test that reads the docs with the docs tests or in static", () => {
     const ci = parse(readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8"));
-    // Desktop runs the complete suite rather than wiring this historical
-    // selector into a static job. Both contracts must actually run docs tests.
     const inStatic = ci.jobs.static
       ? (ci.jobs.static.steps as { run?: string }[]).flatMap((step) => step.run?.startsWith("pnpm exec vitest run ") ? step.run.split(" ").slice(4) : [])
       : ["scripts/testing/verification-docs.test.ts"];
     if (!ci.jobs.static) {
-      const tests = ci.jobs.test.steps.find((step: { run?: string }) => step.run === "pnpm test");
+      const tests = ci.jobs.test.steps.find((step: { run?: string }) => step.run?.startsWith("pnpm exec vitest run --shard="));
       expect(tests).toBeDefined();
       expect(tests.if).toBeUndefined();
       expect(tests["continue-on-error"]).toBeUndefined();
-      expect(JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).scripts.test).toMatch(/^vitest run &&/);
+      expect(ci.jobs.test.strategy.matrix.include).toHaveLength(20);
       expect(readFileSync(join(ROOT, "vite.config.ts"), "utf8")).toContain('"scripts/**/*.test.ts"');
     }
     expect(inStatic).toContain("scripts/testing/verification-docs.test.ts");

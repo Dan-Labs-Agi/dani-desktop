@@ -30,15 +30,33 @@ jobs:
       - run: python3 docs/dani-sdd-kit/scripts/check_kit.py
 
   test:
-    name: typecheck + test (${{ matrix.os }})
+    name: vitest (${{ matrix.os }}, shard ${{ matrix.shard }}/${{ matrix.shards }})
     strategy:
       fail-fast: false
       matrix:
-        # The harness and pure desktop capabilities stay portable across all
-        # supported host platforms. POSIX-only process tests self-skip.
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        include:
+          - { os: ubuntu-latest, shard: 1, shards: 8, e2e: all }
+          - { os: ubuntu-latest, shard: 2, shards: 8, e2e: all }
+          - { os: ubuntu-latest, shard: 3, shards: 8, e2e: all }
+          - { os: ubuntu-latest, shard: 4, shards: 8, e2e: all }
+          - { os: ubuntu-latest, shard: 5, shards: 8, e2e: all }
+          - { os: ubuntu-latest, shard: 6, shards: 8, e2e: all }
+          - { os: ubuntu-latest, shard: 7, shards: 8, e2e: all }
+          - { os: ubuntu-latest, shard: 8, shards: 8, e2e: all }
+          - { os: windows-latest, shard: 1, shards: 8, e2e: host }
+          - { os: windows-latest, shard: 2, shards: 8, e2e: host }
+          - { os: windows-latest, shard: 3, shards: 8, e2e: host }
+          - { os: windows-latest, shard: 4, shards: 8, e2e: host }
+          - { os: windows-latest, shard: 5, shards: 8, e2e: host }
+          - { os: windows-latest, shard: 6, shards: 8, e2e: host }
+          - { os: windows-latest, shard: 7, shards: 8, e2e: host }
+          - { os: windows-latest, shard: 8, shards: 8, e2e: host }
+          - { os: macos-latest, shard: 1, shards: 4, e2e: host }
+          - { os: macos-latest, shard: 2, shards: 4, e2e: host }
+          - { os: macos-latest, shard: 3, shards: 4, e2e: host }
+          - { os: macos-latest, shard: 4, shards: 4, e2e: host }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -48,7 +66,7 @@ jobs:
       - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
       - run: pnpm install --frozen-lockfile
       - name: Validate locale catalogs
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.shard == 1
         run: pnpm i18n:check
       - name: Prepare Electron test runtime
         # Electron 43 lazily downloads its runtime on first import. Resolve it
@@ -56,21 +74,32 @@ jobs:
         # timeout.
         run: node --input-type=commonjs -e "require('electron')"
       - name: Run pnpm typecheck
+        if: matrix.shard == 1
         # The default V8 heap (~4 GB) is not enough for this monorepo's
         # typecheck on the standard runners; give it more of the runner's RAM.
         env:
           NODE_OPTIONS: --max-old-space-size=7168
         run: pnpm typecheck
       - name: Run tests
-        run: pnpm test
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/${{ matrix.shards }}
         env:
+          OMB_VITEST_E2E: ${{ matrix.e2e }}
           # Electron 43 currently exits with EXCEPTION_BREAKPOINT before ready
           # on GitHub's Windows runners even after Chromium's required sandbox
           # ACL is present. Production fails closed there through the tested
           # browser-platform gate; keep probing the upstream regression below.
           OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
+      - name: Run broker tests
+        if: matrix.shard == 1
+        run: pnpm broker:test
+      - name: Run Electron node tests
+        if: matrix.shard == 1
+        run: pnpm test:electron
+      - name: Run packaged server tests
+        if: matrix.shard == 1
+        run: pnpm test:packaged-server
       - name: Probe upstream Electron Windows sandbox regression
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && matrix.shard == 1
         continue-on-error: true
         env:
           # Keep the canary honest: no --no-sandbox or sandbox-disabling flags.
@@ -78,9 +107,10 @@ jobs:
           # then remove the production Windows gate in browser-platform.cjs.
           OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: "0"
         run: pnpm exec vitest run electron/browser-closed-shadow.electron.test.mjs
-      - run: pnpm check:electron
+      - if: matrix.shard == 1
+        run: pnpm check:electron
       - name: production UI build
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.shard == 1
         run: pnpm build
 
   control-plane:

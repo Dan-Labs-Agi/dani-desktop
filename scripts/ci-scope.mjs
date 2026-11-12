@@ -69,6 +69,7 @@ export const VITEST_SUBSETS = {
  * and one to another language runs every test that reads it (the locale tests). */
 export const SRC_OUTSIDE_RENDERER = [
   "src/components/app/app-frame-host.ts",
+  "src/lib/built-in-instances.ts",
   "src/lib/citations.ts",
   "src/lib/composer-attachments.ts",
 ];
@@ -83,7 +84,7 @@ const AREAS = [
   [/^scripts\/.+\.test\.[cm]?[jt]sx?$/, "script-tests"],
   [/^src\/locales\/(?:(?!en\.json$)[^/]+\.json|[^/]+\.test\.ts)$/, "locales"],
   [/^(?:src|public)\/|^[^/]+-preview\.html$/, "web"],
-  [/^(?:server|shared|enterprise|companion|evals|skills|deploy|cloudflare\/composio-broker)\/|^(?:Dockerfile|\.dockerignore|compose\.yaml)$/, "server"],
+  [/^(?:server|computeruse|shared|enterprise|companion|evals|skills|deploy|cloudflare\/composio-broker)\/|^(?:Dockerfile|\.dockerignore|compose\.yaml)$/, "server"],
   [/^electron\/(?:cua|cua-failure|cua-connection|capabilities|screen-status|shared-cua-connection|shared-computer-access|lent-screen-tools|lent-screen-failures|paced-typing)\.[cm]js$/, "windows-computer-control"],
   [/^(?:electron|build)\/|^(?:electron-builder\.yml|index\.html|rail\.html)$/, "desktop"],
   [/^cloudflare\/control-plane\//, "control-plane"],
