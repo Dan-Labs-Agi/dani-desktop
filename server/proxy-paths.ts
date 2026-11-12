@@ -10,9 +10,14 @@ export function resolveProxy(relative: string): string {
   return existsSync(source) ? source : join(SERVER_ROOT, `${relative}.js`);
 }
 
+export function resolveComputeruseService(): string {
+  const bundled = join(SERVER_ROOT, "computeruse", "service.js");
+  return existsSync(bundled) ? bundled : join(SERVER_ROOT, "..", "computeruse", "service.ts");
+}
+
 export const SPAWNED_PROXIES = {
   harnessMcp: resolveProxy("harness-mcp-proxy"),
-  localComputer: resolveProxy("local-computer-proxy"),
+  localComputer: resolveComputeruseService(),
   permission: resolveProxy("permission-proxy"),
   containerMcp: resolveProxy("container-mcp"),
   vpsContainerMcp: resolveProxy("vps-container-mcp"),

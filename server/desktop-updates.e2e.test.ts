@@ -200,7 +200,7 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
     const next = await dumpFor("Now check the dashboard again.");
     const computer = next.mcpConfig.mcpServers.computer;
     expect(computer.args.some((arg: string) => arg.includes("container-mcp"))).toBe(true);
-    expect(computer.args.some((arg: string) => arg.includes("local-computer-proxy"))).toBe(false);
+    expect(computer.args.some((arg: string) => arg.includes("computeruse") && arg.includes("service"))).toBe(false);
     expect(next.systemPrompt).not.toContain("is being updated");
     await finish(bot.id, nextThread);
   }, 60_000);
@@ -239,7 +239,7 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
     const sent = await dumpFor("Open the morning report on the desktop.");
     const computer = sent.mcpConfig.mcpServers.computer;
     expect(computer.args.some((arg: string) => arg.includes("container-mcp"))).toBe(true);
-    expect(computer.args.some((arg: string) => arg.includes("local-computer-proxy"))).toBe(false);
+    expect(computer.args.some((arg: string) => arg.includes("computeruse") && arg.includes("service"))).toBe(false);
     writeFileSync(finishFile, "finish");
   }, 60_000);
 

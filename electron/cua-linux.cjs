@@ -10,7 +10,6 @@ const DEFAULT_MAX_OUTPUT_BYTES = 512 * 1024;
 const GETENT_BINARY = "/usr/bin/getent";
 const GETENT_TIMEOUT_MS = 1_500;
 const GETENT_MAX_OUTPUT_BYTES = 256 * 1024;
-// Keep in sync with DRIVER_FILE_IDENTITY_KEYS in server/local-computer.ts, which revalidates what Electron publishes.
 const DRIVER_FILE_IDENTITY_KEYS = Object.freeze([
   "dev",
   "ino",

@@ -44,7 +44,6 @@ const ENTRY_POINTS = [
   // because tsc may emit its own copy under dist-server/server/.
   "proxy-paths.ts",
   "local-computer.ts",
-  "local-computer-proxy.ts",
   // the hook helper Claude Code runs at PostToolUse/PreCompact/SessionStart/Stop
   "hooks/omb-hook.ts",
   "container-mcp.ts",
@@ -76,6 +75,19 @@ await build({
   minifySyntax: true,
   lineLimit: 500,
   // Written after tsc, replacing its output for these entry points.
+  allowOverwrite: true,
+  logLevel: "info",
+  plugins: [yamlEsmPlugin, serverLocalePlugin],
+  banner: NODE_REQUIRE,
+});
+
+await build({
+  entryPoints: [join(root, "computeruse", "service.ts")],
+  bundle: true,
+  platform: "node",
+  target: "node20",
+  format: "esm",
+  outfile: join(root, "dist-server", "computeruse", "service.js"),
   allowOverwrite: true,
   logLevel: "info",
   plugins: [yamlEsmPlugin, serverLocalePlugin],

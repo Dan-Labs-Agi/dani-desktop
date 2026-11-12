@@ -13,6 +13,7 @@
     "server/drivers/pi-mcp-extension.ts"
   ],
   "include": [
-    "server"
+    "server",
+    "computeruse"
   ]
 }

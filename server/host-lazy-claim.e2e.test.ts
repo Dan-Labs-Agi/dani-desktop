@@ -151,7 +151,7 @@ describe("lazy host claim and pin on use (issue #1650)", () => {
     await busy(holder.id, task.threadId);
     const computer = mountedComputer(await dumpFor(holder.id));
     expect(computer.env.OMB_CUA_COMMAND).toBe("/fixture/cua-driver");
-    expect(computer.args.some((arg: string) => arg.includes("local-computer-proxy"))).toBe(true);
+    expect(computer.args.some((arg: string) => arg.includes("computeruse") && arg.includes("service"))).toBe(true);
     expect(savedTask(holder.id, task.threadId)).not.toHaveProperty("surface");
     const { bot: claimer } = await apiOk("POST", "/api/bots", { name: "Host Claim Bot" });
     const { task: claimTask } = await apiOk("POST", `/api/bots/${claimer.id}/tasks`, {});

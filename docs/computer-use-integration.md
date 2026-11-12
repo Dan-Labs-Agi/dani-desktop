@@ -150,7 +150,7 @@ one TCC identity, one binary to sign/notarize, and one behavior contract.
 
 [Saved steps](superpowers/specs/2026-10-27-saved-steps-design.md) repeats a
 bot's earlier run on this computer by re-issuing the driver's own recorded tool
-calls through the same gated bridge (`server/local-computer-proxy.ts`), each
+calls through the same gated bridge (`computeruse/service.ts`), each
 target looked up fresh by app, window title and accessibility label, never by
 pixel: it adds no input route, binary or permission identity beside cua-driver.
 It replays only at Full access where the person picked this computer as the

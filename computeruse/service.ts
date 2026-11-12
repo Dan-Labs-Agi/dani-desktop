@@ -1,8 +1,8 @@
 // The descriptor and turn token travel in environment variables, never argv or logs.
-import { runMcpBridge } from "./mcp-bridge.ts";
-import { augmentedPath } from "./env-path.ts";
-import { localComputerCallQuery, localComputerRelay, localComputerResultLine } from "./local-computer-guidance.ts";
-import { journalUrl } from "./saved-steps/journal-tap.ts";
+import { runMcpBridge } from "../server/mcp-bridge.ts";
+import { augmentedPath } from "../server/env-path.ts";
+import { localComputerCallQuery, localComputerRelay, localComputerResultLine } from "./guidance.ts";
+import { journalUrl } from "../server/saved-steps/journal-tap.ts";
 
 const {
   OMB_CUA_COMMAND: command,

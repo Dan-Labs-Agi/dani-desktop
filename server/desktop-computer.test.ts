@@ -35,7 +35,7 @@ describe("this computer, only for the desktop app's own server", () => {
       expect(desktop.unavailableReason(), platform).toBeNull();
     }
     expect(thisComputerNotReady(createDesktopComputer())).toBe(
-      "Only the DaniBot app on this computer can let a bot use it. Open the app here, or let the bot work in its own browser or on a cloud desktop instead.",
+      "Only the Dani Bot app on this computer can let a bot use it. Open the app here, or let the bot work in its own browser or on a cloud desktop instead.",
     );
   });
 
@@ -48,12 +48,12 @@ describe("this computer, only for the desktop app's own server", () => {
     expect(desktop.connection()).toBeNull();
     expect(desktop.unavailableReason()).toBe(reason);
     expect(thisComputerNotReady(desktop, "darwin")).toBe(
-      `DaniBot can't use this computer yet — ${reason}. Relaunch DaniBot after granting the missing macOS permission.`,
+      `Dani Bot can't use this computer yet — ${reason}. Relaunch Dani Bot after granting the missing macOS permission.`,
     );
     expect(desktop.receive({ type: DESKTOP_COMPUTER_GRANT, connection: null })).toBe(true);
     expect(desktop.connection()).toBeNull();
     expect(desktop.granted()).toBe(true);
-    expect(thisComputerNotReady(desktop)).toBe("DaniBot can't use this computer yet — make sure DaniBot has the permissions it asks for, then restart it");
+    expect(thisComputerNotReady(desktop)).toBe("Dani Bot can't use this computer yet — make sure Dani Bot has the permissions it asks for, then restart it");
   });
 
   it("decodes again on every use, so a Linux driver that stopped is no longer used", () => {
@@ -87,6 +87,7 @@ describe("this computer, only for the desktop app's own server", () => {
       }
     };
     walk(join(ROOT, "server"));
+    walk(join(ROOT, "computeruse"));
     const uses = (needle: string) => sources.filter((path) => readFileSync(path, "utf8").includes(needle))
       .map((path) => relative(ROOT, path).split(sep).join("/"));
     expect(uses("desktopComputer.receive(")).toEqual(["server/index.ts"]);
@@ -94,7 +95,7 @@ describe("this computer, only for the desktop app's own server", () => {
     const listener = index.slice(index.indexOf("utilityParentPort?.on(\"message\""), index.indexOf("const quickFallback"));
     expect(listener).toContain("desktopComputer.receive(message)");
     expect(index.split("desktopComputer.receive(").length - 1).toBe(1);
-    expect(uses("readCuaConnection(")).toEqual(["server/local-computer.ts"]);
-    expect(uses("cua-connection.json")).toEqual(["server/local-computer.ts"]);
+    expect(uses("readCuaConnection(")).toEqual(["computeruse/local-computer.ts"]);
+    expect(uses("cua-connection.json")).toEqual(["computeruse/local-computer.ts"]);
   });
 });

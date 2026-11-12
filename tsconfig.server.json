@@ -23,6 +23,7 @@
   },
   "include": [
     "server",
+    "computeruse",
     "companion",
     "enterprise",
     "connector"
