@@ -102,7 +102,7 @@ export const ChromeRow = forwardRef<HTMLInputElement, {
           title={yours && props.hint ? props.hint : t(handsBack ? "browser.control.handBack" : "browser.control.take")}
           disabled={!connected || pill === "elsewhere" || pill === "connecting" || pill === "taking" || pill === "waiting"}
           onClick={handsBack ? props.onHandBack : props.onTake}
-          className={`flex max-w-56 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] disabled:cursor-default ${handsBack ? "border-accent-border bg-accent/15 text-accent-text" : "border-hairline text-ink-secondary hover:bg-inset hover:text-ink"}`}
+          className={`flex max-w-56 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] disabled:cursor-default ${pill === "connecting" ? "invisible " : ""}${handsBack ? "border-accent-border bg-accent/15 text-accent-text" : "border-hairline text-ink-secondary hover:bg-inset hover:text-ink"}`}
           data-pill={pill}
         >
           {pill === "taking" || pill === "waiting" || pill === "connecting" ? <Loader2 size={12} className="shrink-0 animate-spin" aria-hidden="true" /> : <Hand size={12} className="shrink-0" aria-hidden="true" />}
@@ -146,7 +146,7 @@ export const ChromeRow = forwardRef<HTMLInputElement, {
             setDraft(shown);
             event.currentTarget.blur();
           }}
-          placeholder={connected ? "Search or enter address" : "Connecting…"}
+          placeholder={connected ? "Search or enter address" : ""}
           spellCheck={false}
           className="mx-1 min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1.5 text-center text-[12px] outline-none placeholder:text-ink-secondary focus:bg-inset focus:text-left"
         />

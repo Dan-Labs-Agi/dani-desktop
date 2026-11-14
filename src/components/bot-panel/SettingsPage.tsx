@@ -4,7 +4,7 @@ import { AppWindow, AudioLines, ChevronRight, FileText, ShieldCheck, Tag } from 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { CALL_MODES, effectiveCallMode, setCallMode, useCallMode, type CallMode } from "@/lib/call-mode";
-import { callCapabilityHelp } from "@/lib/call-capability";
+import { callCapabilityHelp, turnCallsAvailable } from "@/lib/call-capability";
 import { firstSentence } from "@/lib/soul";
 import { currentTaskBot, useStore, type Bot } from "@/state/store";
 import type { ApprovalMode } from "../../../shared/approval-mode";
@@ -65,7 +65,7 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
   };
 
   // As the call button: where this device cannot listen in turns, a call is always Live.
-  const turnsHere = !ready || capabilities.dictation.available;
+  const turnsHere = !ready || turnCallsAvailable(capabilities);
   const callMode = effectiveCallMode(storedCallMode, { turnsHere, canLive: true });
   const turnsHelp = turnsHere ? null : callCapabilityHelp(capabilities, Boolean(window.ogb?.speechStart));
   const callOptions: SegmentOption<CallMode>[] = CALL_MODES.map((entry) => ({

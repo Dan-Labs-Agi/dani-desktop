@@ -225,7 +225,7 @@ export function StreamSurface(props: {
 
   const notify = useCallback((notice: NoticeInput) => {
     const id = ++noticeId.current;
-    setNotices((current) => [...current.slice(-(NOTICE_LIMIT - 1)), { ...notice, id }]);
+    setNotices((current) => [...(notice.kind === "error" ? current.filter((shown) => shown.kind !== "error") : current).slice(-(NOTICE_LIMIT - 1)), { ...notice, id }]);
   }, []);
   const dismiss = (id: number) => setNotices((current) => current.filter((notice) => notice.id !== id));
 

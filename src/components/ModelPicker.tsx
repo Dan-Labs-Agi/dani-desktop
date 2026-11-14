@@ -653,7 +653,7 @@ export function ModelPicker({
           {active && showActiveAccount && (
             <span data-model-account className="text-ink-secondary">{active.displayName} · </span>
           )}
-          {selectedModelLabel}
+          {selectedModelLabel || t("model.choose")}
           {active && modelProvider(active, selection.model) && (
             <span className="text-ink-secondary"> · {modelProvider(active, selection.model)}</span>
           )}

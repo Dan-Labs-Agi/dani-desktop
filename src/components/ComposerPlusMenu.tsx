@@ -10,7 +10,7 @@ import {
 } from "@/lib/approval-mode-options";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { CALL_MODES, effectiveCallMode, useCallMode } from "@/lib/call-mode";
-import { callCapabilityHelp } from "@/lib/call-capability";
+import { callCapabilityHelp, turnCallsAvailable } from "@/lib/call-capability";
 import { requestCallStart } from "@/lib/call-start-request";
 import { useOnCall } from "@/lib/call";
 import { isLiveCallRunning, useLiveMedia } from "@/lib/live-call-media";
@@ -170,7 +170,7 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
   const storedMode = useCallMode();
   const onCall = useOnCall();
   const media = useLiveMedia();
-  const turnsHere = !ready || capabilities.dictation.available;
+  const turnsHere = !ready || turnCallsAvailable(capabilities);
   const callMode = effectiveCallMode(storedMode, { turnsHere, canLive: true });
   const turnsHelp = turnsHere ? null : callCapabilityHelp(capabilities, Boolean(window.ogb?.speechStart));
   const { state } = useStore();

@@ -113,7 +113,7 @@ describe("sidebar top row", () => {
     expect(spacer).toBeGreaterThan(slot);
     expect(switcher).toBeGreaterThan(spacer);
     expect(buttons).toBeGreaterThan(switcher);
-    expect(row.slice(buttons).match(/<button/g)).toHaveLength(2);
+    expect(html).toContain("data-sidebar-actions");
     const rowClasses = classesOf(row, "data-sidebar-top-row");
     expect(rowClasses).toEqual(expect.arrayContaining(["relative", "pl-4", "pr-2"]));
     expect(rowClasses).not.toContain("px-4");
@@ -127,7 +127,8 @@ describe("sidebar top row", () => {
     expect(row).toContain('<span class="min-w-0 truncate @max-[96px]/sidebar-top:hidden">Servers</span>');
     expect(row).toContain("focus-visible:outline-2");
     expect(html).toContain('title="New or share"');
-    expect(row).toContain('title="Active Threads"');
+    expect(row).not.toContain('title="Active Threads"');
+    expect(html.slice(html.indexOf("data-sidebar-actions"))).toContain('title="Active Threads"');
     expect(html.match(/Switch server:/g)).toHaveLength(1);
   });
 

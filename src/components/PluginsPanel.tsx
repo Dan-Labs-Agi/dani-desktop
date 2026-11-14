@@ -478,7 +478,8 @@ export function PluginsPanel() {
                 aria-pressed={filter === "connected"}
                 onClick={() => chooseFilter(filter === "connected" ? "all" : "connected")}
                 className={cn(
-                  "inline-flex h-8 items-center gap-2 rounded-full ps-1.5 pe-2 text-[13px] font-medium leading-5 transition-colors",
+                  "inline-flex h-8 items-center gap-1.5 rounded-full text-[13px] font-medium leading-5 transition-colors",
+                  connectedCards.length > 0 ? "ps-1.5 pe-2" : "ps-3 pe-2",
                   filter === "connected" ? "bg-raised text-ink" : "text-ink-secondary hover:bg-raised/60 hover:text-ink",
                 )}
               >
@@ -564,6 +565,7 @@ export function PluginsPanel() {
             {moreCategories.length > 0 && (
               <SidebarPopoverMenu
                 ariaLabel={t("apps.moreCategories")}
+                align="end"
                 items={moreCategories.map((name) => ({ key: name, label: appCategoryLabel(name), active: category === name, onSelect: () => pickCategory(name) }))}
                 renderTrigger={({ open }) => (
                   <span className={cn(pill, pillTone(filter === "all" && categoryInMore), open && !categoryInMore && "bg-raised-hover text-ink")}>
@@ -588,15 +590,14 @@ export function PluginsPanel() {
           {setupNotice && filter !== "mcp" && (
             <div
               className={cn(
-                "mb-3 rounded-xl px-4 py-3 text-[13px]",
+                "mb-3 flex items-center gap-3 rounded-xl px-4 py-2.5 text-[13px] max-sm:flex-col max-sm:items-start",
                 setupNotice.tone === "warning" ? "bg-warning/10 text-warning" : "bg-control/50 text-ink-secondary",
               )}
             >
-              {t(whopConnected ? "whop.otherAppsSetup" : setupNotice.key)}{" "}
+              <span className="min-w-0 flex-1">{t(whopConnected ? "whop.otherAppsSetup" : setupNotice.key)}</span>
               <button
                 className={cn(
-                  "font-medium underline underline-offset-2",
-                  setupNotice.tone === "info" && "text-ink",
+                  "ui-button ui-button-md shrink-0 whitespace-nowrap",
                   remoteClient && "hidden",
                 )}
                 onClick={() => { close(); dispatch(openKeySettings("composio")); }}
@@ -702,6 +703,11 @@ export function PluginsPanel() {
                         <div className="mt-1 text-[13px] text-ink-secondary">
                           {filter === "connected" ? connectedEmptyCopy.description : t("connectors.tryDifferentSearch")}
                         </div>
+                        {filter === "connected" && inventoryPhase === "ready" && (
+                          <button type="button" onClick={() => chooseFilter("all")} className="ui-button ui-button-md ui-button-primary mt-4">
+                            {t("connectors.tab.marketplace")}
+                          </button>
+                        )}
                         {filter === "connected" && inventoryPhase === "error" && (
                           <button
                             type="button"

@@ -15,6 +15,7 @@ import { cn } from "@/lib/cn";
 import { BotAvatar } from "./Avatar";
 import { CallTargetButton, type CallButtonPlacement } from "./CallView";
 import { useAdvancedMode } from "@/lib/interface-mode";
+import { turnCallsAvailable } from "@/lib/call-capability";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { isRoutineApproval, isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
 
@@ -28,7 +29,7 @@ type Phase = "listening" | "sending" | "working" | "speaking";
 export function GroupCallButton({ group, members, placement, fill, ink }: { group: Group; members: Bot[]; placement?: CallButtonPlacement; fill?: string; ink?: string }) {
   const { capabilities, ready } = useDesktopCapabilities();
   if (group.dm) return null;
-  if (ready && !capabilities.dictation.available) return null;
+  if (ready && !turnCallsAvailable(capabilities)) return null;
   return (
     <CallTargetButton
       placement={placement}

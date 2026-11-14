@@ -24,7 +24,7 @@ import { liveLineHeldElsewhere } from "./LiveCallBar";
 import { isRoutineApproval, isSkillApproval, pendingApprovals, spokenApprovalPrompt } from "./PendingApproval";
 import { callStarted } from "@/lib/product-events";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
-import { callCapabilityHelp, type CallCapabilityHelp } from "@/lib/call-capability";
+import { callCapabilityHelp, turnCallsAvailable, type CallCapabilityHelp } from "@/lib/call-capability";
 import { onCallStartRequest } from "@/lib/call-start-request";
 import { VoiceSetupDialog } from "./VoiceSetupDialog";
 import { openBotSettings } from "./bot-panel/panel-link";
@@ -110,7 +110,7 @@ export function CallTargetButton({
   const voiceReady =
     localVoice ||
     (configured && (requireExplicitVoices ? everyTargetHasVoice : Boolean(state.config?.tts?.ready || everyTargetHasVoice)));
-  const turnsHere = !capabilitiesReady || capabilities.dictation.available;
+  const turnsHere = !capabilitiesReady || turnCallsAvailable(capabilities);
   const mode = effectiveCallMode(useCallMode(), { turnsHere, canLive });
   const liveMode = canLive && mode === "live";
   const turnsReady = capabilitiesReady && supported && voiceReady;
@@ -302,7 +302,6 @@ export function CallTargetButton({
           className={cn(
               "grid place-content-center",
               "w-8 hover:bg-raised-hover text-ink-secondary hover:text-ink disabled:opacity-40 transition-colors",
-              !composer && "bg-control",
               "rounded-l-lg rounded-r-3xl active:rounded-3xl transition-[color,background,border-radius]",
               composer ? "h-8" : "h-9"
             )}

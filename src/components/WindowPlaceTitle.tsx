@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { t } from "@/lib/i18n";
+import { useAdvancedMode } from "@/lib/interface-mode";
 import { usePlaceLook } from "@/lib/place-look";
 import { useStore } from "@/state/store";
 import { PlaceMark } from "./PlacesRail";
@@ -35,7 +36,8 @@ export function WindowPlaceTitle() {
   const place = useWindowPlace();
   const look = usePlaceLook();
   const { state } = useStore();
-  if (!place) return <span aria-hidden="true" />;
+  const namedInSidebar = useAdvancedMode();
+  if (!place || namedInSidebar) return <span aria-hidden="true" />;
   const name = windowPlaceName(place, state.config?.team?.name);
   return <div data-window-place className="flex min-w-0 items-center justify-center gap-1.5 px-2 text-[12px] font-medium text-ink-secondary">
     <PlaceMark place={{ kind: place.local ? "computer" : place.role ? "team" : "cloud", name, color: look?.color ?? place.color ?? null }} size={16} />

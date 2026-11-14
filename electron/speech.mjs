@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "electron";
 import { createSpeechTranscript } from "./speech-transcript.mjs";
+import { WINDOWS_SPEECH_COMMAND, createJsonLines, windowsSpeechArgs, windowsSpeechScript } from "./speech-windows.mjs";
 
 import {
   buildSpeechHelper,
@@ -83,14 +84,18 @@ export function startSpeech(target, options = {}) {
   stopSpeech();
   running?.target.replaced();
   const sink = speechTarget(target);
-  if (process.platform !== "darwin") {
-    sink.end({ code: 2, reason: "unsupported-platform" });
-    return;
-  }
   const requested = Number(options?.endpointMs);
   const endpointMs = Number.isFinite(requested) && requested > 0
     ? Math.min(5_000, Math.max(250, Math.round(requested)))
     : 0;
+  if (process.platform === "win32") {
+    startWindowsSpeech(sink, endpointMs);
+    return;
+  }
+  if (process.platform !== "darwin") {
+    sink.end({ code: 2, reason: "unsupported-platform" });
+    return;
+  }
   const args = endpointMs ? ["--endpoint-ms", String(endpointMs)] : [];
   const release = [...new Set(Array.isArray(options?.finishOnRelease) ? options.finishOnRelease : [])]
     .filter((name) => RELEASE_MODIFIERS.includes(name));
@@ -200,6 +205,54 @@ export function startSpeech(target, options = {}) {
     } else {
       sink.end({ code: 1, reason: "helper-exited" });
     }
+  });
+  proc.on("error", () => {
+    cleanup();
+    if (child !== speechSession) return;
+    child = null;
+    sink.end({ code: 1, reason: "helper-start-failed" });
+  });
+}
+
+function startWindowsSpeech(sink, endpointMs) {
+  const sessionDir = mkdtempSync(path.join(app.getPath("temp"), "danibot-speech-"));
+  const stopPath = path.join(sessionDir, "stop");
+  const finishPath = path.join(sessionDir, "finish");
+  const script = windowsSpeechScript({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
+  let proc;
+  try {
+    proc = spawn(WINDOWS_SPEECH_COMMAND, windowsSpeechArgs({ script, stopPath, finishPath, endpointMs }), { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+  } catch {
+    rmSync(sessionDir, { recursive: true, force: true });
+    sink.end({ code: 1, reason: "helper-start-failed" });
+    return;
+  }
+  const speechSession = { proc, stopPath, finishPath, sessionDir, owner: sink.owner, target: sink };
+  child = speechSession;
+  const forgetWindow = sink.whenGone(() => stopSpeech(sink.owner));
+  let reportedError = null;
+  let completed = false;
+  const transcript = createSpeechTranscript();
+  proc.stdout.setEncoding("utf8");
+  proc.stdout.on("data", createJsonLines((parsed) => {
+    if (typeof parsed.error === "string") reportedError = parsed.error;
+    if (parsed.partial === false && typeof parsed.text === "string") completed = true;
+    if (child === speechSession) sink.transcript(transcript(parsed));
+  }));
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    forgetWindow();
+    rmSync(sessionDir, { recursive: true, force: true });
+  };
+  proc.on("close", (code) => {
+    cleanup();
+    if (child !== speechSession) return;
+    child = null;
+    if (reportedError) sink.end({ code: 1, reason: reportedError });
+    else if (completed && code === 0) sink.end({ code: 0, reason: "completed" });
+    else sink.end({ code: 1, reason: "helper-exited" });
   });
   proc.on("error", () => {
     cleanup();

@@ -174,6 +174,7 @@ export function TurnPresence({
     </span>
   ) : showWorking ? (
     <span id={statusId} className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 leading-none" data-turn-status>
+      <span aria-hidden="true" className="turn-dots"><i /><i /><i /></span>
       {now ? <span className="text-[13px] text-ink-secondary">{lead}</span> : <ShimmerPhrase text={lead} className="text-[13px]" />}
       {since !== null && (
         <>

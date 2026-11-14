@@ -94,8 +94,10 @@ const DESCRIPTION: Record<Place, "computer.dest.cloudDesc" | "computer.dest.vmDe
   cloud: "computer.dest.cloudDesc", vm: "computer.dest.vmDesc", local: "computer.dest.localDesc", browser: "computer.dest.browserDesc",
 };
 
-export function PlaceChip({ bot, task, live, disabled = false, onPin }: {
+export function PlaceChip({ bot, task, live, disabled = false, align = "right", onPin }: {
   bot: Bot;
+  /** Which edge of the chip its menu opens from. */
+  align?: "left" | "right";
   task?: Pick<Task, "surface"> | null;
   live: boolean;
   disabled?: boolean;
@@ -138,16 +140,16 @@ export function PlaceChip({ bot, task, live, disabled = false, onPin }: {
         data-testid="place-chip"
         onClick={() => setOpen((value) => !value)}
         className={cn(
-          "relative flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink",
-          pinned && "text-accent hover:text-accent",
-          (disabled || off) && "cursor-not-allowed opacity-45 hover:bg-transparent",
+          "relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-[13px] text-ink-secondary hover:text-ink aria-expanded:text-ink",
+          (disabled || off) && "cursor-not-allowed opacity-45 hover:text-ink-secondary",
         )}
       >
-        <PlaceIcon place={effective} size={16} className="shrink-0 opacity-80" aria-hidden="true" />
-        {showLive && <span className="absolute right-1.5 top-1.5 size-1.5 animate-pulse rounded-full bg-success" aria-label={t("place.live")} />}
+        <PlaceIcon place={effective} size={14} className="shrink-0" aria-hidden="true" />
+        <span className="whitespace-nowrap">{label}</span>
+        {showLive && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-success" aria-label={t("place.live")} />}
       </button>
       {motion.shown && (
-        <div role="menu" aria-label={t("place.chipTitle")} className={cn("absolute bottom-full right-0 z-40 mb-2 w-[300px] overflow-hidden", MENU_SHEET, motion.className)} {...motion.exitProps}>
+        <div role="menu" aria-label={t("place.chipTitle")} className={cn("absolute bottom-full z-40 mb-2 w-[300px] overflow-hidden", align === "left" ? "left-0" : "right-0", MENU_SHEET, motion.className)} {...motion.exitProps}>
           <div className={MENU_HEADING}>{t("place.chipTitle")}</div>
           <div className="flex flex-col gap-1">
             <button
