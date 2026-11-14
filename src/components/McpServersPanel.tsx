@@ -571,10 +571,10 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
         {servers === null ? (
           !error && <div className="flex items-center justify-center gap-2 py-24 text-[13px] text-ink-secondary"><Loader2 size={14} className="animate-spin" /> {t("mcp.loading")}</div>
         ) : visibleServers?.length === 0 && !editing ? (
-          <div className="mt-5 flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-hairline/60 text-center">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-raised text-ink-secondary"><ServerCog size={21} /></div>
+          <div data-mcp-empty className="mt-5 flex flex-col items-center rounded-2xl border border-dashed border-hairline/60 px-6 py-10 text-center">
+            <ServerCog size={22} className="text-ink-secondary" aria-hidden="true" />
             <div className="mt-3 text-[14px] font-medium text-ink">{t("mcp.empty.title")}</div>
-            <div className="mt-1 max-w-sm text-[13px] text-ink-secondary">{t("mcp.empty.desc")}</div>
+            <div className="mt-1 max-w-sm text-[13px] leading-[18px] text-ink-secondary">{t("mcp.empty.desc")}</div>
           </div>
         ) : (
           <div className="mt-5 space-y-3">
