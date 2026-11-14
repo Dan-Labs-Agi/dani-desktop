@@ -61,7 +61,7 @@ class ChatPreferences(
     }
 
     companion object {
-        const val NAME = "openmaus.chat-preferences"
+        const val NAME = "danibot.chat-preferences"
         const val FILE = "$NAME.xml"
         private const val ACTIVITY_DETAIL = "companion.prefs.activityDetail"
         private const val QUICK_REPLIES = "companion.prefs.quickReplies"

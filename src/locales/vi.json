@@ -3733,7 +3733,7 @@
   "computer.android.allowUsbDebugging": "Cho phép gỡ lỗi USB",
   "computer.android.step3b": "trên điện thoại. Bạn có thể chọn Luôn cho phép đối với máy tính đáng tin cậy này.",
   "computer.android.agentNote": "Tính năng điều khiển qua tác tử sử dụng cùng kết nối USB đã được ủy quyền này. Không cần ứng dụng đồng hành trên điện thoại, tài khoản, Tailscale hay ghép nối không dây.",
-  "computer.android.harnessNote": "Sau khi kết nối, hãy yêu cầu bất kỳ Maus tương thích nào mở một ứng dụng Android hoặc hoàn thành một nhiệm vụ trên điện thoại của bạn. Kỹ năng Phone Harness đi kèm sẽ tự động tải cho các yêu cầu liên quan đến điện thoại.",
+  "computer.android.harnessNote": "Sau khi kết nối, hãy yêu cầu bất kỳ bot tương thích nào mở một ứng dụng Android hoặc hoàn thành một nhiệm vụ trên điện thoại của bạn. Kỹ năng Phone Harness đi kèm sẽ tự động tải cho các yêu cầu liên quan đến điện thoại.",
   "computer.android.step2": "Bật Tùy chọn cho nhà phát triển bằng cách nhấn vào {buildNumber} bảy lần trong mục Giới thiệu về điện thoại, sau đó bật {usbDebugging}.",
   "connectors.card.popupBlocked": "Trình duyệt của bạn đã chặn trang kết nối. Hãy cho phép cửa sổ bật lên, rồi thử lại.",
   "connectors.card.connected": "Đã kết nối",

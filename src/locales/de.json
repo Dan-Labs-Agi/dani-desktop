@@ -882,7 +882,7 @@
   "computer.android.back": "Zurück",
   "computer.android.badState": "Das Handy ist {state}. Steck das USB-Kabel neu ein und lass USB-Debugging aktiviert.",
   "computer.android.buildNumber": "Build-Nummer",
-  "computer.android.harnessNote": "Sobald das Handy verbunden ist, bitte einen kompatiblen Maus, eine Android-App zu öffnen oder eine Aufgabe darauf zu erledigen. Der mitgelieferte Phone-Harness-Skill lädt bei Handy-Anfragen automatisch.",
+  "computer.android.harnessNote": "Sobald das Handy verbunden ist, bitte einen kompatiblen Bot, eine Android-App zu öffnen oder eine Aufgabe darauf zu erledigen. Der mitgelieferte Phone-Harness-Skill lädt bei Handy-Anfragen automatisch.",
   "computer.android.hint": "Klick zum Tippen, zieh oder nutz das Trackpad zum Scrollen, und tipp nach dem Auswählen eines Felds.",
   "computer.android.home": "Startseite",
   "computer.android.recent": "Zuletzt",

@@ -97,7 +97,7 @@ class PersistenceContractTest {
     @Test
     fun permissionPrefsFileNameMatchesWhatTheAppOpens() {
         // The rules above are only worth anything if they name the real file.
-        assertEquals("openmaus.permissions", PermissionPreferences.NAME)
+        assertEquals("danibot.permissions", PermissionPreferences.NAME)
         assertEquals(PermissionPreferences.NAME + ".xml", PermissionPreferences.FILE)
     }
 

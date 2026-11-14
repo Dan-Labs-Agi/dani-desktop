@@ -19,12 +19,12 @@ const spec: ServiceSpec = {
 describe("service units", () => {
   it("runs the same serve command, with strip-types only for a checkout", () => {
     expect(serviceCommand(spec)).toEqual(["/usr/bin/node", "/usr/lib/node_modules/danibot/cli.js", "serve", ...spec.serveArgs]);
-    expect(serviceCommand({ ...spec, script: "/srv/DaniBot/server/danibot.ts" })[1]).toBe("--experimental-strip-types");
+    expect(serviceCommand({ ...spec, script: "/srv/Dani Bot/server/danibot.ts" })[1]).toBe("--experimental-strip-types");
   });
 
   it("renders a systemd unit that restarts, runs as the user, and grants low ports only for --domain", () => {
     const unit = systemdUnit(spec);
-    expect(unit).toContain("Description=DaniBot (agentada)");
+    expect(unit).toContain("Description=Dani Bot (agentada)");
     expect(unit).toContain("User=dani");
     expect(unit).toContain("Environment=OMB_DATA_DIR=/home/dani/.danibot");
     expect(unit).toContain("ExecStart=/usr/bin/node /usr/lib/node_modules/danibot/cli.js serve --port 8799 --data-dir /home/dani/.danibot --domain dani.example.com --no-pair");
@@ -63,7 +63,7 @@ describe("service units", () => {
     const out = "/Users/dani/Library/Application Support/danibot-sentinel";
     const sentinel = { node: "/usr/bin/node", script: "/usr/lib/node_modules/danibot/cli.js", dataDir: "/Users/dani/.danibot", home: "/Users/dani", out };
     expect(sentinelCommand(sentinel)).toEqual(["/usr/bin/node", "/usr/lib/node_modules/danibot/cli.js", "sentinel", "--once", "--data-dir", "/Users/dani/.danibot", "--out", out]);
-    expect(sentinelCommand({ ...sentinel, script: "/srv/DaniBot/server/danibot.ts" })[1]).toBe("--experimental-strip-types");
+    expect(sentinelCommand({ ...sentinel, script: "/srv/Dani Bot/server/danibot.ts" })[1]).toBe("--experimental-strip-types");
     const plist = sentinelLaunchdPlist(sentinel);
     expect(plist).toContain("<string>com.danibot.sentinel</string>");
     expect(plist).toContain("<key>StartInterval</key>\n\t<integer>120</integer>");
@@ -95,18 +95,18 @@ describe("service units", () => {
   });
 
   it("finds the CLI the installed desktop app ships, and runs it as Node", () => {
-    const app = "/Applications/DaniBot.app/Contents";
-    const present = new Set([`${app}/MacOS/DaniBot`, `${app}/Resources/server/danibot.js`]);
-    expect(shippedSentinelCli("darwin", "/Users/dani", (path) => present.has(path))).toEqual({ node: `${app}/MacOS/DaniBot`, script: `${app}/Resources/server/danibot.js` });
-    const user = "/Users/dani/Applications/DaniBot.app/Contents";
+    const app = "/Applications/Dani Bot.app/Contents";
+    const present = new Set([`${app}/MacOS/Dani Bot`, `${app}/Resources/server/danibot.js`]);
+    expect(shippedSentinelCli("darwin", "/Users/dani", (path) => present.has(path))).toEqual({ node: `${app}/MacOS/Dani Bot`, script: `${app}/Resources/server/danibot.js` });
+    const user = "/Users/dani/Applications/Dani Bot.app/Contents";
     expect(shippedSentinelCli("darwin", "/Users/dani", (path) => path.startsWith(user))?.script).toBe(`${user}/Resources/server/danibot.js`);
-    expect(shippedSentinelCli("linux", "/home/dani", (path) => path.startsWith("/opt/DaniBot/"))).toEqual({ node: "/opt/DaniBot/danibot", script: "/opt/DaniBot/resources/server/danibot.js" });
+    expect(shippedSentinelCli("linux", "/home/dani", (path) => path.startsWith("/opt/Dani Bot/"))).toEqual({ node: "/opt/Dani Bot/danibot", script: "/opt/Dani Bot/resources/server/danibot.js" });
     // an app with its script missing, or one released before Sentinel, is no CLI for it
-    expect(shippedSentinelCli("darwin", "/Users/dani", (path) => path.endsWith("MacOS/DaniBot"))).toBeNull();
+    expect(shippedSentinelCli("darwin", "/Users/dani", (path) => path.endsWith("MacOS/Dani Bot"))).toBeNull();
     expect(shippedSentinelCli("darwin", "/Users/dani", (path) => present.has(path), () => false)).toBeNull();
     expect(shippedSentinelCli("win32", "C:\\Users\\dani", () => true)).toBeNull();
 
-    const spec = { node: `${app}/MacOS/DaniBot`, script: `${app}/Resources/server/danibot.js`, dataDir: "/Users/dani/.danibot", home: "/Users/dani", out: "/tmp/s", electronRunAsNode: true };
+    const spec = { node: `${app}/MacOS/Dani Bot`, script: `${app}/Resources/server/danibot.js`, dataDir: "/Users/dani/.danibot", home: "/Users/dani", out: "/tmp/s", electronRunAsNode: true };
     expect(sentinelLaunchdPlist(spec)).toContain("<key>ELECTRON_RUN_AS_NODE</key>\n\t\t<string>1</string>");
     expect(sentinelSystemdService(spec)).toContain("Environment=ELECTRON_RUN_AS_NODE=1");
     expect(sentinelLaunchdPlist({ ...spec, electronRunAsNode: false })).not.toContain("ELECTRON_RUN_AS_NODE");

@@ -80,7 +80,7 @@ struct PairingView: View {
             .fullScreenCover(isPresented: $showingScanner) {
                 PairingScannerSheet { payload in
                     guard let url = URL(string: payload), let invite = PairingInvite.parse(url) else {
-                        return "That isn't an Dani Bot pairing QR code."
+                        return "That isn't a Dani Bot pairing QR code."
                     }
                     accept(invite)
                     return nil

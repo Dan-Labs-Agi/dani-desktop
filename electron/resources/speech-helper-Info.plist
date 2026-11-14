@@ -11,14 +11,14 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>DaniBot Speech</string>
+    <string>Dani Bot Speech</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSBackgroundOnly</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>DaniBot listens while you dictate messages or talk to a bot.</string>
+    <string>Dani Bot listens while you dictate messages or talk to a bot.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>DaniBot converts your speech into text during dictation and calls.</string>
+    <string>Dani Bot converts your speech into text during dictation and calls.</string>
   </dict>
 </plist>

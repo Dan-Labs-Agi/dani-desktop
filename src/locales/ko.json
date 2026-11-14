@@ -5045,7 +5045,7 @@
   "computer.android.allowUsbDebugging": "USB 디버깅 허용",
   "computer.android.step3b": "을(를) 수락하세요. 신뢰하는 이 컴퓨터라면 항상 허용을 고를 수 있어요.",
   "computer.android.agentNote": "에이전트 제어도 이 승인된 USB 연결을 써요. 휴대폰 컴패니언 앱, 계정, Tailscale, 무선 페어링은 필요 없어요.",
-  "computer.android.harnessNote": "연결되면 호환되는 Maus에게 Android 앱을 열거나 휴대폰에서 작업을 마치라고 요청하세요. 휴대폰 요청에는 번들 Phone Harness 스킬이 자동으로 불러와져요.",
+  "computer.android.harnessNote": "연결되면 호환되는 봇에게 Android 앱을 열거나 휴대폰에서 작업을 마치라고 요청하세요. 휴대폰 요청에는 번들 Phone Harness 스킬이 자동으로 불러와져요.",
   "computer.android.step2": "휴대폰 정보에서 {buildNumber}를 일곱 번 눌러 개발자 옵션을 켠 뒤 {usbDebugging}을(를) 켜세요.",
   "connectors.card.popupBlocked": "브라우저가 연결 페이지를 차단했어요. 팝업을 허용한 뒤 다시 시도하세요.",
   "connectors.card.connected": "연결됨",

@@ -127,9 +127,9 @@ class LocalNotificationPoster(
         Build.VERSION.SDK_INT >= 33 && !canPost()
 
     companion object {
-        const val EXTRA_THREAD_ID = "openmaus.threadId"
-        const val EXTRA_BOT_ID = "openmaus.botId"
-        const val EXTRA_KIND = "openmaus.kind"
+        const val EXTRA_THREAD_ID = "danibot.threadId"
+        const val EXTRA_BOT_ID = "danibot.botId"
+        const val EXTRA_KIND = "danibot.kind"
 
         /** Permission string for the UI pass's launcher contract. */
         const val POST_NOTIFICATIONS_PERMISSION = Manifest.permission.POST_NOTIFICATIONS

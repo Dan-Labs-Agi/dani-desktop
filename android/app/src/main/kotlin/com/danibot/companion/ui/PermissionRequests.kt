@@ -2,7 +2,7 @@ package com.danibot.companion.ui
 
 /** Where the "we have asked" flag lives. Not a secret; not backed up either. */
 internal object PermissionPreferences {
-    const val NAME = "openmaus.permissions"
+    const val NAME = "danibot.permissions"
 
     /** The on-disk file, named here so the backup rules can be asserted against it. */
     const val FILE = "$NAME.xml"

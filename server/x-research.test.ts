@@ -404,7 +404,7 @@ describe("profile", () => {
 
 describe("errors", () => {
   it("maps HTTP statuses to plain sentences", () => {
-    // What the Admin's relay answers (openmaus-cloud server/cloud-services.ts).
+    // What the Admin's relay answers (danibot-cloud server/cloud-services.ts).
     expect(errorFor(401, { error: "invalid_api_key" })).toMatchObject({ code: "bad_key", message: X_MESSAGES.badKey });
     expect(errorFor(402, { error: "subscription_inactive" })).toMatchObject({ code: "no_credit", message: X_MESSAGES.noPlan });
     expect(errorFor(422, { error: "invalid_request" }).code).toBe("bad_input");

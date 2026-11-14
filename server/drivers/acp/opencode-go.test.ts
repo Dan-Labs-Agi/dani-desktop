@@ -19,7 +19,7 @@ import {
   openCodeOwnedDirectories,
   OpenCodeDriver,
   openCodeProviderKeysAllowed,
-  openMausOwnsWorkingFolder,
+  daniBotOwnsWorkingFolder,
   parseOpenCodeModelsOutput,
   preferredOpenCodeModel,
   resetOpenCodeModelCache,
@@ -985,11 +985,11 @@ describe("OpenCode access to folders Dani owns", () => {
   });
 
   it("switches off project config only in Dani's own working folders", () => {
-    expect(openMausOwnsWorkingFolder(join(TASK_WORKSPACES_DIR, "bot-7", "thread-1"))).toBe(true);
-    expect(openMausOwnsWorkingFolder(workspaceDir("bot-7"))).toBe(true);
-    expect(openMausOwnsWorkingFolder(TASK_WORKSPACES_DIR)).toBe(false);
-    expect(openMausOwnsWorkingFolder(join(tmpdir(), "project"))).toBe(false);
-    expect(openMausOwnsWorkingFolder(`${TASK_WORKSPACES_DIR}-elsewhere`)).toBe(false);
+    expect(daniBotOwnsWorkingFolder(join(TASK_WORKSPACES_DIR, "bot-7", "thread-1"))).toBe(true);
+    expect(daniBotOwnsWorkingFolder(workspaceDir("bot-7"))).toBe(true);
+    expect(daniBotOwnsWorkingFolder(TASK_WORKSPACES_DIR)).toBe(false);
+    expect(daniBotOwnsWorkingFolder(join(tmpdir(), "project"))).toBe(false);
+    expect(daniBotOwnsWorkingFolder(`${TASK_WORKSPACES_DIR}-elsewhere`)).toBe(false);
   });
 
   it("keeps the person's single folder rule ahead of Dani's folders", () => {

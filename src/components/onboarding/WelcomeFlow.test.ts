@@ -158,7 +158,7 @@ describe("the Chief step", () => {
     await finishesAtNext();
   });
 
-  it("is skipped where there is no DaniBot", async () => {
+  it("is skipped where there is no Dani Bot", async () => {
     f.state = { ...f.state, bots: [] };
     await finishesAtNext();
   });

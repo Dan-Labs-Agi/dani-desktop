@@ -4716,7 +4716,7 @@
   "computer.android.allowUsbDebugging": "USB デバッグを許可",
   "computer.android.step3b": "を承認してください。この信頼できるコンピューターに対しては「常に許可」を選べます。",
   "computer.android.agentNote": "エージェントによる操作も、この承認済みの USB 接続を使います。スマートフォン用のコンパニオンアプリ、アカウント、Tailscale、無線ペアリングは不要です。",
-  "computer.android.harnessNote": "接続したら、対応する Maus に Android アプリを開いてもらったり、スマートフォン上での作業を頼んだりできます。スマートフォン関連の依頼では、同梱の Phone Harness スキルが自動で読み込まれます。",
+  "computer.android.harnessNote": "接続したら、対応するボットに Android アプリを開いてもらったり、スマートフォン上での作業を頼んだりできます。スマートフォン関連の依頼では、同梱の Phone Harness スキルが自動で読み込まれます。",
   "computer.android.step2": "「端末情報」で{buildNumber}を 7 回タップして開発者向けオプションを有効にし、次に{usbDebugging}を有効にしてください。",
   "connectors.card.popupBlocked": "ブラウザーが接続ページをブロックしました。ポップアップを許可してからもう一度お試しください。",
   "connectors.card.connected": "接続済み",

@@ -38,7 +38,7 @@ object NotificationIntents {
      * that collide under 32-bit [String.hashCode].
      */
     fun contentIdentity(botId: String, threadId: String): String =
-        "openmaus://notification/${encode(botId)}/${encode(threadId)}"
+        "danibot://notification/${encode(botId)}/${encode(threadId)}"
 
     fun contentUri(botId: String, threadId: String): Uri =
         Uri.parse(contentIdentity(botId, threadId))

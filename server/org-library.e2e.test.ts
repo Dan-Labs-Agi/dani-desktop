@@ -55,7 +55,7 @@ it("shows the organization's shelf, adds a team once, and keeps its stamps off t
     const blobs = join(fixture.info.dataDir, "org-library", "blobs");
     mkdirSync(blobs, { recursive: true });
     for (const rel of [team, skills]) writeFileSync(join(blobs, `${rel.sha256}.json`), rel.bytes, { mode: 0o600 });
-    const catalog = JSON.stringify({ format: "openmaus.org-library", version: 1, libraryVersion: 1, organization: { id: ORG, name: "Customer Co" },
+    const catalog = JSON.stringify({ format: "danibot.org-library", version: 1, libraryVersion: 1, organization: { id: ORG, name: "Customer Co" },
       packages: [entry(TEAM_ID, team), entry(LIBRARY_ID, skills)] });
     const relayed = await call("POST", "/api/testing/org-library", {
       library: { adminOrigin: "https://admin.example.com", organizationId: ORG, organizationName: "Customer Co", digest: sha(catalog), catalog },

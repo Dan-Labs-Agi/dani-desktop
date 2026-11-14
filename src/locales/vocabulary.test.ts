@@ -9,11 +9,13 @@ import en from "./en.json";
 import { locales } from "./index";
 
 const RETIRED: ReadonlyArray<readonly [string, RegExp, string]> = [
-  ["OMB Cloud", /OMB Cloud/i, "DaniBot Cloud"],
-  ["DaniBot Cloud", /DaniBot Cloud/i, "DaniBot Cloud"],
-  ["DaniBot Pro", /DaniBot Pro\b/, "DaniBot Cloud"],
+  ["OMB Cloud", /OMB Cloud/i, "Cloud"],
+  ["MausBot Cloud", /MausBot Cloud|Dani ?Bot Cloud/i, "Cloud"],
+  ["MausBot Pro", /MausBot Pro\b|Dani ?Bot Pro\b/, "Cloud"],
   // \b before "_" fails, so environment names such as OMB_PUBLIC_IPV4 pass.
-  ["OMB", /\bOMB\b/, "DaniBot"],
+  ["OMB", /\bOMB\b/, "Dani Bot"],
+  // Identifiers such as DaniBot-${version} and X-DaniBot-Desktop-Owner keep the joined spelling.
+  ["MausBot", /\bMausBot\b|\bDaniBot\b(?![-_./])/, "Dani Bot"],
   ["Cloud box", /Cloud box/i, "cloud desktop"],
   ["Hosted desktop", /Hosted desktop/i, "cloud desktop"],
   ["Cloud VM", /Cloud VM/i, "cloud desktop"],
@@ -57,7 +59,7 @@ const isSource = (name: string) => /\.(?:ts|tsx|mjs|cjs|js)$/.test(name) && !/\.
 const ALLOWED: ReadonlyArray<{ file: string; snippet?: string; why: string }> = [
   { file: "shared/credential-request.ts", snippet: "when Boat is selected", why: "the card that asks for a person's own Boat key" },
   { file: "server/boat-create-idempotency.ts", snippet: "unnamed Boat", why: "own-key repair: boat.dev's own name for a machine" },
-  { file: "src/lib/boat-offer.ts", snippet: "DaniBot introduced me", why: "the email a person sends Boat to claim its credit" },
+  { file: "src/lib/boat-offer.ts", snippet: "Dani Bot introduced me", why: "the email a person sends Boat to claim its credit" },
   { file: "server/workspace-backup.ts", snippet: "OMB-WORKSPACE-1", why: "a backup file's format marker" },
   { file: "electron/company-backups.mjs", snippet: "OMB-WORKSPACE-1", why: "a backup file's format marker" },
 ];
@@ -103,7 +105,7 @@ const allows = (entry: (typeof ALLOWED)[number], finding: { file: string; text: 
   entry.file === finding.file && (entry.snippet === undefined || finding.text.includes(entry.snippet));
 
 describe("one name per thing", () => {
-  it("English copy uses DaniBot Cloud, the Cloud, Cloud desktop, This computer and Plan page", () => {
+  it("English copy uses Cloud, the Cloud, Cloud desktop, This computer and Plan page", () => {
     const offending = Object.entries(en as Record<string, string>)
       .filter(([key]) => !PENDING_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)) && !Object.hasOwn(EN_ALLOWED, key))
       // English keys are UI copy, so lower-case "boat" counts too.
@@ -111,13 +113,12 @@ describe("one name per thing", () => {
     expect(offending).toEqual([]);
   });
 
-  const productNames = RETIRED.filter(([, , use]) => use === "DaniBot Cloud");
-  it("translations never show OMB, T3 or an old name for DaniBot Cloud, keep its name as it is, and say Boat only where the English does", () => {
+  const productNames = RETIRED.filter(([word, , use]) => use === "Cloud" || word === "MausBot");
+  it("translations never show OMB, T3, an old app name or an old name for Cloud, and say Boat only where the English does", () => {
     const offending = Object.entries(locales).filter(([code]) => code !== "en").flatMap(([code, pack]) =>
       Object.entries(pack)
         .filter(([key]) => !PENDING_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)))
         .filter(([key, value]) => /\bOMB\b|\bT3\b/.test(value!) || productNames.some(([, pattern]) => pattern.test(value!))
-          || (/DaniBot Cloud/.test((en as Record<string, string>)[key]!) && !/DaniBot Cloud/.test(value!))
           || (/boat/i.test(value!) && !/\bboats?\b/i.test((en as Record<string, string>)[key]!)))
         .map(([key]) => `${code}: ${key}`));
     expect([...new Set(offending)]).toEqual([]);
@@ -136,8 +137,8 @@ describe("one name per thing", () => {
     expect(staleKeys).toEqual([]);
   });
 
-  it("the public docs name DaniBot Cloud and the Cloud as the app does", () => {
-    const names = new Set(["OMB Cloud", "DaniBot Cloud", "DaniBot Pro", "Connect to my Cloud", "your Cloud", "my Cloud"]);
+  it("the public docs name Cloud and the Cloud as the app does", () => {
+    const names = new Set(["OMB Cloud", "MausBot Cloud", "MausBot Pro", "Connect to my Cloud", "your Cloud", "my Cloud"]);
     const cloudNames = RETIRED.filter(([word]) => names.has(word));
     const pages = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
       const path = join(dir, name);
@@ -171,14 +172,14 @@ describe("one name per thing", () => {
 
   it("the check catches each retired word, and lets own-key Boat and env names through", () => {
     for (const bad of [
-      "Sign in to OMB Cloud", "Sign in to DaniBot Cloud", "Get DaniBot Pro", "DaniBot Pro plans",
+      "Sign in to OMB Cloud", "Sign in to Dani Bot Cloud", "Get DaniBot Pro", "DaniBot Pro plans", "Sign in to MausBot Cloud", "Restart DaniBot", "Ask any MausBot",
       "restart OMB", "Cloud box", "Hosted desktop", "Run it in its cloud VM", "Boat cloud runner",
       "Open your Cloud dashboard", "Connect to my Cloud", "Your Cloud is ready", "Let my Cloud use this Mac",
       "Local (this computer)", "Choose Cloud to wake", "Auto, Cloud or Browser", "including one from T3",
       "Auto uses this Boat", "New Boat computer",
     ]) expect(retiredIn(bad), bad).not.toEqual([]);
     for (const good of [
-      "Sign in to DaniBot Cloud", "Pro active · verified by DaniBot Cloud", "Restart Dani Bot", "locked by another Dani Bot process",
+      "Sign in to Cloud", "Pro active · verified by Cloud", "Restart Dani Bot", "DaniBot-0.1.140.dmg", "x-DaniBot-Desktop-Owner", "DaniBot/0.1.140", "locked by another Dani Bot process",
       "set OMB_PUBLIC_IPV4", "Open My Cloud", "Open the Cloud", "Choose Cloud desktop to wake", "Auto, Cloud desktop or Browser",
       "Included with your Cloud plan", "Add a Boat API key in Settings → API keys", "Connect Boat", "Check boat.dev",
       "Bots here can get their own cloud desktops from Boat, a paid service", "Cloud desktops by Boat",

@@ -99,11 +99,11 @@ describe("danibot service", () => {
 
   it("--sentinel prefers the installed app's own CLI over a checkout, which an update or Node upgrade would strand", () => {
     const sentinelOut = join(dir, "sentinel-state");
-    const app = "/Applications/DaniBot.app/Contents";
-    const checkout = { action: "install" as const, dataDir: join(dir, "data"), port: 8799, sentinel: true, sentinelOut, script: "/src/DaniBot/server/danibot.ts", node: "/home/dani/.nvm/versions/node/v24.0.0/bin/node", platform: "darwin" as const, home: "/Users/dani" };
+    const app = "/Applications/Dani Bot.app/Contents";
+    const checkout = { action: "install" as const, dataDir: join(dir, "data"), port: 8799, sentinel: true, sentinelOut, script: "/src/Dani Bot/server/danibot.ts", node: "/home/dani/.nvm/versions/node/v24.0.0/bin/node", platform: "darwin" as const, home: "/Users/dani" };
     expect(runServiceCommand({ ...checkout, exists: (path) => path.startsWith(app), hasSentinel: () => true }, io)).toBe(0);
     const plist = readFileSync(join(sentinelOut, "com.danibot.sentinel.plist"), "utf8");
-    expect(plist).toContain(`<string>${app}/MacOS/DaniBot</string>`);
+    expect(plist).toContain(`<string>${app}/MacOS/Dani Bot</string>`);
     expect(plist).toContain(`<string>${app}/Resources/server/danibot.js</string>`);
     expect(plist).toContain("<key>ELECTRON_RUN_AS_NODE</key>");
     expect(plist).not.toContain("danibot.ts");

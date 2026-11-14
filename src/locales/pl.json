@@ -4609,7 +4609,7 @@
   "computer.android.allowUsbDebugging": "Zezwól na debugowanie USB",
   "computer.android.step3b": "na telefonie. Możesz wybrać Zawsze zezwalaj dla tego zaufanego komputera.",
   "computer.android.agentNote": "Sterowanie agenta korzysta z tego samego autoryzowanego połączenia USB. Nie jest potrzebna aplikacja towarzysząca na telefonie, konto, Tailscale ani parowanie bezprzewodowe.",
-  "computer.android.harnessNote": "Po połączeniu dowolny zgodny Maus może otworzyć aplikację Androida lub wykonać zadanie na twoim telefonie. Dołączona umiejętność Phone Harness ładuje się automatycznie dla żądań dotyczących telefonu.",
+  "computer.android.harnessNote": "Po połączeniu dowolny zgodny bot może otworzyć aplikację Androida lub wykonać zadanie na twoim telefonie. Dołączona umiejętność Phone Harness ładuje się automatycznie dla żądań dotyczących telefonu.",
   "computer.android.step2": "Włącz opcje programisty, stukając siedem razy {buildNumber} w sekcji Informacje o telefonie, a następnie włącz {usbDebugging}.",
   "connectors.card.popupBlocked": "Przeglądarka zablokowała stronę połączenia. Zezwól na wyskakujące okna, a następnie spróbuj ponownie.",
   "connectors.card.connected": "Połączono",

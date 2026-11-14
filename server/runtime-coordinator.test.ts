@@ -1390,7 +1390,7 @@ describe("RuntimeCoordinator: outward restart policy, answerNode, continuation o
       const asked: string[] = [];
       after.host.outward = node => { asked.push(node.id); return node.id === "gen-1" ? ["GMAIL_SEND_EMAIL", "git push"] : []; };
       expect(after.coordinator.node("gen-1")).toMatchObject({ status: "failed", outcome: "interrupted", restarts: 0, executions: 1,
-        outcomeDetail: "Interrupted by an DaniBot restart after it already sent an email (GMAIL_SEND_EMAIL), pushed (git push); not resumed, so nothing is done twice." });
+        outcomeDetail: "Interrupted by a Dani Bot restart after it already sent an email (GMAIL_SEND_EMAIL), pushed (git push); not resumed, so nothing is done twice." });
       expect(asked).toEqual(["gen-1"]);
       expect("restart" in after.coordinator.node("gen-1")!).toBe(false);
       expect(after.host.reports).toEqual([{ child: expect.objectContaining({ id: "gen-1", status: "failed", outcome: "interrupted" }) }]);
@@ -1409,7 +1409,7 @@ describe("RuntimeCoordinator: outward restart policy, answerNode, continuation o
       const last = world(undefined, {}, dir);
       last.host.outward = n => n.id === node.id ? ["SLACK_SEND_MESSAGE"] : [];
       expect(last.coordinator.node(node.id)).toMatchObject({ status: "failed", outcome: "interrupted", restarts: 0, reported: true,
-        outcomeDetail: "Interrupted by an DaniBot restart after it already sent a message (SLACK_SEND_MESSAGE); not resumed, so nothing is done twice." });
+        outcomeDetail: "Interrupted by a Dani Bot restart after it already sent a message (SLACK_SEND_MESSAGE); not resumed, so nothing is done twice." });
       expect(last.host.reports.map(r => [r.child.id, r.parent?.id])).toEqual([[node.id, "gen-2"]]);
       expect(last.coordinator.node("gen-2")).toMatchObject({ status: "waiting", restart: "teammates" });
       last.coordinator.tick();
@@ -1417,7 +1417,7 @@ describe("RuntimeCoordinator: outward restart policy, answerNode, continuation o
       expect(resume.node.id).toBe("gen-2");
       expect(resume.composed.turn).toBe("resume");
       expect(resume.composed.restartNote).toBe("A restart cut these teammates' turns: builder (cut after an outward action, not resumed: see its result). Check their results as usual.\n");
-      expect(resume.text).toContain(`[Dani Bot report from @builder on assignment ${node.id}: failed (interrupted): Interrupted by an DaniBot restart after it already sent a message (SLACK_SEND_MESSAGE)`);
+      expect(resume.text).toContain(`[Dani Bot report from @builder on assignment ${node.id}: failed (interrupted): Interrupted by a Dani Bot restart after it already sent a message (SLACK_SEND_MESSAGE)`);
       await flush();
       expect(last.coordinator.node("gen-2")?.status).toBe("completed");
       expect(last.host.runs).toHaveLength(1);

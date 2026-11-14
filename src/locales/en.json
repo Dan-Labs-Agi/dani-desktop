@@ -5318,7 +5318,7 @@
   "computer.android.allowUsbDebugging": "Allow USB debugging",
   "computer.android.step3b": "on the phone. You can choose Always allow for this trusted computer.",
   "computer.android.agentNote": "Agent control uses this same authorized USB connection. No phone companion app, account, Tailscale, or wireless pairing is needed.",
-  "computer.android.harnessNote": "Once connected, ask any compatible Maus to open an Android app or complete a task on your phone. The bundled Phone Harness skill loads automatically for phone requests.",
+  "computer.android.harnessNote": "Once connected, ask any compatible bot to open an Android app or complete a task on your phone. The bundled Phone Harness skill loads automatically for phone requests.",
   "computer.android.step2": "Enable Developer options by tapping {buildNumber} seven times in About phone, then turn on {usbDebugging}.",
   "connectors.card.popupBlocked": "Your browser blocked the connection page. Allow pop-ups, then try again.",
   "connectors.card.connected": "Connected",

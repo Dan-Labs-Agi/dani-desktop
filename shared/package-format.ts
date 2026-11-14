@@ -1,4 +1,4 @@
-// The Dani Bot package file ("openmaus.package"), v1 or v2; every reader
+// The Dani Bot package file ("danibot.package"), v1 or v2; every reader
 // returns v2. The single validation gate for the server, the renderer and the
 // Admin upload, so it imports only zod, yaml, croner and pure shared modules
 // (no Buffer, no node:*). The schema has no field for chat history, secrets,
@@ -13,7 +13,7 @@ import { normalizeCronSchedule } from "./routine-schedule.ts";
 import { MAUS_COLOR_NAMES } from "./wire.ts";
 import { isSkillName, parseSkillMd, scanSkillText, SKILL_FILE_MAX_BYTES } from "./skill-md.ts";
 
-export const PACKAGE_FORMAT = "openmaus.package";
+export const PACKAGE_FORMAT = "danibot.package";
 /** The newest version this module reads and writes. */
 export const PACKAGE_VERSION = 2;
 /** Canonical UTF-8 bytes of the whole document. */

@@ -16,7 +16,7 @@ describe("the server's bundle of the language packs", () => {
     const bundled = await build({ entryPoints: [SERVER_LINES], bundle: true, write: false, platform: "node", format: "esm", plugins: [serverLocalePlugin], logLevel: "silent" });
     const code = bundled.outputFiles[0]!.text;
     expect(code).toContain("An den Berichtsserver gesendet");
-    expect(code).toContain("Sent to the DaniBot team");
+    expect(code).toContain("Sent to the report server");
     expect(code).not.toContain("notice.openFailed");
     expect(code.length).toBeLessThan(1_000_000);
   });

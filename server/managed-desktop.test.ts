@@ -248,7 +248,7 @@ it("runs native Codex with Company Responses routing, isolated home and no OAuth
     expect(spawned.env.OPENAI_API_KEY).toBeUndefined();
     expect(spawned.argv).toEqual(expect.arrayContaining(managedCodexArgs(config.managed!)));
     expect(JSON.stringify(spawned.argv)).not.toContain(value.token);
-    expect(spawned.calls.find((call: { method: string }) => call.method === "thread/start").params).toMatchObject({ model: "gpt-fixture", modelProvider: "openmaus_company" });
+    expect(spawned.calls.find((call: { method: string }) => call.method === "thread/start").params).toMatchObject({ model: "gpt-fixture", modelProvider: "danibot_company" });
     await expect(native.adapter.sendTurn({ threadId: "blocked", text: "No fallback", model: "gpt-personal" })).rejects.toThrow("personal billing");
   } finally { await native?.dispose(); }
 });

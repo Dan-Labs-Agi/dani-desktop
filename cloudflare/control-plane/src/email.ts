@@ -15,10 +15,10 @@ export interface OTPEmailInput {
 }
 
 const SUBJECTS = {
-  "sign-in": "Your DaniBot sign-in code",
-  "email-verification": "Verify your DaniBot email",
-  "forget-password": "Reset your DaniBot password",
-  "change-email": "Confirm your DaniBot email change",
+  "sign-in": "Your Dani Bot sign-in code",
+  "email-verification": "Verify your Dani Bot email",
+  "forget-password": "Reset your Dani Bot password",
+  "change-email": "Confirm your Dani Bot email change",
 } as const satisfies Record<OTPEmailInput["type"], string>;
 
 export function buildOTPEmail(from: string, input: OTPEmailInput) {

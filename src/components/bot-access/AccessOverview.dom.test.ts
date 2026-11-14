@@ -78,7 +78,7 @@ afterEach(() => {
   setTeamPeople(null);
 });
 
-it("lists each team bot once with its owner and a plain summary, leaving out each person's own DaniBot", async () => {
+it("lists each team bot once with its owner and a plain summary, leaving out each person's own Dani Bot", async () => {
   await overview();
   expect(botRows().map((row) => row.dataset.accessRow)).toEqual(["helpdesk", "payroll"]);
   expect(document.querySelector('[data-access-row="payroll"]')!.textContent).toContain("Owner: Cara");

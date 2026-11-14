@@ -18,7 +18,7 @@ result picked by a marker in its prompt (`FAKE_CLAUDE_MARKER_REPLIES`).
 
 Expected:
 
-- DaniBot, hidden from the sidebar for the whole scenario, has the one default
+- Dani Bot, hidden from the sidebar for the whole scenario, has the one default
   routine, "Keep an eye on my day", with checks, `read-and-draft` and
   `deliver: brief`.
 - The first open of the day, with nothing for the person yet, posts no brief,
@@ -30,7 +30,7 @@ Expected:
   defused. It runs at `--permission-mode default`, and its system prompt has no
   recent work. Only Gmail and Calendar reads reach the service, and none names
   an account.
-- The 10-minute reminder, the prep card and the brief rows appear in DaniBot's
+- The 10-minute reminder, the prep card and the brief rows appear in Dani Bot's
   chat, and the brief's notification names that chat. The brief is edited in
   place, not posted twice.
 - The same mail again is nothing new: there is no second turn.
@@ -44,10 +44,10 @@ Expected:
   draft to a stranger, draft twice and read. Only one reply draft to the
   thread's sender and the read reach the service. No card is shown, and the
   refusals are in the decision log. The run mounts only `agents`, `composio`
-  and DaniBot's answerer, and Gmail's answer reaches it as records. A later
+  and Dani Bot's answerer, and Gmail's answer reaches it as records. A later
   ordinary turn's conversation search does not find the run.
 
-## DaniBot as the owner
+## Dani Bot as the owner
 
 ```sh
 pnpm exec vitest run server/host/proactive-danibot.test.ts
@@ -57,27 +57,27 @@ Each step starts the store, the routines and the proactive side from the files
 on disk, as a restart does, with a stand-in for connected apps and no model.
 Expected:
 
-- A new install's DaniBot is its Chief and gets the one watch. On an install
-  where DaniBot came after the Chief, the watch is made on DaniBot.
-- An existing install's watch moves from the Chief to DaniBot once: same id,
+- A new install's Dani Bot is its Chief and gets the one watch. On an install
+  where Dani Bot came after the Chief, the watch is made on Dani Bot.
+- An existing install's watch moves from the Chief to Dani Bot once: same id,
   paused if it was paused, the edited instructions, the checks' state file
-  unchanged, the day's run count kept. The brief's home becomes DaniBot's chat,
+  unchanged, the day's run count kept. The brief's home becomes Dani Bot's chat,
   its intro shows again, and the Chief keeps its past card. Starting again
   changes nothing, and a routine the person puts back on the Chief stays there.
   A `watch.json` from before the handover still hands over once.
 - A restart after the routine moved but before the brief and `watch.json`
   followed finishes the handover with no second watch.
-- With a watch already on DaniBot, the Chief's is kept and DaniBot's own is
+- With a watch already on Dani Bot, the Chief's is kept and Dani Bot's own is
   paused; a paused watch stays paused and nothing else is left on. A queued run
   holds the handover until it ends. A frozen computer hands nothing over.
-- DaniBot hidden from the sidebar gets the brief card, its notification, the
+- Dani Bot hidden from the sidebar gets the brief card, its notification, the
   first-open answer and the add-a-key card; today's earlier card stays in the
   Chief's chat.
 - On a Team Cloud there is no watch and nothing is handed over, and a member's
-  DaniBot is never the proactive bot, so its briefing routine reads nothing.
-- A move to My Cloud leaves an untouched DaniBot behind while its watch is
-  exactly as the server made it, and carries DaniBot with the watch once the
-  person changed it, even when nobody opened DaniBot. A send that carries no
+  Dani Bot is never the proactive bot, so its briefing routine reads nothing.
+- A move to My Cloud leaves an untouched Dani Bot behind while its watch is
+  exactly as the server made it, and carries Dani Bot with the watch once the
+  person changed it, even when nobody opened Dani Bot. A send that carries no
   routines is unchanged. On My Cloud the arrived watch is the only one on, and
   My Cloud's own is paused.
 
@@ -109,7 +109,7 @@ cap, busy bots, and Run now. The others:
 2. Serve the renderer against it:
    `OMB_PORT=<fixture port> pnpm exec vite --port 19872 --strictPort`.
 3. Open `http://127.0.0.1:19872/` in a headless Chromium. Dismiss the welcome
-   tour, then open DaniBot's chat and Automations. In the chat, the cards are
+   tour, then open Dani Bot's chat and Automations. In the chat, the cards are
    `[data-widget]` elements.
 
 Not verified this way: a real Google account. The Composio slugs and answer

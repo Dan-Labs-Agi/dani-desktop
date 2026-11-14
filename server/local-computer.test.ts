@@ -145,7 +145,7 @@ afterEach(() => {
 
 describe("local computer descriptor", () => {
   it("reports an unavailable reason without making that record mountable", () => {
-    const reason = "embedded host failed: Screen Recording required; grant access in System Settings and restart DaniBot";
+    const reason = "embedded host failed: Screen Recording required; grant access in System Settings and restart Dani Bot";
     const record = { mode: "unavailable", reason };
     expect(decodeCuaConnection(record, { platform: "darwin" })).toBeNull();
     expect(cuaUnavailableReason(record, "darwin")).toBe(reason);

@@ -1,6 +1,6 @@
 # Self-host the full stack with rootless Podman
 
-Run the DaniBot server, Caddy, and per-bot Linux desktops with one Podman
+Run the Dani Bot server, Caddy, and per-bot Linux desktops with one Podman
 engine. Docker Engine, Docker Desktop, and Docker Compose are not required;
 `podman-compose` provides the Compose commands. The existing
 [`deploy/docker-compose.yml`](../docker-compose.yml) remains an independent option.

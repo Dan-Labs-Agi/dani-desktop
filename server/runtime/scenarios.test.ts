@@ -1813,7 +1813,7 @@ describe("§5 outward / §2 loop guard", () => {
     expect(ended).toMatchObject({ status: "failed", outcome: "interrupted", restarts: 0, executions: 1 });
     expect(ended.restart).toBeUndefined();
     expect(ended.outcomeDetail).toBe(`${INTERRUPTED_OUTWARD} sent an email (GMAIL_SEND_EMAIL), pushed (git push); not resumed, so nothing is done twice.`);
-    expect(ended.outcomeDetail!.startsWith("Interrupted by an DaniBot restart after it already")).toBe(true);
+    expect(ended.outcomeDetail!.startsWith("Interrupted by a Dani Bot restart after it already")).toBe(true);
     expect(ended.result).toBe(ended.outcomeDetail);
     expect(kinds(w, root.id)).toEqual(["enqueued", "started", "restart_reconciled", "settled", "reported"]);
     expect(w.store.events(root.id).map((e) => e.detail)).toEqual(["queued: root", "running: turn 1 (host), level auto", "failed: outward action done",

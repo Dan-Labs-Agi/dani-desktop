@@ -4496,7 +4496,7 @@
   "computer.android.allowUsbDebugging": "Permitir depuração USB",
   "computer.android.step3b": "no celular. Você pode escolher Sempre permitir para este computador confiável.",
   "computer.android.agentNote": "O controle pelo agente usa esta mesma conexão USB autorizada. Não é preciso app complementar no celular, conta, Tailscale nem pareamento sem fio.",
-  "computer.android.harnessNote": "Depois de conectado, peça a qualquer Maus compatível para abrir um app Android ou concluir uma tarefa no seu celular. A skill Phone Harness incluída carrega sozinha nos pedidos de celular.",
+  "computer.android.harnessNote": "Depois de conectado, peça a qualquer bot compatível para abrir um app Android ou concluir uma tarefa no seu celular. A skill Phone Harness incluída carrega sozinha nos pedidos de celular.",
   "computer.android.step2": "Ative as opções do desenvolvedor tocando sete vezes em {buildNumber}, em Sobre o telefone, depois ative {usbDebugging}.",
   "connectors.card.popupBlocked": "Seu navegador bloqueou a página de conexão. Permita pop-ups e tente de novo.",
   "connectors.card.connected": "Conectado",

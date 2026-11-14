@@ -5195,7 +5195,7 @@
   "computer.android.allowUsbDebugging": "允许 USB 调试",
   "computer.android.step3b": "。你可以为这台受信任的电脑选择「始终允许」。",
   "computer.android.agentNote": "智能体控制使用的正是这条已授权的 USB 连接。无需手机配套应用、账户、Tailscale 或无线配对。",
-  "computer.android.harnessNote": "连接后，可以让任何兼容的 Maus 打开 Android 应用或在手机上完成任务。处理手机相关请求时，内置的 Phone Harness 技能会自动加载。",
+  "computer.android.harnessNote": "连接后，可以让任何兼容的机器人打开 Android 应用或在手机上完成任务。处理手机相关请求时，内置的 Phone Harness 技能会自动加载。",
   "computer.android.step2": "在「关于手机」中连续点击 {buildNumber} 七次以启用开发者选项，然后开启 {usbDebugging}。",
   "connectors.card.popupBlocked": "浏览器拦截了连接页面。请允许弹出窗口后重试。",
   "connectors.card.connected": "已连接",

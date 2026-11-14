@@ -43,7 +43,7 @@ describe("this computer, only for the desktop app's own server", () => {
     const desktop = createDesktopComputer({ platform: "darwin" });
     expect(desktop.receive({ type: DESKTOP_COMPUTER_GRANT, connection: READY })).toBe(true);
     expect(desktop.connection()).toEqual({ command: "/fixture/cua-driver", args: ["mcp"], env: {}, platform: "darwin", scope: "local-computer" });
-    const reason = "embedded host failed: Screen Recording required; grant access in System Settings and restart DaniBot";
+    const reason = "embedded host failed: Screen Recording required; grant access in System Settings and restart Dani Bot";
     expect(desktop.receive({ type: DESKTOP_COMPUTER_GRANT, connection: { mode: "unavailable", reason } })).toBe(true);
     expect(desktop.connection()).toBeNull();
     expect(desktop.unavailableReason()).toBe(reason);

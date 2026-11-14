@@ -46,7 +46,7 @@ export function DaniBotCustomize({ preview, name, nameRef, image, onName, onPatc
           ref={nameRef}
           value={name}
           maxLength={BOT_PROFILE_LIMITS.name}
-          placeholder="DaniBot"
+          placeholder="Dani Bot"
           data-danibot-welcome-name=""
           onChange={(event) => onName(event.target.value)}
           className="mt-1 w-full rounded-lg border border-hairline/40 bg-inset px-3 py-2 text-[14px] text-ink focus:outline-none"
@@ -114,7 +114,7 @@ export function DaniBotCustomize({ preview, name, nameRef, image, onName, onPatc
         {image.error && <p role="alert" data-danibot-welcome-error="" className="mt-1 px-2 text-[13px] text-danger">{image.error}</p>}
         {generating && (
           <div className="mt-2">
-            <AvatarImageGenerator botLabel={name || "DaniBot"} disabled={image.uploading} generating={image.generating} onGenerate={image.generate} onSavingChange={image.setSavingConnection} />
+            <AvatarImageGenerator botLabel={name || "Dani Bot"} disabled={image.uploading} generating={image.generating} onGenerate={image.generate} onSavingChange={image.setSavingConnection} />
           </div>
         )}
       </div>
