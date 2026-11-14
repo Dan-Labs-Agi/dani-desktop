@@ -272,11 +272,11 @@ describe("header name", () => {
     expect(button(pinned)).toContain('data-testid="computer-button-live"');
   });
 
-  it("centres the bot in the header's middle column, with the controls in the last", () => {
+  it("puts the title on the left like Claude desktop, with the controls in the last column", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
     const row = markup.match(/data-chathead-row="true" class="([^"]*)"/)?.[1] ?? "";
     expect(row).toContain("@min-[30rem]/chathead:grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(max-content,1fr)]");
-    expect(markup).toMatch(/data-chathead-identity="true" class="[^"]*@min-\[30rem\]\/chathead:col-start-2[^"]*justify-self-center/);
+    expect(markup).toMatch(/data-chathead-identity="true" class="[^"]*@min-\[30rem\]\/chathead:col-start-1[^"]*justify-self-start/);
     expect(markup).toMatch(/data-chathead-controls="true" class="[^"]*@min-\[30rem\]\/chathead:col-start-3/);
   });
 });
@@ -593,10 +593,10 @@ describe("thread control placement", () => {
     expect(badge[2].split(" ")).toContain("@max-4xl/chathead:sr-only");
   });
 
-  it("keeps the selected thread's model in the header and permissions under the composer pill", () => {
+  it("keeps the selected thread's model and permissions in the strip under the composer pill", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
     expect(markup.match(/data-test-model-control/g)).toHaveLength(1);
-    expect(markup.indexOf("data-test-model-control")).toBeLessThan(markup.indexOf('role="log"'));
+    expect(markup.indexOf("data-test-model-control")).toBeGreaterThan(markup.indexOf("data-composer-status"));
     expect(markup.indexOf('data-tour="composer"')).toBeGreaterThan(-1);
     expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf("<textarea"));
     expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf("data-composer-status"));

@@ -1,6 +1,6 @@
 import { directMessageSent, roomMessageSent } from "@/lib/product-events";
 import { useComposerDictation } from "@/lib/use-composer-dictation";
-import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type SetStateAction } from "react";
 import { Mic, Square, X } from "lucide-react";
 import { useStore, visibleMessages, currentTaskBot, type Bot, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { cn } from "@/lib/cn";
@@ -113,6 +113,7 @@ export function Composer({
   onConsumeReply,
   onRestoreReply,
   locked: setupLocked = false,
+  modelControl,
 }: {
   bot?: Bot;
   group?: Group;
@@ -123,6 +124,8 @@ export function Composer({
   onConsumeReply?: () => void;
   onRestoreReply?: (message: Message, threadId: string) => void;
   locked?: boolean;
+  /** Advanced mode's model control, shown in the strip under the box. */
+  modelControl?: ReactNode;
 }) {
   const bot = profile ? currentTaskBot(profile) : undefined;
   const locked = setupLocked || Boolean(bot?.awaitingThreadSnapshot);
@@ -969,8 +972,9 @@ export function Composer({
         </div>
         </div>
         </div>
-        {advanced && !locked && !singleRow && (approvalChoice || (modeBot && !remoteClient)) && (
+        {advanced && !locked && !singleRow && (approvalChoice || (modeBot && !remoteClient) || modelControl) && (
           <div data-composer-status className="relative z-[1] mt-1 flex items-center justify-end gap-1 px-1">
+            {modelControl}
             {approvalChoice && <ApprovalModeSelector {...approvalChoice} />}
             {modeBot && !remoteClient && (
               <PlaceChip

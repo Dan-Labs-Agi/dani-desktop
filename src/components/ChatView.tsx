@@ -815,7 +815,6 @@ const MessagesList = memo(function MessagesList({
   );
 });
 
-const CHATHEAD_PILL = `flex min-w-0 items-center gap-2 rounded-full py-0.5 pl-1.5 text-ink ${ELEVATED_FLOAT}`;
 
 export function ChatView({ bot: profile }: { bot: Bot }) {
   const bot = useMemo(() => currentTaskBot(profile), [profile]);
@@ -1021,7 +1020,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
         )}
       >
         <div data-chathead-row className={cn("flex items-center justify-between", phone ? "gap-2" : "@max-[30rem]/chathead:flex-wrap @max-[30rem]/chathead:gap-y-1 @min-[30rem]/chathead:grid @min-[30rem]/chathead:grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(max-content,1fr)]")}>
-        <div data-chathead-identity className={cn("flex min-w-0 items-center gap-2", phone ? "flex-1" : "@max-[30rem]/chathead:basis-full @min-[30rem]/chathead:col-start-2 @min-[30rem]/chathead:justify-self-center", simpleHead && phone && "justify-center")} style={headerNoDragStyle}>
+        <div data-chathead-identity className={cn("flex min-w-0 items-center gap-2", phone ? "flex-1" : advanced ? "@max-[30rem]/chathead:basis-full @min-[30rem]/chathead:col-start-1 @min-[30rem]/chathead:justify-self-start" : "@max-[30rem]/chathead:basis-full @min-[30rem]/chathead:col-start-2 @min-[30rem]/chathead:justify-self-center", simpleHead && phone && "justify-center")} style={headerNoDragStyle}>
           {simpleHead ? (
             <ChatHeadPill
               bot={bot}
@@ -1030,7 +1029,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
               onToggle={() => dispatch({ type: "toggleSettings", open: !state.settingsOpen })}
             />
           ) : advanced ? (
-            <div data-chathead-pill className={cn(CHATHEAD_PILL, "pr-1")}>
+            <div data-chathead-pill className="group/title flex min-w-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => dispatch({ type: "toggleSettings", open: true })}
@@ -1061,7 +1060,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
                 onActivate={() => dispatch({ type: "toggleSettings", open: true })}
                 showEditButton
                 className="truncate text-[14px] font-semibold text-ink"
-                editButtonClassName="size-6 rounded-full"
+                editButtonClassName="size-6 rounded-full opacity-0 transition-opacity group-hover/title:opacity-100 focus-visible:opacity-100"
                 inputClassName="max-w-[220px] rounded-full bg-inset px-2 py-0.5 text-[14px] font-semibold"
               />
               {chiefOfStaffBadge(bot)}
@@ -1115,7 +1114,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
           <ThreadContextWarning bot={bot} messages={messages} />
           <EngineLimitNotice engine={bot.modelSelection?.instanceId} />
           {/* The model and the bot's computer stay in view in both modes; Simple mode moves only ⋯ into the bot panel. */}
-          {!remoteClient && !phone && <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} />}
+          {!remoteClient && !phone && !advanced && <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} />}
           <LiveCallChip currentBotId={bot.id} onOpen={(botId, threadId) => openThread(dispatch, { botId, threadId }, state, showThreads)} />
           {!phoneMenu && <button
             data-tour="computer"
@@ -1287,6 +1286,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
         onClearReply={clearReply}
         onConsumeReply={consumeReply}
         onRestoreReply={restoreReply}
+        modelControl={advanced && !remoteClient && !phone ? <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} /> : undefined}
         onEditLast={lastTypedMessage && !lastTypedMessageHasAttachments && !bot.busy && !lastTypedMessage.id.startsWith("optimistic-")
           ? () => setEditingId(lastTypedMessage.id)
           : undefined}
