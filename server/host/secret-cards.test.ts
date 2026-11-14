@@ -55,7 +55,7 @@ describe("the card a bot asks for a key or secret with", () => {
   it("asks in English where no language is known", () => {
     const { cards, lines, bot } = fixture();
     cards.requestCredential(bot, "ledger-main", { label: "Notion token", reason: "For Notion's MCP server.", delivery: "ref" });
-    expect(lines[0]!.text).toBe("Securely provide the Notion token from DaniBot on your phone or computer. It is never added to chat.");
+    expect(lines[0]!.text).toBe("Securely provide the Notion token from Dani Bot on your phone or computer. It is never added to chat.");
     expect(lines[0]!.secret!.description).toBe("For Notion's MCP server. Ledger gets a one-use reference for Dani Bot's own tools and never sees it.");
   });
 });

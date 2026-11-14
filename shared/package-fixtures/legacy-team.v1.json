@@ -76,7 +76,7 @@
         "name": "Morning signals",
         "agent": "scout",
         "prompt": "Prepare the approved morning signal brief.",
-        "runOn": "maus",
+        "runOn": "dani",
         "schedule": {
           "type": "daily",
           "time": "09:00",

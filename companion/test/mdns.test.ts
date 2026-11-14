@@ -1,4 +1,4 @@
-﻿// Packets are built and read by hand, so the wire format is tested against the
+// Packets are built and read by hand, so the wire format is tested against the
 // format rather than against our own encoder.
 import { createSocket } from "node:dgram";
 import { EventEmitter } from "node:events";
@@ -26,15 +26,15 @@ import {
 
 const service: ServiceInfo = {
   name: "Milind's computer",
-  type: "_DaniBot._tcp",
+  type: "_danibot._tcp",
   port: 8800,
   host: "DaniBot-1a2b3c4d.local",
   addresses: ["192.168.1.42"],
   txt: ["v=1", "name=Milind's computer"],
 };
 
-const INSTANCE = "Milind's computer._DaniBot._tcp.local";
-const SERVICE_NAME = "_DaniBot._tcp.local";
+const INSTANCE = "Milind's computer._danibot._tcp.local";
+const SERVICE_NAME = "_danibot._tcp.local";
 
 function query(name: string, type: number, opts: { id?: number; unicast?: boolean } = {}): Buffer {
   const header = Buffer.alloc(12);

@@ -77,7 +77,7 @@ describe("danibot service", () => {
 
     // Windows gets a schtasks line, with the platform's own folder as --out
     expect(runServiceCommand({ ...base, sentinelOut: undefined, platform: "win32", dataDir: "C:\\Users\\dani\\.danibot", home: "C:\\Users\\dani", env: {} }, io)).toBe(1);
-    expect(err.join("\n")).toContain('schtasks /Create /SC MINUTE /MO 2 /TN "DaniBot Sentinel" /TR "\\"/usr/bin/node\\" \\"/usr/lib/node_modules/danibot/cli.js\\" \\"sentinel\\"');
+    expect(err.join("\n")).toContain('schtasks /Create /SC MINUTE /MO 2 /TN "Dani Bot Sentinel" /TR "\\"/usr/bin/node\\" \\"/usr/lib/node_modules/danibot/cli.js\\" \\"sentinel\\"');
     expect(err.join("\n")).toContain("\\\"--out\\\" \\\"C:\\Users\\dani\\AppData\\Local\\danibot-sentinel\\\"");
   });
 

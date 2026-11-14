@@ -1366,7 +1366,7 @@ describe("§5/§2 ported from the delegation ledger", () => {
 
 describe("§2/§5 every turn a root", () => {
   const CARDS = ["msg-connector-1", "msg-secret-2"];
-  const CONNECTED = "DaniBot connection update: the user securely connected GitHub. Continue the task.";
+  const CONNECTED = "Dani Bot connection update: the user securely connected GitHub. Continue the task.";
 
   it("R-S1 a root ended on cards parks; answer(id) runs it again as the answered turn, cards cleared at dispatch", async () => {
     const w = world();
@@ -1576,7 +1576,7 @@ describe("§2/§5 every turn a root", () => {
     expect(runs).toHaveLength(1);
     expect(runs[0].input!.turn).toBe("rerun");
     expect(runs[0].input!.resumed).toBe(true);
-    expect(runs[0].input!.restartNote).toMatch(/^DaniBot restarted while your previous turn here was running and cut it off;/);
+    expect(runs[0].input!.restartNote).toMatch(/^Dani Bot restarted while your previous turn here was running and cut it off;/);
     expect(runs[0].input!.restartNote).toContain("so nothing is done twice");
     expect(runs[0].a!.restart).toBe("rerun");
     expect(get(v, cut.id)).toMatchObject({ status: "running", executions: 2, restarts: 1 });
@@ -1797,7 +1797,7 @@ describe("§5 outward / §2 loop guard", () => {
     const runs = w.runner.runs(child.id);
     expect(runs).toHaveLength(2);
     expect(runs[1].input!.turn).toBe("rerun");
-    expect(runs[1].input!.restartNote).toMatch(/^DaniBot restarted while your previous turn here was running/);
+    expect(runs[1].input!.restartNote).toMatch(/^Dani Bot restarted while your previous turn here was running/);
     expect(get(w, child.id)).toMatchObject({ status: "completed", result: "built", restarts: 1 });
     expect(w.runner.runs(root.id)[0].input!.restartNote).toContain("Dev (resumed once in place and told to check what it had already done)");
     expect(get(w, root.id).status).toBe("completed");

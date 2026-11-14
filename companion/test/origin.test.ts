@@ -1,4 +1,4 @@
-﻿import fs from "node:fs";
+import fs from "node:fs";
 import { createServer, request } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -40,7 +40,7 @@ describe("private managed origin", () => {
       const socketPath = path.join(directory, "origin.sock");
       const server = createServer((_incoming, response) => {
         response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({ app: "DaniBot" }));
+        response.end(JSON.stringify({ app: "danibot" }));
       });
       await listenCompanionOrigin(server, socketPath);
       expect(fs.statSync(socketPath).mode & 0o777).toBe(0o600);
@@ -54,7 +54,7 @@ describe("private managed origin", () => {
         outgoing.once("error", reject);
         outgoing.end();
       });
-      expect(JSON.parse(body)).toEqual({ app: "DaniBot" });
+      expect(JSON.parse(body)).toEqual({ app: "danibot" });
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   );
