@@ -27,12 +27,12 @@ describe("chat width", () => {
     expect(readChatWidth()).toBe("standard");
   });
 
-  it("sizes the standard width like Grok Bot: a 960px column and bubbles of min(80%, 560px)", () => {
+  it("sizes the standard width like Claude desktop: a 768px column and bubbles of min(80%, 560px)", () => {
     const body = css.match(/:root\s*\{\s*(--chat-bubble-max[^}]*)\}/)?.[1] ?? "";
     expect(body).toMatch(/--chat-bubble-max:\s*35rem/);
     expect(body).toMatch(/--chat-bubble-pct:\s*80%/);
     expect(body).toMatch(/--chat-card-pct:\s*88%/);
-    expect(body).toMatch(/--chat-column-max:\s*60rem/);
+    expect(body).toMatch(/--chat-column-max:\s*48rem/);
   });
 
   it("gives every non-default width a stylesheet block that sets the bubble variables", () => {

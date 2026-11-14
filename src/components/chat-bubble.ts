@@ -26,7 +26,7 @@ export const SIMPLE_BUBBLE_MAX = "max-w-[min(var(--chat-bubble-max),var(--chat-b
 export function plainBotBubble(simple: boolean): string {
   return simple
     ? cn("chat-text w-fit whitespace-pre-wrap", SIMPLE_BUBBLE_MAX, SIMPLE_BOT_BUBBLE)
-    : "chat-text w-fit max-w-[min(var(--chat-bubble-max),var(--chat-bubble-pct))] rounded-2xl bg-card px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap text-ink";
+    : "chat-text w-fit max-w-[min(var(--chat-prose-max),var(--chat-card-pct))] px-1 text-[15px] leading-relaxed whitespace-pre-wrap text-ink";
 }
 
 /** Simple mode's transcript spaces rows 16px apart (ChatView's data-simple-rows); a row in the same group pulls up 12px, to 4px. */

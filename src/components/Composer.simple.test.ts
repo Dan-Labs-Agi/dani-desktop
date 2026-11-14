@@ -286,13 +286,13 @@ describe("the Simple composer in a group chat", () => {
 });
 
 describe("the Advanced composer", () => {
-  it("keeps the paperclip, the approval shield and the split call button, with no +, on Simple's floating surface", () => {
+  it("attaches from the + menu, keeps the approval shield under the box and the split call button, on Simple's floating surface", () => {
     fixture.advanced = true;
     render({ bot });
-    expect(plus()).toBeNull();
+    expect(plus()).not.toBeNull();
     expect(container.querySelector('[data-tour="composer"]')!.className.split(" ")).toEqual(expect.arrayContaining(["rounded-2xl", "bg-composer", "ring-[0.5px]", "shadow-(--shadow-float)"]));
-    expect(container.querySelector('button[aria-label="Attach a file"]')).not.toBeNull();
-    expect(container.querySelector('[aria-haspopup="menu"][aria-label$="for Claude"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Attach a file"]')).toBeNull();
+    expect(container.querySelector('[data-composer-status] [aria-haspopup="menu"][aria-label$="for Claude"]')).not.toBeNull();
     expect(fixture.call).toMatchObject({ placement: "composer" });
     expect(fixture.call?.fill).toBeUndefined();
     expect(container.querySelector("[data-composer-backdrop]")!.className.split(" ")).toContain("top-1/2");
@@ -312,10 +312,11 @@ describe("the Advanced composer", () => {
     expect(sendButton()!.style.backgroundColor).toBe("var(--color-accent)");
   });
 
-  it("keeps the room's Goal chip and its header call button", () => {
+  it("keeps the room's Goal in the + menu until it is on, and its header call button", () => {
     fixture.advanced = true;
     render({ group: room, members: [bot, peer] });
-    expect(container.querySelector('[aria-label="Finish together"]')?.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector('[aria-label="Finish together"]')).toBeNull();
+    expect(plus()).not.toBeNull();
     expect(fixture.groupCall).toBeNull();
   });
 

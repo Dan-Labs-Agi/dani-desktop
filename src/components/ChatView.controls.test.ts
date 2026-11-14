@@ -593,13 +593,13 @@ describe("thread control placement", () => {
     expect(badge[2].split(" ")).toContain("@max-4xl/chathead:sr-only");
   });
 
-  it("keeps the selected thread's model in the header and permissions inside the composer pill", () => {
+  it("keeps the selected thread's model in the header and permissions under the composer pill", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
     expect(markup.match(/data-test-model-control/g)).toHaveLength(1);
     expect(markup.indexOf("data-test-model-control")).toBeLessThan(markup.indexOf('role="log"'));
     expect(markup.indexOf('data-tour="composer"')).toBeGreaterThan(-1);
-    expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf('data-tour="composer"'));
-    expect(markup.indexOf("data-test-approval-control")).toBeLessThan(markup.indexOf("<textarea"));
+    expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf("<textarea"));
+    expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf("data-composer-status"));
     expect(markup).not.toContain('aria-label="Thread settings"');
     expect(fixture.model).toMatchObject({ threadId: "selected", bot: { busy: false, modelSelection: { model: "thread-model" } } });
     expect(fixture.approval).toMatchObject({ approvalMode: "ask", busy: false, trustedModesAvailable: false });
@@ -625,8 +625,9 @@ describe("thread control placement", () => {
   it.each([true, false])("pins a place per conversation from the composer only in Advanced (advanced: %s)", (advanced) => {
     fixture.advanced = advanced;
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
-    const pill = markup.slice(markup.indexOf('data-tour="composer"'), markup.indexOf("<textarea"));
-    expect(pill.match(/data-testid="place-chip"/g) ?? []).toHaveLength(advanced ? 1 : 0);
+    const status = markup.indexOf("data-composer-status");
+    expect(markup.slice(Math.max(status, 0)).match(/data-testid="place-chip"/g) ?? []).toHaveLength(advanced ? 1 : 0);
+    expect(status >= 0).toBe(advanced);
     expect(markup.includes("Where this conversation works")).toBe(advanced);
     fixture.advanced = true;
   });

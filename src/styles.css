@@ -211,7 +211,7 @@
   --chat-card-pct: 88%;
   --chat-prose-max: 44rem;
   /* .chat-column: fills a narrow pane, then stops at this width and centers, so wider windows only grow the gutters. */
-  --chat-column-max: 60rem;
+  --chat-column-max: 48rem;
   /* Menus; a phone rounds them like its sheets. */
   --radius-menu: 14px;
 }

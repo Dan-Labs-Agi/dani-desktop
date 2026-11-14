@@ -1,7 +1,7 @@
 import { directMessageSent, roomMessageSent } from "@/lib/product-events";
 import { useComposerDictation } from "@/lib/use-composer-dictation";
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
-import { Mic, Paperclip, Square, X } from "lucide-react";
+import { Mic, Square, X } from "lucide-react";
 import { useStore, visibleMessages, currentTaskBot, type Bot, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
@@ -818,29 +818,10 @@ export function Composer({
           />
           {!locked && !singleRow && (
             <div className={cn("flex items-center gap-1", simpleDock ? "shrink-0" : "flex-wrap")}>
-              {simpleDock && <ComposerPlusMenu onAttach={() => fileInput.current?.click()} goal={goal} teach={canLearn ? teachTask : undefined} />}
-              {advanced && <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                aria-label={t("composer.attach")}
-                title={t("composer.attach")}
-                className="flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink"
-              >
-                <Paperclip size={16} strokeWidth={1.75} absoluteStrokeWidth />
-              </button>}
-              {/* Simple mode shows a mode's chip only while it is on, so a choice made in the + menu or the bot panel stays in view. */}
-              {goal && (advanced || goal.on) && <GoalToggle {...goal} compact={simpleDock} />}
-              {advanced && approvalChoice && <ApprovalModeSelector {...approvalChoice} />}
+              {(simpleDock || advanced) && <ComposerPlusMenu onAttach={() => fileInput.current?.click()} goal={goal} teach={canLearn ? teachTask : undefined} />}
+              {/* A mode's chip shows only while it is on, so a choice made in the + menu or the bot panel stays in view. */}
+              {goal?.on && <GoalToggle {...goal} compact={simpleDock} />}
               {simpleDock && approvalChoice && profile && bot && approvalModeFor(bot) !== approvalModeFor(profile) && <ApprovalChip choice={approvalChoice} />}
-              {modeBot && !remoteClient && advanced && (
-                <PlaceChip
-                  bot={modeBot}
-                  task={composerTask}
-                  live={Boolean(modeBot.busy)}
-                  disabled={Boolean(modeBot.busy)}
-                  onPin={(surface) => dispatch({ type: "updateTask", botId: modeBot.id, threadId: modeBot.threadId, patch: { surface } })}
-                />
-              )}
             </div>
           )}
           <MentionTextarea
@@ -988,6 +969,20 @@ export function Composer({
         </div>
         </div>
         </div>
+        {advanced && !locked && !singleRow && (approvalChoice || (modeBot && !remoteClient)) && (
+          <div data-composer-status className="relative z-[1] mt-1 flex items-center justify-end gap-1 px-1">
+            {approvalChoice && <ApprovalModeSelector {...approvalChoice} />}
+            {modeBot && !remoteClient && (
+              <PlaceChip
+                bot={modeBot}
+                task={composerTask}
+                live={Boolean(modeBot.busy)}
+                disabled={Boolean(modeBot.busy)}
+                onPin={(surface) => dispatch({ type: "updateTask", botId: modeBot.id, threadId: modeBot.threadId, patch: { surface } })}
+              />
+            )}
+          </div>
+        )}
         </div>
       </div>
       <div className="pointer-events-auto">
