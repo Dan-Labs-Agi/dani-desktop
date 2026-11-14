@@ -12009,7 +12009,7 @@ async function describeInstances() {
     if (hostedModels) return { ...described, readOnly: true,
       install: undefined, authentication: undefined, cli: undefined, cliCandidates: [],
     };
-    if (cloudCredit?.owns(instance.instanceId)) return { ...described, readOnly: true, trialCredit: cloudCredit.status(),
+    if (cloudCredit?.owns(instance.instanceId)) return { ...described, readOnly: true, icon: { kind: "preset" as const, preset: "anthropic" as const }, trialCredit: cloudCredit.status(),
       install: undefined, authentication: undefined, cli: undefined, cliCandidates: [],
       ...(ownReady && described.snapshot.state === "available" ? { snapshot: { state: "unavailable" as const, reason: TRIAL_CREDIT_OWN_AI } } : {}),
     };
