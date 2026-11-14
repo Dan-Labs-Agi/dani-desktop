@@ -12,9 +12,13 @@ export interface ToolkitCard {
   categories?: string[];
 }
 
+/** Slugs logos.composio.dev answers with its grey grid placeholder (a 200 an <img> can't tell apart), checked 2026-11.
+ * ponytail: hand list; a server-side check of the X-Logo-Fallback header if more apps show the grid. */
+const NO_COMPOSIO_LOGO = new Set(["zapier"]);
+
 /** Composio serves one logo per app slug (logos.composio.dev, checked 2026-11). */
-function composioLogo(slug: string): string {
-  return `https://logos.composio.dev/api/${encodeURIComponent(slug)}`;
+function composioLogo(slug: string): string | null {
+  return NO_COMPOSIO_LOGO.has(slug) ? null : `https://logos.composio.dev/api/${encodeURIComponent(slug)}`;
 }
 
 /** An app's logo (its own, else Composio's for its slug), then its site's favicon, then its initial. */
