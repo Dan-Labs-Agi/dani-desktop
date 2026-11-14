@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CircleAlert, LoaderCircle, RefreshCw } from "lucide-react";
+import { Check, CircleAlert, LoaderCircle, RefreshCw } from "@/components/icons";
 import { engineReady } from "@/components/EngineLibrary";
 import { t } from "@/lib/i18n";
 import { api, type InstanceInfo } from "@/state/store";

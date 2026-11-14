@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Mail } from "lucide-react";
+import { Mail } from "@/components/icons";
 import type { UpdatesConsentBridge, UpdatesConsentState, UpdatesConsentStatus } from "../../electron/updates-consent.mjs";
 import { t } from "@/lib/i18n";
 import { SettingRow, Switch } from "./SettingsPrimitives";

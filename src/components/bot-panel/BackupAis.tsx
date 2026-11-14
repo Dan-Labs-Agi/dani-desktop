@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, LifeBuoy, Plus } from "lucide-react";
+import { ChevronDown, LifeBuoy, Plus } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { configuredModelInstances } from "@/lib/engine-rail";

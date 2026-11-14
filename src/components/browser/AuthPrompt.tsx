@@ -1,4 +1,4 @@
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole } from "@/components/icons";
 import type { FormEvent } from "react";
 
 /**

@@ -1,6 +1,6 @@
 import { boatCapableEngine } from "@/lib/remote-desktop";
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, CalendarDays, Globe, ImageOff, Loader2, Monitor, Plus, X } from "lucide-react";
+import { CalendarClock, CalendarDays, Globe, ImageOff, Loader2, Monitor, Plus, X } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { useCaptionChrome } from "@/components/DesktopCapabilities";

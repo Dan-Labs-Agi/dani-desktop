@@ -5,7 +5,7 @@ import {
   Loader2,
   Square,
   XCircle,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

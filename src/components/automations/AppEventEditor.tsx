@@ -1,7 +1,7 @@
 // "When something happens in an app": pick the bot, the app and what happens in it, a few plain filters, and what the
 // bot does. Only connected apps the chosen bot may use are offered.
 import { useEffect, useRef, useState } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2, X } from "@/components/icons";
 
 import { BotAvatar } from "@/components/Avatar";
 import { useModalDialog } from "@/hooks/use-modal-dialog";

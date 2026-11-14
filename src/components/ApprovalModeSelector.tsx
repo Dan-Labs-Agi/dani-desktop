@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ListChecks } from "lucide-react";
+import { Check, ChevronDown, ListChecks } from "@/components/icons";
 
 import { approvalModeFor, type ApprovalMode } from "../../shared/approval-mode";
 import { cn } from "@/lib/cn";

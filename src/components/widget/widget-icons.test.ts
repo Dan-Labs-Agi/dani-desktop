@@ -1,11 +1,11 @@
-import { Dot } from "lucide-react";
+import { Dot } from "@/components/icons";
 import { describe, expect, it } from "vitest";
 
 import { WIDGET_ICON_NAMES } from "../../../shared/widget";
 import { isWidgetDot, WIDGET_ICONS, widgetIcon, widgetIconFilled } from "./widget-icons";
 
 describe("widget icons", () => {
-  it("has a lucide icon for every canonical name, and no name of its own", () => {
+  it("has a icon icon for every canonical name, and no name of its own", () => {
     expect(WIDGET_ICON_NAMES.filter((name) => !Object.hasOwn(WIDGET_ICONS, name))).toEqual([]);
     expect(Object.keys(WIDGET_ICONS).filter((name) => !WIDGET_ICON_NAMES.includes(name))).toEqual([]);
     for (const name of WIDGET_ICON_NAMES) expect(widgetIcon(name), name).toBe(WIDGET_ICONS[name]);

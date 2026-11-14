@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from "react";
-import { GripVertical, Search, UsersRound } from "lucide-react";
+import { GripVertical, Search, UsersRound } from "@/components/icons";
 import { BotAvatar } from "@/components/Avatar";
 import type { Bot } from "@/state/store";
 import { MiniMonth } from "./MiniMonth";

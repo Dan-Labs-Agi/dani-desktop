@@ -1,5 +1,5 @@
 import { useState, type JSX } from "react";
-import { Copy, Download, Gauge, MessagesSquare, MoreHorizontal, Search, SquarePen, Timer } from "lucide-react";
+import { Copy, Download, Gauge, MessagesSquare, MoreHorizontal, Search, SquarePen, Timer } from "@/components/icons";
 
 import { requestChatFind, useChatFindOpen } from "@/lib/chat-find";
 import { cn } from "@/lib/cn";

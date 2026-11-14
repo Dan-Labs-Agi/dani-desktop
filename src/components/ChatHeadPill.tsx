@@ -1,4 +1,4 @@
-import { ChevronRight, Lock, UserRound, Users } from "lucide-react";
+import { ChevronRight, Lock, UserRound, Users } from "@/components/icons";
 import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/cn";

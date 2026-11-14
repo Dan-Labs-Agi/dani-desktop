@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown, Search, X } from "@/components/icons";
 
 import { useStore, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";

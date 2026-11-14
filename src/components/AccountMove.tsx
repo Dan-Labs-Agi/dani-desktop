@@ -2,7 +2,7 @@
 // short segment in the account's name, a line by the account (above it in Simple, under the name in Advanced), a dot
 // on the avatar, and the move's own row at the top of the account menu. In the desktop app only, never in a browser.
 import { useSyncExternalStore } from "react";
-import { CloudAlert, CloudCheck, CloudUpload, Loader2, RefreshCw, Smartphone, X } from "lucide-react";
+import { CloudAlert, CloudCheck, CloudUpload, Loader2, RefreshCw, Smartphone, X } from "@/components/icons";
 import type { CloudSendPageBridge } from "../../electron/cloud-send.mjs";
 import { MOVE_LINE } from "../../electron/cloud-send-parts.mjs";
 import { ipcErrorText, moveLine } from "@/lib/cloud-send";

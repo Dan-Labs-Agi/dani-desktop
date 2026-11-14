@@ -2889,10 +2889,6 @@ button:disabled.bg-danger {
   ) {
     cursor: pointer;
   }
-  /* lucide writes stroke-width="2" as an attribute, which any CSS outranks; an explicit strokeWidth prop is left alone. */
-  :where(svg.lucide[stroke-width="2"]) {
-    stroke-width: 1.75;
-  }
 }
 
 ::highlight(omb-citation-source) {

@@ -271,7 +271,7 @@ describe("a settled widget", () => {
     mount(settled("confirm", "Create routine"));
     const line = find('[data-ask-card="settled"]')!;
     expect(line.textContent).toBe(`Create routine${t("question.details")}`);
-    expect(line.querySelector("svg.lucide-check")).not.toBeNull();
+    expect(line.querySelector("svg.icon-check")).not.toBeNull();
     expect(find("[data-widget]")).toBeNull();
     expect(find("[data-widget-ref]")).toBeNull();
     const details = button(t("question.details"))!;
@@ -313,8 +313,8 @@ describe("a settled widget", () => {
     mount(settled("cancel", "Discard"));
     const line = find('[data-ask-card="settled"]')!;
     expect(line.textContent).toContain("Discard");
-    expect(line.querySelector("svg.lucide-x")).not.toBeNull();
-    expect(line.querySelector("svg.lucide-check")).toBeNull();
+    expect(line.querySelector("svg.icon-x")).not.toBeNull();
+    expect(line.querySelector("svg.icon-check")).toBeNull();
   });
 });
 
@@ -353,7 +353,7 @@ describe("pressing", () => {
     await act(async () => { answer(reply(200, { ok: true })); });
     const line = find('[data-ask-card="settled"]')!;
     expect(line.textContent).toBe(`Create routine${t("question.details")}`);
-    expect(line.querySelector("svg.lucide-check")).not.toBeNull();
+    expect(line.querySelector("svg.icon-check")).not.toBeNull();
     expect(find("[data-widget]")).toBeNull();
     act(() => button(t("question.details"))!.click());
     expect(daysOn()).toEqual(["mon", "tue", "wed", "thu", "fri", "sat"]);
@@ -511,7 +511,7 @@ describe("pressing", () => {
     expect(posted().body).toEqual({ threadId: "t1", sendId: expect.any(String), widgetAction: { messageId: "w1", ref: "cancel", rev: 0 } });
     const line = find('[data-ask-card="settled"]')!;
     expect(line.textContent).toContain("Never mind");
-    expect(line.querySelector("svg.lucide-x")).not.toBeNull();
+    expect(line.querySelector("svg.icon-x")).not.toBeNull();
   });
 
   it("opens an open_url link on this device and posts nothing", async () => {
@@ -586,7 +586,7 @@ describe("pressing", () => {
     const later = widgetActions(sample("kitchenSink")).find((entry) => entry.label === "Ask me later")!;
     expect(posted().body.widgetAction).toEqual({ messageId: "w1", ref: later.ref, rev: 0, values: { rating: "", email: "", note: "" } });
     expect(find('[data-widget="w1"]')!.getAttribute("data-widget-state")).toBe("live");
-    expect(button("Ask me later")!.querySelector("svg.lucide-check")).not.toBeNull();
+    expect(button("Ask me later")!.querySelector("svg.icon-check")).not.toBeNull();
     expect(find('[role="status"]')!.textContent).toBe(t("widget.sent"));
     expect(button("Send feedback")!.disabled).toBe(false);
   });
@@ -610,10 +610,10 @@ describe("pressing", () => {
     type(find<HTMLTextAreaElement>("textarea")!, "Typed on revision 3");
     await press(button("Ask me later")!);
     expect(posted().body.widgetAction.rev).toBe(3);
-    expect(button("Ask me later")!.querySelector("svg.lucide-check")).not.toBeNull();
+    expect(button("Ask me later")!.querySelector("svg.icon-check")).not.toBeNull();
     mount(row(sample("kitchenSink"), { rev: 4 }));
     expect(find<HTMLTextAreaElement>("textarea")!.value).toBe("");
-    expect(button("Ask me later")!.querySelector("svg.lucide-check")).toBeNull();
+    expect(button("Ask me later")!.querySelector("svg.icon-check")).toBeNull();
     expect(find('[role="status"]')!.textContent).toBe("");
 
     mount(row(sample("routineForm")));

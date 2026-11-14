@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyRound, X } from "lucide-react";
+import { KeyRound, X } from "@/components/icons";
 import type { PasskeyWall } from "../../../shared/passkey-wall";
 import { PASSKEY_HELP_URL, openExternalLink } from "@/lib/app-links";
 import { t } from "@/lib/i18n";

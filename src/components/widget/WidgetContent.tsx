@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { ImageOff } from "lucide-react";
+import { ImageOff } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { widgetNumber, widgetString, type WidgetNode } from "../../../shared/widget";

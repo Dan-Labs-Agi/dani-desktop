@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { FolderOpen, Plus } from "lucide-react";
+import { FolderOpen, Plus } from "@/components/icons";
 
 import { appSwitchPatch } from "@/lib/bot-app-access";
 import { skillsLibraryEnabled } from "@/lib/feature-flags";

@@ -222,7 +222,7 @@ describe("the Simple composer in a bot chat", () => {
     const level = popover()!;
     expect(level.textContent).toContain("Ask me first");
     expect(level.textContent).toContain("Command allowlist");
-    expect(level.querySelector('[data-menu-key="approval:full"] .lucide-check')).not.toBeNull();
+    expect(level.querySelector('[data-menu-key="approval:full"] .icon-check')).not.toBeNull();
     click(level.querySelector('[data-menu-key="approval:ask"]'));
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "updateTask", botId: "atlas", threadId: "atlas-thread", patch: { approvalMode: "ask" } });
   });
@@ -232,7 +232,7 @@ describe("the Simple composer in a bot chat", () => {
     render({ bot });
     const chip = container.querySelector<HTMLButtonElement>("[data-goal-chip]")!;
     expect(chip.textContent).toBe("Work until done");
-    expect(chip.querySelector(".lucide-x")).not.toBeNull();
+    expect(chip.querySelector(".icon-x")).not.toBeNull();
     expect(chip.getAttribute("aria-label")).toBe("Turn off Work until done");
     expect(chip.hasAttribute("aria-pressed")).toBe(false);
     expect(chip.className.split(" ")).toEqual(expect.arrayContaining(["h-7", "gap-1", "px-2.5", "text-[13px]"]));
@@ -274,7 +274,7 @@ describe("the Simple composer in a group chat", () => {
     expect(chip?.getAttribute("aria-label")).toBe("Turn off Finish together");
     expect(container.querySelector("textarea")!.getAttribute("placeholder")).toContain("finish together");
     openPlus();
-    expect(item("goal")!.querySelector(".lucide-check")).not.toBeNull();
+    expect(item("goal")!.querySelector(".icon-check")).not.toBeNull();
     click(chip);
     expect(container.querySelector("[data-goal-chip]")).toBeNull();
   });

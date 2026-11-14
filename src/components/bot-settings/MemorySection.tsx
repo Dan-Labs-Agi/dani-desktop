@@ -1,4 +1,4 @@
-import { FileText, FolderOpen, RotateCcw, Trash2 } from "lucide-react";
+import { FileText, FolderOpen, RotateCcw, Trash2 } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";

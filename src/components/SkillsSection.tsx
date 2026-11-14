@@ -1,5 +1,5 @@
 // Security: local browse only, with no registry and no network fetch, so an import is exactly the bytes pasted here.
-import { Search, X } from "lucide-react";
+import { Search, X } from "@/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
 import { useModalDialog } from "@/hooks/use-modal-dialog";

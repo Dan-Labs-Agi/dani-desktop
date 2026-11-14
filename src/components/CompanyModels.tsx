@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useStore, type InstanceInfo } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { companyInstanceFor, instanceCanRun, planCompanySwitch } from "@/lib/company-models";

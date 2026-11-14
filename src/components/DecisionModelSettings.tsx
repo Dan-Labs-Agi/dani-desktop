@@ -1,6 +1,6 @@
 // Security: the key is write-only; the server reports configured-or-not, never the value.
 import { useEffect, useState } from "react";
-import { Check, ExternalLink, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Loader2 } from "@/components/icons";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

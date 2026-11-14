@@ -1,4 +1,4 @@
-import { Mic, Plus } from "lucide-react";
+import { Mic, Plus } from "@/components/icons";
 import { t } from "@/lib/i18n";
 
 /** The app's chat area while the first run's Chief step is up: nothing in it yet, and nothing to press. */

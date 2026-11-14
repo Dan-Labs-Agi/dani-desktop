@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { useStore, type Bot } from "@/state/store";
 import { t } from "@/lib/i18n";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Circle, Sparkles } from "lucide-react";
+import { ChevronRight, Circle, Sparkles } from "@/components/icons";
 
 import type { BotOverview } from "@/lib/bot-overview-types";
 import { t } from "@/lib/i18n";

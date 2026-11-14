@@ -4,7 +4,7 @@
 // waits, a chip above the message box says so and its x stops it. Once answered, the card stays, quiet, with the answer.
 // While its answers are written, at first or after the bot is renamed, it takes no pick.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Sparkles, X } from "lucide-react";
+import { Sparkles, X } from "@/components/icons";
 
 import { currentReactor, useReactor } from "@/lib/cloud-guest";
 import { cn } from "@/lib/cn";

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Building2, Check } from "lucide-react";
+import { Building2, Check } from "@/components/icons";
 import type { ManagedDesktopBridge, ManagedDesktopState } from "../../../../electron/managed-desktop.mjs";
 import { productName } from "@/lib/brand";
 import { t } from "@/lib/i18n";

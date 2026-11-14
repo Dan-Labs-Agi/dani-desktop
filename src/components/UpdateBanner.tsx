@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, PackageOpen, RefreshCw, Sparkles, X } from "lucide-react";
+import { Loader2, PackageOpen, RefreshCw, Sparkles, X } from "@/components/icons";
 import { useUpdaterState } from "@/lib/updater";
 import { t } from "@/lib/i18n";
 import { productName } from "../lib/brand";

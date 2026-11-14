@@ -1,4 +1,4 @@
-import { Check, Copy, Loader2, Sparkles } from "lucide-react";
+import { Check, Copy, Loader2, Sparkles } from "@/components/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";

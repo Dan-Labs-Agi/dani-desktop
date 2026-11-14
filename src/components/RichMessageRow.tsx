@@ -1,4 +1,4 @@
-import { AppWindow, Crosshair } from "lucide-react";
+import { AppWindow, Crosshair } from "@/components/icons";
 import type { Message } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { AppMessage } from "./app/AppMessage";

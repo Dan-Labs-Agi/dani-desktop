@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, Check } from "lucide-react";
+import { ChevronRight, Check } from "@/components/icons";
 import type { Message } from "@/state/store";
 import { describeRun } from "@/lib/activity-runs";
 import { t } from "@/lib/i18n";

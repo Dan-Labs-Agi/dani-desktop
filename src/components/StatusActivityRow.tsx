@@ -1,4 +1,4 @@
-import { Info, RefreshCw } from "lucide-react";
+import { Info, RefreshCw } from "@/components/icons";
 import { statusActivity } from "@/lib/activity-runs";
 import { t } from "@/lib/i18n";
 import { useStore, type Message } from "@/state/store";

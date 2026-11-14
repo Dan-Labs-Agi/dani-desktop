@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { ArrowUpRight, ChartNoAxesCombined, ChevronRight, Table2 } from "lucide-react";
+import { ArrowUpRight, ChartNoAxesCombined, ChevronRight, Table2 } from "@/components/icons";
 import { useStore, type Message } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { InlineDataChart } from "./data/InlineDataChart";

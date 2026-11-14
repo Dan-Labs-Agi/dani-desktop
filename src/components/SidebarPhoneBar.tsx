@@ -1,4 +1,4 @@
-import { FolderOpen, LayoutGrid, Puzzle, Search, UsersRound, X, Zap } from "lucide-react";
+import { FolderOpen, LayoutGrid, Puzzle, Search, UsersRound, X, Zap } from "@/components/icons";
 
 import { useCloudFilesReady } from "@/lib/cloud-files";
 import { t } from "@/lib/i18n";

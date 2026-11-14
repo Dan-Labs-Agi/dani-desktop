@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Bell, ChevronLeft, ImagePlus, Loader2, Trash2, X } from "lucide-react";
+import { Bell, ChevronLeft, ImagePlus, Loader2, Trash2, X } from "@/components/icons";
 
 import { api, useStore, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";

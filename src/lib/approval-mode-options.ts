@@ -1,4 +1,4 @@
-import { FilePen, Hand, Settings, ShieldAlert, ShieldCheck } from "lucide-react";
+import { FilePen, Hand, Settings, ShieldAlert, ShieldCheck } from "@/components/icons";
 
 import { hasNativeAutoReview, supportsApprovalMode, type ApprovalMode } from "../../shared/approval-mode";
 import { t } from "@/lib/i18n";

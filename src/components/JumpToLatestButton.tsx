@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 

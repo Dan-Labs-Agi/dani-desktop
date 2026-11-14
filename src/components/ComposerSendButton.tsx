@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { ArrowUp, ChevronUp, Clock, CornerDownRight, RotateCcw } from "lucide-react";
+import { ArrowUp, ChevronUp, Clock, CornerDownRight, RotateCcw } from "@/components/icons";
 
 import type { FollowUp } from "../../shared/follow-up";
 import { cn } from "@/lib/cn";
@@ -44,7 +44,7 @@ export function ComposerSendButton({ compact, waits, label, title, look, disable
         waits ? "bg-raised text-ink-secondary hover:bg-raised-hover" : look.className,
       )}
     >
-      {waits ? <Clock size={compact ? 14 : 15} /> : <ArrowUp size={16} strokeWidth={1.75} absoluteStrokeWidth />}
+      {waits ? <Clock size={compact ? 14 : 15} /> : <ArrowUp size={16} strokeWidth={1.75} />}
     </button>
   );
   if (!menu) return button;

@@ -100,7 +100,7 @@ describe("the window frame's top bar", () => {
     fixture.config = config;
     await mount(createElement(WindowFrameBar));
     expect(middle()!.querySelector("span:last-child")!.textContent).toBe(name);
-    expect(Boolean(middle()!.querySelector("svg.lucide-laptop")), "This computer's laptop").toBe(shown.local);
+    expect(Boolean(middle()!.querySelector("svg.icon-laptop")), "This computer's laptop").toBe(shown.local);
   });
 
   it("names nothing where main says nothing (a browser, a remote client, an older app)", async () => {

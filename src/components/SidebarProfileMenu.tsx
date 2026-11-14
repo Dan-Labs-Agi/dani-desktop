@@ -21,7 +21,7 @@ import {
   UserRound,
   UsersRound,
   Zap,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { AccountMoveStatus, useAccountMove, type AccountMoveKind } from "./AccountMove";
 import { InitialsAvatar } from "./Avatar";

@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Minus, Square, Copy, X } from "lucide-react";
+import { Minus, Square, Copy, X } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 

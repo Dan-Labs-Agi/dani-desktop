@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ExternalLink, Globe, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Globe, Loader2 } from "@/components/icons";
 import { api } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { Card, CommandLine } from "./SettingsPrimitives";

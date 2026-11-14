@@ -1,5 +1,5 @@
 // Screen 3: the browser has the payment page; this sheet shows where things stand and moves on by itself.
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink } from "@/components/icons";
 import type { CloudOffer } from "../../../electron/cloud-home.mjs";
 import { cloudPlanLabel, dueToday, offerPlanLabel, usd } from "@/lib/cloud-plan";
 import { t } from "@/lib/i18n";

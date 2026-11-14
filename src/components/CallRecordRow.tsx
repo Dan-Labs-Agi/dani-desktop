@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AudioLines, ChevronRight } from "lucide-react";
+import { AudioLines, ChevronRight } from "@/components/icons";
 
 import { formatCallDuration } from "../../shared/live-call";
 import { callRecordIsPartial, callRecordLines } from "@/lib/call-record";

@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, RefreshCw, Server, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, Server, Trash2 } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { Card } from "./SettingsPrimitives";

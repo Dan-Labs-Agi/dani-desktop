@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Repeat } from "lucide-react";
+import { Repeat } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";

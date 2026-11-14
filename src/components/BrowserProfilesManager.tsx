@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { Globe, Plus, Trash2 } from "lucide-react";
+import { Globe, Plus, Trash2 } from "@/components/icons";
 import { api, ApiError, useStore, type Bot, type BotAnnouncement, type BrowserProfile, type ConfigStatus } from "@/state/store";
 import { browserProfileDeletionBlockReason, browserProfilesMutation, newBrowserProfileId } from "@/lib/browser-profiles";
 import { isOwnerOrAdmin, readSessionState } from "@/lib/session";

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { createPortal } from "react-dom";
-import { BookOpen, Crown, Pencil, Sparkles, Wand2 } from "lucide-react";
+import { BookOpen, Crown, Pencil, Sparkles, Wand2 } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

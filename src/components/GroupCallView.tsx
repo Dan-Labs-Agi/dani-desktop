@@ -1,7 +1,7 @@
 // Half-duplex like CallView: the native recognizer has no echo cancellation. Replies are queued so a fast second member
 // never cuts off the first.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, PhoneOff, X } from "lucide-react";
+import { Loader2, PhoneOff, X } from "@/components/icons";
 
 import { currentCall, deferCallCleanup, endCall, useOnCall } from "@/lib/call";
 import { routeSpokenGroupMessage } from "@/lib/group-call";

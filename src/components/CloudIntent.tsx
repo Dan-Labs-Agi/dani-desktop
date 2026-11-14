@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowUp, CalendarCheck, Eye, Newspaper, Search, type LucideIcon } from "lucide-react";
+import { ArrowUp, CalendarCheck, Eye, Newspaper, Search, type IconType } from "@/components/icons";
 import { RobotAvatar } from "@/components/robot/RobotAvatar";
 import { robotMotionForMaus } from "@/components/robot/robot-avatar-engine";
 import { engineReady } from "@/components/EngineLibrary";
@@ -18,7 +18,7 @@ import type { OnboardingStatus } from "@/lib/onboarding";
 import type { LocaleKey } from "@/locales";
 import { api, useStore, type Action, type AppState } from "@/state/store";
 
-const IDEAS: Array<{ id: string; icon: LucideIcon; label: LocaleKey; text: LocaleKey }> = [
+const IDEAS: Array<{ id: string; icon: IconType; label: LocaleKey; text: LocaleKey }> = [
   { id: "digest", icon: Newspaper, label: "cloudIntent.idea.digest", text: "cloudIntent.idea.digestText" },
   { id: "watch", icon: Eye, label: "cloudIntent.idea.watch", text: "cloudIntent.idea.watchText" },
   { id: "research", icon: Search, label: "cloudIntent.idea.research", text: "cloudIntent.idea.researchText" },

@@ -1,5 +1,5 @@
 import { useState, type RefObject } from "react";
-import { ImagePlus, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Sparkles, Trash2 } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

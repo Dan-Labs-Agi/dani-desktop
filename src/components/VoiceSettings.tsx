@@ -1,6 +1,6 @@
 // Security: the harness holds the cloud provider keys; the renderer never talks to ElevenLabs or Fish Audio itself.
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Volume2 } from "lucide-react";
+import { Check, Loader2, Volume2 } from "@/components/icons";
 
 import { api, useStore, type Bot, type ConfigStatus } from "@/state/store";
 import { useDesktopCapabilities } from "@/components/DesktopCapabilities";

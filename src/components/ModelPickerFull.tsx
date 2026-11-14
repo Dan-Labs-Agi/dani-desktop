@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, KeyRound, Plus, Search } from "lucide-react";
+import { Check, KeyRound, Plus, Search } from "@/components/icons";
 import type { InstanceInfo } from "@/state/store";
 import { isClaudeAccount, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail, type SignInFamily } from "@/lib/engine-rail";
 import { cn } from "@/lib/cn";

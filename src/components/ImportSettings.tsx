@@ -1,6 +1,6 @@
 // Settings → Import: everything that brings work in from elsewhere, in one place. "From your AI apps" brings the skills
 // and MCP servers another AI tool keeps on this computer; the bot import below is the same one Templates has.
-import { BookOpen, Check, Info, Loader2, Plug } from "lucide-react";
+import { BookOpen, Check, Info, Loader2, Plug } from "@/components/icons";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { track } from "@/lib/analytics";

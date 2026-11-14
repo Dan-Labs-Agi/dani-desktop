@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Rocket, Star } from "lucide-react";
+import { Rocket, Star } from "@/components/icons";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import { api, useStore } from "@/state/store";

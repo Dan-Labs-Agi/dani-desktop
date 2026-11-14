@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Lock, Users } from "lucide-react";
+import { Lock, Users } from "@/components/icons";
 
 import type { BotAccess, BotAccessLevel, GrantedLevel } from "../../../shared/bot-access";
 import { botOwner } from "../../../shared/bot-owner";

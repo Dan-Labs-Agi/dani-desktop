@@ -1,4 +1,4 @@
-import { SquareSlash } from "lucide-react";
+import { SquareSlash } from "@/components/icons";
 import { useState } from "react";
 
 import type { Bot } from "@/state/store";

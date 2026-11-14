@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type SyntheticEvent } from "react";
-import { Crown } from "lucide-react";
+import { Crown } from "@/components/icons";
 import { BotAvatar } from "@/components/Avatar";
 import { RobotAvatar } from "@/components/robot/RobotAvatar";
 import { usePrefersReducedMotion } from "@/components/mascot-clock";

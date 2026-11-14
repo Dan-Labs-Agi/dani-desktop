@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { Bug, Users } from "lucide-react";
+import { Bug, Users } from "@/components/icons";
 import type { Bot } from "@/state/store";
 import type { TeamPerson } from "@/state/team-people";
 import { cn } from "@/lib/cn";

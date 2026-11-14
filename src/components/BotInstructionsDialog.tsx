@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { BookOpen, X } from "lucide-react";
+import { BookOpen, X } from "@/components/icons";
 
 import { BotAvatar } from "./Avatar";
 import { normalizeState } from "@/lib/mascot";

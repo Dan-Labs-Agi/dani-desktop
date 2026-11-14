@@ -18,7 +18,7 @@ import {
   ShieldCheck,
   Smartphone,
   Wifi,
-} from "lucide-react";
+} from "@/components/icons";
 import { QRCodeSVG } from "qrcode.react";
 import { phonePairingLink } from "../../shared/pairing-link";
 import {

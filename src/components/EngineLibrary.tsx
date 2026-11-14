@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ArrowUpRight, Check, ChevronDown, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, RefreshCw } from "@/components/icons";
 import { useStore, type InstanceInfo } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

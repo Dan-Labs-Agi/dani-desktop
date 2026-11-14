@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Loader2 } from "@/components/icons";
 
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { activeLocale, t } from "@/lib/i18n";

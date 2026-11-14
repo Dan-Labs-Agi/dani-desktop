@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, Plus } from "lucide-react";
+import { ArrowUp, Plus } from "@/components/icons";
 import { BotAvatar } from "@/components/Avatar";
 import { RobotAvatar } from "@/components/robot/RobotAvatar";
 import { usePrefersReducedMotion } from "@/components/mascot-clock";

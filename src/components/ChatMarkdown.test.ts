@@ -903,9 +903,9 @@ describe("ChatMarkdown attachments", () => {
     });
 
     it("does not offer a retry for a refusal that happens on every try", () => {
-      expect(render(true)).not.toContain("lucide-rotate-ccw");
-      expect(render(true, "file:///Users/dani/Desktop/designs/Posts/2026-10-08_News")).not.toContain("lucide-rotate-ccw");
-      expect(render(false)).toContain("lucide-rotate-ccw");
+      expect(render(true)).not.toContain("icon-rotate-ccw");
+      expect(render(true, "file:///Users/dani/Desktop/designs/Posts/2026-10-08_News")).not.toContain("icon-rotate-ccw");
+      expect(render(false)).toContain("icon-rotate-ccw");
     });
 
     it("shows the path in a browser, which has no desktop bridge", () => {

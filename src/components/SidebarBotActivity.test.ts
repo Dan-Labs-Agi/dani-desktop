@@ -1,4 +1,4 @@
-import { BellDot, CircleAlert, Clock3, Loader2 } from "lucide-react";
+import { BellDot, CircleAlert, Clock3, Loader2 } from "@/components/icons";
 import { describe, expect, it } from "vitest";
 import type { Bot, Group, GroupTask, Task } from "@/state/store";
 import { botShowsUnread } from "@/lib/bot-unread";

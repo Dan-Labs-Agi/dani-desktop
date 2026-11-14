@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Circle, X } from "lucide-react";
+import { Check, ChevronRight, Circle, X } from "@/components/icons";
 import { useEffect, useState } from "react";
 import { api } from "@/state/api";
 import type { Message } from "@/state/store";

@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { plainErrorLine } from "@/lib/plain-error";
 import type { AppState } from "@/state/store";

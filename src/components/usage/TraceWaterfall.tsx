@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Sparkles, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Sparkles, X } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { formatTokens, hasFiniteCost } from "@/lib/usage";

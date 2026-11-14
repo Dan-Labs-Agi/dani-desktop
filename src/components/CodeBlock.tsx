@@ -1,7 +1,7 @@
 // Security: Shiki's output is generator-escaped; nothing else reaches the DOM as HTML.
 import { useEffect, useMemo, useState } from "react";
 import type { HighlighterCore } from "shiki/core";
-import { Check, Copy, Download, MoreHorizontal, WrapText, X } from "lucide-react";
+import { Check, Copy, Download, MoreHorizontal, WrapText, X } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { useCopyFeedback } from "@/lib/copy-text";

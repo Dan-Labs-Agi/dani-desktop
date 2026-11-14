@@ -1,4 +1,4 @@
-import { FolderOpen, Globe, Puzzle, UsersRound, Zap } from "lucide-react";
+import { FolderOpen, Globe, Puzzle, UsersRound, Zap } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { useAppTriggers } from "@/lib/app-triggers";

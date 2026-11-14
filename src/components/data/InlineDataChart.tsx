@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons";
 import type { DataCard } from "../../../shared/data-surface";
 import { useStore } from "@/state/store";
 import { useColorScheme } from "@/lib/color-scheme";

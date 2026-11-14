@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Loader2, Moon, MonitorOff, TriangleAlert } from "lucide-react";
+import { Loader2, Moon, MonitorOff, TriangleAlert } from "@/components/icons";
 import type { Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

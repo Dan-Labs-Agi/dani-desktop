@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/icons";
 import { daniVariantForBot } from "./robot/dani-variants";
 import { RobotAvatar } from "./robot/RobotAvatar";
 import { NewBotDialog } from "./lazy-screens";

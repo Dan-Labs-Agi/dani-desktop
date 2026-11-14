@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowDownToLine, Loader2, PackageOpen, RefreshCw, X } from "lucide-react";
+import { ArrowDown, ArrowDownToLine, Loader2, PackageOpen, RefreshCw, X } from "@/components/icons";
 
 import { useUpdaterState, type UpdaterState } from "@/lib/updater";
 import { releaseHighlights } from "@/lib/release-highlights";

@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { PERSON_STOPPED_TURN_NAME } from "../../shared/client-cancel";
 

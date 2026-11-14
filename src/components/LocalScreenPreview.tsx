@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Monitor, RotateCcw, Square } from "lucide-react";
+import { Loader2, Monitor, RotateCcw, Square } from "@/components/icons";
 
 import { requestScreenPreview, stopScreenPreview } from "@/lib/screen-preview";
 import { t } from "@/lib/i18n";

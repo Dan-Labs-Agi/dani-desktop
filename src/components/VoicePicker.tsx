@@ -2,7 +2,7 @@
 // area never clips it, and the focus stays in the search box while the arrow keys walk the rows.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Loader2, Search } from "lucide-react";
+import { Check, ChevronDown, Loader2, Search } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";

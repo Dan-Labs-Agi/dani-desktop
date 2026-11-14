@@ -101,9 +101,9 @@ describe("pinned threads panel", () => {
 describe("pinned thread rows", () => {
   it("shows the plain Pin icon and a time byline for an idle pinned thread", () => {
     const { markup } = renderRows([entry]);
-    expect(markup).toContain("lucide-pin ");
-    expect(markup).not.toContain("lucide-circle-alert");
-    expect(markup).not.toContain("lucide-loader");
+    expect(markup).toContain("icon-pin ");
+    expect(markup).not.toContain("icon-circle-alert");
+    expect(markup).not.toContain("icon-loader");
     expect(markup).toContain("Atlas · just now");
   });
 
@@ -113,8 +113,8 @@ describe("pinned thread rows", () => {
       task: { threadId: "pinned-2", title: "Build report", createdAt: 1, queued: false, busy: true, activity: "working" },
     };
     const { markup } = renderRows([working]);
-    expect(markup).toContain("lucide-loader");
-    expect(markup).not.toContain("lucide-pin ");
+    expect(markup).toContain("icon-loader");
+    expect(markup).not.toContain("icon-pin ");
     expect(markup).toContain("Atlas · " + t("chat.activity.working"));
   });
 
@@ -124,7 +124,7 @@ describe("pinned thread rows", () => {
       task: { threadId: "pinned-3", title: "Needs approval", createdAt: 1, queued: false, activity: "waiting-on-you" },
     };
     const { markup } = renderRows([waiting]);
-    expect(markup).toContain("lucide-circle-alert");
+    expect(markup).toContain("icon-circle-alert");
     expect(markup).toContain("Atlas · " + t("task.waiting"));
   });
 

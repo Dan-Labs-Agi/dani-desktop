@@ -1,6 +1,6 @@
 import { useMemo, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AudioLines, Check, Minus, X } from "lucide-react";
+import { AudioLines, Check, Minus, X } from "@/components/icons";
 
 import { formatCallDuration } from "../../shared/live-call";
 import { stripLeakedSystemHarnessMessages } from "../../shared/system-message-guard";

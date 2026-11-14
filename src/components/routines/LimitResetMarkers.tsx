@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from "react";
-import { Hourglass } from "lucide-react";
+import { Hourglass } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

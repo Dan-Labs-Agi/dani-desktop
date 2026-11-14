@@ -1,4 +1,4 @@
-import { Settings } from "lucide-react";
+import { Settings } from "@/components/icons";
 import { useEffect } from "react";
 
 import { sayFrameDrawn } from "@/lib/chrome-rail";

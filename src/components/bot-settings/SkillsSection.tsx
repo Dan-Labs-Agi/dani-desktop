@@ -1,4 +1,4 @@
-import { BookOpen, Trash2 } from "lucide-react";
+import { BookOpen, Trash2 } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 

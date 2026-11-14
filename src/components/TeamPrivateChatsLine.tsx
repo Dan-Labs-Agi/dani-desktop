@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Lock, UserRound, Users } from "lucide-react";
+import { Lock, UserRound, Users } from "@/components/icons";
 import { t } from "@/lib/i18n";
 
 const SEEN_KEY = (teamId: string) => `omb.team-private-chats.${teamId}`;

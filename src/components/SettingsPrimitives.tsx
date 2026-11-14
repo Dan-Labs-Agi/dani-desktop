@@ -1,5 +1,5 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
-import { Check, ChevronRight, Copy, X } from "lucide-react";
+import { Check, ChevronRight, Copy, X } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { useCopyFeedback } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";

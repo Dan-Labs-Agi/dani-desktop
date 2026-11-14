@@ -1,4 +1,4 @@
-import { Crosshair, X } from "lucide-react";
+import { Crosshair, X } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { removePointedChip, usePointedChips } from "@/lib/pointed-chips";
 import { pointedLabel } from "../../../shared/app-frame/point";

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { browserUnavailableReason } from "@/lib/feature-flags";
-import { ChevronDown, ChevronRight, FolderOpen, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderOpen, Plus } from "@/components/icons";
 
 import { api, useStore, type Bot } from "@/state/store";
 import { useBotEditor } from "./BotEditorContext";

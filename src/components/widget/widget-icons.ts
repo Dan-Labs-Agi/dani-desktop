@@ -4,10 +4,10 @@ import {
   Download, Ellipsis, EllipsisVertical, ExternalLink, FileIcon, FileText, FlaskConical, Folder, GitPullRequest, Globe, History,
   IdCard, ImageIcon, Images, Info, KeyRound, Layers, LifeBuoy, Lightbulb, LinkIcon, LockIcon, Mail, MapIcon, MapPin, Monitor,
   Notebook, NotebookPen, PartyPopper, Pencil, PencilLine, Phone, Play, Plus, RefreshCw, Search, SlidersHorizontal, Smartphone,
-  Sparkle, Sparkles, SquareCode, SquareMenu, SquarePen, Star, TriangleAlert, Upload, User, X, Zap, type LucideIcon,
-} from "lucide-react";
+  Sparkle, Sparkles, SquareCode, SquareMenu, SquarePen, Star, TriangleAlert, Upload, User, X, Zap, type IconType,
+} from "@/components/icons";
 
-export const WIDGET_ICONS: Readonly<Record<string, LucideIcon>> = {
+export const WIDGET_ICONS: Readonly<Record<string, IconType>> = {
   info: Info,
   agent: Bot,
   analytics: ChartNoAxesCombined,
@@ -85,16 +85,16 @@ export const WIDGET_ICONS: Readonly<Record<string, LucideIcon>> = {
   "arrow-right": ArrowRight,
 };
 
-export function widgetIcon(name: unknown): LucideIcon {
+export function widgetIcon(name: unknown): IconType {
   return typeof name === "string" && Object.hasOwn(WIDGET_ICONS, name) ? WIDGET_ICONS[name]! : Dot;
 }
 
-/** lucide draws outlines only: the filled star is the same glyph, filled. */
+/** icon draws outlines only: the filled star is the same glyph, filled. */
 export function widgetIconFilled(name: unknown): boolean {
   return name === "star-filled";
 }
 
-/** lucide's dot is a 2px speck; the widget's dot is the 7px status dot. */
+/** icon's dot is a 2px speck; the widget's dot is the 7px status dot. */
 export function isWidgetDot(name: unknown): boolean {
   return widgetIcon(name) === Dot;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Globe, Hand, Loader2, LockKeyhole, Moon, X } from "lucide-react";
+import { Globe, Hand, Loader2, LockKeyhole, Moon, X } from "@/components/icons";
 import { browserUnavailableReason } from "@/lib/feature-flags";
 import { t } from "@/lib/i18n";
 import { usePageVisible } from "@/lib/page-visible";

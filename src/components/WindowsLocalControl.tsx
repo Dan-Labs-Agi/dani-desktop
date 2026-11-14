@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Loader2, MonitorX } from "lucide-react";
+import { AlertTriangle, Loader2, MonitorX } from "@/components/icons";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
 import { t } from "@/lib/i18n";
 

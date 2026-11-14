@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { AppWindow, CalendarClock, Send, Share2, X } from "lucide-react";
+import { AppWindow, CalendarClock, Send, Share2, X } from "@/components/icons";
 
 import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { cn } from "@/lib/cn";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AppWindow, AudioLines, ChevronRight, FileText, ShieldCheck, Tag } from "lucide-react";
+import { AppWindow, AudioLines, ChevronRight, FileText, ShieldCheck, Tag } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

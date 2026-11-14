@@ -1,4 +1,4 @@
-import { Crown, Loader2, Phone } from "lucide-react";
+import { Crown, Loader2, Phone } from "@/components/icons";
 import { memo, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { cn } from "@/lib/cn";

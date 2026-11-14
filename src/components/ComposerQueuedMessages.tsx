@@ -1,4 +1,4 @@
-import { CornerDownRight, Pencil, Trash2 } from "lucide-react";
+import { CornerDownRight, Pencil, Trash2 } from "@/components/icons";
 
 import type { SteerQueueReason } from "../../shared/wire";
 import { t } from "@/lib/i18n";

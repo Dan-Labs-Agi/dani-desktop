@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import { Check, Loader2, RefreshCw, TriangleAlert } from "@/components/icons";
 
 import { api, useStore, type InstanceInfo } from "@/state/store";
 import { EngineCard, EngineSections, RefreshEngines, engineReady } from "./EngineLibrary";

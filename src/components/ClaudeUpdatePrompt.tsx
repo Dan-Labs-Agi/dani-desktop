@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, Download, Loader2, RefreshCw, X } from "lucide-react";
+import { Check, Copy, Download, Loader2, RefreshCw, X } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { useCopyFeedback } from "@/lib/copy-text";

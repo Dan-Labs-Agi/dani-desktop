@@ -1,4 +1,4 @@
-import { AudioLines, Blocks, CalendarClock, Fingerprint, Image, LockKeyhole, Monitor, Phone, Search, Server, Zap, type LucideIcon } from "lucide-react";
+import { AudioLines, Blocks, CalendarClock, Fingerprint, Image, LockKeyhole, Monitor, Phone, Search, Server, Zap, type IconType } from "@/components/icons";
 import type { AppSettingsSection, ConfigStatus } from "@/state/store";
 import type { SavedKey } from "@/state/config-status";
 import type { KeyProvider } from "@/lib/analytics-allowlist";
@@ -43,7 +43,7 @@ export type KeyId =
   | "lmStudio" | "openaiCompat" | "liveCalls" | "liveKey" | "elevenlabs" | "fishAudio" | "box" | "vps" | "onePassword" | "composio" | "treg" | "postiz"
   | "jev" | "openrouterHelper" | "workersAi" | "imageOpenai" | "imageCustom";
 
-export type KeyMark = { driverKind: string; preset?: ProviderIconPreset } | { icon: LucideIcon };
+export type KeyMark = { driverKind: string; preset?: ProviderIconPreset } | { icon: IconType };
 
 export interface KeyEntry {
   id: KeyId;

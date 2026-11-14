@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ZoomIn } from "lucide-react";
+import { ZoomIn } from "@/components/icons";
 
 import { AttachmentPreviewDialog, type MessageAttachmentContext, type PreviewImage } from "@/components/AttachmentPreview";
 import { t } from "@/lib/i18n";

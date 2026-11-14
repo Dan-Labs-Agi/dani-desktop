@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Gauge } from "lucide-react";
+import { Gauge } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { roomContextWarnings, threadContextWarning } from "@/lib/context-warning";

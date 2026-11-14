@@ -2,7 +2,7 @@
 // ?view=sidebar|settings|confirm&state=near|full|browser|top|trial&skin=midnight|daylight&lang=de
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Bot, CalendarClock, Gauge, LayoutGrid, MessageSquare, Plus, Search, Settings } from "lucide-react";
+import { Bot, CalendarClock, Gauge, LayoutGrid, MessageSquare, Plus, Search, Settings } from "@/components/icons";
 import type { CloudUsage } from "../electron/cloud-home.mjs";
 import { InitialsAvatar } from "@/components/Avatar";
 import { ConfirmDialogCard } from "@/components/ConfirmDialog";

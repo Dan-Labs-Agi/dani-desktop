@@ -1,6 +1,6 @@
 // One line of the person's inbox as a dense row: the sender's face and name, the subject, a muted snippet and the time.
 // An unread row is bold on a stronger ground. On hover or keyboard focus the time gives way to the row's quick actions.
-import { Check, CornerUpLeft, ExternalLink, X, type LucideIcon } from "lucide-react";
+import { Check, CornerUpLeft, ExternalLink, X, type IconType } from "@/components/icons";
 import type { InboxRow } from "../../../shared/inbox";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -9,7 +9,7 @@ import { InboxSender } from "../InboxLine";
 import { threadUpdatedLabel } from "../SidebarThreadRow";
 import { quickActions, subjectOf, textOf, type QuickAction } from "./inbox-view";
 
-const ACTION_LOOK: Record<QuickAction, { Icon: LucideIcon; label: LocaleKey }> = {
+const ACTION_LOOK: Record<QuickAction, { Icon: IconType; label: LocaleKey }> = {
   allow: { Icon: Check, label: "approval.action.allowOnce" },
   deny: { Icon: X, label: "approval.action.deny" },
   reply: { Icon: CornerUpLeft, label: "chat.reply" },

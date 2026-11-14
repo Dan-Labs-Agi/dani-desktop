@@ -1,7 +1,7 @@
 // The editor for an automation that runs when another app sends something: who does it and what it does, with the
 // rest under More. The words a person sees never say webhook, endpoint or payload.
 import { useRef, useState } from "react";
-import { Cloud, Laptop, Loader2, X } from "lucide-react";
+import { Cloud, Laptop, Loader2, X } from "@/components/icons";
 
 import { BotAvatar } from "@/components/Avatar";
 import { useModalDialog } from "@/hooks/use-modal-dialog";

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowLeft, CalendarDays, Check, Columns3, Hash, ListFilter, Search, ToggleLeft, Type } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Columns3, Hash, ListFilter, Search, ToggleLeft, Type } from "@/components/icons";
 import type { DataColumn } from "../../../shared/data-surface";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { t } from "@/lib/i18n";

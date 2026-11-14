@@ -3,7 +3,7 @@
 // with their answers right there (the line it sits under answers on its own card), and the way into the whole inbox.
 // With nothing open it shrinks to one line.
 import { useEffect, useState } from "react";
-import { Check, CornerUpLeft, Inbox } from "lucide-react";
+import { Check, CornerUpLeft, Inbox } from "@/components/icons";
 import type { InboxRow, InboxView } from "../../../shared/inbox";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

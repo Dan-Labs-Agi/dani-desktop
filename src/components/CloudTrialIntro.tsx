@@ -1,4 +1,4 @@
-import { Check, Cloud } from "lucide-react";
+import { Check, Cloud } from "@/components/icons";
 import type { CloudOffer } from "../../electron/cloud-home.mjs";
 import { cn } from "@/lib/cn";
 import { cloudIntroView } from "@/lib/cloud-plan";

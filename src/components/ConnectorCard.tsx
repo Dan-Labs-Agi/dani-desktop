@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, PlugZap, RefreshCw, X } from "lucide-react";
+import { Loader2, PlugZap, RefreshCw, X } from "@/components/icons";
 
 import { api, type Bot, type Message } from "@/state/store";
 import { ApiError } from "@/state/api";

@@ -1,4 +1,4 @@
-import { Pause } from "lucide-react";
+import { Pause } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { useStore, type Bot, type Group } from "@/state/store";

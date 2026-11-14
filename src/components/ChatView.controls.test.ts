@@ -588,7 +588,7 @@ describe("thread control placement", () => {
 
   it("keeps the Chief of Staff badge on one line instead of stacking a word per line", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, chiefOfStaff: true } }));
-    const badge = /<span title="Chief of Staff" class="([^"]*)"><svg[^>]*lucide-crown[^]*?<\/svg> <span class="([^"]*)">Chief of Staff<\/span>/.exec(markup)!;
+    const badge = /<span title="Chief of Staff" class="([^"]*)"><svg[^>]*icon-crown[^]*?<\/svg> <span class="([^"]*)">Chief of Staff<\/span>/.exec(markup)!;
     expect(badge[1].split(" ")).toEqual(expect.arrayContaining(["shrink-0", "whitespace-nowrap"]));
     expect(badge[2].split(" ")).toContain("@max-4xl/chathead:sr-only");
   });

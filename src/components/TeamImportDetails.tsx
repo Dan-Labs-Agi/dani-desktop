@@ -1,6 +1,6 @@
 // The template preview body: what a team, package or backup brings and what stays behind. Shared by Templates,
 // the organization shelf and the Grok Bot import.
-import { BookOpen, CalendarClock, Check, Crown, MessageSquare, NotebookPen, Plug, Users } from "lucide-react";
+import { BookOpen, CalendarClock, Check, Crown, MessageSquare, NotebookPen, Plug, Users } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

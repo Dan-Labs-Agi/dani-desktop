@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import type { Bot } from "@/state/store";
 import { teamBotName, useTeamPeople } from "@/state/team-people";
 import { BotAvatar } from "./Avatar";

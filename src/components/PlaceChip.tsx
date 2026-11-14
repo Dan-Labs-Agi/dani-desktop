@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useMenuMotion } from "./MenuMotion";

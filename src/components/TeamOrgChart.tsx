@@ -2,7 +2,7 @@
 // bots that report to them by department. Dragging a bot onto a person, or its Reports to… button, changes its owner:
 // the same `reportsTo` the sidebar's face edits.
 import { useMemo, useState, useSyncExternalStore, type DragEvent } from "react";
-import { Crown, UserRound } from "lucide-react";
+import { Crown, UserRound } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { buildOrgChart, type OrgColumn } from "@/lib/team-org-chart";

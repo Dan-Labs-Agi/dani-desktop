@@ -1,5 +1,5 @@
 import { useRef, useState, type Ref } from "react";
-import { Check, Laptop, Loader2, Sparkles, Users } from "lucide-react";
+import { Check, Laptop, Loader2, Sparkles, Users } from "@/components/icons";
 import { TeamLibraryPanel } from "@/components/lazy-screens";
 import { cn } from "@/lib/cn";
 import { listOf } from "@/lib/cloud-send";

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowLeft, Plus, Zap } from "lucide-react";
+import { ArrowLeft, Plus, Zap } from "@/components/icons";
 
 import { useDesktopCapabilities, windowFramed } from "@/components/DesktopCapabilities";
 import { automationsFrom, automationSentence, automationStatus, orderAutomations, statusLine, type Automation } from "@/lib/automations";

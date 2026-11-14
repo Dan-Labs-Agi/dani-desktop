@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { Loader2, LockKeyhole } from "lucide-react";
+import { Loader2, LockKeyhole } from "@/components/icons";
 
 import type { LoginBots } from "../../shared/logins";
 import { cn } from "@/lib/cn";

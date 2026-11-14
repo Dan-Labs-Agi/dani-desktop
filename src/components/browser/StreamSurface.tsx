@@ -4,7 +4,7 @@
 // first press takes the browser, Shift+Escape returns to the address bar, a larger frame cap is sent in place rather
 // than by reconnecting, so the person keeps the browser they hold, and the page's dropdown lists, cursor shape and HTTP
 // sign-in are drawn here.
-import { Download, FileUp, Loader2, X } from "lucide-react";
+import { Download, FileUp, Loader2, X } from "@/components/icons";
 import {
   type FormEvent,
   type KeyboardEvent,

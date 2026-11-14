@@ -38,9 +38,9 @@ describe("Data filter popover", () => {
     click("Filter");
     expect(document.activeElement).toBe(input("Search columns"));
     expect(host.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Filter rows");
-    expect(button("id").querySelector(".lucide-hash")).not.toBeNull();
-    expect(button("created").querySelector(".lucide-calendar-days")).not.toBeNull();
-    expect(button("active").querySelector(".lucide-toggle-left")).not.toBeNull();
+    expect(button("id").querySelector(".icon-hash")).not.toBeNull();
+    expect(button("created").querySelector(".icon-calendar-days")).not.toBeNull();
+    expect(button("active").querySelector(".icon-toggle-left")).not.toBeNull();
     type("Search columns", "DISPLAY");
     expect(button("display.name")).toBeDefined();
     expect(button("id")).toBeUndefined();

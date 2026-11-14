@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, ChevronRight, Loader2, Phone, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2, Phone, X } from "@/components/icons";
 
 import { glassPopupFrameStyle } from "@/lib/glass-popup";
 import { t } from "@/lib/i18n";

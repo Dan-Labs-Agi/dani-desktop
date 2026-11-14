@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Download, Share } from "lucide-react";
+import { Check, Copy, Download, Share } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { useMenuMotion } from "./MenuMotion";

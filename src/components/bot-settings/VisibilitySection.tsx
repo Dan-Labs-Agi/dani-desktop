@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "@/components/icons";
 
 import { api, useStore, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { ChevronDown, Database, History, Loader2, Maximize2, Minimize2, Pin } from "lucide-react";
+import { ChevronDown, Database, History, Loader2, Maximize2, Minimize2, Pin } from "@/components/icons";
 import { DATA_ROUTES, type DataRunRequest } from "../../../shared/data-surface";
 import { api, useStore, type Bot } from "@/state/store";
 import { t } from "@/lib/i18n";

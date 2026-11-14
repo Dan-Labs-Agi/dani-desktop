@@ -1,5 +1,5 @@
 import { useContext, useState, type ReactNode } from "react";
-import { Check, Clock3, ShieldCheck, Undo2, X } from "lucide-react";
+import { Check, Clock3, ShieldCheck, Undo2, X } from "@/components/icons";
 import { api, ApiError, StoreContext, type Bot, type Message, type OptionCardData } from "@/state/store";
 import { shareLearnedSkillsMode } from "@/lib/feature-flags";
 import { cn } from "@/lib/cn";

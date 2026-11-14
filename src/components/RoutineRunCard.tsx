@@ -1,4 +1,4 @@
-import { ArrowRight, Loader2, Zap } from "lucide-react";
+import { ArrowRight, Loader2, Zap } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { routineDateTime } from "@/lib/routine-display";

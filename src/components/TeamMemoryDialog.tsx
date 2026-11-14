@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Brain, Check, Loader2, Pin, Plus, Trash2, X } from "lucide-react";
+import { Brain, Check, Loader2, Pin, Plus, Trash2, X } from "@/components/icons";
 
 
 import { api } from "@/state/store";

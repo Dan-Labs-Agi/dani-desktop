@@ -5,7 +5,7 @@
 // never paid for (asked first; main takes it off their list on the Admin), and Make … my home for a server of theirs that
 // main says this computer's bots may move to (one tap: main starts the move).
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
-import { House, Laptop, Loader2, MoreHorizontal, Plus, Search, Server } from "lucide-react";
+import { House, Laptop, Loader2, MoreHorizontal, Plus, Search, Server } from "@/components/icons";
 import type { CloudSwatch } from "../../electron/cloud-list.mjs";
 import type { PlaceColorOutcome } from "../../electron/place-look.mjs";
 import { track } from "@/lib/analytics";

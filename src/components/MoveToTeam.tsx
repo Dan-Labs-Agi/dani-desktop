@@ -3,7 +3,7 @@
 // sidebar, which opens it in the team. Main runs the move (electron/team-move-main.mjs); the teams come from the
 // Dani Bot Cloud sign-in it verified, never from this page.
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRightLeft, Loader2, Users } from "lucide-react";
+import { ArrowRightLeft, Loader2, Users } from "@/components/icons";
 import type { TeamMoveView } from "../../electron/team-move.mjs";
 import type { Bot } from "@/state/store";
 import { ConfirmDialog } from "./ConfirmDialog";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AppWindow, Bot as BotIcon, Cloud, Download, Mail, Smartphone, Sparkles, type LucideIcon } from "lucide-react";
+import { AppWindow, Bot as BotIcon, Cloud, Download, Mail, Smartphone, Sparkles, type IconType } from "@/components/icons";
 
 import { track } from "@/lib/analytics";
 import { INTRO_CHIPS, setupSteps, type IntroChip, type SetupStep } from "@/lib/default-bot";
@@ -10,7 +10,7 @@ import { useStore, type Action } from "@/state/store";
 import { engineReady } from "./EngineLibrary";
 import { ConnectAiDialog } from "./onboarding/ConnectAi";
 
-const STEPS: Record<SetupStep, { label: LocaleKey; icon: LucideIcon }> = {
+const STEPS: Record<SetupStep, { label: LocaleKey; icon: IconType }> = {
   ai: { label: "helperIntro.step.ai", icon: Sparkles },
   bots: { label: "helperIntro.step.bots", icon: BotIcon },
   apps: { label: "helperIntro.step.apps", icon: AppWindow },
@@ -61,7 +61,7 @@ export function HelperSetup() {
   );
 }
 
-const CHIPS: Record<IntroChip, { label: LocaleKey; icon: LucideIcon }> = {
+const CHIPS: Record<IntroChip, { label: LocaleKey; icon: IconType }> = {
   ai: { label: "helperIntro.chip.ai", icon: Sparkles },
   apps: { label: "helperIntro.chip.mail", icon: Mail },
   import: { label: "helperIntro.chip.skills", icon: Download },

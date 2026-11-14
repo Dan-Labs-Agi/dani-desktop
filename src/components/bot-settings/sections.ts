@@ -7,14 +7,14 @@ import {
   Eye,
   History,
   LayoutDashboard,
-  type LucideIcon,
+  type IconType,
   Mic,
   Network,
   ShieldCheck,
   Slack,
   Sparkles,
   User,
-} from "lucide-react";
+} from "@/components/icons";
 
 import type { BotSettingsSection } from "@/state/store";
 import type { LocaleKey } from "@/locales";
@@ -23,7 +23,7 @@ export const BOT_SECTIONS: Array<{
   id: BotSettingsSection;
   label: string;
   labelKey?: LocaleKey;
-  icon: LucideIcon;
+  icon: IconType;
   keywords: string[];
 }> = [
   { id: "overview", label: "Overview", labelKey: "botSettings.sections.overview", icon: LayoutDashboard, keywords: ["summary", "status", "what it does", "won't", "prompt", "what the model sees"] },

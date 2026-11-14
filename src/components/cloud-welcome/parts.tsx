@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode, type Ref } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { IconType } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 
@@ -19,7 +19,7 @@ export function StepHeading({ title, sub, aside, headingRef }: { title: ReactNod
   </header>;
 }
 
-export function CardIcon({ icon: Icon }: { icon: LucideIcon }) {
+export function CardIcon({ icon: Icon }: { icon: IconType }) {
   return <span aria-hidden="true" className="flex size-[34px] shrink-0 items-center justify-center rounded-[10px] bg-accent/15 text-accent-text">
     <Icon size={18} />
   </span>;

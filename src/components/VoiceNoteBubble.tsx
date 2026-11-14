@@ -1,6 +1,6 @@
 // No playback during a Live call: the call's microphone would pick the note up.
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, Pause, Play } from "lucide-react";
+import { ChevronRight, Pause, Play } from "@/components/icons";
 
 import { attachmentAudioUrl } from "@/lib/composer-attachments";
 import { t } from "@/lib/i18n";

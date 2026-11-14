@@ -235,7 +235,7 @@ describe("sidebar top row", () => {
       at("data-sidebar-account"),
     ];
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
-    expect(foot).toMatch(/data-tour="nav-apps" data-sidebar-nav="apps"[^>]*aria-label="Connect apps"[^>]*class="[^"]*\bsize-9\b[^"]*"><svg[^>]*lucide-puzzle/);
+    expect(foot).toMatch(/data-tour="nav-apps" data-sidebar-nav="apps"[^>]*aria-label="Connect apps"[^>]*class="[^"]*\bsize-9\b[^"]*"><svg[^>]*icon-puzzle/);
     expect(foot).not.toContain("data-workspace-switcher");
     expect(foot).not.toContain('data-sidebar-nav="automations"');
     expect(foot).not.toContain('data-sidebar-nav="team-map"');

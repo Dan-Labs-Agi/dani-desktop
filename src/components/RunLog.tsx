@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, CheckCircle2, Circle, Copy, Loader2, XCircle } from "lucide-react";
+import { Check, CheckCircle2, Circle, Copy, Loader2, XCircle } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";

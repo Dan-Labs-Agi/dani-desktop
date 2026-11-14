@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, CheckCheck, Folder, MoreHorizontal, Pencil, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCheck, Folder, MoreHorizontal, Pencil, Plus, X } from "@/components/icons";
 import { useStore, type Bot, type BotProject } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { MENU_SHEET } from "./menu-recipe";

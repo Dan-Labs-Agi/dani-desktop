@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Hourglass } from "lucide-react";
+import { Hourglass } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { dueBeforeReset, limitLine, nearLimitEngines, useEngineLimits, type EngineLimit } from "@/lib/limit-resets";

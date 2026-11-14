@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Download, Loader2, Upload } from "lucide-react";
+import { Download, Loader2, Upload } from "@/components/icons";
 import type { WorkspaceBackupSummary } from "../../shared/workspace-backup";
 import { api } from "@/state/store";
 import { t } from "@/lib/i18n";

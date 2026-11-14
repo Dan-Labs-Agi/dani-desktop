@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@/components/icons";
 import type { ConfigStatus } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";

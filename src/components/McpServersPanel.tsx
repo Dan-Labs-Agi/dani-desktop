@@ -12,7 +12,7 @@ import {
   RefreshCw,
   ServerCog,
   Trash2,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { openExternalLink } from "@/lib/app-links";
 import { cn } from "@/lib/cn";

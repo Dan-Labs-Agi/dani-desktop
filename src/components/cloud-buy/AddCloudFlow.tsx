@@ -2,7 +2,7 @@
 // browser; the sheet follows the payment and the setup by itself and opens the new Cloud. Without an Admin that sells more
 // than one Cloud per account it says so calmly. Main keeps the checkout page and the account; the page sees only this.
 import { useEffect, useRef, useState } from "react";
-import { Copy, ExternalLink, Loader2 } from "lucide-react";
+import { Copy, ExternalLink, Loader2 } from "@/components/icons";
 import type { CloudOfferPlan } from "../../../electron/cloud-home.mjs";
 import type { CloudSwatch } from "../../../electron/cloud-list.mjs";
 import type { AddCloudView } from "../../../electron/cloud-rail.mjs";

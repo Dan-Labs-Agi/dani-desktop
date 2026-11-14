@@ -1,6 +1,6 @@
 // The buying sheet's small pieces, drawn only with the skin's tokens so every skin gets its own version.
 import type { HTMLAttributes, ReactNode } from "react";
-import { Check, ChevronLeft, Cloud } from "lucide-react";
+import { Check, ChevronLeft, Cloud } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { cloudColorFill } from "@/lib/cloud-look";
 import { t } from "@/lib/i18n";

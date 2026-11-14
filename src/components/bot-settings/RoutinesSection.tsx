@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronRight, FileText, Plus } from "lucide-react";
+import { CalendarClock, ChevronRight, FileText, Plus } from "@/components/icons";
 import { useState } from "react";
 import { useStore, type Bot } from "@/state/store";
 import type { Routine, RoutineRun, RoutineRunOn } from "@/lib/routines";

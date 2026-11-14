@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Folder, FolderOpen } from "lucide-react";
+import { Folder, FolderOpen } from "@/components/icons";
 import { api, type Group } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

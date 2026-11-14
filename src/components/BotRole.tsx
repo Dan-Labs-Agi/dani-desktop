@@ -1,4 +1,4 @@
-import { Crown } from "lucide-react";
+import { Crown } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import type { Bot } from "@/state/store";
 

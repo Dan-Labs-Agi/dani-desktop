@@ -1,5 +1,5 @@
 import { EffortRow, ModelPicker } from "../ModelPicker";
-import { X } from "lucide-react";
+import { X } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { useStore, type Bot } from "@/state/store";
 import { useBotEditor } from "./BotEditorContext";

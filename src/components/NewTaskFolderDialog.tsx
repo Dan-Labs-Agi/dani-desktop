@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen } from "@/components/icons";
 import { useStore, type Bot } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { useModalDialog } from "@/hooks/use-modal-dialog";

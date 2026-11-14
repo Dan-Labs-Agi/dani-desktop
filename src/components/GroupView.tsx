@@ -4,7 +4,7 @@ import { activeLocale, t } from "@/lib/i18n";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useReactor } from "@/lib/cloud-guest";
 import { otherSpeaker } from "@/lib/own-profile";
-import { Check, ChevronDown, FolderOpen, Loader2, Pin, Square, X } from "lucide-react";
+import { Check, ChevronDown, FolderOpen, Loader2, Pin, Square, X } from "@/components/icons";
 import {
   api,
   useStore,

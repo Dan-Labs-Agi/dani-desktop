@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons";
 import type { ReactNode } from "react";
 import type { Bot, Message } from "@/state/store";
 import { handoffResult } from "@/lib/handoff-result";
