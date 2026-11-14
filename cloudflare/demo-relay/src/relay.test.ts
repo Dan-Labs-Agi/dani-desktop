@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 
-import { costUsd, createRelay, MODEL, tokenKey, toMessages, type Env, type Grant } from "./index";
+import { costUsd, createRelay, MODEL, tokenKey, toMessages, type Env, type Grant } from "./relay";
 
 const TOKEN = `omb_ai_${"a".repeat(43)}`;
 const usage = (input: number, output: number, read = 0, written = 0) =>
@@ -105,6 +105,10 @@ describe("the demo relay", () => {
     ]);
     expect(params.tools).toEqual([{ name: "search", description: "Search", input_schema: { type: "object", properties: { q: { type: "string" } } } }]);
     expect(() => toMessages({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "http://x.test/a.png" } }] }] })).toThrow();
+  });
+
+  it("gives workerd an entry module with only its handler", async () => {
+    expect(Object.keys(await import("./index"))).toEqual(["default"]);
   });
 
   it("prices a long prompt at the higher rate", () => {
