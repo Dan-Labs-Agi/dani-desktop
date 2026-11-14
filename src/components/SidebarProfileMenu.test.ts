@@ -452,7 +452,7 @@ describe("Simple mode's account menu", () => {
   });
 
   it("raises a downloaded or failed app update and a newer server, and nothing else", () => {
-    expect(simpleUpdateTop({ source: "desktop", phase: "downloaded" })).toEqual({ label: "Update ready", action: "Restart" });
+    expect(simpleUpdateTop({ source: "desktop", phase: "downloaded" })).toEqual({ label: "Update ready", action: "Update now" });
     expect(simpleUpdateTop({ source: "desktop", phase: "downloaded", installMode: "handoff" })).toEqual({ label: "Update ready", action: "Install" });
     expect(simpleUpdateTop({ source: "desktop", phase: "error" })).toEqual({ label: "Update failed", action: "Retry" });
     expect(simpleUpdateTop({ source: "server", phase: "available" })).toEqual({ label: "Update ready", action: "Install" });

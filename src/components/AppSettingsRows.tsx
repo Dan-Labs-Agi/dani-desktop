@@ -68,7 +68,7 @@ export function UpdatesRow({ title = t("settings.updates.title") }: { title?: st
           : s.status === "downloaded"
             ? s.installMode === "handoff"
               ? t("settings.updates.install")
-              : t("settings.updates.restart")
+              : t("settings.updates.updateNow")
             : s.status === "preparing"
               ? t("settings.updates.preparingShort")
               : s.status === "installing"

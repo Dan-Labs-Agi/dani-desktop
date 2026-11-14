@@ -25,6 +25,6 @@ it("shows this app's update where the desktop app answers, with no Download step
   expect(downloading).toContain("disabled");
   const ready = render({ status: "downloaded", version: "0.2.0" });
   expect(ready).toContain("Dani Bot 0.2.0 is ready. Restart the app to apply it.");
-  expect(ready).toContain("Restart and install");
+  expect(ready).toContain("Update now");
   expect(render({ status: "downloaded", version: "0.2.0", installMode: "handoff" })).toContain("Dani Bot 0.2.0 is ready. Install it in a terminal.");
 });

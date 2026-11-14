@@ -80,7 +80,7 @@ describe("the update button", () => {
 });
 
 describe("the update card", () => {
-  it("opens centred with the version, highlights and Restart to update, which installs", async () => {
+  it("opens centred with the version, highlights and Update now, which installs", async () => {
     await emit({ status: "downloaded", version: "0.2.0", releaseNotes: NOTES, installMode: "restart" });
     await act(async () => button()!.click());
     const dialog = card()!;
@@ -94,9 +94,9 @@ describe("the update card", () => {
       "Rooms keep actions.",
       "Mentions say who they reach.",
     ]);
-    const restart = [...dialog.querySelectorAll("button")].find((node) => node.textContent?.includes("Restart to update"))!;
-    expect(document.activeElement).toBe(restart);
-    await act(async () => restart.click());
+    const update = [...dialog.querySelectorAll("button")].find((node) => node.textContent?.includes("Update now"))!;
+    expect(document.activeElement).toBe(update);
+    await act(async () => update.click());
     expect(install).toHaveBeenCalledOnce();
   });
 
@@ -108,7 +108,7 @@ describe("the update card", () => {
     const primary = [...card()!.querySelectorAll("button")].find((node) => node.textContent?.includes("Downloading 45%"))!;
     expect(primary.disabled).toBe(true);
     await emit({ status: "downloaded", version: "0.2.0", percent: 100 });
-    expect(card()!.textContent).toContain("Restart to update");
+    expect(card()!.textContent).toContain("Update now");
     expect(card()!.querySelector('[role="progressbar"]')).toBeNull();
   });
 
@@ -116,7 +116,7 @@ describe("the update card", () => {
     await emit({ status: "downloaded", version: "0.2.0", installMode: "restart", installsByItself: true });
     await act(async () => button()!.click());
     expect(card()!.textContent).toContain("Restart now, or leave it: Dani Bot installs it by itself the next time you're away and nothing is running.");
-    expect(card()!.textContent).toContain("Restart to update");
+    expect(card()!.textContent).toContain("Update now");
     await emit({ status: "downloaded", version: "0.2.0", installMode: "restart", installsByItself: false });
     expect(card()!.textContent).toContain("Dani Bot closes and reopens in a moment.");
     expect(card()!.textContent).not.toContain("by itself");
