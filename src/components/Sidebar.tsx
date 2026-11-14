@@ -1,7 +1,7 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch } from "react";
 import { createPortal } from "react-dom";
-import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, Library, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, PinOff, Plus, Search, TextQuote, Trash2, Users, X, ListChecks, SquarePen } from "@/components/icons";
+import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, Library, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, PinOff, Plus, Search, TextQuote, Trash2, Users, X, ListChecks, SquarePen, PanelLeft } from "@/components/icons";
 import { api, useStore, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel } from "@/lib/live-activity";
@@ -1259,10 +1259,10 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
               <ListChecks size={density === "icons" ? 20 : 18} strokeWidth={1.5} className={actionRows ? "text-ink-secondary" : undefined} />
               {actionRows && <span className="min-w-0 flex-1 truncate text-left">{t("attention.title")}</span>}
               {attention.length > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-accent px-0.5 text-[10px] font-semibold leading-4 text-ink">{attention.length > 9 ? "9+" : attention.length}</span>
+                <span className={cn("flex min-w-4 items-center justify-center rounded-full px-0.5 font-semibold leading-4", actionRows ? "text-[12px] tabular-nums font-normal text-ink-secondary" : "absolute -right-0.5 -top-0.5 bg-accent text-[10px] text-ink")}>{attention.length > 9 ? "9+" : attention.length}</span>
               )}
               {attentionHasRunningWork(attention) && (
-                <span data-header-activity="" className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-success" aria-hidden="true" />
+                <span data-header-activity="" className={cn("size-1.5 rounded-full bg-success", actionRows ? "shrink-0" : "absolute bottom-0.5 right-0.5")} aria-hidden="true" />
               )}
             </button>
             {attentionMotion.shown && (
@@ -1346,10 +1346,21 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
         </div>}
         {density !== "icons" && (simpleDesk ? <div data-sidebar-top-slot className="min-w-0 flex-1" /> : (
           <div data-sidebar-top-slot className={cn("@container/sidebar-top flex min-w-0 flex-1 items-center", simple && "justify-end")}>
+            {actionRows && <button
+              type="button"
+              data-sidebar-collapse
+              onClick={() => setSidebarDensity("icons")}
+              aria-label={t("sidebar.resize")}
+              title={t("sidebar.resize")}
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              style={windowNoDragStyle}
+            >
+              <PanelLeft size={18} strokeWidth={1.5} aria-hidden="true" />
+            </button>}
             {!simple && <div data-sidebar-top-spacer className="min-w-0 flex-1 @min-[96px]/sidebar-top:min-w-6" />}
-            <div data-sidebar-top-switcher className={simple ? "flex min-w-0 items-center" : "flex min-w-0 max-w-[140px] items-center"}>
+            {!actionRows && <div data-sidebar-top-switcher className={simple ? "flex min-w-0 items-center" : "flex min-w-0 max-w-[140px] items-center"}>
               <DesktopWorkspaceSwitcher inline pill={simple} cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} />
-            </div>
+            </div>}
           </div>
         ))}
         {!rail && <div
@@ -1358,6 +1369,16 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
           style={windowNoDragStyle}
         >
           {simpleDesk && <SidebarSearchToggle ref={searchToggleRef} corner={corner} open={searchShown} onToggle={() => (searchShown ? closeSearch() : setSearchOpen(true))} />}
+          {density === "icons" && advanced && !phone && <button
+            type="button"
+            data-sidebar-expand
+            onClick={() => setSidebarDensity("comfortable")}
+            aria-label={t("sidebar.resize")}
+            title={t("sidebar.resize")}
+            className="flex size-[46px] shrink-0 items-center justify-center rounded-xl text-ink-secondary hover:bg-raised hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            <PanelLeft size={20} strokeWidth={1.5} aria-hidden="true" />
+          </button>}
           {density === "icons" && <button
             type="button"
             onClick={openCommandPalette}
@@ -1376,9 +1397,13 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
       <OrganizationIdentity compact={density === "icons"} />
       {actionRows && <nav data-sidebar-actions aria-label={t("sidebar.new")} className="flex flex-col gap-0.5 px-3 pb-1">
         <div className="relative flex">{plusControl}</div>
+        <button type="button" ref={searchToggleRef} data-sidebar-search-row aria-label={t("sidebar.searchAria")} aria-expanded={searchShown} onClick={() => (searchShown ? closeSearch() : setSearchOpen(true))} className="relative flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[14px] text-ink transition-colors hover:bg-ink/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+          <Search size={18} strokeWidth={1.5} className="text-ink-secondary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">{t("sidebar.search")}</span>
+        </button>
         <div className="relative flex">{attentionControl}</div>
       </nav>}
-      {phone ? null : simple ? searchShown && <SidebarSearchPill query={query} onQuery={setQuery} onClose={closeSearch} /> : <div className={cn("pt-1 pb-3", density === "icons" ? "hidden" : "px-3")}>
+      {phone ? null : simple || actionRows ? searchShown && <SidebarSearchPill query={query} onQuery={setQuery} onClose={closeSearch} /> : <div className={cn("pt-1 pb-3", density === "icons" ? "hidden" : "px-3")}>
         <div className={cn("flex h-8 items-center gap-2 rounded-full px-3 focus-within:ring-focus", ELEVATED_CONTROL)}>
           <Search size={15} className="shrink-0 text-ink-secondary" />
           <input
@@ -1577,6 +1602,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
         iconOnly={density === "icons"}
       />
 
+      {actionRows && <div data-sidebar-place className="[&>div]:py-0"><DesktopWorkspaceSwitcher cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} /></div>}
       {rail ? <SimpleRailFooter
         owner={cloudOwner}
         archived={archivedEntry}

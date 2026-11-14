@@ -355,7 +355,7 @@ test("a named local environment is this computer with its path, and gets its own
   assert.equal(items[0].id, "workspace-local");
   const row = items.find((item) => item.id === "workspace-l1");
   assert.equal(row.label, "APRS Chat");
-  assert.equal(row.type, "radio");
+  assert.equal(row.type, "checkbox");
   assert.equal(row.checked, true);
   assert.equal(items.find((item) => item.id === "workspace-r1").checked, false);
   row.click();
@@ -428,7 +428,7 @@ test("the switcher lists My Cloud first, then each team from the session with th
   assert.deepEqual(env.workspaceSummary(state), { local: false, name: "Acme", origin: TEAM, role: "Super admin" });
   // Before the move (or a Team Owner, whose home is this computer): This computer, then each team with its role (no Forget), then servers as saved.
   const before = env.workspaceMenuTemplate(state, { onSwitch() {}, onConnect() {}, onForget() {} });
-  assert.deepEqual(before.filter((item) => item.type === "radio").map((item) => [item.label, item.sublabel]), [["This computer", undefined], ["Acme", "Super admin"], ["Office", "office.example.test"], ["My Cloud", "omb-t-1.fly.dev"]]);
+  assert.deepEqual(before.filter((item) => item.type === "checkbox").map((item) => [item.label, item.sublabel]), [["This computer", undefined], ["Acme", "Super admin"], ["Office", "office.example.test"], ["My Cloud", "omb-t-1.fly.dev"]]);
   assert.equal(before.some((item) => item.id === "workspace-forget"), false, "a team is the Admin's to remove");
   assert.equal(env.otherPlaces(state, home), 2);
   const serialized = env.parseEnvironments(env.serializeEnvironments(state));

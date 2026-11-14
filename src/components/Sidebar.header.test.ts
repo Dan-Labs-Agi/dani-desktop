@@ -111,20 +111,17 @@ describe("sidebar top row", () => {
     expect(lights).toBe(-1);
     expect(slot).toBeGreaterThan(-1);
     expect(spacer).toBeGreaterThan(slot);
-    expect(switcher).toBeGreaterThan(spacer);
-    expect(buttons).toBeGreaterThan(switcher);
+    expect(switcher).toBe(-1);
+    expect(buttons).toBeGreaterThan(spacer);
+    expect(row.indexOf("data-sidebar-collapse")).toBeLessThan(spacer);
     expect(html).toContain("data-sidebar-actions");
     const rowClasses = classesOf(row, "data-sidebar-top-row");
     expect(rowClasses).toEqual(expect.arrayContaining(["relative", "pl-4", "pr-2"]));
     expect(rowClasses).not.toContain("px-4");
     expect(classesOf(row, "data-sidebar-top-slot")).toEqual(expect.arrayContaining(["@container/sidebar-top", "min-w-0", "flex-1"]));
     expect(row).toContain('<div data-sidebar-top-spacer="true" class="min-w-0 flex-1 @min-[96px]/sidebar-top:min-w-6"></div>');
-    const switcherClasses = classesOf(row, "data-sidebar-top-switcher");
-    expect(switcherClasses).toEqual(expect.arrayContaining(["min-w-0", "max-w-[140px]"]));
-    expect(switcherClasses).not.toContain("flex-1");
     expect(classesOf(row, "data-sidebar-top-buttons")).toEqual(expect.arrayContaining(["shrink-0", "gap-0.5"]));
-    expect(row).toMatch(/aria-label="Switch server: Servers"[^>]*title="Servers"[^>]*class="[^"]*\bh-7\b[^"]*\boverflow-hidden\b[^"]*\btext-\[13px\][^"]*" style="-webkit-app-region:no-drag"/);
-    expect(row).toContain('<span class="min-w-0 truncate @max-[96px]/sidebar-top:hidden">Servers</span>');
+    expect(row).not.toContain("Switch server:");
     expect(row).toContain("focus-visible:outline-2");
     expect(html).toContain('title="New or share"');
     expect(row).not.toContain('title="Active Threads"');
@@ -169,8 +166,9 @@ describe("sidebar top row", () => {
       const { slot, spacer, switcher, buttons } = order(row);
       expect(slot).toBeGreaterThan(-1);
       expect(spacer).toBeGreaterThan(slot);
-      expect(switcher).toBeGreaterThan(spacer);
-      expect(buttons).toBeGreaterThan(switcher);
+      expect(switcher).toBe(-1);
+      expect(buttons).toBeGreaterThan(spacer);
+      expect(row.indexOf("data-sidebar-collapse")).toBeLessThan(spacer);
       expect(html.match(/Switch server:/g)).toHaveLength(1);
     },
   );
