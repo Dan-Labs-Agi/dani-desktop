@@ -176,9 +176,37 @@ const heldProfiles = new Map<string, { target: string; daemon: number }>();
 function namesProfile(args: string, dir: string): boolean {
   const flag = `--user-data-dir=${dir}`;
   for (let at = args.indexOf(flag); at >= 0; at = args.indexOf(flag, at + 1)) {
-    if (at + flag.length === args.length || args[at + flag.length] === " ") return true;
+    if (at + flag.length === args.length || args[at + flag.length] === " " || args[at + flag.length] === "\"") return true;
   }
   return false;
+}
+
+/** From a listing of `{ pid, ancestors, args }` rows (ancestors: images of the nearest running ancestors, space separated), the
+ * main processes (no --type=) on `dir` with no running agent-browser above them. */
+export function orphanedWindowsChromes(json: string, dir: string): number[] {
+  let rows: unknown;
+  try { rows = JSON.parse(json || "[]"); } catch { return []; }
+  return (Array.isArray(rows) ? rows : [rows]).flatMap((row) => {
+    const { pid, ancestors, args } = (row ?? {}) as { pid?: unknown; ancestors?: unknown; args?: unknown };
+    return Number.isInteger(pid) && typeof args === "string" && !/(?:^|\s)--type=/.test(args) && namesProfile(args, dir)
+      && !/agent-browser/i.test(typeof ancestors === "string" ? ancestors : "") ? [pid as number] : [];
+  });
+}
+
+/** Windows (agent-browser 0.36): Chrome inherits its daemon's listening socket, so when the daemon dies its port still accepts
+ * and never answers, and every `close` or probe times out until that Chrome stops. The daemon starts Chrome through a cmd
+ * wrapper, so a Chrome with a running agent-browser among its three nearest ancestors is a live daemon's and is left alone.
+ * True when one was stopped. */
+async function stopOrphanedWindowsChrome(dir: string): Promise<boolean> {
+  const powershell = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const script = "$all = Get-CimInstance Win32_Process; $by = @{}; foreach ($p in $all) { $by[[int]$p.ProcessId] = $p };"
+    + " @($all | Where-Object { $_.CommandLine -like '*--user-data-dir=*' } | ForEach-Object { $names = @(); $up = $by[[int]$_.ParentProcessId];"
+    + " for ($i = 0; $i -lt 3 -and $up; $i++) { $names += $up.Name; $up = $by[[int]$up.ParentProcessId] };"
+    + " [pscustomobject]@{ pid = [int]$_.ProcessId; ancestors = ($names -join ' '); args = $_.CommandLine } }) | ConvertTo-Json -Compress";
+  const listing = await execText(powershell, ["-NoProfile", "-NonInteractive", "-Command", script]);
+  const orphans = orphanedWindowsChromes(listing ?? "", dir);
+  for (const pid of orphans) await execText("taskkill", ["/PID", String(pid), "/T", "/F"]);
+  return orphans.length > 0;
 }
 
 async function daemonOf(pid: number, table: Map<number, ListedProcess>): Promise<number | null> {
@@ -194,7 +222,8 @@ async function daemonOf(pid: number, table: Map<number, ListedProcess>): Promise
  * A Chrome whose daemon was killed keeps running, re-parented, and would take every later launch, so it is stopped; then the
  * lock goes. A daemon's own Chrome keeps it. The profile's contents are never touched. */
 export async function releaseBrowserProfile(dir: string | undefined): Promise<void> {
-  if (!dir || process.platform === "win32") return;
+  if (!dir) return;
+  if (process.platform === "win32") { await stopOrphanedWindowsChrome(dir); return; }
   let target: string;
   try { target = readlinkSync(join(dir, "SingletonLock")); }
   catch { heldProfiles.delete(dir); return; }

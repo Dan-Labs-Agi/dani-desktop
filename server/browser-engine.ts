@@ -150,6 +150,12 @@ async function closeOnce(binaryPath: string, env: NodeJS.ProcessEnv, session: st
   const closing = daemonPid();
   // Read first: once the daemon exits, its Chrome is re-parented and can no longer be found under it.
   const tree = closing === null ? null : await browserProcessTree(binaryPath, Number(closing), session).catch(() => null);
+  // Windows: a dead daemon's port answers nothing while its orphaned Chrome holds the socket, so `close` would only time out.
+  if (!tree && process.platform === "win32") {
+    await releaseBrowserProfile(env.AGENT_BROWSER_PROFILE ?? browserProfileDirectory(session));
+    const left = await runningBrowserSessions(binaryPath, closeEnv, deadline);
+    if (left && !left.includes(session)) return true;
+  }
   if ((await runBrowserCommand(binaryPath, closeEnv, ["close"], deadline)).ok) {
     // Native close answers before the daemon exits, and Chrome's helper processes can outlive the answer.
     while (Date.now() < deadline) {
