@@ -270,8 +270,8 @@ export function CallTargetButton({
               ? unavailable ? "bg-ink/[0.06] text-ink-tertiary hover:text-ink-secondary" : "bg-ink/[0.06] text-ink hover:bg-ink/[0.11]"
             : composer
               ? unavailable
-                ? "bg-control text-ink-tertiary hover:text-ink-secondary"
-                : "bg-control text-ink hover:bg-raised-hover"
+                ? "text-ink-tertiary hover:bg-raised-hover hover:text-ink-secondary"
+                : "text-ink-secondary hover:bg-raised-hover hover:text-ink"
               : unavailable
                 ? "text-ink-tertiary hover:bg-raised-hover hover:text-ink-secondary"
                 : "text-ink-secondary hover:bg-raised-hover hover:text-ink",
@@ -301,7 +301,8 @@ export function CallTargetButton({
           title={t("call.mode.menu")}
           className={cn(
               "grid place-content-center",
-              "bg-control w-8 hover:bg-raised-hover text-ink-secondary hover:text-ink disabled:opacity-40 transition-colors",
+              "w-8 hover:bg-raised-hover text-ink-secondary hover:text-ink disabled:opacity-40 transition-colors",
+              !composer && "bg-control",
               "rounded-l-lg rounded-r-3xl active:rounded-3xl transition-[color,background,border-radius]",
               composer ? "h-8" : "h-9"
             )}
@@ -419,10 +420,11 @@ export function CallModeMenu({ id, mode, onChoose, onClose, placement = "header"
         if (event.key === "Tab") onClose();
         else navigateThreadMenu(event);
       }}
-      className={cn("animate-pop-in absolute right-0 z-30 w-[280px] text-left", MENU_SHEET, placement === "composer" ? "bottom-full mb-1.5" : "top-full mt-1.5")}
+      className={cn("animate-pop-in absolute right-0 z-30 w-[220px] text-left", MENU_SHEET, placement === "composer" ? "bottom-full mb-1.5" : "top-full mt-1.5")}
     >
       {CALL_MODES.map((entry) => {
         const unavailable = entry.id === "turns" ? turnsUnavailable : null;
+        const hint = unavailable ? `${unavailable.label}. ${unavailable.reason}` : callModeHint(entry.id, { cloudHome });
         return (
           <button
             key={entry.id}
@@ -431,21 +433,20 @@ export function CallModeMenu({ id, mode, onChoose, onClose, placement = "header"
             aria-checked={mode === entry.id}
             // aria-disabled, not disabled: arrow keys skip a disabled item, so its reason would never be read out.
             aria-disabled={unavailable ? true : undefined}
+            title={hint}
             onClick={() => {
               if (!unavailable) onChoose(entry.id);
             }}
             className={cn(
-              "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-menu-hover aria-disabled:cursor-default aria-disabled:hover:bg-transparent",
+              "flex min-h-[30px] w-full items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none hover:bg-menu-hover aria-disabled:cursor-default aria-disabled:hover:bg-transparent",
               mode === entry.id && "bg-menu-active",
             )}
           >
             <span className="min-w-0 flex-1">
               <span className={cn("block text-[14px] leading-[18px]", unavailable ? "text-ink-tertiary" : "text-ink")}>{t(entry.label)}</span>
-              <span className="mt-0.5 block text-[12px] leading-[1.4] text-ink-secondary">
-                {unavailable ? `${unavailable.label}. ${unavailable.reason}` : callModeHint(entry.id, { cloudHome })}
-              </span>
+              {unavailable && <span className="mt-0.5 block text-[12px] leading-[1.4] text-ink-tertiary">{unavailable.label}</span>}
             </span>
-            {mode === entry.id && <Check size={14} className="mt-0.5 shrink-0 text-accent" aria-hidden="true" />}
+            {mode === entry.id && <Check size={14} className="shrink-0 text-ink-secondary" aria-hidden="true" />}
           </button>
         );
       })}

@@ -228,6 +228,7 @@ export function ModelPicker({
   threadId,
   className,
   contained = false,
+  quiet = false,
   label,
   size = "md",
 }: {
@@ -235,6 +236,8 @@ export function ModelPicker({
   threadId?: string;
   className?: string;
   contained?: boolean;
+  /** No fill until hovered or open: for a strip of small text controls. */
+  quiet?: boolean;
   label?: ReactNode;
   size?: "sm" | "md";
 }) {
@@ -631,8 +634,9 @@ export function ModelPicker({
     <button
       {...triggerProps}
       className={cn(
-        "group flex items-center gap-1.5 rounded-full py-1 pl-2 pr-2.5 text-[13px] text-ink disabled:cursor-not-allowed",
-        contained
+        "group flex items-center gap-1.5 rounded-full py-1 pl-2 pr-2.5 text-[13px] disabled:cursor-not-allowed",
+        quiet ? "text-ink-secondary hover:text-ink aria-expanded:text-ink" : "text-ink",
+        contained || quiet
           ? "hover:bg-ink/[0.06] aria-expanded:bg-ink/[0.08] disabled:opacity-50 disabled:hover:bg-transparent"
           : cn(ELEVATED_FLOAT, ELEVATED_HOVER, "disabled:text-ink-tertiary disabled:hover:bg-composer"),
         !contained && active && !showActiveAccount && COMPACT_SQUARE,

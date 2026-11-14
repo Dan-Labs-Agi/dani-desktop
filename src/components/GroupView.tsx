@@ -1090,7 +1090,7 @@ export function GroupView({ group }: { group: Group }) {
 
       <div
         ref={scrollRef}
-        className="glass-scroller h-full overflow-x-hidden overflow-y-auto px-5 [overflow-anchor:none]"
+        className="glass-scroller h-full overflow-x-hidden overflow-y-auto px-5 [@media(pointer:fine)]:px-3 [@media(pointer:fine)]:[scrollbar-gutter:stable_both-edges] [overflow-anchor:none]"
         {...scrollHandlers}
       >
         {setupPending ? (

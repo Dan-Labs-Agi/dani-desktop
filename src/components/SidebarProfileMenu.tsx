@@ -674,7 +674,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
               {moveDot && <span aria-hidden data-account-dot={moveDot} className={cn("absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-app", DOT_COLOR[moveDot])} />}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[14px] font-medium leading-5 text-ink">{name}</span>
+              <span className="truncate text-[14px] leading-5 text-ink">{name}</span>
               <AccountMoveStatus kind={move.kind} place={move.place} />
             </span>
             {noteworthy && (

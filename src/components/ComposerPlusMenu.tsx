@@ -219,7 +219,7 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
       <Plus size={22} aria-hidden="true" />
     </span>
   ) : (
-    <span data-composer-plus className={cn("flex items-center justify-center transition-colors", SIMPLE_CONTROL, open && "bg-ink/[0.09] text-ink")}>
+    <span data-composer-plus className={cn("flex items-center justify-center transition-colors", simple ? SIMPLE_CONTROL : "size-7 rounded-full text-ink-secondary hover:bg-ink/[0.09] hover:text-ink", open && "bg-ink/[0.09] text-ink")}>
       <Plus size={20} strokeWidth={1.75} absoluteStrokeWidth aria-hidden="true" />
     </span>
   );

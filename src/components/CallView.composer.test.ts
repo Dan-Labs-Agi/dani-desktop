@@ -100,10 +100,11 @@ afterEach(() => {
 });
 
 describe("composer call button", () => {
-  it("is a Send-sized filled button with a waveform, labelled for the bot", () => {
+  it("is a Send-sized quiet button with a waveform, labelled for the bot", () => {
     const { html, button } = render();
     expect(button.props["aria-label"]).toBe("Call Pepper");
-    expect(String(button.props.className).split(" ")).toEqual(expect.arrayContaining(["size-8", "rounded-l-3xl", "rounded-r-lg", "active:rounded-3xl", "transition-[color,background,border-radius]", "bg-control"]));
+    expect(String(button.props.className).split(" ")).toEqual(expect.arrayContaining(["size-8", "rounded-l-3xl", "rounded-r-lg", "active:rounded-3xl", "transition-[color,background,border-radius]", "hover:bg-raised-hover"]));
+    expect(String(button.props.className).split(" ")).not.toContain("bg-control");
     expect(html).toContain("lucide-audio-lines");
     expect(html).not.toContain("lucide-phone");
   });

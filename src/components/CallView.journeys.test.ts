@@ -171,7 +171,7 @@ function expectTurnsDisabled(reason: string) {
   const [turns, live] = menuItems();
   expect(turns?.textContent).toContain("Take turns");
   expect(turns?.getAttribute("aria-disabled")).toBe("true");
-  expect(turns?.textContent).toContain(reason);
+  expect(turns?.getAttribute("title")).toContain(reason);
   expect(turns?.getAttribute("aria-checked")).toBe("false");
   expect(live?.textContent).toContain("Live");
   expect(live?.hasAttribute("aria-disabled")).toBe(false);

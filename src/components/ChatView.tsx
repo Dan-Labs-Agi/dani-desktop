@@ -1,4 +1,4 @@
-import { createContext, memo, use, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch } from "react";
+import { createContext, memo, use, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch } from "react";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { PHONE_LAYOUT, useMediaQuery } from "@/lib/use-media-query";
 import { ThreadLinkContext } from "@/components/ThreadLinkMenu";
@@ -137,6 +137,9 @@ import { isBotTextRow, joinedCorners, needsStamp, quietRow, simpleRowLayout, SIM
 
 const USER_COLLAPSE_CHARS = 600;
 const USER_COLLAPSE_LINES = 8;
+/** A header of plain words stays solid canvas behind them: what scrolls under it fades only across its last 12px. */
+// SAFETY: a custom property is not in React's CSSProperties type; the renderer accepts it as an inline style.
+const PLAIN_HEADER_FADE = { "--glass-fade": "12px" } as CSSProperties;
 
 interface ChatRows {
   botId: string; threadId: string; botName: string; botColor: Bot["color"]; voiceId?: string;
@@ -908,8 +911,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
   branch.current = messages;
   const onBranch = useCallback((messageId: string) => branch.current.some((m) => m.id === messageId), []);
   const colorMine = useColorUserBubbles();
-  // Simple mode draws your bubble in one flat tone of the bot's colour.
-  const bubbleStyle = useMemo(() => (colorMine ? userBubbleStyle(bot.color, { flat: !advanced }) : undefined), [colorMine, bot.color, advanced]);
+  const bubbleStyle = useMemo(() => (colorMine ? userBubbleStyle(bot.color, { flat: true }) : undefined), [colorMine, bot.color]);
   const hasMore = Boolean(bot.hasMore);
   const reactor = useReactor();
   const speakerViewer = state.config?.team && reactor !== "user" ? reactor : null;
@@ -1010,7 +1012,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
       <CallOverlay bot={bot} />
       <GlassScrollFrame className="flex-1 [--glass-tint:var(--color-app)]">
       {/* z-[25]: above the room set-up card (z-20), below the CallOverlay (z-30). */}
-      <GlassBar edge="top" fade={!remoteClient} className="z-[25]">
+      <GlassBar edge="top" fade={!remoteClient} className="z-[25]" style={advanced ? PLAIN_HEADER_FADE : undefined}>
       <div
         {...headerDragProps}
         className={cn(
@@ -1060,7 +1062,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
                 onActivate={() => dispatch({ type: "toggleSettings", open: true })}
                 showEditButton
                 className="truncate text-[14px] font-semibold text-ink"
-                editButtonClassName="size-6 rounded-full opacity-0 transition-opacity group-hover/title:opacity-100 focus-visible:opacity-100"
+                editButtonClassName="size-6 rounded-full opacity-0 transition-opacity group-hover/title:opacity-100 focus-visible:opacity-100 touch:opacity-100"
                 inputClassName="max-w-[220px] rounded-full bg-inset px-2 py-0.5 text-[14px] font-semibold"
               />
               {chiefOfStaffBadge(bot)}
@@ -1161,7 +1163,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
 
       <div
         ref={scrollRef}
-        className="glass-scroller h-full overflow-x-hidden overflow-y-auto overscroll-y-contain px-5 [overflow-anchor:none]"
+        className="glass-scroller h-full overflow-x-hidden overflow-y-auto overscroll-y-contain px-5 [@media(pointer:fine)]:px-3 [@media(pointer:fine)]:[scrollbar-gutter:stable_both-edges] [overflow-anchor:none]"
         // Simple mode's composer sits on plain canvas, so a row scrolled into view stops clear of it.
         style={advanced ? undefined : { scrollPaddingBottom: composerDock.pad }}
         {...scrollHandlers}
@@ -1286,7 +1288,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
         onClearReply={clearReply}
         onConsumeReply={consumeReply}
         onRestoreReply={restoreReply}
-        modelControl={advanced && !remoteClient && !phone ? <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} /> : undefined}
+        modelControl={advanced && !remoteClient && !phone ? <ModelPicker key={bot.threadId} bot={bot} threadId={bot.threadId} quiet /> : undefined}
         onEditLast={lastTypedMessage && !lastTypedMessageHasAttachments && !bot.busy && !lastTypedMessage.id.startsWith("optimistic-")
           ? () => setEditingId(lastTypedMessage.id)
           : undefined}
