@@ -106,18 +106,18 @@ describe("Settings rail groups", () => {
     for (const entry of SECTIONS) expect(SETTINGS_GROUPS.map((group) => group.id)).toContain(entry.group);
   });
 
-  it("shows every desktop page under its labelled group", () => {
+  it("shows every desktop page under its group, named for screen readers, with API keys pinned at the foot", () => {
     vi.stubGlobal("window", { ogb: { environments: {}, organization: {}, cloudAccount: {} } });
     const html = render();
-    for (const label of ["You", "AI", "Devices", "Account"]) expect(html).toContain(`>${label}</div>`);
+    for (const label of ["You", "AI", "Devices", "Account"]) expect(html).toContain(`class="sr-only">${label}</div>`);
     expect(html).toContain("glass-surface");
     expect(rail(html)).toEqual({
       you: ["general", "appearance", "companion"],
-      ai: ["engines", "connections", "decisionModel"],
+      ai: ["engines", "decisionModel"],
       computers: ["desktopWorkspaces", "computer", "logins"],
       account: ["cloudAccount", "organization", "usage", "backups", "import", "experimental"],
+      pinned: ["connections"],
     });
-    expect(html).toContain('<optgroup label="AI">');
   });
 
   it("keeps the browser-only pages for a hosted workspace's admins", () => {

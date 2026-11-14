@@ -360,7 +360,7 @@ describe("Settings in Advanced mode", () => {
     expect(html).toContain("glass-surface");
     expect(html).toContain('data-settings-look="advanced"');
     expect(html).not.toContain("data-settings-page=");
-    expect([...html.matchAll(/data-settings-group="([^"]+)"/g)].map((match) => match[1])).toEqual(["you", "ai", "computers", "account"]);
+    expect([...html.matchAll(/data-settings-group="([^"]+)"/g)].map((match) => match[1])).toEqual(["you", "ai", "computers", "account", "pinned"]);
     expect(html.indexOf('aria-label="Advanced mode"')).toBeLessThan(html.indexOf("Language"));
     expect(html).toContain("Show every technical control on this device");
     expect(html).not.toContain("More settings");

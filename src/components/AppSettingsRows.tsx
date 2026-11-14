@@ -255,7 +255,7 @@ export function ColorUserBubblesRow({ simple = false }: { simple?: boolean }) {
 export function AdvancedModeRow({ simple = false }: { simple?: boolean }) {
   const enabled = useAdvancedMode();
   return (
-    <SettingRow className={simple ? undefined : "rounded-2xl border border-ink/[0.08] bg-menu py-4"} title={t("settings.advancedMode.title")}
+    <SettingRow title={t("settings.advancedMode.title")}
       subtitle={t(simple ? "settings.simple.advancedMode" : "settings.advancedMode.subtitle")}>
       <Switch
         checked={enabled}

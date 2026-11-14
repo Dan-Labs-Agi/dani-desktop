@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, ChartNoAxesColumn, Cloud, CloudDownload, Coins, Download, FlaskConical, KeyRound, LockKeyhole, Monitor, Palette, ScrollText, Search, Settings, Sparkles, TabletSmartphone, Terminal, User, Users, X, Building2, Zap, BookOpen } from "@/components/icons";
+import { Archive, ArrowUpRight, ChartNoAxesColumn, ChevronLeft, Cloud, CloudDownload, Coins, Download, FlaskConical, KeyRound, LockKeyhole, Monitor, Palette, ScrollText, Search, Settings, Sparkles, TabletSmartphone, Terminal, User, Users, X, Building2, Zap, BookOpen } from "@/components/icons";
 import { useStore, type AppSettingsSection } from "@/state/store";
 import { skillsLibraryEnabled } from "@/lib/feature-flags";
 import { type LocaleKey } from "@/locales";
@@ -107,6 +107,9 @@ export const SECTIONS: Array<{
   { id: "experimental", group: "account", labelKey: "settings.section.experimental", icon: FlaskConical, keywords: ["early", "preview", "learn", "skill", "authoring"] },
 ];
 
+/** Sections kept at the foot of the Advanced nav, apart from the groups. */
+const PINNED_SECTIONS: readonly AppSettingsSection[] = ["connections"];
+
 export type SimpleSettingsPage = {
   id: string;
   labelKey: LocaleKey;
@@ -188,6 +191,8 @@ export function SettingsModal() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchFirst = useRef(advanced);
   const [query, setQuery] = useState("");
+  // A phone shows the list of sections or one section, never both; a wider sheet shows them side by side.
+  const [phoneList, setPhoneList] = useState(false);
   useEffect(() => window.ogb?.environments?.onOpenSettings?.(() => setQuery("")), []);
   useEffect(() => window.ogb?.onOpenAppSettings?.(() => setQuery("")), []);
   const q = query.trim().toLowerCase();
@@ -442,6 +447,9 @@ export function SettingsModal() {
   };
 
   const close = () => dispatch({ type: "toggleAppSettings", open: false });
+  const pinnedSections = visibleSections.filter((entry) => PINNED_SECTIONS.includes(entry.id));
+  const listedSections = visibleSections.filter((entry) => !PINNED_SECTIONS.includes(entry.id));
+  const pickSection = (id: AppSettingsSection) => { setPhoneList(false); openSection(id); };
   const searchField = (className: string, inputClassName: string) => (
     <div className={className}>
       <Search size={15} aria-hidden="true" className="shrink-0 text-ink-secondary" />
@@ -589,88 +597,87 @@ export function SettingsModal() {
         aria-modal="true"
         aria-labelledby="app-settings-title"
         tabIndex={-1}
-        className="glass-surface glass-popup animate-pop-in relative flex overflow-hidden rounded-2xl outline-none"
+        className="glass-surface glass-popup animate-pop-in relative flex flex-col overflow-hidden rounded-2xl outline-none"
       >
-        <span id="app-settings-title" className="sr-only">{t("settings.title")}</span>
-        <nav className="glass-rail hidden min-h-0 w-[200px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-hairline/30 p-3 sm:flex">
-          <div className="shrink-0 px-2 py-3 text-[15px] font-semibold text-ink">
-            {t("settings.title")}
-          </div>
-          {searchField(
-            "mb-2 mt-1 flex h-8 shrink-0 items-center gap-2 rounded-lg bg-ink/[0.05] px-[9px] text-[13px] focus-within:ring-2 focus-within:ring-focus/60",
-            "w-full min-w-0 bg-transparent text-[13px] text-ink placeholder:text-ink-tertiary focus:outline-none",
-          )}
-          {visibleSections.length === 0 && (
-            <div className="px-2.5 py-4 text-[13px] leading-relaxed text-ink-secondary">
-              {t("settings.noMatch", { query: query.trim() })}
-            </div>
-          )}
-          {SETTINGS_GROUPS.map((group) => {
-            const entries = visibleSections.filter((entry) => entry.group === group.id);
-            if (entries.length === 0) return null;
-            return (
-              <div key={group.id} role="group" aria-labelledby={`settings-group-${group.id}`} data-settings-group={group.id} className="flex flex-col gap-0.5 pb-2">
-                <div id={`settings-group-${group.id}`} className="px-[9px] pb-1 pt-2 text-[12px] font-medium leading-4 text-ink-tertiary">
-                  {t(group.labelKey)}
+        <header data-settings-header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-ink/[0.08] pl-5 pr-3">
+          <h2 id="app-settings-title" className="text-[15px] font-medium text-ink">{t("settings.title")}</h2>
+          <button
+            onClick={close}
+            aria-label={t("settings.close")}
+            title={`${t("settings.close")} (${shortcutLabel("close-panel")})`}
+            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink motion-reduce:transition-none"
+          >
+            <X size={18} />
+          </button>
+        </header>
+        <div className="flex min-h-0 flex-1">
+          <nav aria-label={t("settings.title")} data-settings-nav className={cn("min-h-0 w-full shrink-0 flex-col border-ink/[0.08] sm:flex sm:w-[240px] sm:border-r", phoneList ? "flex" : "hidden")}>
+            {searchField(
+              "mx-3 mb-2 mt-3 flex h-8 shrink-0 items-center gap-2 rounded-lg border border-ink/[0.1] px-2.5 text-[14px] focus-within:border-ink/30",
+              "w-full min-w-0 bg-transparent text-[14px] text-ink placeholder:text-ink-tertiary focus:outline-none",
+            )}
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-2">
+              {listedSections.length === 0 && pinnedSections.length === 0 && (
+                <div className="px-2.5 py-4 text-[13px] leading-relaxed text-ink-secondary">
+                  {t("settings.noMatch", { query: query.trim() })}
                 </div>
-                {entries.map(({ id, labelKey, icon: Icon }) => (
+              )}
+              {SETTINGS_GROUPS.map((group) => {
+                const entries = listedSections.filter((entry) => entry.group === group.id);
+                if (entries.length === 0) return null;
+                return (
+                  <div key={group.id} role="group" aria-labelledby={`settings-group-${group.id}`} data-settings-group={group.id} className="flex flex-col gap-0.5 border-ink/[0.08] py-2 not-first:border-t">
+                    <div id={`settings-group-${group.id}`} className="sr-only">{t(group.labelKey)}</div>
+                    {entries.map(({ id, labelKey, icon: Icon }) => (
+                      <button
+                        key={id}
+                        data-settings-section={id}
+                        onClick={() => pickSection(id)}
+                        aria-current={section === id ? "page" : undefined}
+                        className={cn("flex h-8 shrink-0 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-left text-[14px] text-ink transition-colors motion-reduce:transition-none", section === id ? "bg-ink/[0.08]" : "hover:bg-ink/[0.06]")}
+                      >
+                        <Icon size={16} className="shrink-0 text-ink-secondary" />
+                        <span className="min-w-0 truncate">{t(labelKey)}</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+              {keyResultButtons("cursor-pointer flex min-h-8 items-center rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink transition-colors hover:bg-ink/[0.06] motion-reduce:transition-none")}
+            </div>
+            {pinnedSections.length > 0 && (
+              <div data-settings-group="pinned" className="flex shrink-0 flex-col gap-0.5 border-t border-ink/[0.08] px-3 py-2">
+                {pinnedSections.map(({ id, labelKey, icon: Icon }) => (
                   <button
                     key={id}
                     data-settings-section={id}
-                    onClick={() => openSection(id)}
+                    onClick={() => pickSection(id)}
                     aria-current={section === id ? "page" : undefined}
-                    className={cn(
-                      "flex h-8 shrink-0 cursor-pointer items-center gap-[9px] rounded-lg px-[9px] text-left text-[13px] text-ink transition-colors motion-reduce:transition-none",
-                      section === id ? "bg-ink/[0.08]" : "hover:bg-ink/[0.06]",
-                    )}
+                    className={cn("flex h-8 shrink-0 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-left text-[14px] text-ink transition-colors motion-reduce:transition-none", section === id ? "bg-ink/[0.08]" : "hover:bg-ink/[0.06]")}
                   >
-                    <Icon size={15} className="shrink-0" />
-                    {t(labelKey)}
+                    <Icon size={16} className="shrink-0 text-ink-secondary" />
+                    <span className="min-w-0 flex-1 truncate">{t(labelKey)}</span>
+                    <ArrowUpRight size={14} className="shrink-0 text-ink-tertiary" aria-hidden="true" />
                   </button>
                 ))}
               </div>
-            );
-          })}
-          {keyResultButtons("cursor-pointer flex min-h-9 items-center rounded-lg px-2.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-control/50 motion-reduce:transition-none")}
-        </nav>
+            )}
+          </nav>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline/30 px-3 py-3 sm:pl-9">
-            <Select className="min-w-0 sm:hidden"
-              aria-label={t("settings.title")}
-              value={section}
-              onChange={(event) => {
-                setQuery("");
-                openSection(event.target.value as AppSettingsSection);
-              }}
-            >
-              {SETTINGS_GROUPS.map((group) => {
-                const entries = availableSections.filter((entry) => entry.group === group.id);
-                return entries.length === 0 ? null : (
-                  <optgroup key={group.id} label={t(group.labelKey)}>
-                    {entries.map(({ id, labelKey }) => (
-                      <option key={id} value={id}>{t(labelKey)}</option>
-                    ))}
-                  </optgroup>
-                );
-              })}
-            </Select>
-            <span className="hidden text-[15px] font-semibold text-ink sm:block">
-              {sectionLabelKey ? t(sectionLabelKey) : null}
-            </span>
-            <button
-              onClick={close}
-              aria-label={t("settings.close")}
-              title={`${t("settings.close")} (${shortcutLabel("close-panel")})`}
-              className="ui-icon-button cursor-pointer shrink-0 max-md:size-9 max-md:rounded-full max-md:border max-md:border-hairline max-md:bg-card"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div ref={scrollRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4 sm:px-5 sm:pb-5">
-            <LicenseExpiryBanner config={state.config} />
-            {renderSection(section)}
+          <div className={cn("min-h-0 min-w-0 flex-1 flex-col sm:flex", phoneList ? "hidden" : "flex")}>
+            <div className="flex shrink-0 items-center gap-1 px-3 pb-1 pt-4 sm:px-8 sm:pt-6">
+              <button type="button" data-settings-back onClick={() => setPhoneList(true)} aria-label={t("rail.back")} title={t("rail.back")}
+                className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-secondary hover:bg-ink/[0.06] hover:text-ink sm:hidden">
+                <ChevronLeft size={18} />
+              </button>
+              <h3 data-settings-section-title className="min-w-0 truncate text-[17px] font-medium leading-6 text-ink">
+                {sectionLabelKey ? t(sectionLabelKey) : null}
+              </h3>
+            </div>
+            <div ref={scrollRef} data-settings-scroll className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-5 pt-3 sm:px-8">
+              <LicenseExpiryBanner config={state.config} />
+              {renderSection(section)}
+            </div>
           </div>
         </div>
       </div>

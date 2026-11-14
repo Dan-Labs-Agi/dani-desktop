@@ -67,11 +67,13 @@ describe("Settings → General", () => {
     expect(en).toContain("Stop after no progress for");
   });
 
-  it("offers a labeled compact section picker without removing desktop navigation", async () => {
+  it("lists the sections on a phone and shows one with a way back, beside each other on a wider sheet", async () => {
     const html = await renderSettings();
-    expect(html).toMatch(/<div class="[^"]*sm:hidden[^"]*"><select[^>]*aria-label="Settings"/);
-    expect(html).toContain('<option value="companion">Remote access</option>');
-    expect(html).toMatch(/<nav[^>]*hidden[^>]*sm:flex/);
-    expect(html).toContain('id="app-settings-title" class="sr-only"');
+    const nav = html.match(/<nav[^>]*data-settings-nav[^>]*>/)![0];
+    expect(nav.split(/[ "]/)).toEqual(expect.arrayContaining(["sm:flex", "hidden"]));
+    expect(html.match(/<button[^>]*data-settings-back[^>]*>/)![0]).toContain("sm:hidden");
+    expect(html).toContain('data-settings-section="companion"');
+    expect(html).toContain(">Remote access</span>");
+    expect(html).toMatch(/<h2 id="app-settings-title"[^>]*>Settings<\/h2>/);
   });
 });

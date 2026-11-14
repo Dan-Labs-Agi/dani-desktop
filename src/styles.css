@@ -1549,6 +1549,15 @@ body {
 [data-settings-look] {
   --settings-edge: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
+/* Advanced Settings: the rows of a section sit straight on the sheet, on the title's left edge, a thin rule between
+   neighbours. The section's scroller spaces its blocks 1rem apart; a rule replaces that gap. */
+[data-settings-look="advanced"] [data-settings-scroll] > [data-setting-row] {
+  padding: 0.75rem 0;
+}
+[data-settings-look="advanced"] [data-settings-scroll] > [data-setting-row] + [data-setting-row] {
+  margin-top: -1rem;
+  border-top: 1px solid var(--settings-edge);
+}
 :root[data-skin="midnight"] [data-settings-look] {
   --settings-edge: color-mix(in srgb, var(--color-ink) 6%, transparent);
 }
