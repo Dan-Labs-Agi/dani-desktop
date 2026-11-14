@@ -11,6 +11,7 @@ import {
   Gauge,
   Info,
   HelpCircle,
+  ChevronDown,
   Keyboard,
   Laptop,
   LifeBuoy,
@@ -25,6 +26,7 @@ import {
 
 import { AccountMoveStatus, useAccountMove, type AccountMoveKind } from "./AccountMove";
 import { InitialsAvatar } from "./Avatar";
+import { useCloudPlan } from "./ProIntroduction";
 import { DiscordIcon } from "./DiscordIcon";
 import { AboutDialog } from "./AboutDialog";
 import { PhoneAppDialog } from "./lazy-screens";
@@ -581,6 +583,8 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   const filesReady = useCloudFilesReady();
   const cloudAccount = !remote && Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true));
   const openCloudAccount = () => dispatch({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
+  const cloudPlan = useCloudPlan();
+  const plan = cloudPlan?.view.kind === "paid" ? cloudPlan.view.label : null;
   const move = useAccountMove(state.config?.cloudHome === true, { onOpen: openCloudAccount, onPairPhone: () => dispatch(phonePairingSettingsAction()) });
 
   const items = profileMenuItems({
@@ -664,9 +668,10 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
         ) : (
           <span
             ref={triggerRef}
+            data-sidebar-account-row=""
             className={cn(
-              "flex min-h-[46px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors",
-              open ? "bg-raised" : "hover:bg-raised/50",
+              "flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
+              open ? "bg-ink/[0.08]" : "hover:bg-ink/[0.06]",
             )}
           >
             <span className="relative flex shrink-0">
@@ -674,7 +679,11 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
               {moveDot && <span aria-hidden data-account-dot={moveDot} className={cn("absolute -right-0.5 -top-0.5 size-2 rounded-full ring-2 ring-app", DOT_COLOR[moveDot])} />}
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[14px] leading-5 text-ink">{name}</span>
+              <span className="flex min-w-0 items-center gap-1 text-[14px] leading-5 text-ink">
+                <span className="min-w-0 truncate">{name}</span>
+                {plan && <span data-account-plan className="shrink-0 text-ink-secondary">· {plan}</span>}
+                <ChevronDown size={12} className="shrink-0 text-ink-tertiary" aria-hidden="true" />
+              </span>
               <AccountMoveStatus kind={move.kind} place={move.place} />
             </span>
             {noteworthy && (
