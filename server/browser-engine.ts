@@ -8,7 +8,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
 import { browserBundlePaths } from "./browser-bundle-release.ts";
-import { browserProcessesRunning, browserProcessTree, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
+import { browserProcessesRunning, browserProcessTree, processAlive, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
 import { BROWSER_VIEWPORT, viewportArgs, type PageSize } from "./browser-page-size.ts";
 import { browserRuntimeEnv, ownsBrowserViewport } from "./browser-runtime.ts";
 import { spawnBotWork } from "./oom-score.ts";
@@ -170,11 +170,22 @@ async function closeOnce(binaryPath: string, env: NodeJS.ProcessEnv, session: st
   return tree ? stopBrowserProcesses(tree) : false;
 }
 
+/** Windows: a Chrome on the profile is an orphan only once its session's daemon is gone; while it runs, nothing is
+ * scanned, so a live daemon's Chrome is never stopped whatever the engine binary is called. */
+function releaseUnlessDaemonRuns(env: NodeJS.ProcessEnv): Promise<void> {
+  if (process.platform === "win32") {
+    let pid = 0;
+    try { pid = Number(readFileSync(browserDaemonFile(env, ".pid"), "utf8").trim()); } catch {}
+    if (Number.isInteger(pid) && pid > 0 && processAlive(pid)) return Promise.resolve();
+  }
+  return releaseBrowserProfile(env.AGENT_BROWSER_PROFILE);
+}
+
 /** Starts a session's browser with its launch settings in `env`, or keeps the running one on its page: `open` without a URL. */
 export async function startBrowserSession(binaryPath: string, env: NodeJS.ProcessEnv, timeoutMs = 30_000): Promise<boolean> {
   const session = env.AGENT_BROWSER_SESSION;
   if (!session || !/^[A-Za-z0-9_.-]{1,96}$/.test(session)) return false;
-  await releaseBrowserProfile(env.AGENT_BROWSER_PROFILE);
+  await releaseUnlessDaemonRuns(env);
   return (await runBrowserCommand(binaryPath, env, ["open", "--json", "--no-webmcp"], Date.now() + timeoutMs)).ok;
 }
 
@@ -245,7 +256,7 @@ export async function prepareBrowserSessionState(
   const env = browserRuntimeEnv({ ...options.env, AGENT_BROWSER_SESSION: session, AGENT_BROWSER_HEADLESS: "1" });
   ensureManagedBrowserConfig(env);
   if (options.persistent === false) return;
-  await releaseBrowserProfile(env.AGENT_BROWSER_PROFILE);
+  await releaseUnlessDaemonRuns(env);
   check();
   const directory = browserSessionsDirectory(env);
   const key = join(directory, session);
