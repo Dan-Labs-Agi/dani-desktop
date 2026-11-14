@@ -26,6 +26,7 @@ import {
 
 import { AccountMoveStatus, useAccountMove, type AccountMoveKind } from "./AccountMove";
 import { InitialsAvatar } from "./Avatar";
+import type { CloudPlanView } from "@/lib/cloud-plan";
 import { useCloudPlan } from "./ProIntroduction";
 import { DiscordIcon } from "./DiscordIcon";
 import { AboutDialog } from "./AboutDialog";
@@ -77,6 +78,11 @@ export function profileInitials(profile?: { name?: string; email?: string }): st
   }
   const email = profile?.email?.trim();
   return email ? email[0]!.toUpperCase() : "?";
+}
+
+/** The plan named beside the account: a paid one only, so a free or unknown account shows the name alone. */
+export function accountPlanLabel(view: CloudPlanView | undefined): string | null {
+  return view?.kind === "paid" ? view.label : null;
 }
 
 export function profileLabel(profile?: { name?: string; email?: string }): string {
@@ -584,7 +590,7 @@ export function SidebarProfileMenu({ iconOnly = false, rail = false, circle = fa
   const cloudAccount = !remote && Boolean(window.ogb?.cloudAccount || (window.ogb?.cloudPlan && state.config?.cloudHome === true));
   const openCloudAccount = () => dispatch({ type: "toggleAppSettings", open: true, section: "cloudAccount" });
   const cloudPlan = useCloudPlan();
-  const plan = cloudPlan?.view.kind === "paid" ? cloudPlan.view.label : null;
+  const plan = accountPlanLabel(cloudPlan?.view);
   const move = useAccountMove(state.config?.cloudHome === true, { onOpen: openCloudAccount, onPairPhone: () => dispatch(phonePairingSettingsAction()) });
 
   const items = profileMenuItems({

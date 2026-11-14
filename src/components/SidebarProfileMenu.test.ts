@@ -22,6 +22,7 @@ import {
   updateNoteworthy,
   updateLabel,
   updatePhase,
+  accountPlanLabel,
 } from "./SidebarProfileMenu";
 import { DOCS_URL, FEEDBACK_URL, HELP_CENTER_URL, platformLabel } from "@/lib/app-links";
 import { profileForSession } from "@/lib/session";
@@ -66,6 +67,17 @@ describe("profileLabel", () => {
     expect(profileLabel({ name: "Omkar", email: "o@x.dev" })).toBe("Omkar");
     expect(profileLabel({ email: "o@x.dev" })).toBe("o@x.dev");
     expect(profileLabel(undefined)).toBe("You");
+  });
+});
+
+describe("the plan beside the account name", () => {
+  it("names a paid plan and stays silent for a free, signed-out or unknown account", () => {
+    expect(accountPlanLabel({ kind: "paid", label: "Pro", checking: false })).toBe("Pro");
+    expect(accountPlanLabel({ kind: "paid", label: "Max", checking: true, trial: true })).toBe("Max");
+    expect(accountPlanLabel({ kind: "free" })).toBeNull();
+    expect(accountPlanLabel({ kind: "signed-out" })).toBeNull();
+    expect(accountPlanLabel({ kind: "attention", label: "Pro" })).toBeNull();
+    expect(accountPlanLabel(undefined)).toBeNull();
   });
 });
 

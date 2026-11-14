@@ -562,6 +562,10 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
           ...notice.params,
           ...(notice.stateKey ? { state: t(notice.stateKey) } : {}),
         })}</div>}
+        <div className="mt-4 rounded-xl border border-hairline/50 bg-raised/35 px-4 py-3 text-[12px] leading-relaxed text-ink-secondary">
+          {t("mcp.trustNotice")}
+        </div>
+
         {servers === null ? (
           !error && <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-ink-secondary"><Loader2 size={14} className="animate-spin" /> {t("mcp.loading")}</div>
         ) : visibleServers?.length === 0 && !editing ? (
@@ -675,9 +679,6 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
 
         <ClaudeCodeSwitches />
 
-        <div className="mt-4 rounded-xl border border-hairline/50 bg-raised/35 px-4 py-3 text-[12px] leading-relaxed text-ink-secondary">
-          {t("mcp.trustNotice")}
-        </div>
 
       </div>
     </section>
