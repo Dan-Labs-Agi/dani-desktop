@@ -562,16 +562,10 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
           ...notice.params,
           ...(notice.stateKey ? { state: t(notice.stateKey) } : {}),
         })}</div>}
-        <ClaudeCodeSwitches />
-
-        <div className="mt-4 rounded-xl border border-hairline/50 bg-raised/35 px-4 py-3 text-[12px] leading-relaxed text-ink-secondary">
-          {t("mcp.trustNotice")}
-        </div>
-
         {servers === null ? (
-          !error && <div className="flex items-center justify-center gap-2 py-24 text-[13px] text-ink-secondary"><Loader2 size={14} className="animate-spin" /> {t("mcp.loading")}</div>
+          !error && <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-ink-secondary"><Loader2 size={14} className="animate-spin" /> {t("mcp.loading")}</div>
         ) : visibleServers?.length === 0 && !editing ? (
-          <div data-mcp-empty className="mt-5 flex flex-col items-center rounded-2xl border border-dashed border-hairline/60 px-6 py-10 text-center">
+          <div data-mcp-empty className="mt-5 flex flex-col items-center rounded-2xl border border-dashed border-hairline/60 px-6 py-8 text-center">
             <ServerCog size={22} className="text-ink-secondary" aria-hidden="true" />
             <div className="mt-3 text-[14px] font-medium text-ink">{t("mcp.empty.title")}</div>
             <div className="mt-1 max-w-sm text-[13px] leading-[18px] text-ink-secondary">{t("mcp.empty.desc")}</div>
@@ -678,6 +672,13 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
             })}
           </div>
         )}
+
+        <ClaudeCodeSwitches />
+
+        <div className="mt-4 rounded-xl border border-hairline/50 bg-raised/35 px-4 py-3 text-[12px] leading-relaxed text-ink-secondary">
+          {t("mcp.trustNotice")}
+        </div>
+
       </div>
     </section>
   );
