@@ -21,6 +21,18 @@ test("Files keeps its settings in the folder main names (the staging Admin's own
   }
 });
 
+test("Files starts when Windows cannot name a Documents folder", (t) => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "omb-files-nodocs-")));
+  const installed = installCloudFiles({
+    app: { getPath: (name) => { if (name === "documents") throw new Error("Failed to get 'documents' path"); return join(dir, name); } },
+    ipcMain: { handle: () => {} }, dialog: {}, shell: { trashItem: async () => {} }, powerMonitor: { on: () => {} },
+    fetch: async () => { throw new Error("offline"); }, localWorkspaceOnly: (_channel, handler) => handler, send: () => {}, cloudOrigin: () => null,
+    cloudAccount: () => ({ openDashboard: async () => {} }), localDataDir: join(dir, "home", ".danibot"),
+  });
+  t.after(() => { installed.close(); rmSync(dir, { recursive: true, force: true }); });
+  assert.ok(installed);
+});
+
 test("Files channels answer this computer's own window only, and share only a folder the person picked here", async (t) => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "omb-files-main-")));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
