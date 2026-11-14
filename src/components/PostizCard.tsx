@@ -4,6 +4,7 @@ import { Check, ExternalLink, Loader2, MoreHorizontal } from "lucide-react";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { openExternalLink } from "@/lib/app-links";
+import { plainErrorLine } from "@/lib/plain-error";
 import { reserveConnectionPage } from "@/lib/connector-oauth";
 import { completeMcpSignIn, mcpSignInLink, runMcpSignIn, type McpSignInStatus } from "@/lib/mcp-sign-in";
 import { keySaved, keySaveFailure } from "@/lib/product-events";
@@ -315,7 +316,7 @@ export function PostizCard({ refreshKey = 0, onConnection }: {
             )}
           </div>
         )}
-        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{error}</p>}
+        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{plainErrorLine(error) ?? error}</p>}
         {offerConnect && !waiting && status.team && !person && (
           <label data-postiz-only-me className="mt-1.5 flex items-center gap-2 text-[12px] text-ink-secondary">
             <input type="checkbox" checked={onlyMe} onChange={(event) => setOnlyMe(event.target.checked)} /> {t("mcp.team.onlyMe")}

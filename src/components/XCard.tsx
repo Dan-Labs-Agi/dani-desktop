@@ -4,6 +4,7 @@ import { Check, ExternalLink, Loader2 } from "lucide-react";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { activeLocale, t } from "@/lib/i18n";
 import { xResearchAction } from "@/lib/cloud-plan";
+import { plainErrorLine } from "@/lib/plain-error";
 import { keyRemoved, keySaved, keySaveFailure, keyTestResult } from "@/lib/product-events";
 import { isXConnectorStatus, type XConnectorStatus, type XIncludedUsage } from "../../shared/x-connector";
 import { looksLikeKey, saveCredential, tregVerdict } from "./keys/key-save";
@@ -220,7 +221,7 @@ export function XCard({ refreshKey = 0, onConnection }: {
           </form>
         )}
         {verdict && <p role="status" className="mt-1.5 text-[12px] text-ink-secondary">{verdict}</p>}
-        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{error}</p>}
+        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{plainErrorLine(error) ?? error}</p>}
       </div>
     </div>
   );

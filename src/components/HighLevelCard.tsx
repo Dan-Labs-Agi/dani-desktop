@@ -5,6 +5,7 @@ import { api } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { reserveConnectionPage } from "@/lib/connector-oauth";
 import { openExternalLink } from "@/lib/app-links";
+import { plainErrorLine } from "@/lib/plain-error";
 import {
   HIGHLEVEL_API,
   cancelHighLevelSignIn,
@@ -259,7 +260,7 @@ export function HighLevelCard({ refreshKey = 0, onConnection }: {
             )}
           </p>
         )}
-        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{error}</p>}
+        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{plainErrorLine(error) ?? error}</p>}
         {!connecting && status !== null && !connected && !needsSignIn && (
           tokenMode ? (
             <form

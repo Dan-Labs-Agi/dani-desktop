@@ -16,6 +16,7 @@ import {
 
 import { openExternalLink } from "@/lib/app-links";
 import { cn } from "@/lib/cn";
+import { plainErrorLine } from "@/lib/plain-error";
 import { activeLocale, t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { updateMcpServers } from "@/lib/mcp-servers";
@@ -473,7 +474,7 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
               <p className="mt-2 leading-relaxed">{t("mcp.auth.otherComputerHint")}</p>
               {renderPasteBack(server)}
             </details>)}
-        {callbackError && <p role="alert" className="text-danger">{callbackError}</p>}
+        {callbackError && <p role="alert" className="text-danger">{plainErrorLine(callbackError) ?? callbackError}</p>}
       </div>
     );
   }
@@ -501,7 +502,7 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
           </button>}
       </div>
       <div className="ps-[52px]">
-      {failed && <p role="alert" className="mt-1.5 text-[12px] text-danger">{typeof failed === "string" ? failed : t(failed.key, failed.params)}</p>}
+      {failed && <p role="alert" className="mt-1.5 text-[12px] text-danger">{typeof failed === "string" ? plainErrorLine(failed) ?? failed : t(failed.key, failed.params)}</p>}
       {whopServer && renderSignIn(whopServer)}
       <details className="mt-1 text-[12px] text-ink-secondary">
         <summary className="cursor-pointer">{t("whop.access")}</summary>
@@ -556,7 +557,7 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
           <McpServerEditor key={`${editing}${fixingKeys ? ":keys" : ""}`} server={editingServer} fixKeys={fixingKeys} taken={(servers ?? []).map((server) => server.name)} team={Boolean(store.config?.team)}
             busy={busy !== null} onCancel={closeEditor} onSubmit={(items) => void (editing === "new" ? addServers(items) : saveEdit(items))} />
         )}
-        {error && <div role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-[12px] text-danger">{typeof error === "string" ? error : t(error.key, error.params)}</div>}
+        {error && <div role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-[12px] text-danger">{typeof error === "string" ? plainErrorLine(error) ?? error : t(error.key, error.params)}</div>}
         {notice && <div role="status" className="mt-3 rounded-lg bg-success/10 px-3 py-2 text-[12px] text-success">{t(notice.key, {
           ...notice.params,
           ...(notice.stateKey ? { state: t(notice.stateKey) } : {}),
@@ -568,7 +569,7 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
         </div>
 
         {servers === null ? (
-          <div className="flex items-center justify-center gap-2 py-24 text-[13px] text-ink-secondary"><Loader2 size={14} className="animate-spin" /> {t("mcp.loading")}</div>
+          !error && <div className="flex items-center justify-center gap-2 py-24 text-[13px] text-ink-secondary"><Loader2 size={14} className="animate-spin" /> {t("mcp.loading")}</div>
         ) : visibleServers?.length === 0 && !editing ? (
           <div className="mt-5 flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-hairline/60 text-center">
             <div className="flex size-11 items-center justify-center rounded-xl bg-raised text-ink-secondary"><ServerCog size={21} /></div>
