@@ -63,11 +63,16 @@ describe("Your MCP servers inside the Apps pop-up", () => {
 
   it("shows a failed first load in plain words, with no status line and no endless loading", () => {
     fixture.servers = null;
-    fixture.seeded = { [ERROR]: "500 Internal Server Error" };
-    const html = render(true);
-    expect(html).toContain("Something went wrong on the other end. Try again.");
-    expect(html).not.toContain("500 Internal Server Error");
-    expect(html).not.toContain("Loading MCP servers");
+    for (const [raw, plain] of [
+      ["500 Internal Server Error", "Something went wrong on the other end. Try again."],
+      ["Failed to fetch", "Couldn&#x27;t reach Dani Bot. Check that it&#x27;s running, then try again."],
+    ]) {
+      fixture.seeded = { [ERROR]: raw };
+      const html = render(true);
+      expect(html).toContain(plain);
+      expect(html).not.toContain(raw);
+      expect(html).not.toContain("Loading MCP servers");
+    }
   });
 
   it("says which computer a server of another computer's runs on, and offers no sign-in to it here", () => {
