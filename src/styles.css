@@ -240,6 +240,8 @@
      bottom of this file, which is what makes them take effect) */
   --color-accent-ink: #ffffff;
   --color-danger-ink: #ffffff;
+  /* the Chief of Staff's crown badge: one gold on every skin, under white */
+  --color-chief: #e8993a;
   /* ink carried by the user's own bubble. A hex rather than the ink token so
      the contrast check can measure it; every dark skin repeats its ink here. */
   --color-bubble-user-ink: #f5f5f5;
