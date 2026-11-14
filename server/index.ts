@@ -5913,7 +5913,7 @@ async function mountHostComputer(owner: TurnOwner, botId: string, providerSuppor
     owner, lazy: true, label: "this computer", onRejected,
     claim: async (call) => { if (ask) await askToUseYourComputer(approvalBus, store.bot(botId) ?? undefined, owner, call); await bindTurnComputer(owner, "computer:host", true); },
   });
-  return gatedLocalComputer(cua, controlIntegration(botId, owner.threadId, owner.generation, "this computer"), journal, verifyComputerEffectsEnabled(cfg));
+  return gatedLocalComputer(cua, controlIntegration(botId, owner.threadId, owner.generation, "this computer"), journal, verifyComputerEffectsEnabled(cfg), { stale: cfg.features?.guardComputerStale, loop: cfg.features?.guardComputerLoops, typing: cfg.features?.verifyComputerTyping, anchor: cfg.features?.anchorComputerTargets, scroll: cfg.features?.verifyComputerScroll, untrusted: cfg.features?.wrapComputerScreenData, guidance: cfg.features?.guideComputerUse });
 }
 
 /** Checked and started at dispatch, unlike the Boat: the VPS bridge execs into the container as soon as the engine launches and dies if it is not up. */
@@ -8377,7 +8377,7 @@ async function beginTurn(
               pinAutoSurface("local"); recordTurnPlace(bot.id, threadId, "local");
             },
           });
-          integrations.localComputer = gatedLocalComputer(cua, controlIntegration(bot.id, threadId, dispatchClaimId, "this computer"), savedSteps.journals(directRequestOwners.get(threadId)), verifyComputerEffectsEnabled(cfg));
+          integrations.localComputer = gatedLocalComputer(cua, controlIntegration(bot.id, threadId, dispatchClaimId, "this computer"), savedSteps.journals(directRequestOwners.get(threadId)), verifyComputerEffectsEnabled(cfg), { stale: cfg.features?.guardComputerStale, loop: cfg.features?.guardComputerLoops, typing: cfg.features?.verifyComputerTyping, anchor: cfg.features?.anchorComputerTargets, scroll: cfg.features?.verifyComputerScroll, untrusted: cfg.features?.wrapComputerScreenData, guidance: cfg.features?.guideComputerUse });
           computerKind = "local";
         }
       }

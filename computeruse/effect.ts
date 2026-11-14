@@ -106,14 +106,22 @@ function withNote(result: JsonObject, note: string): JsonObject {
 export async function withVerifiedEffect(
   call: ToolCall,
   child: ChildCalls,
-  { timeoutMs = OBSERVE_TIMEOUT_MS, act }: { timeoutMs?: number; act?: () => Promise<JsonObject> } = {},
+  { timeoutMs = OBSERVE_TIMEOUT_MS, act, before: cachedBefore, onObserved }: {
+    timeoutMs?: number;
+    act?: () => Promise<JsonObject>;
+    before?: Observation | null;
+    onObserved?: (after: Observation | null, verdict: EffectVerdict) => void;
+  } = {},
 ): Promise<unknown> {
   const target = readBackTarget(call.arguments);
   if (!target) return null;
-  const before = await observe(child, target, timeoutMs);
+  const before = cachedBefore === undefined ? await observe(child, target, timeoutMs) : cachedBefore;
   const result = await (act ? act() : child.call(call.name, call.arguments));
   // The driver refused or failed: it sent nothing, and its own words are the whole answer.
   if (result.isError === true) return result;
-  const note = effectNote(effectVerdict(before, await observe(child, target, timeoutMs)), call.name);
+  const after = await observe(child, target, timeoutMs);
+  const verdict = effectVerdict(before, after);
+  onObserved?.(after, verdict);
+  const note = effectNote(verdict, call.name);
   return note ? withNote(result, note) : result;
 }

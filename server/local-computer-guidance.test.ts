@@ -147,8 +147,8 @@ describe("localComputerRelay", () => {
     it("leaves an action with no window to read back, and every observation, to the driver", async () => {
       const { calls, relayed } = child(() => typed);
       expect(localComputerRelay("darwin", true)({ name: "click", arguments: { x: 1, y: 2 } }, relayed)).toBeNull();
-      expect(localComputerRelay("darwin", true)({ name: "get_window_state", arguments: { pid: 4242, window_id: 7 } }, relayed)).toBeNull();
-      expect(calls).toEqual([]);
+      expect(await localComputerRelay("darwin", true)({ name: "get_window_state", arguments: { pid: 4242, window_id: 7 } }, relayed)).toEqual(typed);
+      expect(calls).toEqual([["get_window_state", { pid: 4242, window_id: 7 }]]);
     });
   });
 });

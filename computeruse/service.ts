@@ -12,6 +12,13 @@ const {
   OMB_CONTROL_TOKEN: token,
   OMB_COMPUTER_JOURNAL: journal,
   OMB_COMPUTER_VERIFY: verifyEffects,
+  OMB_COMPUTER_STALE: guardStale,
+  OMB_COMPUTER_LOOP: guardLoops,
+  OMB_COMPUTER_TYPING: verifyTyping,
+  OMB_COMPUTER_ANCHOR: anchorTargets,
+  OMB_COMPUTER_SCROLL: verifyScroll,
+  OMB_COMPUTER_UNTRUSTED: wrapScreen,
+  OMB_COMPUTER_GUIDANCE: showGuidance,
   ...childEnv
 } = process.env;
 
@@ -38,6 +45,6 @@ runMcpBridge({
   label: "Local Cua Driver",
   gate: { url: url!, token: token!, describe: localComputerCallQuery },
   ...(journal === "1" ? { journal: { url: journalUrl(url!), token: token! } } : {}),
-  rewriteResponse: localComputerResultLine,
-  relay: localComputerRelay(platform ?? process.platform, verifyEffects === "1"),
+  rewriteResponse: (line) => localComputerResultLine(line, wrapScreen === "1", showGuidance === "1"),
+  relay: localComputerRelay(platform ?? process.platform, verifyEffects === "1", { stale: guardStale === "1", loop: guardLoops === "1", typing: verifyTyping === "1", anchor: anchorTargets === "1", scroll: verifyScroll === "1" }),
 });
