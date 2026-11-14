@@ -1,0 +1,14 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "danibot-demo-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "secrets": { "required": ["ANTHROPIC_API_KEY"] },
+  // One entry per demo token: key = SHA-256 of the token, value = {"name","budgetUsd","spentUsd","off"?}.
+  // Create it with `wrangler kv namespace create danibot-demo-tokens` and put the id here.
+  "kv_namespaces": [{ "binding": "TOKENS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }],
+  "vars": { "PAUSED": "0" },
+  "observability": { "enabled": true }
+}

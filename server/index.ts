@@ -1583,7 +1583,7 @@ const managedDesktop = new ManagedDesktopProviders({
     resyncOpenCodeProviderKeys();
   },
 });
-const cloudCredit = CLOUD_HOME ? new CloudCreditProvider({
+const cloudCredit = CLOUD_HOME || trialCreditCredential() ? new CloudCreditProvider({
   registry, dataDirectory: DATA_DIR, credential: trialCreditCredential(),
   onChange: ids => {
     registry.forgetSnapshots(); bus.attach(ids.flatMap(id => { const instance = registry.get(id); return instance ? [instance] : []; }));

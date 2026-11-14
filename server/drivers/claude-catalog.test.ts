@@ -33,7 +33,7 @@ describe("readClaudeModelCatalog", () => {
       contextWindow: 1_000_000,
     });
     expect(ids.indexOf("claude-sonnet-5-5")).toBe(ids.indexOf("claude-sonnet-5") - 1);
-    expect(STATIC_CLAUDE_MODELS.default).toBe("claude-sonnet-5");
+    expect(STATIC_CLAUDE_MODELS.default).toBe("claude-haiku-5-5");
   });
 
   it("lists ANTHROPIC_MODEL from the instance environment when settings are missing", () => {
@@ -58,7 +58,7 @@ describe("readClaudeModelCatalog", () => {
     );
 
     expect(readClaudeModelCatalog({ HOME: home })).toEqual({
-      default: "claude-sonnet-5",
+      default: "claude-haiku-5-5",
       options: [
         ...STATIC_CLAUDE_MODELS.options,
         { id: "my-local-opus", label: "Local Opus", custom: true },
@@ -188,7 +188,7 @@ describe("ClaudeDriver catalog", () => {
       const haiku = instance.models.options.filter((option) => option.id === "claude-haiku-5-5");
       expect(haiku).toEqual([{ id: "claude-haiku-5-5", label: "Claude Haiku 5.5", contextWindow: 1_000_000 }]);
       expect(instance.models.options.some((option) => option.id === "claude-haiku-4-5")).toBe(true);
-      expect(instance.models.default).toBe("claude-sonnet-5");
+      expect(instance.models.default).toBe("claude-haiku-5-5");
       expect(readStartupModelCache(instanceId)?.options).toContainEqual(haiku[0]);
     } finally {
       await instance.dispose();
