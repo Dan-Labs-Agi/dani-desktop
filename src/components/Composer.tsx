@@ -975,7 +975,7 @@ export function Composer({
         {advanced && !locked && !singleRow && (approvalChoice || (modeBot && !remoteClient) || modelControl) && (
           <div data-composer-status className="relative z-[1] mt-1 flex items-center justify-end gap-1 px-1">
             {modelControl}
-            {approvalChoice && <ApprovalModeSelector {...approvalChoice} />}
+            {approvalChoice && <ApprovalModeSelector {...approvalChoice} align="right" />}
             {modeBot && !remoteClient && (
               <PlaceChip
                 bot={modeBot}

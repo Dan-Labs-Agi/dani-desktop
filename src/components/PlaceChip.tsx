@@ -147,7 +147,7 @@ export function PlaceChip({ bot, task, live, disabled = false, onPin }: {
         {showLive && <span className="absolute right-1.5 top-1.5 size-1.5 animate-pulse rounded-full bg-success" aria-label={t("place.live")} />}
       </button>
       {motion.shown && (
-        <div role="menu" aria-label={t("place.chipTitle")} className={cn("absolute bottom-full left-0 z-40 mb-2 w-[300px] overflow-hidden", MENU_SHEET, motion.className)} {...motion.exitProps}>
+        <div role="menu" aria-label={t("place.chipTitle")} className={cn("absolute bottom-full right-0 z-40 mb-2 w-[300px] overflow-hidden", MENU_SHEET, motion.className)} {...motion.exitProps}>
           <div className={MENU_HEADING}>{t("place.chipTitle")}</div>
           <div className="flex flex-col gap-1">
             <button
