@@ -1112,9 +1112,10 @@
   max-width: var(--chat-prose-max);
 }
 
+/* Claude Desktop's message type: 15px on a 22px line. */
 .chat-text,
 .chat-md {
-  line-height: 1.75;
+  line-height: 1.4667;
   font-family: "omb-chat", var(--font-sans);
 }
 .chat-md :is(strong, b) {
