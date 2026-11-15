@@ -1,5 +1,6 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
 import { ThreadRowsSkeleton } from "./ChatSkeleton";
+import { DecodeIn } from "./LoadingSkeleton";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch } from "react";
 import { createPortal } from "react-dom";
 import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, Library, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, PinOff, Plus, Search, TextQuote, Trash2, Users, X, ListChecks, SquarePen, PanelLeft } from "@/components/icons";
@@ -1466,7 +1467,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
         onAvatars={(avatars) => setSidebarDensity(avatars ? "icons" : "comfortable")} style={windowNoDragStyle} />}
 
       <GlassScroller className={rail ? "[scrollbar-gutter:stable_both-edges]" : simpleDesk ? "px-3" : "px-2"}>
-        <div className={cn("flex flex-col", simpleDesk ? cn("gap-0.5 pb-2", !tiles && "pt-2") : advanced ? "gap-0.5" : "gap-1 pb-2 pt-2")}>
+        <DecodeIn loading={!state.hydrated && state.bots.length === 0} once className={cn("flex flex-col", simpleDesk ? cn("gap-0.5 pb-2", !tiles && "pt-2") : advanced ? "gap-0.5" : "gap-1 pb-2 pt-2")}>
           {!state.hydrated && state.bots.length === 0 && density !== "icons" && <ThreadRowsSkeleton />}
           {matchingBots.length === 0 && visibleGroups.length === 0 && q && q.length < MIN_QUERY && (
             <div className="px-3 py-6 text-center text-[13px] text-ink-secondary">{t("sidebar.noMatch", { query })}</div>
@@ -1591,7 +1592,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
               row={botRow}
             />
           )}
-        </div>
+        </DecodeIn>
       </GlassScroller>
       <p className="sr-only" aria-live="polite" aria-atomic="true">
         {sections.announcement}

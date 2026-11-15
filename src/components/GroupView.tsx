@@ -1202,7 +1202,7 @@ export function GroupView({ group }: { group: Group }) {
         <JumpToLatestButton onClick={jumpToLatest} style={{ bottom: composerDock.height }} />
       )}
 
-      <div ref={composerDockRef} className="absolute inset-x-0 bottom-0 z-[2] chat-column-dock">
+      <div ref={composerDockRef} data-ascii="skip" className="absolute inset-x-0 bottom-0 z-[2] chat-column-dock">
       <RoomComposer
         key={group.threadId}
         group={group}
