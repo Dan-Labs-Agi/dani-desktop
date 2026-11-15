@@ -257,13 +257,9 @@ export function PostizCard({ refreshKey = 0, onConnection }: {
     <SidebarPopoverMenu
       placement="below"
       ariaLabel={t("postiz.menu")}
-      triggerClassName="shrink-0"
+      triggerClassName="ui-button ui-button-md w-7 shrink-0 px-0"
       items={[{ key: "disconnect", label: t("connectors.disconnect"), disabled: busy !== null, onSelect: () => void disconnect() }]}
-      renderTrigger={() => (
-        <span className="inline-flex size-7 items-center justify-center rounded-full bg-control/80 text-ink hover:bg-raised-hover">
-          {busy === "disconnect" ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={15} aria-hidden="true" />}
-        </span>
-      )}
+      renderTrigger={() => busy === "disconnect" ? <Loader2 size={14} className="animate-spin" /> : <MoreHorizontal size={15} aria-hidden="true" />}
     />
   );
   const offerConnect = status !== null && !connected && !blocked;
@@ -312,7 +308,7 @@ export function PostizCard({ refreshKey = 0, onConnection }: {
                 <span className="leading-relaxed text-ink">{t("mcp.auth.pasteBackHint")}</span>
                 <input type="text" value={callbackUrl} onChange={(event) => setCallbackUrl(event.target.value)} autoComplete="off" spellCheck={false}
                   aria-label={t("mcp.auth.callbackUrl")} placeholder="http://127.0.0.1:…/mcp-oauth/callback?…" className={field} />
-                <button type="submit" disabled={!callbackUrl.trim()} className={primaryPill}>{t("mcp.auth.complete")}</button>
+                <button type="submit" disabled={!callbackUrl.trim()} className={`${primaryPill} self-start`}>{t("mcp.auth.complete")}</button>
               </form>
             )}
           </div>

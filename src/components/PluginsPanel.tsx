@@ -758,10 +758,12 @@ export function PluginsPanel() {
     const addingAccount = aliasSlug === card.slug && !included;
     const busy = busySlug === card.slug;
     const needsKey = !configured && setup === "needs-setup" && !remoteClient;
-    const policy = state.config?.managedPolicy, unavailableReason = policy?.apps && !policy.apps.allowAll && !policy.apps.allowlist.includes(card.slug) ? t("policy.managedBy", { organization: policy.organizationName })
+    const policy = state.config?.managedPolicy;
+    const blockedByPolicy = Boolean(policy?.apps && !policy.apps.allowAll && !policy.apps.allowlist.includes(card.slug));
+    const unavailableReason = blockedByPolicy && policy ? t("policy.managedBy", { organization: policy.organizationName })
       : managedConnectorUnavailableReason(mode, card.slug) ? t("connectors.selfHostOnlyReason") : null;
     const usedBy = connected || included ? botsUsingService(state.bots, state.instances, card.slug) : [];
-    const staticLabel = unavailableReason ? t("connectors.selfHostOnly") : included && !needsKey ? t("connectors.action.included") : null;
+    const staticLabel = blockedByPolicy ? t("connectors.action.unavailable") : unavailableReason ? t("connectors.selfHostOnly") : included && !needsKey ? t("connectors.action.included") : null;
     const description = unavailableReason ?? (
       pending
         ? authorizationUrl

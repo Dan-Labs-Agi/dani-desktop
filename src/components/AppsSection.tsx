@@ -18,7 +18,7 @@ export function AppsSection({ id, title, note, viewAll, after, children }: {
           <button
             type="button"
             onClick={viewAll.onClick}
-            className="shrink-0 rounded-full px-2 text-[13px] font-medium leading-5 text-ink-secondary transition-colors hover:text-ink"
+            className="shrink-0 text-[12px] leading-5 text-ink-secondary transition-colors hover:text-ink"
           >
             {viewAll.label}
           </button>
