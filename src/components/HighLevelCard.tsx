@@ -196,9 +196,7 @@ export function HighLevelCard({ refreshKey = 0, onConnection }: {
   const needsSignIn = state === "needs-sign-in";
   const description = connected && status?.location?.name
     ? t("highlevel.connectedTo", { name: status.location.name })
-    : connected
-      ? t("apps.connected")
-      : needsSignIn
+    : needsSignIn
         ? t("connectors.signedOut")
         : t("highlevel.description");
   const menu = (connected || needsSignIn) && (
@@ -216,7 +214,7 @@ export function HighLevelCard({ refreshKey = 0, onConnection }: {
   );
 
   return (
-    <div data-app-tile="highlevel" data-highlevel-state={state ?? "loading"} className="flex min-w-0 flex-col rounded-xl px-2 py-2 transition-colors hover:bg-raised/40">
+    <div data-app-tile="highlevel" data-highlevel-state={state ?? "loading"} className="flex min-w-0 flex-col rounded-xl px-2 py-2">
       <div className="flex items-center gap-3">
         <HighLevelIcon />
         <div className="min-w-0 flex-1">

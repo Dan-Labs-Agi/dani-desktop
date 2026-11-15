@@ -269,7 +269,7 @@ export function PostizCard({ refreshKey = 0, onConnection }: {
   const offerConnect = status !== null && !connected && !blocked;
 
   return (
-    <div data-app-tile="postiz" data-postiz-state={status?.state ?? "loading"} className="flex min-w-0 flex-col rounded-xl px-2 py-2 transition-colors hover:bg-raised/40">
+    <div data-app-tile="postiz" data-postiz-state={status?.state ?? "loading"} className="flex min-w-0 flex-col rounded-xl px-2 py-2">
       <div className="flex items-center gap-3">
         <PostizIcon />
         <div className="min-w-0 flex-1">

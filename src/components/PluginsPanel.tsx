@@ -533,7 +533,7 @@ export function PluginsPanel() {
               data-apps-filter="mcp"
               aria-pressed={filter === "mcp"}
               onClick={() => chooseFilter(filter === "mcp" ? "all" : "mcp")}
-              className={cn(pill, "h-9 border border-hairline/40 px-3.5", filter === "mcp" ? "bg-ink text-app" : "text-ink hover:bg-raised")}
+              className={cn(pill, "h-9 border border-ink/[0.08] px-3.5", filter === "mcp" ? "bg-ink text-app" : "text-ink hover:bg-raised")}
             >
               <Server size={14} aria-hidden="true" />
               <span className="hidden sm:inline">{t("apps.filter.mcp")}</span>
@@ -580,8 +580,8 @@ export function PluginsPanel() {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-7 sm:px-7">
           {stale && (
-            <div className="mb-3 flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2 text-[13px] text-warning">
-              <TriangleAlert size={14} className="mt-px shrink-0" />
+            <div className="mb-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-2.5 text-[13px] leading-5 text-warning">
+              <TriangleAlert size={14} className="mt-[3px] shrink-0" />
               <span>
                 {t("connectors.stale")}
               </span>
@@ -590,8 +590,8 @@ export function PluginsPanel() {
           {setupNotice && filter !== "mcp" && (
             <div
               className={cn(
-                "mb-3 flex items-center gap-3 rounded-xl px-4 py-2.5 text-[13px] max-sm:flex-col max-sm:items-start",
-                setupNotice.tone === "warning" ? "bg-warning/10 text-warning" : "bg-control/50 text-ink-secondary",
+                "mb-3 flex items-center gap-3 rounded-xl px-4 py-2.5 text-[13px] leading-5 max-sm:flex-col max-sm:items-start",
+                setupNotice.tone === "warning" ? "bg-warning/10 text-warning" : "border border-ink/[0.08] text-ink-secondary",
               )}
             >
               <span className="min-w-0 flex-1">{t(whopConnected ? "whop.otherAppsSetup" : setupNotice.key)}</span>
@@ -604,10 +604,10 @@ export function PluginsPanel() {
             </div>
           )}
           {botsWithoutApps.length > 0 && (
-            <div className="mb-3 rounded-xl bg-control/50 px-4 py-3 text-[13px] leading-relaxed text-ink-secondary">
+            <div className="mb-3 rounded-xl border border-ink/[0.08] px-4 py-3 text-[13px] leading-5 text-ink-secondary">
               <span className="font-medium text-ink">{t("connectors.perBot.title")}</span>{" "}
               {t("connectors.perBot.body")}
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2.5 flex flex-wrap gap-2">
                 {botsWithoutApps.map((candidate) => (
                   <button
                     key={candidate.id}
@@ -636,7 +636,7 @@ export function PluginsPanel() {
               {t("connectors.featuredAfter")}
             </div>
           )}
-          {error && <div role="alert" className="mb-3 rounded-xl bg-danger/10 px-3 py-2 text-[12px] text-danger">{typeof error === "string" ? plainErrorLine(error) ?? error : t(error.key)}</div>}
+          {error && <div role="alert" className="mb-3 rounded-xl bg-danger/10 px-4 py-2.5 text-[13px] leading-5 text-danger">{typeof error === "string" ? plainErrorLine(error) ?? error : t(error.key)}</div>}
 
           {filter !== "mcp" && (
             <div data-apps-grid className="@container flex flex-col gap-7 pt-1">
@@ -735,7 +735,7 @@ export function PluginsPanel() {
           )}
 
           {filter !== "connected" && category === null && (
-            <div className={cn(filter === "all" && "mt-8 border-t border-hairline/30 pt-6", filter === "mcp" && "pt-1")}>
+            <div className={cn(filter === "all" && "mt-8 border-t border-ink/[0.08] pt-6", filter === "mcp" && "pt-1")}>
               <McpServersPanel embedded hideWhop={filter === "all"} />
             </div>
           )}
@@ -761,6 +761,7 @@ export function PluginsPanel() {
     const policy = state.config?.managedPolicy, unavailableReason = policy?.apps && !policy.apps.allowAll && !policy.apps.allowlist.includes(card.slug) ? t("policy.managedBy", { organization: policy.organizationName })
       : managedConnectorUnavailableReason(mode, card.slug) ? t("connectors.selfHostOnlyReason") : null;
     const usedBy = connected || included ? botsUsingService(state.bots, state.instances, card.slug) : [];
+    const staticLabel = unavailableReason ? t("connectors.selfHostOnly") : included && !needsKey ? t("connectors.action.included") : null;
     const description = unavailableReason ?? (
       pending
         ? authorizationUrl
@@ -776,7 +777,7 @@ export function PluginsPanel() {
       <div
         key={card.slug}
         data-app-tile={card.slug}
-        className="flex min-w-0 flex-col rounded-xl px-2 py-2 transition-colors hover:bg-raised/40"
+        className="flex min-w-0 flex-col rounded-xl px-2 py-2"
       >
         <div className="flex items-center gap-3">
           <ServiceIcon card={card} className="size-10 shrink-0 rounded-[10px]" />
@@ -809,10 +810,11 @@ export function PluginsPanel() {
               {description}
             </div>
           </div>
-          <button
+          {staticLabel ? (
+            <span className="shrink-0 px-1 text-[12px] leading-5 text-ink-secondary">{staticLabel}</span>
+          ) : <button
             type="button"
-            disabled={Boolean(unavailableReason) || (!needsKey && (!configured || inventoryPhase !== "ready" || busy || included))}
-            title={unavailableReason ?? undefined}
+            disabled={!needsKey && (!configured || inventoryPhase !== "ready" || busy)}
             data-needs-key={needsKey || undefined}
             onClick={() => {
               if (needsKey) {
@@ -835,9 +837,7 @@ export function PluginsPanel() {
             }}
             className="ui-button ui-button-md min-w-[64px] shrink-0"
           >
-            {unavailableReason ? (
-              t("connectors.selfHostOnly")
-            ) : busy ? (
+            {busy ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
               connectorActionLabel(inventoryPhase, {
@@ -850,7 +850,7 @@ export function PluginsPanel() {
                 failed: Boolean(failed),
               })
             )}
-          </button>
+          </button>}
         </div>
         <div className="ps-[52px]">
           {authorizationUrl && (

@@ -155,7 +155,7 @@ export function XCard({ refreshKey = 0, onConnection }: {
         : connecting && !status.unavailable ? t("apps.x.connecting") : t("apps.x.addKey");
 
   return (
-    <div data-app-tile="x" data-x-state={status === null ? "loading" : using ?? "none"} className="flex min-w-0 flex-col rounded-xl px-2 py-2 transition-colors hover:bg-raised/40">
+    <div data-app-tile="x" data-x-state={status === null ? "loading" : using ?? "none"} className="flex min-w-0 flex-col rounded-xl px-2 py-2">
       <div className="flex items-center gap-3">
         <XIcon />
         <div className="min-w-0 flex-1">
