@@ -23,17 +23,14 @@ describe("LoadingSkeleton", () => {
 });
 
 describe("DecodeIn", () => {
-  it("is ascii-reveal's AsciiReveal driven by loading, as its docs page runs it around AsciiSkeleton", () => {
+  it("is ascii-reveal's AsciiReveal exactly as its docs show it, around AsciiSkeleton", () => {
     reveals.length = 0;
-    const html = renderToStaticMarkup(h(DecodeIn, { loading: true, preset: "terminal", from: "top", className: "flex", "data-plan": "loading" },
+    const html = renderToStaticMarkup(h(DecodeIn, { loading: true, className: "flex", "data-plan": "loading" },
       h(LoadingSkeleton, { label: "Loading" })));
     expect(html).toContain('class="ars"');
-    expect(reveals).toEqual([{ loading: true, preset: "terminal", origin: "top-left", revealOnMount: false, lazy: false, className: "decode-in flex", "data-plan": "loading" }]);
-  });
-
-  it("decodes from the centre with the decode glyphs unless told otherwise", () => {
+    expect(reveals).toEqual([{ loading: true, origin: "pointer", className: "decode-in flex", "data-plan": "loading" }]);
     reveals.length = 0;
     renderToStaticMarkup(h(DecodeIn, { loading: false }, h("p", null, "Pro plan")));
-    expect(reveals).toEqual([{ loading: false, preset: "decode", origin: "center", revealOnMount: false, lazy: false, className: "decode-in" }]);
+    expect(reveals).toEqual([{ loading: false, origin: "pointer", className: "decode-in" }]);
   });
 });

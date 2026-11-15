@@ -297,7 +297,7 @@ export function VoicePicker({
           loading && !skeleton && "opacity-60",
         )}
       >
-        <DecodeIn loading={skeleton} preset="terminal" from="top">{body}</DecodeIn>
+        <DecodeIn loading={skeleton}>{body}</DecodeIn>
       </div>
     </div>
   );

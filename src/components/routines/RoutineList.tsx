@@ -19,7 +19,7 @@ export function RoutineList({ routines, runs, bots, loading, error, onOpen, onLo
   onToggle?: (routine: Routine) => void;
 }) {
   const sorted = [...routines].sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity) || a.name.localeCompare(b.name));
-  return <DecodeIn loading={Boolean(loading)} preset="terminal" from="top" className="flex flex-col gap-3" aria-label={t("routines.list")}>
+  return <DecodeIn loading={Boolean(loading)} className="flex flex-col gap-3" aria-label={t("routines.list")}>
     {error && <div role="alert" className="rounded-lg bg-danger/10 p-3 text-[12px] text-danger">{t("routines.loadError")}</div>}
     {loading && <LoadingSkeleton label={t("routines.loading")} lines={4} className="p-3" />}
     {!loading && !error && sorted.length === 0 && <div className="rounded-xl border border-dashed border-hairline/50 p-5 text-center text-[13px] text-ink-secondary"><Repeat2 size={20} className="mx-auto mb-2 opacity-60" />{t("routines.empty")}</div>}

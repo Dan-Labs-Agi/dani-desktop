@@ -16,22 +16,19 @@ export function LoadingSkeleton({ label, lines = 3, widths, className, ...rest }
   return (
     <div {...rest} role="status" className={cn("loading-skeleton text-[13px] text-ink-secondary", className)}>
       <span className="sr-only">{label}</span>
-      <AsciiSkeleton variant="dither" lines={lines} widths={widths} />
+      <AsciiSkeleton lines={lines} widths={widths} />
     </div>
   );
 }
 
-/** ascii-reveal's Reveal as its docs page runs it: while `loading` the skeleton inside is left alone, and when it turns
- *  false the content that replaced it decodes in at once. `preset` is its glyph set, `from` where the wave starts. */
-export function DecodeIn({ loading, preset = "decode", from = "center", className, children, ...rest }: {
+/** ascii-reveal's Reveal exactly as its docs show it: `<AsciiReveal loading={!data} origin="pointer">`. */
+export function DecodeIn({ loading, className, children, ...rest }: {
   loading: boolean;
-  preset?: "decode" | "terminal";
-  from?: "center" | "top";
   as?: ElementType;
   children?: ReactNode;
 } & Omit<HTMLAttributes<HTMLElement>, "children"> & DataAttributes) {
   return (
-    <AsciiReveal {...rest} loading={loading} preset={preset} origin={from === "top" ? "top-left" : "center"} revealOnMount={false} lazy={false} className={cn("decode-in", className)}>
+    <AsciiReveal {...rest} loading={loading} origin="pointer" className={cn("decode-in", className)}>
       {children}
     </AsciiReveal>
   );

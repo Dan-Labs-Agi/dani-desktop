@@ -251,7 +251,7 @@ export function PlanUsage() {
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
         </button>
       </div>
-      <DecodeIn loading={loading && !report} from="top">
+      <DecodeIn loading={loading && !report}>
         {loading && !report && <LoadingSkeleton label={t("planUsage.loading")} lines={3} />}
         {error && <p role="alert" className="mb-3 text-[13px] text-danger">{error}</p>}
         {report && report.providers.length === 0 && (

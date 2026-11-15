@@ -123,7 +123,7 @@ export function RobotAvatar(props: RobotAvatarProps) {
       data-robot-renderer={ready ? "webgl" : failure ? "unavailable" : "loading"}
     >
       <span className="mz-robot-placeholder loading-skeleton text-ink-secondary" aria-hidden="true">
-        <AsciiSkeleton variant="dither" rows={Math.max(2, Math.round(size / 11))} width={size} height={size} circle seed={Math.floor(seedFromLabel(label) * 1e6)} />
+        <AsciiSkeleton rows={Math.max(2, Math.round((size * 3) / 40))} width={size} height={size} circle />
       </span>
       <canvas ref={canvasRef} className="mz-robot-canvas" />
       {failure ? (

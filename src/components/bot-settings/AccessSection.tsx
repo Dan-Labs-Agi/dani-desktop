@@ -160,7 +160,7 @@ export function McpServersCard({ bot, patch }: { bot: Bot; patch: (patch: { mcpS
           {t("botAccess.mcpRefreshError")} <button type="button" onClick={() => void refresh()} className="underline">{t("connectors.action.retry")}</button>
         </div>
       )}
-      <DecodeIn loading={servers === null && !error} preset="terminal" from="top">
+      <DecodeIn loading={servers === null && !error}>
         {servers === null ? !error && (
           <LoadingSkeleton label={t("mcp.loading")} lines={2} className="mt-3" />
         ) : servers.length === 0 ? (

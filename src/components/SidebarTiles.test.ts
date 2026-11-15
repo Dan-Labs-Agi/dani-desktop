@@ -91,7 +91,8 @@ describe("the tile grid", () => {
   const grid = (primary: Bot | null, pinned: Bot[]) => {
     const bots = [...(primary ? [primary] : []), ...pinned];
     const row = (candidate: Bot) => botRowProps({ ...initialState, bots, selectedId: "", activeView: "chat" }, dispatch, candidate, { density: "comfortable", query: "", onMenu });
-    return renderToStaticMarkup(createElement(SidebarTileGrid, { primary, pinned, row }));
+    // React 19 puts the avatar skeleton's hoisted <style> first in static markup.
+    return renderToStaticMarkup(createElement(SidebarTileGrid, { primary, pinned, row })).replace(/^<style[^>]*>[^<]*<\/style>/, "");
   };
   const tiles = (html: string) => [...html.matchAll(/data-sidebar-bot-row="([^"]+)" data-sidebar-tile="([^"]+)" draggable="(true|false)"/g)]
     .map(([, id, kind, draggable]) => `${kind}:${id}${draggable === "true" ? ":drag" : ""}`);
