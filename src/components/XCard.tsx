@@ -11,7 +11,8 @@ import { looksLikeKey, saveCredential, tregVerdict } from "./keys/key-save";
 import { useCloudPlan } from "./ProIntroduction";
 
 const TREG_URL = "https://treg.to";
-const pill = "inline-flex h-7 min-w-[64px] shrink-0 items-center justify-center gap-2 rounded-full bg-control/80 px-3 text-[13px] font-medium leading-5 text-ink transition-colors hover:bg-raised-hover disabled:opacity-40";
+const pill = "ui-button ui-button-md min-w-[64px] shrink-0";
+const primaryPill = "ui-button ui-button-md ui-button-primary min-w-[64px] shrink-0";
 const field = "h-8 w-full min-w-0 rounded-lg bg-inset px-2.5 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none focus:ring-1 focus:ring-accent/50";
 
 /** What the card's search box matches. */
@@ -210,7 +211,7 @@ export function XCard({ refreshKey = 0, onConnection }: {
                 onPaste={() => { saveAfterPaste.current = true; }}
                 className={field}
               />
-              <button type="submit" disabled={busy !== null || !key.trim()} className={pill}>
+              <button type="submit" disabled={busy !== null || !key.trim()} className={primaryPill}>
                 {busy === "save" ? <Loader2 size={14} className="animate-spin" /> : t("common.save")}
               </button>
             </div>

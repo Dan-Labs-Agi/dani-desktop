@@ -13,7 +13,8 @@ import { isPostizStatus, POSTIZ_CLOUD, POSTIZ_KEY_PAGE, POSTIZ_SERVER, type Post
 import { cleanKey, looksLikeKey, saveCredential } from "./keys/key-save";
 import { SidebarPopoverMenu } from "./SidebarPopoverMenu";
 
-const pill = "inline-flex h-7 min-w-[64px] shrink-0 items-center justify-center gap-2 rounded-full bg-control/80 px-3 text-[13px] font-medium leading-5 text-ink transition-colors hover:bg-raised-hover disabled:opacity-40";
+const pill = "ui-button ui-button-md min-w-[64px] shrink-0";
+const primaryPill = "ui-button ui-button-md ui-button-primary min-w-[64px] shrink-0";
 const field = "h-8 w-full min-w-0 rounded-lg bg-inset px-2.5 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none focus:ring-1 focus:ring-accent/50";
 const link = "text-[12px] text-accent-text underline underline-offset-2";
 const SERVER = encodeURIComponent(POSTIZ_SERVER);
@@ -311,7 +312,7 @@ export function PostizCard({ refreshKey = 0, onConnection }: {
                 <span className="leading-relaxed text-ink">{t("mcp.auth.pasteBackHint")}</span>
                 <input type="text" value={callbackUrl} onChange={(event) => setCallbackUrl(event.target.value)} autoComplete="off" spellCheck={false}
                   aria-label={t("mcp.auth.callbackUrl")} placeholder="http://127.0.0.1:…/mcp-oauth/callback?…" className={field} />
-                <button type="submit" disabled={!callbackUrl.trim()} className={pill}>{t("mcp.auth.complete")}</button>
+                <button type="submit" disabled={!callbackUrl.trim()} className={primaryPill}>{t("mcp.auth.complete")}</button>
               </form>
             )}
           </div>
@@ -333,7 +334,7 @@ export function PostizCard({ refreshKey = 0, onConnection }: {
             )}
             <p className="text-[12px] leading-relaxed text-ink-secondary">{t(person || onlyMe ? "postiz.keyHelp" : "postiz.keyAndAddressHelp")}</p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              <button type="submit" disabled={busy !== null || !key.trim()} className={pill}>
+              <button type="submit" disabled={busy !== null || !key.trim()} className={primaryPill}>
                 {busy === "key" ? <Loader2 size={14} className="animate-spin" /> : t("connectors.action.connect")}
               </button>
               <a href={POSTIZ_KEY_PAGE} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] font-medium text-accent-text hover:underline">

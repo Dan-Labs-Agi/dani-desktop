@@ -596,10 +596,7 @@ export function PluginsPanel() {
             >
               <span className="min-w-0 flex-1">{t(whopConnected ? "whop.otherAppsSetup" : setupNotice.key)}</span>
               <button
-                className={cn(
-                  "ui-button ui-button-md shrink-0 whitespace-nowrap",
-                  remoteClient && "hidden",
-                )}
+                className={cn("ui-button ui-button-md ui-button-primary shrink-0 whitespace-nowrap", remoteClient && "hidden")}
                 onClick={() => { close(); dispatch(openKeySettings("composio")); }}
               >
                 {t("connectors.openSettings")}
@@ -616,7 +613,7 @@ export function PluginsPanel() {
                     key={candidate.id}
                     type="button"
                     onClick={() => dispatch({ type: "updateBot", botId: candidate.id, patch: { composio: true } })}
-                    className={cn(pill, "bg-control text-ink hover:bg-raised-hover")}
+                    className="ui-button ui-button-md"
                   >
                     {t("connectors.perBot.allow", { name: candidate.name })}
                   </button>
@@ -689,7 +686,7 @@ export function PluginsPanel() {
                         <button
                           type="button"
                           onClick={() => setShowAllApps(true)}
-                          className={cn(pill, "bg-control/70 px-4 text-ink hover:bg-raised-hover")}
+                          className="ui-button ui-button-md"
                         >
                           {t("apps.showAll", { count: allCards.length.toLocaleString() })}
                         </button>
@@ -713,7 +710,7 @@ export function PluginsPanel() {
                             type="button"
                             disabled={refreshing}
                             onClick={() => void loadConnectionInventory(true)}
-                            className={cn(pill, "mt-4 bg-raised text-ink hover:bg-raised-hover disabled:opacity-50")}
+                            className="ui-button ui-button-md mt-4"
                           >
                             <RefreshCw size={14} className={cn(refreshing && "animate-spin")} />
                             {t("connectors.action.retry")}
@@ -836,7 +833,7 @@ export function PluginsPanel() {
                 setAliasDraft("");
               }
             }}
-            className="inline-flex h-7 min-w-[64px] shrink-0 items-center justify-center gap-2 rounded-full bg-control/80 px-3 text-[13px] font-medium leading-5 text-ink transition-colors hover:bg-raised-hover disabled:opacity-40"
+            className="ui-button ui-button-md min-w-[64px] shrink-0"
           >
             {unavailableReason ? (
               t("connectors.selfHostOnly")
@@ -958,7 +955,7 @@ export function PluginsPanel() {
               <button
                 type="submit"
                 disabled={busy || !aliasDraft.trim()}
-                className="inline-flex h-7 shrink-0 items-center rounded-full bg-accent px-3 text-[13px] font-medium leading-5 text-accent-ink disabled:opacity-40"
+                className="ui-button ui-button-md ui-button-primary shrink-0"
               >
                 {t("connectors.action.continue")}
               </button>

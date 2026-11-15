@@ -19,7 +19,8 @@ import {
 import { forgetHighLevelStatus, rememberHighLevelStatus } from "@/lib/highlevel-status";
 import { SidebarPopoverMenu } from "./SidebarPopoverMenu";
 
-const pill = "inline-flex h-7 min-w-[64px] shrink-0 items-center justify-center gap-2 rounded-full bg-control/80 px-3 text-[13px] font-medium leading-5 text-ink transition-colors hover:bg-raised-hover disabled:opacity-40";
+const pill = "ui-button ui-button-md min-w-[64px] shrink-0";
+const primaryPill = "ui-button ui-button-md ui-button-primary min-w-[64px] shrink-0";
 const field = "h-8 w-full min-w-0 rounded-lg bg-inset px-2.5 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none focus:ring-1 focus:ring-accent/50";
 
 export function HighLevelIcon() {
@@ -290,7 +291,7 @@ export function HighLevelCard({ refreshKey = 0, onConnection }: {
               />
               <p className="text-[12px] leading-relaxed text-ink-secondary">{t("highlevel.tokenHelp")}</p>
               <div className="flex items-center gap-2">
-                <button type="submit" disabled={busy !== null} className={pill}>
+                <button type="submit" disabled={busy !== null} className={primaryPill}>
                   {busy === "token" ? <Loader2 size={14} className="animate-spin" /> : t("connectors.action.connect")}
                 </button>
                 <button type="button" onClick={() => { setTokenMode(false); setError(null); }} className="text-[12px] text-ink-secondary underline underline-offset-2 hover:text-ink">
