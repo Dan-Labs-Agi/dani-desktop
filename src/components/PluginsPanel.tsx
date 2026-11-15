@@ -760,6 +760,7 @@ export function PluginsPanel() {
     const reconnect = pending ? undefined : accountToReconnect(serviceStatus);
     const addingAccount = aliasSlug === card.slug && !included;
     const busy = busySlug === card.slug;
+    const needsKey = !configured && setup === "needs-setup" && !remoteClient;
     const policy = state.config?.managedPolicy, unavailableReason = policy?.apps && !policy.apps.allowAll && !policy.apps.allowlist.includes(card.slug) ? t("policy.managedBy", { organization: policy.organizationName })
       : managedConnectorUnavailableReason(mode, card.slug) ? t("connectors.selfHostOnlyReason") : null;
     const usedBy = connected || included ? botsUsingService(state.bots, state.instances, card.slug) : [];
@@ -813,10 +814,14 @@ export function PluginsPanel() {
           </div>
           <button
             type="button"
-            disabled={!configured || inventoryPhase !== "ready" || busy || included || Boolean(unavailableReason)}
+            disabled={Boolean(unavailableReason) || (!needsKey && (!configured || inventoryPhase !== "ready" || busy || included))}
             title={unavailableReason ?? undefined}
+            data-needs-key={needsKey || undefined}
             onClick={() => {
-              if (pending && !failed) {
+              if (needsKey) {
+                close();
+                dispatch(openKeySettings("composio"));
+              } else if (pending && !failed) {
                 const url = reusableConnectionUrl(pendingAuthorization);
                 if (url) {
                   setError(null);

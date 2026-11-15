@@ -58,6 +58,7 @@ vi.mock("./XCard", () => ({
 vi.mock("./PostizCard", () => ({
   PostizCard: () => createElement("div", { "data-postiz-card": true }, "Postiz"),
 }));
+import { openKeySettings } from "./keys/key-focus";
 import { APPS_PREVIEW_COUNT, PluginsPanel, USED_BY_AVATAR_SIZE, botsUsingService } from "./PluginsPanel";
 import { FACE_BOX } from "./cursor-face-data";
 import { MASCOT_BODIES } from "../../shared/mascot-bodies";
@@ -71,6 +72,7 @@ const X_CONNECTED = 22;
 const CATEGORY = 20;
 const POSTIZ_CONNECTED = 23;
 const MODE = 4;
+const SETUP = 5;
 const SEARCH = 15;
 const TAB = 16;
 
@@ -124,6 +126,16 @@ describe("Apps pop-up", () => {
     const grid = tree.find((node) => node.props["data-apps-grid"] !== undefined)!;
     expect(nodes(grid).some((node) => node.props.whopCard === true)).toBe(true);
     expect(fixture.dispatch).not.toHaveBeenCalled();
+  });
+  it("sends Connect to the connected-apps key setting while no key is set, instead of a dead button", () => {
+    fixture.overrides.set(CONFIGURED, false);
+    fixture.overrides.set(SETUP, "needs-setup");
+    const { nodes: tree } = render();
+    const connect = tree.find((node) => node.props["data-needs-key"] === true)!;
+    expect(connect.props.disabled).toBe(false);
+    connect.props.onClick!();
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "togglePlugins", open: false });
+    expect(fixture.dispatch).toHaveBeenLastCalledWith(openKeySettings("composio"));
   });
   it("counts Whop among connected apps", () => {
     fixture.overrides.set(18, true);
