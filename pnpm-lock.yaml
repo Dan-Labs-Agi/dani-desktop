@@ -78,6 +78,9 @@ importers:
       ajv-formats:
         specifier: 3.0.1
         version: 3.0.1(ajv@8.20.0)
+      ascii-reveal:
+        specifier: github:quanhoangindex/ascii-reveal#ec413f44933e4c08df202edaaed83ce77c342c3e
+        version: https://codeload.github.com/quanhoangindex/ascii-reveal/tar.gz/ec413f44933e4c08df202edaaed83ce77c342c3e(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -2735,6 +2738,18 @@ packages:
 
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
+
+  ascii-reveal@https://codeload.github.com/quanhoangindex/ascii-reveal/tar.gz/ec413f44933e4c08df202edaaed83ce77c342c3e:
+    resolution: {tarball: https://codeload.github.com/quanhoangindex/ascii-reveal/tar.gz/ec413f44933e4c08df202edaaed83ce77c342c3e}
+    version: 0.3.0
+    peerDependencies:
+      react: '>=17'
+      react-dom: '>=17'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   asn1js@3.0.10:
     resolution: {integrity: sha512-S2s3aOytiKdFRdulw2qPE51MzjzVOisppcVv7jVFR+Kw0kxwvFrDcYA0h7Ndqbmj0HkMIXYWaoj7fli8kgx1eg==}
@@ -7593,6 +7608,11 @@ snapshots:
       - supports-color
 
   argparse@2.0.1: {}
+
+  ascii-reveal@https://codeload.github.com/quanhoangindex/ascii-reveal/tar.gz/ec413f44933e4c08df202edaaed83ce77c342c3e(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+    optionalDependencies:
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
 
   asn1js@3.0.10:
     dependencies:

@@ -113,10 +113,12 @@ describe("bot draft dialog", () => {
   });
 
   it("steps aside while App settings, opened from inside it, is on top", () => {
-    expect(render().html).not.toMatch(/^<div[^>]* hidden/);
+    // React 19 puts the loading skeleton's hoisted <style> first in static markup.
+    const html = (defaults?: boolean) => render(defaults).html.replace(/^<style[^>]*>[^<]*<\/style>/, "");
+    expect(html()).not.toMatch(/^<div[^>]* hidden/);
     fixture.appSettingsOpen = true;
-    expect(render().html).toMatch(/^<div[^>]* hidden/);
-    expect(render(true).html).not.toMatch(/^<div[^>]* hidden/);
+    expect(html()).toMatch(/^<div[^>]* hidden/);
+    expect(html(true)).not.toMatch(/^<div[^>]* hidden/);
   });
   it("opens immediately with all sections and no creation request", () => {
     const result = render();

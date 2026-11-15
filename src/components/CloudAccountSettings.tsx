@@ -16,6 +16,7 @@ import { CloudSetupSteps } from "./CloudSetupSteps";
 import { useCloudSendNotice } from "./CloudSendStrip";
 import { OpenFilesButton } from "./OpenFilesButton";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export { cloudPlanLabel };
 
@@ -152,7 +153,7 @@ export function CloudPlanOnCloud({ bridge, onConnectPhone }: { bridge: CloudPlan
   const act = (action: () => Promise<void>) => { setFailed(false); void action().catch(() => setFailed(true)); };
   return <Card title={t("settings.section.cloudAccount")} subtitle={t(home ? "cloudAccount.onCloudHome" : "cloudAccount.onCloud")}>
     <div data-cloud-plan={plan?.status ?? "loading"} className="flex flex-col items-start gap-3">
-      {line ? <p role="status" className="text-[15px] font-medium text-ink">{line}</p> : !plan && <p role="status" className="text-[13px] text-ink-secondary">{t("cloudAccount.loading")}</p>}
+      {line ? <p role="status" className="text-[15px] font-medium text-ink">{line}</p> : !plan && <LoadingSkeleton label={t("cloudAccount.loading")} lines={2} />}
       {plan?.status === "signin" && <p className="text-[13px] text-ink-secondary">{t("cloudAccount.onCloudSignIn")}</p>}
       {trialLines(plan?.trial, plan?.credit)}
       <div className="flex flex-wrap gap-2">
@@ -271,7 +272,7 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
     <p className="text-[13px] leading-relaxed text-ink-secondary">{t("cloudAccount.optional")}</p>
     <Card title={t("settings.section.cloudAccount")} subtitle={t("cloudAccount.separate")}>
       {account?.staging && <StagingMark className="mb-3" />}
-      {(!account || view.kind === "unknown") && <p role="status" className="text-[13px] text-ink-secondary">{t("cloudAccount.loading")}</p>}
+      {(!account || view.kind === "unknown") && <LoadingSkeleton label={t("cloudAccount.loading")} lines={3} />}
       {message && <p role="status" className="mb-3 text-[13px] text-ink-secondary">{message}</p>}
       {(view.kind === "signed-out" || view.kind === "removed") && <div className="flex flex-col items-start gap-3">
         {addCloudButton}

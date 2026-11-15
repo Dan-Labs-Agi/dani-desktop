@@ -1,4 +1,4 @@
-import { FileText, Loader2, Repeat2 } from "@/components/icons";
+import { FileText, Repeat2 } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { Routine, RoutineRun } from "@/lib/routines";
@@ -6,6 +6,7 @@ import { scheduleLabel } from "@/lib/schedule-label";
 import { latestRoutineRun, routineDateTime, routineFinished, routineHeldNote, routineNextLabel, routineRunLabel, routineRunTone, routineScheduleState } from "@/lib/routine-display";
 import type { Bot } from "@/state/store";
 import { Switch } from "../SettingsPrimitives";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export function RoutineList({ routines, runs, bots, loading, error, onOpen, onLogs, onToggle }: {
   routines: Routine[];
@@ -20,7 +21,7 @@ export function RoutineList({ routines, runs, bots, loading, error, onOpen, onLo
   const sorted = [...routines].sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity) || a.name.localeCompare(b.name));
   return <div className="space-y-3" aria-label={t("routines.list")}>
     {error && <div role="alert" className="rounded-lg bg-danger/10 p-3 text-[12px] text-danger">{t("routines.loadError")}</div>}
-    {loading && <p role="status" className="flex items-center gap-2 p-3 text-[12px] text-ink-secondary"><Loader2 size={14} className="animate-spin" />{t("routines.loading")}</p>}
+    {loading && <LoadingSkeleton label={t("routines.loading")} lines={4} className="p-3" />}
     {!loading && !error && sorted.length === 0 && <div className="rounded-xl border border-dashed border-hairline/50 p-5 text-center text-[13px] text-ink-secondary"><Repeat2 size={20} className="mx-auto mb-2 opacity-60" />{t("routines.empty")}</div>}
     {sorted.map((routine) => {
       const latest = latestRoutineRun(routine.id, runs);

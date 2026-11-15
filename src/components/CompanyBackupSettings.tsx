@@ -5,6 +5,7 @@ import { activeLocale, t } from "@/lib/i18n";
 import { collectWorkspaceClientState, WORKSPACE_RESTORE_MARKER } from "@/lib/workspace-backup-client";
 import { Card, Switch } from "./SettingsPrimitives";
 import { WorkspaceBackupRestartNotice, WorkspaceBackupSummaryView } from "./WorkspaceBackupSettings";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 type BackupBridge = NonNullable<NonNullable<Window["ogb"]>["companyBackups"]>;
 type BackupList = Awaited<ReturnType<BackupBridge["list"]>>;
@@ -258,7 +259,7 @@ export function ConnectedCompanyBackupSettings({ connection, bridge }: { connect
           <button type="button" className="ui-button" disabled={disabled} onClick={() => openDialog({ kind: "create" })}>{t("companyBackup.create")}</button>
           <button type="button" className="ui-button" disabled={action !== null || state?.busy || needsRestart || loading} onClick={() => void refresh()}>{t("companyBackup.refresh")}</button>
         </div>
-        {loading && <p role="status" className="text-[13px] text-ink-secondary">{t("companyBackup.loading")}</p>}
+        {loading && <LoadingSkeleton label={t("companyBackup.loading")} lines={3} />}
         {listing && <p className="text-[12px] text-ink-secondary">{t("companyBackup.quota", { used: bytes(listing.usedBytes), total: bytes(listing.limits.ownerQuotaBytes), count: listing.limits.retainedSnapshots })}</p>}
         {pending > 0 && <p role="status" className="text-[12px] text-ink-secondary">{t("companyBackup.pending", { count: pending })}</p>}
         {listing && ready.length === 0 && <p className="text-[13px] text-ink-secondary">{t("companyBackup.empty")}</p>}

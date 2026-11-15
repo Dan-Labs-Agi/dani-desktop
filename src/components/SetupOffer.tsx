@@ -12,6 +12,7 @@ import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { api, useStore, type Bot, type Message } from "@/state/store";
 import { moveChoiceFocus, returnFocusToComposer } from "./AskCard";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 const blank = (bot: Pick<Bot, "soul" | "description">): boolean => !bot.soul?.trim() && !bot.description?.trim();
 const LETTERS = "ABCDEFGH";
@@ -115,13 +116,7 @@ export function SetupOffer({ botId, threadId, message, transcript }: { botId: st
           <X size={15} aria-hidden="true" />
         </button>}
       </div>
-      {pending ? <div data-setup-waiting="" className="mt-1.5 flex flex-col">
-        {PLACEHOLDER_WIDTHS.map((width) => (
-          <div key={width} className="flex min-h-10 items-center px-3 py-2">
-            <span className="h-4 rounded-md bg-ink/[0.06] motion-safe:animate-pulse" style={{ width }} />
-          </div>
-        ))}
-      </div> : <div key={choices.join("\n")} data-setup-updating={updating ? "" : undefined}
+      {pending ? <LoadingSkeleton data-setup-waiting="" label={t("chat.setupCard.loading")} lines={PLACEHOLDER_WIDTHS.length} widths={PLACEHOLDER_WIDTHS} className="mt-1.5 px-3 py-3 [&_.ars-line+.ars-line]:mt-6" /> : <div key={choices.join("\n")} data-setup-updating={updating ? "" : undefined}
         className={cn("mt-1.5 flex flex-col", updating ? "motion-safe:animate-pulse" : waitedOnce.current && "motion-safe:animate-msg-in")}>
         {options.map((option, index) => (
           <button key={option.label} type="button" data-ask-choice="" disabled={quiet || busy} onClick={option.pick}

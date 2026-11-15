@@ -35,6 +35,7 @@ import { WHOP_MCP_URL, isWhopServer, whopServerName } from "@/lib/whop-integrati
 import { POSTIZ_SERVER } from "../../shared/postiz";
 import { CHAT_TOOL_LIMIT, chatToolBudgetFit } from "../../shared/tool-budget";
 import { openBotSettings } from "./bot-panel/panel-link";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export interface ProbeResult {
   ok: boolean;
@@ -567,7 +568,7 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
         </div>
 
         {servers === null ? (
-          !error && <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-ink-secondary"><Loader2 size={14} className="animate-spin" /> {t("mcp.loading")}</div>
+          !error && <LoadingSkeleton label={t("mcp.loading")} lines={4} className="px-1 py-6" />
         ) : visibleServers?.length === 0 && !editing ? (
           <div data-mcp-empty className="mt-3 flex flex-col items-center rounded-xl border border-ink/[0.08] px-6 py-8 text-center">
             <ServerCog size={22} className="text-ink-secondary" aria-hidden="true" />

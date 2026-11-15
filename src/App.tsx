@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, Loader2, Menu } from "@/components/icons";
+import { ChevronLeft, Menu } from "@/components/icons";
 import { CLOUD_LINK_SETTINGS, openBot, StoreProvider, useStore } from "@/state/store";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useWelcomeViewer, WelcomeGate } from "@/components/onboarding/WelcomeGate";
@@ -64,6 +64,7 @@ import { useReadShownChatOnFocus } from "@/hooks/use-read-shown-chat";
 import { usePresence } from "@/hooks/use-presence";
 import { ChatNotice } from "@/components/ChatErrorBanner";
 import { loadingLine } from "@/lib/app-loading";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { useAiSwitchKeeper } from "@/lib/ai-switch";
 import { useChiefStepOpen } from "@/lib/default-bot";
 import { SESSION_ENDED_REASON, useSessionEnded } from "@/lib/session-ended";
@@ -381,7 +382,7 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         <main data-app-loading={loading.text} className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-app text-ink-secondary">
           <WindowDragStrip />
           <div className="w-full max-w-md"><ChatNotice notice={state.notice} /></div>
-          {loading.busy && <Loader2 size={20} className="animate-spin" />}
+          {loading.busy && <LoadingSkeleton label={t(loading.text)} lines={5} widths={["72%", "88%", "54%", "80%", "36%"]} className="w-full max-w-[min(var(--chat-prose-max),80%)] px-6" />}
           <div className="text-[14px]">{t(loading.text)}</div>
           {loading.command && (
             <div className="text-[12px]">

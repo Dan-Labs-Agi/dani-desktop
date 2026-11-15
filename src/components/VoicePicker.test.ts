@@ -155,7 +155,7 @@ describe("VoicePicker", () => {
     await mount({ value: "c".repeat(32), voices: [], loading: true });
     expect(trigger().textContent).toBe("Loading voices…");
     await open();
-    expect(sheet()!.querySelectorAll("[data-voice-skeleton]")).toHaveLength(4);
+    expect(sheet()!.querySelectorAll("[data-voice-skeleton] .ars-line")).toHaveLength(8);
     expect(options()).toHaveLength(0);
 
     await mount({ voices: [], query: "zzzz" });

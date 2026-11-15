@@ -4,6 +4,7 @@ import { Loader2, Trash2, X } from "@/components/icons";
 import type { CommandAllowRule, CommandAllowlistResponse } from "../../shared/command-allowlist";
 import { api, useStore } from "@/state/store";
 import { t } from "@/lib/i18n";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 // Electron collects -webkit-app-region from layout boxes and ignores z-index, so the chat header's drag strip swallows
 // clicks on top of it.
@@ -145,9 +146,7 @@ export function CommandAllowlistDialog({ botId, botName, threadId, onClose }: {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
           <p id={scopeId} className="mt-3 text-[12px] leading-relaxed text-ink-secondary">{t("commandAllowlist.scope")}</p>
-          {loading && <p role="status" className="mt-5 flex items-center gap-2 text-[13px] text-ink-secondary">
-            <Loader2 size={15} className="animate-spin" aria-hidden="true" />{t("commandAllowlist.loading")}
-          </p>}
+          {loading && <LoadingSkeleton label={t("commandAllowlist.loading")} lines={4} className="mt-5" />}
           {error && <div role="alert" className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-[12px] text-danger">
             <p>{error}</p>
             {!data && !loading && <button type="button" onClick={() => setRevision((value) => value + 1)}

@@ -39,6 +39,7 @@ import { openBotSettings } from "./bot-panel/panel-link";
 import { openKeySettings } from "./keys/key-focus";
 import { lacksAdminScope } from "@/lib/admin-scope";
 import { ServiceIcon, type ToolkitCard } from "./ServiceIcon"; import { AppsSection } from "./AppsSection";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 export { ServiceIcon, type ToolkitCard } from "./ServiceIcon";
 
 export { preloadConnectedApps, type ConnectorInventory } from "@/lib/connected-apps";
@@ -677,9 +678,7 @@ export function PluginsPanel() {
                 after={(
                   <>
                     {cards === null && (
-                      <div className="flex items-center justify-center gap-2 py-24 text-[13px] text-ink-secondary">
-                        <Loader2 size={14} className="animate-spin" /> {t("connectors.loadingCatalog")}
-                      </div>
+                      <LoadingSkeleton label={t("connectors.loadingCatalog")} lines={6} className="px-1 py-6" />
                     )}
                     {allCapped && (
                       <div className="mt-4 flex justify-center">

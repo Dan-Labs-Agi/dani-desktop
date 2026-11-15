@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { Card, SIMPLE_CARD } from "./SettingsPrimitives";
 import { UsageSummaryCard } from "./CloudUsageMeter";
 import { formatPlanSpend, type PlanSpend } from "@/lib/plan-spend";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 interface PlanWindow {
   available: boolean;
@@ -250,7 +251,7 @@ export function PlanUsage() {
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
         </button>
       </div>
-      {loading && !report && <p role="status" className="text-[13px] text-ink-secondary">{t("planUsage.loading")}</p>}
+      {loading && !report && <LoadingSkeleton label={t("planUsage.loading")} lines={3} />}
       {error && <p role="alert" className="mb-3 text-[13px] text-danger">{error}</p>}
       {report && report.providers.length === 0 && (
         <p className="text-[13px] text-ink-secondary">{t("planUsage.empty")}</p>

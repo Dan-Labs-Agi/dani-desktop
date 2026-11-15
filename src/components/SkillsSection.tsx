@@ -7,6 +7,7 @@ import { useStore } from "@/state/store";
 import { Card, Switch } from "./SettingsPrimitives";
 import type { SkillsLibrarySkillWire } from "../../shared/wire";
 import { Select } from "./Select";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export function filterLibrarySkills(
   skills: readonly SkillsLibrarySkillWire[],
@@ -250,7 +251,7 @@ export function SkillsSection() {
           )}
 
           {loading ? (
-            <div className="text-[12px] text-ink-secondary">{t("skills.library.loading")}</div>
+            <LoadingSkeleton label={t("skills.library.loading")} lines={3} />
           ) : visible.length === 0 ? (
             <div className="rounded-lg bg-inset px-3 py-2 text-[12px] text-ink-secondary">
               {skills.length === 0 ? t("skills.library.empty") : t("skills.library.noMatches")}
