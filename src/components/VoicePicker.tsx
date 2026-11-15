@@ -8,7 +8,7 @@ import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { useMenuMotion } from "./MenuMotion";
-import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export interface PickerVoice {
   id: string;
@@ -297,7 +297,7 @@ export function VoicePicker({
           loading && !skeleton && "opacity-60",
         )}
       >
-        {body}
+        <DecodeIn loading={skeleton}>{body}</DecodeIn>
       </div>
     </div>
   );

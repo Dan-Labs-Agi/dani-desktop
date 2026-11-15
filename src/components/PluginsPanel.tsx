@@ -39,7 +39,7 @@ import { openBotSettings } from "./bot-panel/panel-link";
 import { openKeySettings } from "./keys/key-focus";
 import { lacksAdminScope } from "@/lib/admin-scope";
 import { ServiceIcon, type ToolkitCard } from "./ServiceIcon"; import { AppsSection } from "./AppsSection";
-import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 export { ServiceIcon, type ToolkitCard } from "./ServiceIcon";
 
 export { preloadConnectedApps, type ConnectorInventory } from "@/lib/connected-apps";
@@ -640,7 +640,7 @@ export function PluginsPanel() {
           {error && <div role="alert" className="mb-3 rounded-xl bg-danger/10 px-4 py-2.5 text-[13px] leading-5 text-danger">{typeof error === "string" ? plainErrorLine(error) ?? error : t(error.key)}</div>}
 
           {filter !== "mcp" && (
-            <div data-apps-grid className="@container flex flex-col gap-7 pt-1">
+            <DecodeIn loading={cards === null} data-apps-grid className="@container flex flex-col gap-7 pt-1">
               {sections.filter((section) => section.kind !== "all").map((section) => section.kind === "connected" ? (
                 <AppsSection
                   key="connected"
@@ -730,7 +730,7 @@ export function PluginsPanel() {
                 <div data-native-card="postiz" className={postizHere ? "contents" : "hidden"}><PostizCard refreshKey={whopRefresh} onConnection={setPostizConnected} /></div>
                 {allShown.map((card) => renderTile(card))}
               </AppsSection>
-            </div>
+            </DecodeIn>
           )}
 
           {filter !== "connected" && category === null && (

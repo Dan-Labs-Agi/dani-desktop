@@ -33,7 +33,7 @@ import { openKeySettings } from "../keys/key-focus";
 import { KeysLink } from "../keys/KeysLink";
 import type { ConnectorScope, ConnectorScopes } from "../../../shared/connector-scopes";
 import type { useBotSettingsDerived } from "./useBotSettingsDerived";
-import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 /**
  * Claude keeps sessions per project folder, so the server pins each task's folder on its first turn. PATCHed directly,
@@ -160,30 +160,32 @@ export function McpServersCard({ bot, patch }: { bot: Bot; patch: (patch: { mcpS
           {t("botAccess.mcpRefreshError")} <button type="button" onClick={() => void refresh()} className="underline">{t("connectors.action.retry")}</button>
         </div>
       )}
-      {servers === null ? !error && (
-        <LoadingSkeleton label={t("mcp.loading")} lines={2} className="mt-3" />
-      ) : servers.length === 0 ? (
-        <div className="mt-3 rounded-lg bg-inset px-3 py-2 text-[12px] text-ink-secondary">{t("botAccess.mcpEmpty")}</div>
-      ) : (
-        <div className="mt-3 divide-y divide-hairline/40 overflow-hidden rounded-lg border border-hairline/40">
-          {servers.map((server) => (
-            <div key={server.name} className="flex items-center justify-between gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-mono text-[13px] text-ink">{server.name}</div>
-                {!server.enabled && <div className="text-[12px] text-ink-secondary">{t("botAccess.mcpDisabled")}</div>}
-                {server.enabled && server.offFor?.includes(bot.id) && <div className="text-[12px] text-ink-secondary">{t("mcp.offFor", { bots: bot.name })}</div>}
+      <DecodeIn loading={servers === null && !error}>
+        {servers === null ? !error && (
+          <LoadingSkeleton label={t("mcp.loading")} lines={2} className="mt-3" />
+        ) : servers.length === 0 ? (
+          <div className="mt-3 rounded-lg bg-inset px-3 py-2 text-[12px] text-ink-secondary">{t("botAccess.mcpEmpty")}</div>
+        ) : (
+          <div className="mt-3 divide-y divide-hairline/40 overflow-hidden rounded-lg border border-hairline/40">
+            {servers.map((server) => (
+              <div key={server.name} className="flex items-center justify-between gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-mono text-[13px] text-ink">{server.name}</div>
+                  {!server.enabled && <div className="text-[12px] text-ink-secondary">{t("botAccess.mcpDisabled")}</div>}
+                  {server.enabled && server.offFor?.includes(bot.id) && <div className="text-[12px] text-ink-secondary">{t("mcp.offFor", { bots: bot.name })}</div>}
+                </div>
+                <Switch
+                  checked={mounted.has(server.name)}
+                  disabled={!server.enabled || !!bot.busy || error}
+                  aria-label={t("botAccess.mcpAllow", { name: server.name })}
+                  onClick={() => toggle(server.name)}
+                  className="disabled:cursor-not-allowed"
+                />
               </div>
-              <Switch
-                checked={mounted.has(server.name)}
-                disabled={!server.enabled || !!bot.busy || error}
-                aria-label={t("botAccess.mcpAllow", { name: server.name })}
-                onClick={() => toggle(server.name)}
-                className="disabled:cursor-not-allowed"
-              />
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </DecodeIn>
       <ToolBudgetLine botId={bot.id} busy={!!bot.busy} />
       <div className="mt-3 flex items-center gap-2">
         <button type="button" onClick={openPlugins} className="flex items-center gap-1.5 rounded-lg bg-control px-3 py-2 text-[13px] text-ink hover:bg-raised-hover">
