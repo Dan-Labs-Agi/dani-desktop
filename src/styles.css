@@ -1120,6 +1120,9 @@
 }
 /* ascii-reveal draws its dither skeleton at 22% opacity, too faint on Daylight. */
 .loading-skeleton .ars { --ars-base: .45; }
+/* ascii-reveal reads these from the box it decodes in: the terminal cursor's colour, and the colour each character
+   lands in before it settles. */
+.decode-in { --ascii-accent: var(--color-accent-text); --ascii-flash: var(--color-accent-text); }
 .chat-md :is(strong, b) {
   font-weight: 600;
 }

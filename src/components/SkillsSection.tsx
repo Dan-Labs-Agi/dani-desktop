@@ -250,7 +250,7 @@ export function SkillsSection() {
             </div>
           )}
 
-          <DecodeIn loading={loading}>
+          <DecodeIn loading={loading} preset="terminal" from="top">
             {loading ? (
               <LoadingSkeleton label={t("skills.library.loading")} lines={3} />
             ) : visible.length === 0 ? (

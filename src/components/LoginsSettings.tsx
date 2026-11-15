@@ -77,7 +77,7 @@ export function LoginsSettings() {
 
   return (
     <Card title={t("settings.logins.title")} subtitle={t("settings.logins.subtitle")}>
-      <DecodeIn loading={logins === null && !error} className="flex flex-col gap-3" aria-busy={logins === null || busy}>
+      <DecodeIn loading={logins === null && !error} preset="terminal" from="top" className="flex flex-col gap-3" aria-busy={logins === null || busy}>
         {state.config?.cloudHome === true && <p className="text-[12px] leading-relaxed text-ink-secondary" data-logins-cloud-own>{t("settings.logins.cloudOwn")}</p>}
         {logins === null && !error && <LoadingSkeleton label={t("settings.logins.loading")} lines={3} />}
         {logins?.length === 0 && !adding && <p className="text-[12px] leading-relaxed text-ink-secondary">{t("settings.logins.empty")}</p>}

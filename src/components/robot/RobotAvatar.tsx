@@ -113,6 +113,7 @@ export function RobotAvatar(props: RobotAvatarProps) {
       className={`mz-robot-avatar${ready ? " is-ready" : ""}${props.className ? ` ${props.className}` : ""}`}
       style={{ width: `${size}px`, height: `${size}px` }}
       role="img"
+      data-ascii="skip"
       aria-label={failure ? `${label}. 3D avatar unavailable.` : label}
       title={failure ?? label}
       data-robot-error={failure ?? undefined}

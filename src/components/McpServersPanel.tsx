@@ -567,7 +567,7 @@ export function McpServersPanel({ embedded = false, whopCard = false, hideWhop =
           {t("mcp.trustNotice")}
         </div>
 
-        <DecodeIn loading={servers === null && !error}>
+        <DecodeIn loading={servers === null && !error} preset="terminal" from="top">
           {servers === null ? (
             !error && <LoadingSkeleton label={t("mcp.loading")} lines={4} className="px-1 py-6" />
           ) : visibleServers?.length === 0 && !editing ? (

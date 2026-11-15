@@ -152,7 +152,7 @@ export function CloudPlanOnCloud({ bridge, onConnectPhone }: { bridge: CloudPlan
       : plan ? t(home ? "cloudAccount.onCloudNoneHome" : "cloudAccount.onCloudNone") : null;
   const act = (action: () => Promise<void>) => { setFailed(false); void action().catch(() => setFailed(true)); };
   return <Card title={t("settings.section.cloudAccount")} subtitle={t(home ? "cloudAccount.onCloudHome" : "cloudAccount.onCloud")}>
-    <DecodeIn loading={!plan} data-cloud-plan={plan?.status ?? "loading"} className="flex flex-col items-start gap-3">
+    <DecodeIn loading={!plan} from="top" data-cloud-plan={plan?.status ?? "loading"} className="flex flex-col items-start gap-3">
       {line ? <p role="status" className="text-[15px] font-medium text-ink">{line}</p> : !plan && <LoadingSkeleton label={t("cloudAccount.loading")} lines={2} />}
       {plan?.status === "signin" && <p className="text-[13px] text-ink-secondary">{t("cloudAccount.onCloudSignIn")}</p>}
       {trialLines(plan?.trial, plan?.credit)}
@@ -271,7 +271,7 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
   return <>
     <p className="text-[13px] leading-relaxed text-ink-secondary">{t("cloudAccount.optional")}</p>
     <Card title={t("settings.section.cloudAccount")} subtitle={t("cloudAccount.separate")}>
-      <DecodeIn loading={!account || view.kind === "unknown"}>
+      <DecodeIn loading={!account || view.kind === "unknown"} from="top">
         {account?.staging && <StagingMark className="mb-3" />}
         {(!account || view.kind === "unknown") && <LoadingSkeleton label={t("cloudAccount.loading")} lines={3} />}
         {message && <p role="status" className="mb-3 text-[13px] text-ink-secondary">{message}</p>}

@@ -82,7 +82,7 @@ export function OrganizationSettings() {
   return <>
     <p className="text-[13px] leading-relaxed text-ink-secondary">{t("organization.additive")}</p>
     <Card title={t("settings.section.organization")} subtitle={t("organization.privacy")}>
-      <DecodeIn loading={!connection && !error}>
+      <DecodeIn loading={!connection && !error} from="top">
         {!connection && (error ? <p role="status" className="text-[13px] text-ink-secondary">{error}</p> : <LoadingSkeleton label={t("organization.loading")} lines={2} />)}
         {connection?.message && <p role="status" className="mb-3 text-[13px] text-ink-secondary">{connection.message}</p>}
         {licenseExpired && <p role="alert" className="mb-3 text-[13px] text-ink">{t("organization.licenseExpired")}</p>}

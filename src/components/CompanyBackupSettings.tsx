@@ -242,7 +242,7 @@ export function ConnectedCompanyBackupSettings({ connection, bridge }: { connect
   const scheduledDate = (value: number) => new Intl.DateTimeFormat(activeLocale(), { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 
   return <Card title={t("companyBackup.title")} subtitle={t("companyBackup.account", { organization: connection.organization?.name ?? "", email: connection.email ?? "" })}>
-    <DecodeIn loading={loading} className="flex flex-col gap-3">
+    <DecodeIn loading={loading} from="top" className="flex flex-col gap-3">
       <p className="text-[13px] text-ink-secondary">{t("companyBackup.managedScope")}</p>
       {bridge.configureSchedule && schedule && <div className="rounded-lg border border-hairline/40 p-3">
         <div className="flex items-center justify-between gap-3">

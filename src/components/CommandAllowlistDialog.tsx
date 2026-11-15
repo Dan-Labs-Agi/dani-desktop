@@ -146,7 +146,7 @@ export function CommandAllowlistDialog({ botId, botName, threadId, onClose }: {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
           <p id={scopeId} className="mt-3 text-[12px] leading-relaxed text-ink-secondary">{t("commandAllowlist.scope")}</p>
-          <DecodeIn loading={loading}>
+          <DecodeIn loading={loading} preset="terminal" from="top">
             {loading && <LoadingSkeleton label={t("commandAllowlist.loading")} lines={4} className="mt-5" />}
             {error && <div role="alert" className="mt-4 rounded-lg bg-danger/10 px-3 py-2 text-[12px] text-danger">
               <p>{error}</p>

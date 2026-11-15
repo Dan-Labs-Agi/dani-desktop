@@ -640,7 +640,7 @@ export function PluginsPanel() {
           {error && <div role="alert" className="mb-3 rounded-xl bg-danger/10 px-4 py-2.5 text-[13px] leading-5 text-danger">{typeof error === "string" ? plainErrorLine(error) ?? error : t(error.key)}</div>}
 
           {filter !== "mcp" && (
-            <DecodeIn loading={cards === null} data-apps-grid className="@container flex flex-col gap-7 pt-1">
+            <DecodeIn loading={cards === null} from="top" data-apps-grid className="@container flex flex-col gap-7 pt-1">
               {sections.filter((section) => section.kind !== "all").map((section) => section.kind === "connected" ? (
                 <AppsSection
                   key="connected"
