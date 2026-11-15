@@ -4,8 +4,8 @@ import { createJsonLines, createWhisperStreamText, tidyWhisperText, windowsSpeec
 
 describe("the Windows speech helper", () => {
   it("runs the script under Windows PowerShell with the session's stop and finish markers", () => {
-    const args = windowsSpeechArgs({ script: "C:\app\speech-helper.ps1", stopPath: "C:\t\stop", finishPath: "C:\t\finish" });
-    expect(args).toEqual(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "C:\app\speech-helper.ps1", "-StopFile", "C:\t\stop", "-FinishFile", "C:\t\finish"]);
+    const args = windowsSpeechArgs({ script: "C:\\app\\speech-helper.ps1", stopPath: "C:\\t\\stop", finishPath: "C:\\t\\finish" });
+    expect(args).toEqual(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "C:\\app\\speech-helper.ps1", "-StopFile", "C:\\t\\stop", "-FinishFile", "C:\\t\\finish"]);
     expect(windowsSpeechArgs({ script: "s", stopPath: "a", finishPath: "b", endpointMs: 900 }).slice(-2)).toEqual(["-EndpointMs", "900"]);
   });
 

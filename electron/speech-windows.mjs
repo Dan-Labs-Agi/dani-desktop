@@ -23,6 +23,7 @@ export function windowsWhisper({ packaged, resourcesPath, env = process.env, exi
 const join = (left, right) => left && right ? `${left} ${right}` : left || right;
 // whisper.cpp writes non-speech as bracketed tags, and its base model hears these in near-silence.
 const tidy = (text) => {
+  // oxlint-disable-next-line no-control-regex -- strips the terminal colour codes whisper-stream writes
   const words = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
   return /^(thank you\.?|thanks for watching!?|you\.?)$/i.test(words) ? "" : words;
 };
