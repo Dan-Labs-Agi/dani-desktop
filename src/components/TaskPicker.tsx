@@ -380,7 +380,7 @@ function ConversationTaskPicker({
                     <FolderInput size={14} />
                     <select aria-label={t("folder.moveNamed", { title: task.title })} value={bot.projects?.some((project) => project.id === task.projectId) ? task.projectId : ""}
                       onFocus={clearDismiss} onChange={(event) => { clearDismiss(); onMove(task.threadId, event.target.value || null); }}
-                      className="absolute inset-0 w-full cursor-pointer opacity-0">
+                      className="ui-select absolute inset-0 w-full cursor-pointer opacity-0">
                       <option value="">{t("folder.none")}</option>
                       {bot.projects?.map((project) => <option key={project.id} value={project.id}>{project.emoji ? `${project.emoji} ` : ""}{project.name}</option>)}
                     </select>
