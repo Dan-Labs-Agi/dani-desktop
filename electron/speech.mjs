@@ -14,7 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "electron";
 import { createSpeechTranscript } from "./speech-transcript.mjs";
-import { WINDOWS_SPEECH_COMMAND, createJsonLines, windowsSpeechArgs, windowsSpeechScript, windowsWhisper } from "./speech-windows.mjs";
+import { WINDOWS_SPEECH_COMMAND, createJsonLines, createWhisperStreamText, tidyWhisperText, windowsSpeechArgs, windowsSpeechScript, windowsWhisper } from "./speech-windows.mjs";
 
 import {
   buildSpeechHelper,
@@ -220,7 +220,7 @@ function startWindowsSpeech(sink, endpointMs) {
   const finishPath = path.join(sessionDir, "finish");
   const where = { packaged: app.isPackaged, resourcesPath: process.resourcesPath };
   const script = windowsSpeechScript(where);
-  // ponytail: whisper only transcribes on finish, so talk mode (endpointMs) stays on the streaming engines.
+  // ponytail: whisper ends only on finish (no endpointing), so talk mode (endpointMs) stays on the Windows engines.
   const whisper = endpointMs ? null : windowsWhisper(where);
   let proc;
   try {
@@ -230,14 +230,18 @@ function startWindowsSpeech(sink, endpointMs) {
     sink.end({ code: 1, reason: "helper-start-failed" });
     return;
   }
-  const speechSession = { proc, stopPath, finishPath, sessionDir, owner: sink.owner, target: sink };
+  const speechSession = { proc, stopPath, finishPath, sessionDir, owner: sink.owner, target: sink, live: null };
   child = speechSession;
   const forgetWindow = sink.whenGone(() => stopSpeech(sink.owner));
   let reportedError = null;
   let completed = false;
   const transcript = createSpeechTranscript();
+  if (whisper?.stream) speechSession.live = startWhisperStream(whisper, (text) => {
+    if (text && child === speechSession && speechSession.live) sink.transcript(transcript({ partial: true, text }));
+  });
   proc.stdout.setEncoding("utf8");
   proc.stdout.on("data", createJsonLines((parsed) => {
+    if (whisper && typeof parsed.text === "string") parsed.text = tidyWhisperText(parsed.text);
     if (typeof parsed.error === "string") reportedError = parsed.error;
     if (parsed.partial === false && typeof parsed.text === "string") completed = true;
     if (child === speechSession) sink.transcript(transcript(parsed));
@@ -246,6 +250,7 @@ function startWindowsSpeech(sink, endpointMs) {
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
+    quiet(speechSession);
     forgetWindow();
     rmSync(sessionDir, { recursive: true, force: true });
   };
@@ -265,12 +270,34 @@ function startWindowsSpeech(sink, endpointMs) {
   });
 }
 
+/** Live partials while the person talks; the helper's final line, from the whole take, replaces them. */
+function startWhisperStream({ stream, model }, onText) {
+  const language = app.getSystemLocale().split("-")[0] || "en";
+  let proc;
+  try {
+    proc = spawn(stream, ["-m", model, "-l", language, "--step", "1500", "--length", "6000"], { cwd: path.dirname(stream), stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+  } catch {
+    return null;
+  }
+  const text = createWhisperStreamText();
+  proc.stdout.setEncoding("utf8");
+  proc.stdout.on("data", (chunk) => onText(text(chunk)));
+  proc.on("error", () => {});
+  return proc;
+}
+
+function quiet(speechSession) {
+  speechSession.live?.kill();
+  speechSession.live = null;
+}
+
 const ownedBy = (owner) => child !== null && (owner === undefined || child.owner === owner);
 
 export function stopSpeech(owner) {
   if (!ownedBy(owner)) return;
   const speechSession = child;
   child = null;
+  quiet(speechSession);
   try {
     writeFileSync(speechSession.stopPath, "stop");
   } catch {}
@@ -278,6 +305,7 @@ export function stopSpeech(owner) {
 
 export function finishSpeech(owner) {
   if (!ownedBy(owner)) return;
+  quiet(child);
   try {
     writeFileSync(child.finishPath, "finish");
   } catch {}

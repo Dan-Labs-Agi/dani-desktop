@@ -16,8 +16,41 @@ export function windowsWhisper({ packaged, resourcesPath, env = process.env, exi
   const base = packaged ? resourcesPath : path.join(__dirname, "..", "dist-native");
   const cli = env.DANI_WHISPER_CLI || path.join(base, "speech-runtime", `win32-${process.arch}`, "whisper-cli.exe");
   const model = env.DANI_WHISPER_MODEL || path.join(base, "speech-models", "whisper", "ggml-base-q5_1.bin");
-  return exists(cli) && exists(model) ? { cli, model } : null;
+  const stream = path.join(path.dirname(cli), "whisper-stream.exe");
+  return exists(cli) && exists(model) ? { cli, model, stream: exists(stream) ? stream : null } : null;
 }
+
+const join = (left, right) => left && right ? `${left} ${right}` : left || right;
+// whisper.cpp writes non-speech as bracketed tags, and its base model hears these in near-silence.
+const tidy = (text) => {
+  const words = text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+  return /^(thank you\.?|thanks for watching!?|you\.?)$/i.test(words) ? "" : words;
+};
+
+/** whisper-stream redraws its current line after `\r` and keeps it on a line break (`\r\n` on Windows); returns the
+ *  transcript so far after each stdout chunk. */
+export function createWhisperStreamText() {
+  let kept = "";
+  let line = "";
+  let held = "";
+  return (chunk) => {
+    const data = held + String(chunk);
+    held = data.endsWith("\r") ? "\r" : "";
+    for (const part of (held ? data.slice(0, -1) : data).split(/(\r\n|\r|\n)/)) {
+      if (part === "\r\n" || part === "\n") {
+        kept = join(kept, tidy(line));
+        line = "";
+      } else if (part === "\r") {
+        line = "";
+      } else {
+        line += part;
+      }
+    }
+    return join(kept, tidy(line));
+  };
+}
+
+export const tidyWhisperText = tidy;
 
 export function windowsSpeechArgs({ script, stopPath, finishPath, endpointMs = 0, whisper = null }) {
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-StopFile", stopPath, "-FinishFile", finishPath];
