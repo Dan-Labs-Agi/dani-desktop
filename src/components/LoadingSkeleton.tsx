@@ -11,7 +11,8 @@ export function LoadingSkeleton({ label, lines = 3, widths, className, ...rest }
   className?: string;
 } & Record<`data-${string}`, string | undefined>) {
   return (
-    <div {...rest} role="status" aria-label={label} title={label} className={cn("text-[13px] text-ink-tertiary", className)}>
+    <div {...rest} role="status" className={cn("loading-skeleton text-[13px] text-ink-secondary", className)}>
+      <span className="sr-only">{label}</span>
       <AsciiSkeleton variant="dither" lines={lines} widths={widths} />
     </div>
   );

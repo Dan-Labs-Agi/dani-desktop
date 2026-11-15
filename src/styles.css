@@ -1118,6 +1118,8 @@
   line-height: 1.4667;
   font-family: "omb-chat", var(--font-sans);
 }
+/* ascii-reveal draws its dither skeleton at 22% opacity, too faint on Daylight. */
+.loading-skeleton .ars { --ars-base: .45; }
 .chat-md :is(strong, b) {
   font-weight: 600;
 }

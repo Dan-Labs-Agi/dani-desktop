@@ -64,7 +64,7 @@ import { useReadShownChatOnFocus } from "@/hooks/use-read-shown-chat";
 import { usePresence } from "@/hooks/use-presence";
 import { ChatNotice } from "@/components/ChatErrorBanner";
 import { loadingLine } from "@/lib/app-loading";
-import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { ChatSkeleton } from "@/components/ChatSkeleton";
 import { useAiSwitchKeeper } from "@/lib/ai-switch";
 import { useChiefStepOpen } from "@/lib/default-bot";
 import { SESSION_ENDED_REASON, useSessionEnded } from "@/lib/session-ended";
@@ -379,15 +379,22 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
       ) : bot ? (
         <ChatView bot={bot} />
       ) : (
-        <main data-app-loading={loading.text} className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-3 bg-app text-ink-secondary">
+        <main data-app-loading={loading.text} className={cn("relative flex h-full min-w-0 flex-1 flex-col bg-app text-ink-secondary", !loading.busy && "items-center justify-center gap-3")}>
           <WindowDragStrip />
-          <div className="w-full max-w-md"><ChatNotice notice={state.notice} /></div>
-          {loading.busy && <LoadingSkeleton label={t(loading.text)} lines={5} widths={["72%", "88%", "54%", "80%", "36%"]} className="w-full max-w-[min(var(--chat-prose-max),80%)] px-6" />}
-          <div className="text-[14px]">{t(loading.text)}</div>
-          {loading.command && (
-            <div className="text-[12px]">
-            {t("app.loading.startServer")} <code className="rounded bg-raised px-1.5 py-0.5">pnpm dev:server</code>
-            </div>
+          {loading.busy ? (
+            <ChatSkeleton label={t(loading.text)}>
+              <ChatNotice notice={state.notice} />
+              {loading.command && (
+                <div className="mb-2 text-center text-[12px]">
+                  {t("app.loading.startServer")} <code className="rounded bg-raised px-1.5 py-0.5">pnpm dev:server</code>
+                </div>
+              )}
+            </ChatSkeleton>
+          ) : (
+            <>
+              <div className="w-full max-w-md"><ChatNotice notice={state.notice} /></div>
+              <div className="text-[14px]">{t(loading.text)}</div>
+            </>
           )}
         </main>
       )}
