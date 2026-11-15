@@ -1255,7 +1255,7 @@ export function ChatView({ bot: profile }: { bot: Bot }) {
 
       <TranscriptAnnouncer threadKey={transcriptKey} snapshot={announcement} />
 
-      <div ref={composerDockRef} data-ascii="skip" className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] chat-column-dock">
+      <div ref={composerDockRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] chat-column-dock">
       {advanced && lastRunStep && showRun(recordedRun) && showRunCard && runDismissed.get(transcriptKey) !== lastRunStep.id && (
         <div className="flex justify-end px-5 pb-2">
           <VerifyCard

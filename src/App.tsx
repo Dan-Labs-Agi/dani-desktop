@@ -65,7 +65,6 @@ import { usePresence } from "@/hooks/use-presence";
 import { ChatNotice } from "@/components/ChatErrorBanner";
 import { loadingLine } from "@/lib/app-loading";
 import { ChatSkeleton } from "@/components/ChatSkeleton";
-import { DecodeIn } from "@/components/LoadingSkeleton";
 import { useAiSwitchKeeper } from "@/lib/ai-switch";
 import { useChiefStepOpen } from "@/lib/default-bot";
 import { SESSION_ENDED_REASON, useSessionEnded } from "@/lib/session-ended";
@@ -375,33 +374,29 @@ function Shell({ viewer }: { viewer: WelcomeViewer | null }) {
         <NoEngines />
       ) : chiefStep ? (
         <EmptyChatShell />
+      ) : group ? (
+        <GroupView key={group.id} group={group} />
+      ) : bot ? (
+        <ChatView bot={bot} />
       ) : (
-        <DecodeIn loading={!group && !bot && loading.busy} once className="flex h-full min-w-0 flex-1 [&>.ar-overlay]:z-40!">
-          {group ? (
-            <GroupView key={group.id} group={group} />
-          ) : bot ? (
-            <ChatView bot={bot} />
-          ) : (
-            <main data-app-loading={loading.text} className={cn("relative flex h-full min-w-0 flex-1 flex-col bg-app text-ink-secondary", !loading.busy && "items-center justify-center gap-3")}>
-              <WindowDragStrip />
-              {loading.busy ? (
-                <ChatSkeleton label={t(loading.text)}>
-                  <ChatNotice notice={state.notice} />
-                  {loading.command && (
-                    <div className="mb-2 text-center text-[12px]">
-                      {t("app.loading.startServer")} <code className="rounded bg-raised px-1.5 py-0.5">pnpm dev:server</code>
-                    </div>
-                  )}
-                </ChatSkeleton>
-              ) : (
-                <>
-                  <div className="w-full max-w-md"><ChatNotice notice={state.notice} /></div>
-                  <div className="text-[14px]">{t(loading.text)}</div>
-                </>
+        <main data-app-loading={loading.text} className={cn("relative flex h-full min-w-0 flex-1 flex-col bg-app text-ink-secondary", !loading.busy && "items-center justify-center gap-3")}>
+          <WindowDragStrip />
+          {loading.busy ? (
+            <ChatSkeleton label={t(loading.text)}>
+              <ChatNotice notice={state.notice} />
+              {loading.command && (
+                <div className="mb-2 text-center text-[12px]">
+                  {t("app.loading.startServer")} <code className="rounded bg-raised px-1.5 py-0.5">pnpm dev:server</code>
+                </div>
               )}
-            </main>
+            </ChatSkeleton>
+          ) : (
+            <>
+              <div className="w-full max-w-md"><ChatNotice notice={state.notice} /></div>
+              <div className="text-[14px]">{t(loading.text)}</div>
+            </>
           )}
-        </DecodeIn>
+        </main>
       )}
       {/* Sibling panels need distinct keys: two keyed `bot.id` collide in React's keyed reconciliation. */}
       {state.settingsOpen && bot && (
