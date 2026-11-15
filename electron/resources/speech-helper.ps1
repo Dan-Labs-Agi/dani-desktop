@@ -76,6 +76,8 @@ function Start-Online {
     if ("$($compiled.Status)" -ne "Success") { return $null }
 
     $session = $script:recognizer.ContinuousRecognitionSession
+    # Windows' defaults end the session 5 s after start when nothing is said yet; dictation waits for the person.
+    $script:recognizer.Timeouts.InitialSilenceTimeout = [TimeSpan]::FromMinutes(10)
     $session.AutoStopSilenceTimeout = [TimeSpan]::FromMinutes(10)
     $sink = [DaniSpeechSink]
     [void]$script:recognizer.add_HypothesisGenerated([Delegate]::CreateDelegate([Windows.Foundation.TypedEventHandler[Windows.Media.SpeechRecognition.SpeechRecognizer, Windows.Media.SpeechRecognition.SpeechRecognitionHypothesisGeneratedEventArgs]], $sink.GetMethod("Hypothesis")))
