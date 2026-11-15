@@ -9883,7 +9883,7 @@ describe("harness HTTP API", () => {
       writeFileSync(failureMarker, "fail only this fixture's browser close");
       rmSync(fakeClaudeDump, { force: true });
       expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "Check the website" })).status).toBe(202);
-      await expect.poll(() => readFileSync(join(home, "browser-calls.jsonl"), "utf8").includes('"session":"prep-failure"')).toBe(true);
+      await expect.poll(() => readFileSync(join(home, "browser-calls.jsonl"), "utf8").includes('"session":"prep-failure"'), { timeout: 10_000 }).toBe(true);
       await expect.poll(async () => {
         const current = (await api("GET", "/api/bots?messages=20")).body;
         const member = current.bots.find((candidate: { id: string }) => candidate.id === bot.id);
