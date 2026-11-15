@@ -32,7 +32,6 @@ import { LocalComputerAutoWarning } from "./LocalComputerAutoWarning";
 import { SharePresetDialog } from "./SharePresetDialog";
 import { SettingRow } from "./SettingsPrimitives";
 import { Select } from "./Select";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 const SECTIONS = ["Identity", "Soul", "Skills", "Memory", "Routines", "Access", "Model", "Permissions", "Voice & alerts"] as const;
 type Section = typeof SECTIONS[number];
@@ -191,15 +190,13 @@ export function NewBotDialog({ defaultsMode = false, onClose, onCreated, readyBo
             className={cn("shrink-0 rounded-lg px-3 py-2 text-left text-[13px]", active === label ? "bg-control text-ink" : "text-ink-secondary hover:bg-control/50")}>{t(SECTION_KEYS[label])}</button>)}
         </nav>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-5">
-          <DecodeIn loading={!ready && !error}>
-            {!ready && !error && <LoadingSkeleton label={t("newBot.loading")} lines={4} />}
-            {ready && <fieldset disabled={saving} className="min-w-0">
-              <BotEditorStore value={scopedStore}><BotEditorContext.Provider value={{ request: draft.request, draft: true, uploadAvatar: draft.uploadAvatar }}>
-                <DraftSection active={active} draft={draft} defaultsMode={defaultsMode}
-                  owner={team && !defaultsMode ? { value: reportsToFor(chosenOwner, bot.section, parent.state.bots, team), choose: setChosenOwner } : undefined} />
-              </BotEditorContext.Provider></BotEditorStore>
-            </fieldset>}
-          </DecodeIn>
+          {!ready && !error && <div role="status" className="flex items-center gap-2 text-[13px] text-ink-secondary"><Loader2 size={16} className="animate-spin" />{t("newBot.loading")}</div>}
+          {ready && <fieldset disabled={saving} className="min-w-0">
+            <BotEditorStore value={scopedStore}><BotEditorContext.Provider value={{ request: draft.request, draft: true, uploadAvatar: draft.uploadAvatar }}>
+              <DraftSection active={active} draft={draft} defaultsMode={defaultsMode}
+                owner={team && !defaultsMode ? { value: reportsToFor(chosenOwner, bot.section, parent.state.bots, team), choose: setChosenOwner } : undefined} />
+            </BotEditorContext.Provider></BotEditorStore>
+          </fieldset>}
         </div>
       </div>
       {error && <p role="alert" className="max-h-24 overflow-y-auto border-t border-hairline/40 px-5 py-3 text-[13px] text-danger">{error}</p>}

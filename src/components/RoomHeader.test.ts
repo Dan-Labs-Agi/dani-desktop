@@ -162,8 +162,7 @@ describe("the Simple header's buttons", () => {
       group: room(), members: bots, simple: true, setupPending: false, remoteClient: false, findOpen: false,
       onToggleFind: vi.fn(), onToggleFolder: vi.fn(), onOpenMembers, membersTriggerRef: { current: null },
     }));
-    // React 19 puts the avatar skeleton's hoisted <style> first in static markup.
-    expect(markup.replace(/^<style[^>]*>[^<]*<\/style>/, "")).toMatch(/^<div data-window-drag="" style="-webkit-app-region:drag"/);
+    expect(markup).toMatch(/^<div data-window-drag="" style="-webkit-app-region:drag"/);
     const buttons = markup.match(/<button[^>]*>/g)!;
     expect(buttons).toHaveLength(2);
     for (const button of buttons) expect(button).toContain('style="-webkit-app-region:no-drag"');

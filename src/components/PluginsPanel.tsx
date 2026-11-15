@@ -39,7 +39,6 @@ import { openBotSettings } from "./bot-panel/panel-link";
 import { openKeySettings } from "./keys/key-focus";
 import { lacksAdminScope } from "@/lib/admin-scope";
 import { ServiceIcon, type ToolkitCard } from "./ServiceIcon"; import { AppsSection } from "./AppsSection";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 export { ServiceIcon, type ToolkitCard } from "./ServiceIcon";
 
 export { preloadConnectedApps, type ConnectorInventory } from "@/lib/connected-apps";
@@ -640,7 +639,7 @@ export function PluginsPanel() {
           {error && <div role="alert" className="mb-3 rounded-xl bg-danger/10 px-4 py-2.5 text-[13px] leading-5 text-danger">{typeof error === "string" ? plainErrorLine(error) ?? error : t(error.key)}</div>}
 
           {filter !== "mcp" && (
-            <DecodeIn loading={cards === null} data-apps-grid className="@container flex flex-col gap-7 pt-1">
+            <div data-apps-grid className="@container flex flex-col gap-7 pt-1">
               {sections.filter((section) => section.kind !== "all").map((section) => section.kind === "connected" ? (
                 <AppsSection
                   key="connected"
@@ -678,7 +677,9 @@ export function PluginsPanel() {
                 after={(
                   <>
                     {cards === null && (
-                      <LoadingSkeleton label={t("connectors.loadingCatalog")} lines={6} className="px-1 py-6" />
+                      <div className="flex items-center justify-center gap-2 py-24 text-[13px] text-ink-secondary">
+                        <Loader2 size={14} className="animate-spin" /> {t("connectors.loadingCatalog")}
+                      </div>
                     )}
                     {allCapped && (
                       <div className="mt-4 flex justify-center">
@@ -730,7 +731,7 @@ export function PluginsPanel() {
                 <div data-native-card="postiz" className={postizHere ? "contents" : "hidden"}><PostizCard refreshKey={whopRefresh} onConnection={setPostizConnected} /></div>
                 {allShown.map((card) => renderTile(card))}
               </AppsSection>
-            </DecodeIn>
+            </div>
           )}
 
           {filter !== "connected" && category === null && (

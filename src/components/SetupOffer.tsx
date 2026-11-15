@@ -12,7 +12,6 @@ import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
 import { api, useStore, type Bot, type Message } from "@/state/store";
 import { moveChoiceFocus, returnFocusToComposer } from "./AskCard";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 const blank = (bot: Pick<Bot, "soul" | "description">): boolean => !bot.soul?.trim() && !bot.description?.trim();
 const LETTERS = "ABCDEFGH";
@@ -40,6 +39,7 @@ export function SetupOffer({ botId, threadId, message, transcript }: { botId: st
   // The list on screen changes only when a wait the card showed ends, so a letter key always picks a job on screen.
   const shown = useRef<{ id: string; choices: string[] } | null>(null);
   const showedWait = useRef(false);
+  const waitedOnce = useRef(false);
   const waiting = message.setupChoicesPending === true && !waitedOut && Date.now() - message.at < STALE_WAIT_MS;
   const stamp = message.setupChoicesUpdating;
   const rewriting = stamp !== undefined && rewriteWaitedOut !== stamp && Date.now() - stamp < STALE_WAIT_MS;
@@ -64,6 +64,7 @@ export function SetupOffer({ botId, threadId, message, transcript }: { botId: st
   const answer = first?.setupRequest ? first : undefined;
   const pending = waiting && !settled;
   const updating = rewriting && !settled;
+  if (pending || updating) waitedOnce.current = true;
   if (shown.current?.id !== message.id || (showedWait.current && !pending && !updating)) {
     shown.current = { id: message.id, choices: message.setupChoices?.length ? message.setupChoices : FALLBACK_CHOICES.map((key) => t(key)) };
   }
@@ -114,22 +115,26 @@ export function SetupOffer({ botId, threadId, message, transcript }: { botId: st
           <X size={15} aria-hidden="true" />
         </button>}
       </div>
-      <DecodeIn loading={pending || updating}>
-        {pending ? <LoadingSkeleton data-setup-waiting="" label={t("chat.setupCard.loading")} lines={PLACEHOLDER_WIDTHS.length} widths={PLACEHOLDER_WIDTHS} className="mt-1.5 px-3 py-3 [&_.ars-line+.ars-line]:mt-6" /> : <div key={choices.join("\n")} data-setup-updating={updating ? "" : undefined}
-          className={cn("mt-1.5 flex flex-col", updating && "motion-safe:animate-pulse")}>
-          {options.map((option, index) => (
-            <button key={option.label} type="button" data-ask-choice="" disabled={quiet || busy} onClick={option.pick}
-              className={cn("group flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-start",
-                quiet ? "cursor-default" : "hover:bg-ink/[0.05] disabled:cursor-default")}>
-              <kbd className={cn("flex size-6 shrink-0 items-center justify-center rounded-md font-sans text-[12px] font-medium",
-                quiet ? "bg-ink/[0.04] text-ink-tertiary" : "bg-ink/[0.07] text-ink-secondary group-hover:bg-ink/[0.1]")}>
-                {LETTERS[index]}
-              </kbd>
-              <span dir="auto" className={cn("min-w-0 break-words text-[14px] leading-5", quiet ? "text-ink-tertiary" : "text-ink")}>{option.label}</span>
-            </button>
-          ))}
-        </div>}
-      </DecodeIn>
+      {pending ? <div data-setup-waiting="" className="mt-1.5 flex flex-col">
+        {PLACEHOLDER_WIDTHS.map((width) => (
+          <div key={width} className="flex min-h-10 items-center px-3 py-2">
+            <span className="h-4 rounded-md bg-ink/[0.06] motion-safe:animate-pulse" style={{ width }} />
+          </div>
+        ))}
+      </div> : <div key={choices.join("\n")} data-setup-updating={updating ? "" : undefined}
+        className={cn("mt-1.5 flex flex-col", updating ? "motion-safe:animate-pulse" : waitedOnce.current && "motion-safe:animate-msg-in")}>
+        {options.map((option, index) => (
+          <button key={option.label} type="button" data-ask-choice="" disabled={quiet || busy} onClick={option.pick}
+            className={cn("group flex min-h-10 items-center gap-3 rounded-xl px-3 py-2 text-start",
+              quiet ? "cursor-default" : "hover:bg-ink/[0.05] disabled:cursor-default")}>
+            <kbd className={cn("flex size-6 shrink-0 items-center justify-center rounded-md font-sans text-[12px] font-medium",
+              quiet ? "bg-ink/[0.04] text-ink-tertiary" : "bg-ink/[0.07] text-ink-secondary group-hover:bg-ink/[0.1]")}>
+              {LETTERS[index]}
+            </kbd>
+            <span dir="auto" className={cn("min-w-0 break-words text-[14px] leading-5", quiet ? "text-ink-tertiary" : "text-ink")}>{option.label}</span>
+          </button>
+        ))}
+      </div>}
       {settled && answer && (
         <div data-setup-answer="" className="mx-3 mb-1 mt-1.5 border-t border-hairline/40 pt-2.5">
           <div className="text-[12px] leading-4 text-ink-tertiary">{t("chat.setupCard.answer")}</div>

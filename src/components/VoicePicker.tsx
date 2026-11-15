@@ -8,7 +8,6 @@ import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { useMenuMotion } from "./MenuMotion";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export interface PickerVoice {
   id: string;
@@ -197,7 +196,14 @@ export function VoicePicker({
   let body: ReactNode;
   if (skeleton) {
     body = (
-      <LoadingSkeleton data-voice-skeleton="" label={t("voice.loading")} lines={SKELETON_ROWS * 2} widths={["40%", "80%"]} className="px-2.5 py-2" />
+      <div role="status" aria-label={t("voice.loading")}>
+        {Array.from({ length: SKELETON_ROWS }, (_, row) => (
+          <div key={row} data-voice-skeleton className="animate-pulse px-2.5 py-2">
+            <span className="block h-3.5 w-2/5 rounded bg-raised" />
+            <span className="mt-1.5 block h-3 w-4/5 rounded bg-raised/70" />
+          </div>
+        ))}
+      </div>
     );
   } else if (empty) {
     body = (
@@ -297,7 +303,7 @@ export function VoicePicker({
           loading && !skeleton && "opacity-60",
         )}
       >
-        <DecodeIn loading={skeleton}>{body}</DecodeIn>
+        {body}
       </div>
     </div>
   );

@@ -7257,7 +7257,6 @@
   "chat.savedSteps.forgotten": "Forgotten",
   "chat.savedSteps.forgetFailed": "Couldn't forget these steps. Try again.",
   "chat.setupCard.title": "What should I help you with first?",
-  "chat.setupCard.loading": "Getting the choices ready…",
   "chat.setupCard.other": "Something else",
   "chat.setupCard.answer": "Your answer",
   "chat.setupCard.research": "Research and digging into topics",

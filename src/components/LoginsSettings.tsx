@@ -9,7 +9,6 @@ import { useOwnerOrAdmin } from "@/lib/use-owner-or-admin";
 import { useStore } from "@/state/store";
 import { LoginBotPicker, LoginForm } from "./LoginForm";
 import { Card } from "./SettingsPrimitives";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 // Security: a row never shows the password, which no route returns.
 
@@ -77,9 +76,9 @@ export function LoginsSettings() {
 
   return (
     <Card title={t("settings.logins.title")} subtitle={t("settings.logins.subtitle")}>
-      <DecodeIn loading={logins === null && !error} className="flex flex-col gap-3" aria-busy={logins === null || busy}>
+      <div className="flex flex-col gap-3" aria-busy={logins === null || busy}>
         {state.config?.cloudHome === true && <p className="text-[12px] leading-relaxed text-ink-secondary" data-logins-cloud-own>{t("settings.logins.cloudOwn")}</p>}
-        {logins === null && !error && <LoadingSkeleton label={t("settings.logins.loading")} lines={3} />}
+        {logins === null && !error && <p className="text-[12px] text-ink-secondary">{t("settings.logins.loading")}</p>}
         {logins?.length === 0 && !adding && <p className="text-[12px] leading-relaxed text-ink-secondary">{t("settings.logins.empty")}</p>}
         {!!logins?.length && (
           <ul className="divide-y divide-hairline/30" data-logins-list>
@@ -165,7 +164,7 @@ export function LoginsSettings() {
         {error && <p role="alert" className="text-[12px] text-danger">{error}</p>}
         <OnePasswordConnection status={onePassword} disabled={logins === null} bots={bots} botNames={botNames}
           onChange={async (next) => { setOnePassword(next); await load(); }} />
-      </DecodeIn>
+      </div>
     </Card>
   );
 }

@@ -6,7 +6,6 @@ import { cn } from "@/lib/cn";
 import { Card, SIMPLE_CARD } from "./SettingsPrimitives";
 import { UsageSummaryCard } from "./CloudUsageMeter";
 import { formatPlanSpend, type PlanSpend } from "@/lib/plan-spend";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 interface PlanWindow {
   available: boolean;
@@ -251,72 +250,70 @@ export function PlanUsage() {
           {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
         </button>
       </div>
-      <DecodeIn loading={loading && !report}>
-        {loading && !report && <LoadingSkeleton label={t("planUsage.loading")} lines={3} />}
-        {error && <p role="alert" className="mb-3 text-[13px] text-danger">{error}</p>}
-        {report && report.providers.length === 0 && (
-          <p className="text-[13px] text-ink-secondary">{t("planUsage.empty")}</p>
-        )}
-        {report && report.providers.length > 0 && (
-          <div className="flex flex-col gap-4">
-            {report.providers.map((provider) => (
-              <div key={provider.id} className="border-t border-hairline/30 pt-3 first:border-t-0 first:pt-0">
-                <div className="mb-2 flex min-w-0 items-baseline gap-2">
-                  <span className="truncate text-[14px] font-medium text-ink">{providerLabel(provider)}</span>
-                  {provider.plan && <span className="truncate text-[12px] text-ink-secondary">{provider.plan}</span>}
-                </div>
-                {provider.ok ? (
-                  <div className="flex flex-col gap-2">
-                    <WindowRow label={t("planUsage.fiveHour")} window={provider.fiveHour} now={now} />
-                    <WindowRow label={t("planUsage.weekly")} window={provider.weekly} now={now} />
-                    {provider.extra.map((extra, index) => (
-                      <WindowRow
-                        key={`${extra.label}-${index}`}
-                        label={windowLabel(extra.label)}
-                        now={now}
-                        usedHeadline={Boolean(extra.spend)}
-                        detail={extra.spend ? formatPlanSpend(extra.spend) : undefined}
-                        window={{
-                          available: true,
-                          remainingPercent: extra.remainingPercent,
-                          usedPercent: extra.usedPercent,
-                          resetsAt: extra.resetsAt,
-                        }}
-                      />
-                    ))}
-                    {(provider.models ?? []).length > 0 && (
-                      <div className="mt-1 flex flex-col gap-2">
-                        <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-secondary">{t("planUsage.byModel")}</div>
-                        {(provider.models ?? []).map((model) => (
-                          <div key={model.name} className="flex flex-col gap-1">
-                            <div className="truncate text-[13px] font-medium text-ink">{model.name}</div>
-                            {model.windows.map((entry, index) => (
-                              <WindowRow
-                                key={`${model.name}-${entry.label}-${index}`}
-                                label={windowLabel(entry.label)}
-                                now={now}
-                                usedHeadline
-                                window={{
-                                  available: true,
-                                  remainingPercent: entry.remainingPercent,
-                                  usedPercent: entry.usedPercent,
-                                  resetsAt: entry.resetsAt,
-                                }}
-                              />
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-[13px] text-danger">{providerError(provider)}</p>
-                )}
+      {loading && !report && <p role="status" className="text-[13px] text-ink-secondary">{t("planUsage.loading")}</p>}
+      {error && <p role="alert" className="mb-3 text-[13px] text-danger">{error}</p>}
+      {report && report.providers.length === 0 && (
+        <p className="text-[13px] text-ink-secondary">{t("planUsage.empty")}</p>
+      )}
+      {report && report.providers.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {report.providers.map((provider) => (
+            <div key={provider.id} className="border-t border-hairline/30 pt-3 first:border-t-0 first:pt-0">
+              <div className="mb-2 flex min-w-0 items-baseline gap-2">
+                <span className="truncate text-[14px] font-medium text-ink">{providerLabel(provider)}</span>
+                {provider.plan && <span className="truncate text-[12px] text-ink-secondary">{provider.plan}</span>}
               </div>
-            ))}
-          </div>
-        )}
-      </DecodeIn>
+              {provider.ok ? (
+                <div className="flex flex-col gap-2">
+                  <WindowRow label={t("planUsage.fiveHour")} window={provider.fiveHour} now={now} />
+                  <WindowRow label={t("planUsage.weekly")} window={provider.weekly} now={now} />
+                  {provider.extra.map((extra, index) => (
+                    <WindowRow
+                      key={`${extra.label}-${index}`}
+                      label={windowLabel(extra.label)}
+                      now={now}
+                      usedHeadline={Boolean(extra.spend)}
+                      detail={extra.spend ? formatPlanSpend(extra.spend) : undefined}
+                      window={{
+                        available: true,
+                        remainingPercent: extra.remainingPercent,
+                        usedPercent: extra.usedPercent,
+                        resetsAt: extra.resetsAt,
+                      }}
+                    />
+                  ))}
+                  {(provider.models ?? []).length > 0 && (
+                    <div className="mt-1 flex flex-col gap-2">
+                      <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-secondary">{t("planUsage.byModel")}</div>
+                      {(provider.models ?? []).map((model) => (
+                        <div key={model.name} className="flex flex-col gap-1">
+                          <div className="truncate text-[13px] font-medium text-ink">{model.name}</div>
+                          {model.windows.map((entry, index) => (
+                            <WindowRow
+                              key={`${model.name}-${entry.label}-${index}`}
+                              label={windowLabel(entry.label)}
+                              now={now}
+                              usedHeadline
+                              window={{
+                                available: true,
+                                remainingPercent: entry.remainingPercent,
+                                usedPercent: entry.usedPercent,
+                                resetsAt: entry.resetsAt,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[13px] text-danger">{providerError(provider)}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { AsciiSkeleton } from "ascii-reveal";
 
 import {
   greetAvatar,
@@ -114,7 +113,6 @@ export function RobotAvatar(props: RobotAvatarProps) {
       className={`mz-robot-avatar${ready ? " is-ready" : ""}${props.className ? ` ${props.className}` : ""}`}
       style={{ width: `${size}px`, height: `${size}px` }}
       role="img"
-      data-ascii="skip"
       aria-label={failure ? `${label}. 3D avatar unavailable.` : label}
       title={failure ?? label}
       data-robot-error={failure ?? undefined}
@@ -122,8 +120,8 @@ export function RobotAvatar(props: RobotAvatarProps) {
       data-robot-motion={motion}
       data-robot-renderer={ready ? "webgl" : failure ? "unavailable" : "loading"}
     >
-      <span className="mz-robot-placeholder loading-skeleton text-ink-secondary" aria-hidden="true">
-        <AsciiSkeleton rows={Math.max(2, Math.round((size * 3) / 40))} width={size} height={size} circle />
+      <span className="mz-robot-placeholder" aria-hidden="true">
+        {failure ? "3D unavailable" : "Loading 3D"}
       </span>
       <canvas ref={canvasRef} className="mz-robot-canvas" />
       {failure ? (

@@ -56,7 +56,7 @@ export default defineConfig({
     include,
     // OMB_VITEST_E2E=host (CI's Windows and macOS shards) leaves the e2e files that run on Linux only.
     exclude: [...configDefaults.exclude, ...(hostE2eOnly() ? portableE2eFiles(root, include) : [])],
-    setupFiles: ["server/testing/setup.ts", "src/testing/all-locales.ts", "src/testing/ascii-reveal.ts"],
+    setupFiles: ["server/testing/setup.ts", "src/testing/all-locales.ts"],
     // the suite spawns fake provider CLIs and a real harness server;
     // parallel files introduce load-sensitive flakes for no win
     fileParallelism: false,

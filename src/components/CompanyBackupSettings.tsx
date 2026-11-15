@@ -5,7 +5,6 @@ import { activeLocale, t } from "@/lib/i18n";
 import { collectWorkspaceClientState, WORKSPACE_RESTORE_MARKER } from "@/lib/workspace-backup-client";
 import { Card, Switch } from "./SettingsPrimitives";
 import { WorkspaceBackupRestartNotice, WorkspaceBackupSummaryView } from "./WorkspaceBackupSettings";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 type BackupBridge = NonNullable<NonNullable<Window["ogb"]>["companyBackups"]>;
 type BackupList = Awaited<ReturnType<BackupBridge["list"]>>;
@@ -242,7 +241,7 @@ export function ConnectedCompanyBackupSettings({ connection, bridge }: { connect
   const scheduledDate = (value: number) => new Intl.DateTimeFormat(activeLocale(), { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 
   return <Card title={t("companyBackup.title")} subtitle={t("companyBackup.account", { organization: connection.organization?.name ?? "", email: connection.email ?? "" })}>
-    <DecodeIn loading={loading} className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
       <p className="text-[13px] text-ink-secondary">{t("companyBackup.managedScope")}</p>
       {bridge.configureSchedule && schedule && <div className="rounded-lg border border-hairline/40 p-3">
         <div className="flex items-center justify-between gap-3">
@@ -259,7 +258,7 @@ export function ConnectedCompanyBackupSettings({ connection, bridge }: { connect
           <button type="button" className="ui-button" disabled={disabled} onClick={() => openDialog({ kind: "create" })}>{t("companyBackup.create")}</button>
           <button type="button" className="ui-button" disabled={action !== null || state?.busy || needsRestart || loading} onClick={() => void refresh()}>{t("companyBackup.refresh")}</button>
         </div>
-        {loading && <LoadingSkeleton label={t("companyBackup.loading")} lines={3} />}
+        {loading && <p role="status" className="text-[13px] text-ink-secondary">{t("companyBackup.loading")}</p>}
         {listing && <p className="text-[12px] text-ink-secondary">{t("companyBackup.quota", { used: bytes(listing.usedBytes), total: bytes(listing.limits.ownerQuotaBytes), count: listing.limits.retainedSnapshots })}</p>}
         {pending > 0 && <p role="status" className="text-[12px] text-ink-secondary">{t("companyBackup.pending", { count: pending })}</p>}
         {listing && ready.length === 0 && <p className="text-[13px] text-ink-secondary">{t("companyBackup.empty")}</p>}
@@ -270,7 +269,7 @@ export function ConnectedCompanyBackupSettings({ connection, bridge }: { connect
       </>}
       {!dialog && busyView}
       {!dialog && statusMessage && <p role="alert" className="break-words text-[13px] text-danger">{statusMessage}</p>}
-    </DecodeIn>
+    </div>
     {dialog && <dialog ref={nativeDialog} aria-labelledby="company-backup-dialog-title" onKeyDown={(event) => {
       // The enclosing Settings dialog has its own window-level keyboard trap.
       if (event.key === "Escape" || event.key === "Tab") event.stopPropagation();

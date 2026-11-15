@@ -47,7 +47,7 @@ describe("the setup card while its answers are written", () => {
     show(greeting({ setupChoicesPending: true }));
     expect(card()!.textContent).toContain("What should I help you with first?");
     expect(card()!.getAttribute("aria-busy")).toBe("true");
-    expect(container.querySelectorAll("[data-setup-waiting] .ars-line")).toHaveLength(6);
+    expect(container.querySelectorAll("[data-setup-waiting] > div")).toHaveLength(6);
     expect(container.querySelectorAll("kbd")).toHaveLength(0);
     expect(card()!.textContent).not.toContain("Something else");
     press("a");

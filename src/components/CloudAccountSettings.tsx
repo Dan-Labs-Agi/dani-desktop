@@ -16,7 +16,6 @@ import { CloudSetupSteps } from "./CloudSetupSteps";
 import { useCloudSendNotice } from "./CloudSendStrip";
 import { OpenFilesButton } from "./OpenFilesButton";
 import { useDesktopCapabilities } from "./DesktopCapabilities";
-import { DecodeIn, LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export { cloudPlanLabel };
 
@@ -152,8 +151,8 @@ export function CloudPlanOnCloud({ bridge, onConnectPhone }: { bridge: CloudPlan
       : plan ? t(home ? "cloudAccount.onCloudNoneHome" : "cloudAccount.onCloudNone") : null;
   const act = (action: () => Promise<void>) => { setFailed(false); void action().catch(() => setFailed(true)); };
   return <Card title={t("settings.section.cloudAccount")} subtitle={t(home ? "cloudAccount.onCloudHome" : "cloudAccount.onCloud")}>
-    <DecodeIn loading={!plan} data-cloud-plan={plan?.status ?? "loading"} className="flex flex-col items-start gap-3">
-      {line ? <p role="status" className="text-[15px] font-medium text-ink">{line}</p> : !plan && <LoadingSkeleton label={t("cloudAccount.loading")} lines={2} />}
+    <div data-cloud-plan={plan?.status ?? "loading"} className="flex flex-col items-start gap-3">
+      {line ? <p role="status" className="text-[15px] font-medium text-ink">{line}</p> : !plan && <p role="status" className="text-[13px] text-ink-secondary">{t("cloudAccount.loading")}</p>}
       {plan?.status === "signin" && <p className="text-[13px] text-ink-secondary">{t("cloudAccount.onCloudSignIn")}</p>}
       {trialLines(plan?.trial, plan?.credit)}
       <div className="flex flex-wrap gap-2">
@@ -163,7 +162,7 @@ export function CloudPlanOnCloud({ bridge, onConnectPhone }: { bridge: CloudPlan
       </div>
       {plan?.renewal && <CloudCancelPlan renewal={plan.renewal} actions={renewal} onChanged={() => setReads(count => count + 1)} />}
       {failed && <p role="alert" className="text-[13px] text-danger">{t("cloudAccount.actionFailed")}</p>}
-    </DecodeIn>
+    </div>
   </Card>;
 }
 
@@ -271,52 +270,50 @@ export function CloudAccountSettings({ linkRequest = 0, cloudHome = false, teamH
   return <>
     <p className="text-[13px] leading-relaxed text-ink-secondary">{t("cloudAccount.optional")}</p>
     <Card title={t("settings.section.cloudAccount")} subtitle={t("cloudAccount.separate")}>
-      <DecodeIn loading={!account || view.kind === "unknown"}>
-        {account?.staging && <StagingMark className="mb-3" />}
-        {(!account || view.kind === "unknown") && <LoadingSkeleton label={t("cloudAccount.loading")} lines={3} />}
-        {message && <p role="status" className="mb-3 text-[13px] text-ink-secondary">{message}</p>}
-        {(view.kind === "signed-out" || view.kind === "removed") && <div className="flex flex-col items-start gap-3">
-          {addCloudButton}
-          <button type="button" disabled={busy} className={addCloudButton ? "text-[13px] font-medium text-accent-text underline underline-offset-2 hover:text-ink" : "ui-button"}
-            onClick={() => onSignIn ? onSignIn() : void perform(() => bridge.begin())}>{t("cloudAccount.signIn")}</button>
+      {account?.staging && <StagingMark className="mb-3" />}
+      {(!account || view.kind === "unknown") && <p role="status" className="text-[13px] text-ink-secondary">{t("cloudAccount.loading")}</p>}
+      {message && <p role="status" className="mb-3 text-[13px] text-ink-secondary">{message}</p>}
+      {(view.kind === "signed-out" || view.kind === "removed") && <div className="flex flex-col items-start gap-3">
+        {addCloudButton}
+        <button type="button" disabled={busy} className={addCloudButton ? "text-[13px] font-medium text-accent-text underline underline-offset-2 hover:text-ink" : "ui-button"}
+          onClick={() => onSignIn ? onSignIn() : void perform(() => bridge.begin())}>{t("cloudAccount.signIn")}</button>
+      </div>}
+      {account?.status === "connecting" && <div className="flex flex-col items-start gap-3">
+        <p role="status" className="text-[13px] text-ink-secondary">{t("cloudAccount.browser")}</p>
+        {enrollment && <div data-cloud-code className="flex flex-col gap-1">
+          <p className="text-[13px] text-ink-secondary">{t("cloudAccount.codeCheck")}</p>
+          <code dir="ltr" className="select-all text-[18px] font-semibold tracking-widest text-ink">{enrollment.userCode}</code>
+          <p className="text-[12px] text-ink-secondary">{t("cloudAccount.codeUntil", { time: time(enrollment.expiresAt) })}</p>
         </div>}
-        {account?.status === "connecting" && <div className="flex flex-col items-start gap-3">
-          <p role="status" className="text-[13px] text-ink-secondary">{t("cloudAccount.browser")}</p>
-          {enrollment && <div data-cloud-code className="flex flex-col gap-1">
-            <p className="text-[13px] text-ink-secondary">{t("cloudAccount.codeCheck")}</p>
-            <code dir="ltr" className="select-all text-[18px] font-semibold tracking-widest text-ink">{enrollment.userCode}</code>
-            <p className="text-[12px] text-ink-secondary">{t("cloudAccount.codeUntil", { time: time(enrollment.expiresAt) })}</p>
-          </div>}
-          <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.reopen())}>{t("organization.reopen")}</button>
-            <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.cancel())}>{t("organization.cancel")}</button></div>
-        </div>}
-        {signed && <div className="flex flex-col gap-3">
-          {account.account && <p className="break-all text-[14px] text-ink">{account.account.email}</p>}
-          {line && <p role="status" data-cloud-plan={view.kind} className="text-[15px] font-medium text-ink">{line}
-            {view.kind === "paid" && view.checking && <span className="ms-2 text-[12px] font-normal text-ink-secondary">{t("cloudAccount.checking")}</span>}</p>}
-          {account.status === "connected" && trialLines(account.trial, account.credit)}
-          {view.kind === "free" && addCloudButton}
-          <div className="flex flex-wrap gap-2">
-            {view.kind === "reauth"
-              ? <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.signInAgain())}>{t("cloudAccount.signInAgain")}</button>
-              : <>
-                {!(view.kind === "free" && addCloudButton) && <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.openDashboard())}>{view.kind === "free" ? t("cloudAccount.dashboard") : dashboardLabel(account, view)}</button>}
-                <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.refresh())}>{t("organization.refresh")}</button>
-              </>}
-            {!confirm && <button type="button" disabled={busy} className="ui-button" onClick={() => setConfirm(true)}>{t("cloudAccount.signOut")}</button>}
-          </div>
-          {account.status === "connected" && account.renewal && <CloudCancelPlan renewal={account.renewal} actions={renewal} />}
-          {view.kind === "free" && !confirm && <p className="text-[12px] text-ink-secondary">{t("cloudAccount.otherEmail")}{" "}
-            <button type="button" disabled={busy} className="underline hover:text-ink" onClick={() => setConfirm(true)}>{t("cloudAccount.useOtherEmail")}</button></p>}
-          {confirm && <div role="group" aria-label={t("cloudAccount.signoutTitle")} className="rounded-lg border border-hairline/40 p-3">
-            <p className="text-[13px] text-ink-secondary">{t("cloudAccount.signoutHelp")}</p><div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" autoFocus disabled={busy} className="ui-button" onClick={() => setConfirm(false)}>{t("cloudAccount.keep")}</button>
-              <button type="button" disabled={busy} className="ui-button text-danger" onClick={() => void perform(() => bridge.signOut())}>{t("cloudAccount.signOut")}</button>
-            </div></div>}
-        </div>}
-        {error && <p role="alert" className="mt-3 text-[13px] text-danger">{t("cloudAccount.actionFailed")}</p>}
-        {!account && <button type="button" disabled={busy} className="ui-button mt-3" onClick={() => void perform(() => bridge.state())}>{t("organization.refresh")}</button>}
-      </DecodeIn>
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.reopen())}>{t("organization.reopen")}</button>
+          <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.cancel())}>{t("organization.cancel")}</button></div>
+      </div>}
+      {signed && <div className="flex flex-col gap-3">
+        {account.account && <p className="break-all text-[14px] text-ink">{account.account.email}</p>}
+        {line && <p role="status" data-cloud-plan={view.kind} className="text-[15px] font-medium text-ink">{line}
+          {view.kind === "paid" && view.checking && <span className="ms-2 text-[12px] font-normal text-ink-secondary">{t("cloudAccount.checking")}</span>}</p>}
+        {account.status === "connected" && trialLines(account.trial, account.credit)}
+        {view.kind === "free" && addCloudButton}
+        <div className="flex flex-wrap gap-2">
+          {view.kind === "reauth"
+            ? <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.signInAgain())}>{t("cloudAccount.signInAgain")}</button>
+            : <>
+              {!(view.kind === "free" && addCloudButton) && <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.openDashboard())}>{view.kind === "free" ? t("cloudAccount.dashboard") : dashboardLabel(account, view)}</button>}
+              <button type="button" disabled={busy} className="ui-button" onClick={() => void perform(() => bridge.refresh())}>{t("organization.refresh")}</button>
+            </>}
+          {!confirm && <button type="button" disabled={busy} className="ui-button" onClick={() => setConfirm(true)}>{t("cloudAccount.signOut")}</button>}
+        </div>
+        {account.status === "connected" && account.renewal && <CloudCancelPlan renewal={account.renewal} actions={renewal} />}
+        {view.kind === "free" && !confirm && <p className="text-[12px] text-ink-secondary">{t("cloudAccount.otherEmail")}{" "}
+          <button type="button" disabled={busy} className="underline hover:text-ink" onClick={() => setConfirm(true)}>{t("cloudAccount.useOtherEmail")}</button></p>}
+        {confirm && <div role="group" aria-label={t("cloudAccount.signoutTitle")} className="rounded-lg border border-hairline/40 p-3">
+          <p className="text-[13px] text-ink-secondary">{t("cloudAccount.signoutHelp")}</p><div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" autoFocus disabled={busy} className="ui-button" onClick={() => setConfirm(false)}>{t("cloudAccount.keep")}</button>
+            <button type="button" disabled={busy} className="ui-button text-danger" onClick={() => void perform(() => bridge.signOut())}>{t("cloudAccount.signOut")}</button>
+          </div></div>}
+      </div>}
+      {error && <p role="alert" className="mt-3 text-[13px] text-danger">{t("cloudAccount.actionFailed")}</p>}
+      {!account && <button type="button" disabled={busy} className="ui-button mt-3" onClick={() => void perform(() => bridge.state())}>{t("organization.refresh")}</button>}
     </Card>
     {machine && (onTeamPlan
       ? cloudHomeCard({ machine, busy, failed: homeFailed, onConnect: () => { if (team) openTeam(team.id); }, team: { name: team?.name ?? null } })
