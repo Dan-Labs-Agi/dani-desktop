@@ -545,7 +545,7 @@ export function BotThreadList({ bot, selected, query, pendingQueued, reveal, loc
     } finally { setMarkingRead(false); }
   };
   return (
-    <div hidden={hidden} className={cn("mb-2 space-y-0.5", indent && "[--thread-indent:4rem]")} role="group" aria-label={t("task.namedList", { name: bot.name })}
+    <div hidden={hidden} className={cn("mb-2 space-y-0.5", indent && "mt-1 [--thread-indent:4rem]")} role="group" aria-label={t("task.namedList", { name: bot.name })}
       onDragOver={(event) => { if (event.dataTransfer.types.includes(FOLDER_DRAG_TYPE)) event.stopPropagation(); }}
       onDrop={(event) => { if (event.dataTransfer.types.includes(FOLDER_DRAG_TYPE)) { event.preventDefault(); event.stopPropagation(); resetFolderDrag(); } }}>
       {!hidden && <>
@@ -724,7 +724,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
       : simpleRow ? "gap-2 rounded-[10px] py-2 pl-2 pr-2 md:h-[54px] md:py-0"
         : cn(showThreads ? "gap-2 py-2" : "gap-3 py-2", showThreads ? "pl-6 pr-9 group-hover:pr-[5.75rem] group-focus-within:pr-[5.75rem] max-md:pr-9 touch:pr-[5.75rem]" : "pl-2.5 pr-9"),
     !iconOnly && "max-md:rounded-2xl max-md:py-2.5",
-    selected ? "bg-raised" : "hover:bg-raised/50",
+    selected && !expanded ? "bg-raised" : "hover:bg-raised/50",
     simpleRow && rowSurface(selected),
   );
   const { waiting, working, teammateWait, queued } = sidebarBotStatus(bot, pendingQueued);
