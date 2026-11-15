@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AsciiSkeleton } from "ascii-reveal";
 
 import {
   greetAvatar,
@@ -121,8 +122,8 @@ export function RobotAvatar(props: RobotAvatarProps) {
       data-robot-motion={motion}
       data-robot-renderer={ready ? "webgl" : failure ? "unavailable" : "loading"}
     >
-      <span className="mz-robot-placeholder" aria-hidden="true">
-        {failure ? "3D unavailable" : "Loading 3D"}
+      <span className="mz-robot-placeholder loading-skeleton text-ink-secondary" aria-hidden="true">
+        <AsciiSkeleton variant="dither" rows={Math.max(2, Math.round(size / 11))} width={size} height={size} circle seed={Math.floor(seedFromLabel(label) * 1e6)} />
       </span>
       <canvas ref={canvasRef} className="mz-robot-canvas" />
       {failure ? (

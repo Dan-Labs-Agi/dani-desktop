@@ -45,14 +45,3 @@
   background: #d33;
   color: #fff;
 }
-
-.mz-robot-avatar > .mz-robot-placeholder {
-  display: grid;
-  place-items: center;
-  text-align: center;
-  font: 10px / 1.2 system-ui;
-  color: #667;
-  border: 1px solid #ccd;
-  border-radius: 8px;
-  background: #f4f6f8;
-}
