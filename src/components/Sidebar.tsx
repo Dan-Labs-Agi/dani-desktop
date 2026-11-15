@@ -449,9 +449,10 @@ export function currentArchivableBot(bots: readonly Bot[], id: string): Bot | un
 
 const NO_FOLDERS: BotProject[] = [];
 
-export function BotThreadList({ bot, selected, query, pendingQueued, reveal, locale, generatedTitles, dispatch, activityLabel, hidden = false }: BotRowProps & {
+export function BotThreadList({ bot, selected, query, pendingQueued, reveal, locale, generatedTitles, dispatch, activityLabel, hidden = false, indent = false }: BotRowProps & {
   activityLabel?: string;
   hidden?: boolean;
+  indent?: boolean;
 }) {
   const now = useRelativeNow();
   const tasks = (bot.tasks ?? [{ threadId: bot.threadId, title: t("task.newShort"), createdAt: 0 }])
@@ -544,7 +545,7 @@ export function BotThreadList({ bot, selected, query, pendingQueued, reveal, loc
     } finally { setMarkingRead(false); }
   };
   return (
-    <div hidden={hidden} className="mb-2 space-y-0.5" role="group" aria-label={t("task.namedList", { name: bot.name })}
+    <div hidden={hidden} className={cn("mb-2 space-y-0.5", indent && "[--thread-indent:4rem]")} role="group" aria-label={t("task.namedList", { name: bot.name })}
       onDragOver={(event) => { if (event.dataTransfer.types.includes(FOLDER_DRAG_TYPE)) event.stopPropagation(); }}
       onDrop={(event) => { if (event.dataTransfer.types.includes(FOLDER_DRAG_TYPE)) { event.preventDefault(); event.stopPropagation(); resetFolderDrag(); } }}>
       {!hidden && <>
@@ -909,7 +910,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         </span>
       )}
     </div>
-    {advanced && !iconOnly && threadsOpen && hasThreadList && <BotThreadList {...props} hidden={!showThreads}
+    {advanced && !iconOnly && threadsOpen && hasThreadList && <BotThreadList {...props} hidden={!showThreads} indent
       activityLabel={liveActivityLabel(last)}
       query={bot.name.toLowerCase().includes(query.toLowerCase()) || bot.title.toLowerCase().includes(query.toLowerCase()) ? "" : query} />}
     {(advanced || (!iconOnly && (waiting || unread))) && !expanded && <SidebarBotActivity bot={bot} rowThreadId={selected ? bot.threadId : botOpensTo(bot, showThreads)} density={density} pendingQueued={pendingQueued} dispatch={dispatch} waitingOnly={!advanced} />}
