@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,9 +11,18 @@ export function windowsSpeechScript({ packaged, resourcesPath }) {
   return packaged ? path.join(resourcesPath, "speech-helper.ps1") : path.join(__dirname, "resources", "speech-helper.ps1");
 }
 
-export function windowsSpeechArgs({ script, stopPath, finishPath, endpointMs = 0 }) {
+/** whisper.cpp's CLI (with its sibling DLLs) and model, when both are on disk. */
+export function windowsWhisper({ packaged, resourcesPath, env = process.env, exists = existsSync }) {
+  const base = packaged ? resourcesPath : path.join(__dirname, "..", "dist-native");
+  const cli = env.DANI_WHISPER_CLI || path.join(base, "speech-runtime", `win32-${process.arch}`, "whisper-cli.exe");
+  const model = env.DANI_WHISPER_MODEL || path.join(base, "speech-models", "whisper", "ggml-base-q5_1.bin");
+  return exists(cli) && exists(model) ? { cli, model } : null;
+}
+
+export function windowsSpeechArgs({ script, stopPath, finishPath, endpointMs = 0, whisper = null }) {
   const args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-StopFile", stopPath, "-FinishFile", finishPath];
   if (endpointMs > 0) args.push("-EndpointMs", String(endpointMs));
+  if (whisper) args.push("-WhisperCli", whisper.cli, "-WhisperModel", whisper.model);
   return args;
 }
 

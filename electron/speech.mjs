@@ -14,7 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app } from "electron";
 import { createSpeechTranscript } from "./speech-transcript.mjs";
-import { WINDOWS_SPEECH_COMMAND, createJsonLines, windowsSpeechArgs, windowsSpeechScript } from "./speech-windows.mjs";
+import { WINDOWS_SPEECH_COMMAND, createJsonLines, windowsSpeechArgs, windowsSpeechScript, windowsWhisper } from "./speech-windows.mjs";
 
 import {
   buildSpeechHelper,
@@ -218,10 +218,13 @@ function startWindowsSpeech(sink, endpointMs) {
   const sessionDir = mkdtempSync(path.join(app.getPath("temp"), "danibot-speech-"));
   const stopPath = path.join(sessionDir, "stop");
   const finishPath = path.join(sessionDir, "finish");
-  const script = windowsSpeechScript({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
+  const where = { packaged: app.isPackaged, resourcesPath: process.resourcesPath };
+  const script = windowsSpeechScript(where);
+  // ponytail: whisper only transcribes on finish, so talk mode (endpointMs) stays on the streaming engines.
+  const whisper = endpointMs ? null : windowsWhisper(where);
   let proc;
   try {
-    proc = spawn(WINDOWS_SPEECH_COMMAND, windowsSpeechArgs({ script, stopPath, finishPath, endpointMs }), { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    proc = spawn(WINDOWS_SPEECH_COMMAND, windowsSpeechArgs({ script, stopPath, finishPath, endpointMs, whisper }), { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
   } catch {
     rmSync(sessionDir, { recursive: true, force: true });
     sink.end({ code: 1, reason: "helper-start-failed" });

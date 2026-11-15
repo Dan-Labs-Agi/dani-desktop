@@ -9,10 +9,14 @@
 # Engine: Windows' online dictation (Windows.Media.SpeechRecognition, the recognizer behind Win+H) when it starts, else
 # the offline System.Speech dictation, which is far less accurate. Online needs Settings > Privacy & security > Speech >
 # Online speech recognition; while that is off, starting it fails (0x80045509) and the offline engine takes over.
+# With -WhisperCli and -WhisperModel it records instead and transcribes locally with whisper.cpp on finish, so there are
+# no partial lines.
 param(
   [Parameter(Mandatory = $true)][string]$StopFile,
   [Parameter(Mandatory = $true)][string]$FinishFile,
-  [int]$EndpointMs = 0
+  [int]$EndpointMs = 0,
+  [string]$WhisperCli = "",
+  [string]$WhisperModel = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,6 +93,46 @@ function Start-Online {
     return $null
   }
 }
+
+# winmm's MCI waveaudio device records the default microphone to a WAV file; whisper.cpp reads 16 kHz mono PCM.
+function Mci([string]$command) {
+  if ([DaniMci]::mciSendStringW($command, $null, 0, [IntPtr]::Zero) -ne 0) { throw "mci failed: $command" }
+}
+
+function Transcribe-Locally {
+  Add-Type -TypeDefinition 'public static class DaniMci { [System.Runtime.InteropServices.DllImport("winmm.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern int mciSendStringW(string command, System.Text.StringBuilder result, int size, System.IntPtr window); }'
+  $base = Join-Path (Split-Path -Parent $StopFile) "take"
+  try {
+    Mci "open new type waveaudio alias take"
+    Mci "set take bitspersample 16 channels 1 samplespersec 16000 bytespersec 32000 alignment 2"
+    Mci "record take"
+  } catch {
+    Fail "microphone-unavailable"
+  }
+  while (-not (Test-Path -LiteralPath $FinishFile)) {
+    if (Test-Path -LiteralPath $StopFile) { [Environment]::Exit(0) }
+    Start-Sleep -Milliseconds 50
+  }
+  try {
+    Mci "stop take"
+    # MCI rejects file paths over 128 characters; the session directory is a short one in the temp folder.
+    Mci "save take `"$base.wav`""
+    Mci "close take"
+  } catch {
+    Fail "microphone-unavailable"
+  }
+  # Windows PowerShell 5.1 turns a native command's stderr into terminating errors under "Stop".
+  $ErrorActionPreference = "Continue"
+  $language = (Get-Culture).TwoLetterISOLanguageName
+  & $WhisperCli -m $WhisperModel -f "$base.wav" -l $language -nt -np -otxt -of $base *> $null
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath "$base.txt")) { Fail "transcription-failed" }
+  # whisper.cpp writes non-speech as bracketed tags such as [BLANK_AUDIO].
+  $text = ((Get-Content -LiteralPath "$base.txt" -Encoding UTF8 -Raw) -replace '\[[^\]]*\]', ' ' -replace '\s+', ' ').Trim()
+  Emit @{ partial = $false; text = $text }
+  [Environment]::Exit(0)
+}
+
+if ($WhisperCli -and $WhisperModel) { Transcribe-Locally }
 
 $online = Start-Online
 if (-not $online) {

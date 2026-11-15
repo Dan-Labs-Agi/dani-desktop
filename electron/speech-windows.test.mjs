@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { createSpeechTranscript } from "./speech-transcript.mjs";
-import { createJsonLines, windowsSpeechArgs, windowsSpeechScript } from "./speech-windows.mjs";
+import { createJsonLines, windowsSpeechArgs, windowsSpeechScript, windowsWhisper } from "./speech-windows.mjs";
 
 describe("the Windows speech helper", () => {
   it("runs the script under Windows PowerShell with the session's stop and finish markers", () => {
     const args = windowsSpeechArgs({ script: "C:\app\speech-helper.ps1", stopPath: "C:\t\stop", finishPath: "C:\t\finish" });
     expect(args).toEqual(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "C:\app\speech-helper.ps1", "-StopFile", "C:\t\stop", "-FinishFile", "C:\t\finish"]);
     expect(windowsSpeechArgs({ script: "s", stopPath: "a", finishPath: "b", endpointMs: 900 }).slice(-2)).toEqual(["-EndpointMs", "900"]);
+  });
+
+  it("hands the helper whisper.cpp only when both its CLI and model are on disk", () => {
+    const env = { DANI_WHISPER_CLI: "C:\w\whisper-cli.exe", DANI_WHISPER_MODEL: "C:\w\model.bin" };
+    const whisper = windowsWhisper({ packaged: false, env, exists: () => true });
+    expect(whisper).toEqual({ cli: env.DANI_WHISPER_CLI, model: env.DANI_WHISPER_MODEL });
+    expect(windowsWhisper({ packaged: false, env, exists: (file) => file !== env.DANI_WHISPER_MODEL })).toBeNull();
+    expect(windowsWhisper({ packaged: true, resourcesPath: "/res", env: {}, exists: () => true }).model.replaceAll("\\", "/")).toBe("/res/speech-models/whisper/ggml-base-q5_1.bin");
+    expect(windowsSpeechArgs({ script: "s", stopPath: "a", finishPath: "b", whisper }).slice(-4)).toEqual(["-WhisperCli", env.DANI_WHISPER_CLI, "-WhisperModel", env.DANI_WHISPER_MODEL]);
   });
 
   it("is read from the app's resources once packaged, since PowerShell cannot open a file inside the archive", () => {

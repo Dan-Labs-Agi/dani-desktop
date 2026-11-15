@@ -80,7 +80,7 @@ export function useComposerDictation({ draftId, text, onText, available }: {
     if (!available || !window.ogb) {
       setSpeechError(t("composer.dictation.unavailable"));
     } else if (recording) {
-      stop();
+      void (window.ogb.speechFinish?.() ?? stop());
     } else {
       session.current = { draftId, base: text };
       setRecording(true);
