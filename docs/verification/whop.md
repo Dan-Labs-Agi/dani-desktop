@@ -2,8 +2,8 @@
 
 The first-party Whop card uses the existing MCP registry and OAuth flow. It
 connects to `https://mcp.whop.com/mcp`, with browser sign-in and no pasted API
-key or Composio dependency. The bundled logo is attributed in
-`src/assets/whop/README.md`.
+key or Composio account. Its logo is the one Composio's logo service serves for `whop`, falling back to
+whop.com's favicon.
 
 ## Isolated browser verification
 

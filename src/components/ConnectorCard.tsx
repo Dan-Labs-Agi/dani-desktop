@@ -154,10 +154,13 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     );
   }
 
+  const appLogo = (className: string) => isMcp ? undefined : <ServiceIcon card={{ slug: connector.slug, label: connector.label, logo: null, domain: null }} className={className} />;
+
   if (connected) {
     return (
       <AskSettledLine
         ariaLabel={connector.label}
+        icon={appLogo("size-4 rounded-[4px]")}
         action={!connector.resumed && !stopped && (
           <button type="button" onClick={() => void resume()} disabled={busy} className={cn(ASK_QUIET_BUTTON, "text-accent-text")}>
             {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -178,7 +181,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     <AskCard
       tour="connector"
       ariaLabel={connector.label}
-      icon={isMcp ? <PlugZap size={15} /> : <ServiceIcon card={{ slug: connector.slug, label: connector.label, logo: null, domain: null }} className="size-[18px] rounded-[5px]" />}
+      icon={appLogo("size-[18px] rounded-[5px]") ?? <PlugZap size={15} />}
       title={isMcp ? t("connectors.card.signInTo", { label: connector.label }) : connector.label}
       explanation={connector.description}
       onDismiss={dismiss}

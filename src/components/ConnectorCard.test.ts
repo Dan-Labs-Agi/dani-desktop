@@ -32,6 +32,7 @@ describe("ConnectorCard ask card", () => {
   it("shows the app's own logo, and a plug for an MCP server's sign-in", () => {
     expect(view({ slug: "gmail", label: "Gmail" })).toContain('src="https://logos.composio.dev/api/gmail"');
     expect(view({ source: "mcp", slug: "notes", label: "Notes" })).not.toContain("logos.composio.dev");
+    expect(view({ slug: "gmail", label: "Gmail", status: "connected", resumed: true })).toContain('src="https://logos.composio.dev/api/gmail"');
   });
 
   it("folds into one line once connected and the bot is continuing", () => {

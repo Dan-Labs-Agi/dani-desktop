@@ -127,6 +127,18 @@ describe("Apps pop-up", () => {
     expect(nodes(grid).some((node) => node.props.whopCard === true)).toBe(true);
     expect(fixture.dispatch).not.toHaveBeenCalled();
   });
+  it("names a connected account by its label or its place, keeps its raw id to the tooltip, and ticks the app once", () => {
+    fixture.overrides.set(STATUS, { slack: { connected: true, accounts: [{ id: "ca_1", status: "ACTIVE" }, { id: "ca_2", alias: "work", status: "EXPIRED" }] } });
+    const { html, nodes: tree } = render();
+    const rows = tree.filter((node) => node.props["data-connected-account"] !== undefined).map((node) => renderToStaticMarkup(node));
+    expect(rows[0]).toContain(">Account 1<");
+    expect(rows[0]).not.toContain(">ca_1");
+    expect(rows[0]).toContain('title="ca_1 · active"');
+    expect(rows[0]).not.toContain("· active<");
+    expect(rows[1]).toContain(">work<");
+    expect(rows[1]).toContain("· expired");
+    expect(html.match(/text-success/g)?.length).toBe(1);
+  });
   it("sends Connect to the connected-apps key setting while no key is set, instead of a dead button", () => {
     fixture.overrides.set(CONFIGURED, false);
     fixture.overrides.set(SETUP, "needs-setup");

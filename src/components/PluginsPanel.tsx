@@ -868,15 +868,14 @@ export function PluginsPanel() {
           )}
           {accounts.length > 0 && (
             <div className="mt-1.5 space-y-0.5">
-              {accounts.map((account) => {
+              {accounts.map((account, index) => {
                 const active = /^active$/i.test(account.status);
                 const reconnectable = needsReconnect(account) && account.id !== reconnect?.id;
                 return (
-                  <div key={account.id} className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
-                    {active ? <Check size={12} className="shrink-0 text-success" /> : <span className="size-3 shrink-0" />}
-                    <span className="min-w-0 truncate text-ink" title={`${account.alias ? `${account.id} · ` : ""}${account.status.toLowerCase()}`}>
-                      {account.alias || account.id}
-                      <span className="text-ink-secondary"> · {account.status.toLowerCase()}</span>
+                  <div key={account.id} data-connected-account className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
+                    <span className="min-w-0 truncate text-ink-secondary" title={`${account.id} · ${account.status.toLowerCase()}`}>
+                      {account.alias || t("connectors.accountNumber", { n: index + 1 })}
+                      {!active && <span className="text-warning"> · {account.status.toLowerCase()}</span>}
                     </span>
                     {reconnectable && (
                       <button

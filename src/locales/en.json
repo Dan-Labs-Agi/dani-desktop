@@ -5397,6 +5397,7 @@
   "connectors.aliasTaken": "Another account already uses that label. Choose a different one.",
   "connectors.disconnect": "Disconnect",
   "connectors.disconnectAria": "Disconnect {account} from {service}",
+  "connectors.accountNumber": "Account {n}",
   "connectors.aliasRequired": "Enter a label for the account, such as work or personal.",
   "connectors.aliasPlaceholder": "Account label (work, personal…)",
   "connectors.aliasAriaAnother": "Label for another {service} account",
