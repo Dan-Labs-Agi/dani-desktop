@@ -10,7 +10,7 @@ import { waitForExit } from "./testing/cleanup.ts";
 import type { WireMessage } from "../shared/wire.ts";
 
 const EMPTY = { instanceId: "", model: "" };
-const DEFAULT = { instanceId: "claude", model: "claude-sonnet-5" };
+const DEFAULT = { instanceId: "claude", model: "claude-haiku-5-5" };
 const CHOSEN = { instanceId: "claude", model: "claude-opus-5" };
 const FAKE_CLI = fileURLToPath(new URL("./testing/fake-claude-cli.ts", import.meta.url));
 
