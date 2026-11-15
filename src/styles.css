@@ -3039,6 +3039,56 @@ button:disabled.bg-danger {
   outline-width: 1.5px;
   outline-offset: -1.5px;
 }
+/* Customizable <select> (Chromium 135+, so Electron 43): the open list is drawn as one of the app's menus, a check
+   at the end of the chosen row. Browsers without it keep their native list. The field draws its own chevron. */
+.ui-select,
+.ui-select::picker(select) {
+  appearance: base-select;
+}
+.ui-select::picker-icon {
+  display: none;
+}
+.ui-select::picker(select) {
+  margin-block: 4px;
+  padding: 4px;
+  border: none;
+  min-width: anchor-size(width);
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  background: var(--color-menu);
+  color: var(--color-ink);
+  border-radius: var(--radius-menu);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--color-ink) 10%, transparent), var(--menu-shadow);
+}
+.ui-select option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.ui-select option:is(:hover, :focus-visible) {
+  background: var(--color-menu-hover);
+  outline: none;
+}
+.ui-select option::checkmark {
+  order: 1;
+  margin-inline-start: auto;
+  color: var(--color-ink-secondary);
+}
+.ui-select option:disabled {
+  opacity: 0.4;
+}
+.ui-select optgroup {
+  padding: 4px 8px 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-secondary);
+}
 :root,
 :is([data-skin="midnight"], [data-skin="foundry"], [data-skin="graphite"], [data-skin="dusk"], [data-skin="halloween"]) {
   --radius-menu: 12px;

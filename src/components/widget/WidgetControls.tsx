@@ -181,7 +181,7 @@ export function WidgetSelect({ node, bare }: { node: WidgetNode; bare: boolean }
         {...field.control}
         value={choosingOther ? OTHER_OPTION : field.text}
         onChange={(event) => (event.target.value === OTHER_OPTION ? field.chooseOther() : field.set(event.target.value))}
-        className={cn(bare ? WIDGET_BARE : WIDGET_FIELD, "appearance-none", bare ? "ps-2 pe-7 text-end [field-sizing:content]" : "pe-9", !field.text && !choosingOther && "text-ink-tertiary")}
+        className={cn(bare ? WIDGET_BARE : WIDGET_FIELD, "ui-select", bare ? "ps-2 pe-7 text-end [field-sizing:content]" : "pe-9", !field.text && !choosingOther && "text-ink-tertiary")}
       >
         <option value="" disabled={!open} hidden={!open}>{widgetString(node, "placeholder") ?? t("widget.choose")}</option>
         {optionsOf(node).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

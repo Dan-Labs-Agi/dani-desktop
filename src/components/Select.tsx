@@ -29,7 +29,7 @@ export function Select({
       <select
         {...props}
         className={cn(
-          "peer w-full min-w-0 cursor-pointer appearance-none truncate disabled:cursor-default disabled:opacity-50",
+          "ui-select peer w-full min-w-0 cursor-pointer truncate disabled:cursor-default disabled:opacity-50",
           VARIANTS[variant],
           variant === "ghost" ? GHOST.select : SIZES[size].select,
         )}

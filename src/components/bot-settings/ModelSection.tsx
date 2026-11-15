@@ -7,6 +7,7 @@ import { ProposalStatus } from "./ProposalStatus";
 import { ThreadModelsLine } from "../ThreadModelsLine";
 import { t } from "@/lib/i18n";
 import { Select } from "../Select";
+import { DANI_FREE_INSTANCE_IDS } from "../../../shared/dani-free";
 
 export function ModelSection({ bot }: { bot: Bot }) {
   const { state, dispatch } = useStore();
@@ -73,13 +74,16 @@ function KeepWarmRow({ bot, workspaceOn, onChange }: { bot: Bot; workspaceOn: bo
 export function FallbackChain({ bot, onChange }: { bot: Bot; onChange: (fallback: Bot["fallback"]) => void }) {
   const { state } = useStore();
   const chain = bot.fallback ?? [];
+  // Dani's two routes (server and CLI) reach the same free models under one name: list Dani once, and not beside itself.
+  const dani = (instanceId: string) => DANI_FREE_INSTANCE_IDS[instanceId] === true;
+  const daniTaken = dani(bot.modelSelection.instanceId) || chain.some((entry) => dani(entry.instanceId));
   const available = state.instances.filter(
     (instance) =>
       instance.snapshot.state === "available" &&
       Boolean(instance.models.default.trim()) &&
       instance.instanceId !== bot.modelSelection.instanceId &&
       !chain.some((entry) => entry.instanceId === instance.instanceId),
-  );
+  ).filter((instance, index, list) => !dani(instance.instanceId) || (!daniTaken && list.findIndex((other) => dani(other.instanceId)) === index));
   const nameOf = (instanceId: string) => state.instances.find((instance) => instance.instanceId === instanceId)?.displayName ?? instanceId;
   const modelsOf = (entry: NonNullable<Bot["fallback"]>[number]) => {
     const instance = state.instances.find((candidate) => candidate.instanceId === entry.instanceId);
