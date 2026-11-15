@@ -859,6 +859,8 @@
   "composer.placeholder.locked": "Schließe die Gruppeneinrichtung ab, um einen Thread zu starten",
   "composer.placeholder.queue": "{name} arbeitet — wird gesendet, wenn dieser Zug endet",
   "composer.placeholder.queueGroup": "{name} arbeitet — {key} stellt deine Nachricht in die Warteschlange",
+  "composer.placeholder.sendOrQueue": "{key} zum Senden, {alternate} zum Einreihen für später",
+  "composer.placeholder.queueOrSend": "{key} zum Einreihen für später, {alternate} zum sofortigen Senden",
   "composer.placeholder.steer": "{name} arbeitet — {key} schickt das in den laufenden Zug",
   "composer.queued.deleteAria": "Wartende Nachricht {index} von {count} löschen",
   "composer.queued.deleteTitle": "Diese wartende Nachricht löschen",

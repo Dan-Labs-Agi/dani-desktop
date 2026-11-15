@@ -2242,6 +2242,8 @@
   "composer.placeholder.approval": "Odpowiedz na powyższe zatwierdzenie, aby kontynuować",
   "composer.placeholder.attaching": "Załączanie plików…",
   "composer.placeholder.listening": "Słuchanie…",
+  "composer.placeholder.sendOrQueue": "{key}, aby wysłać, {alternate}, aby dodać do kolejki na później",
+  "composer.placeholder.queueOrSend": "{key}, aby dodać do kolejki na później, {alternate}, aby wysłać teraz",
   "composer.placeholder.steer": "{name} pracuje — {key} wysyła to do bieżącej tury",
   "composer.placeholder.steerQueued": "{name} pracuje — naciśnij {key} ponownie, aby skierować zakolejkowaną wiadomość do bieżącej tury",
   "composer.placeholder.queueGroup": "{name} pracuje — {key} dodaje twoją wiadomość do kolejki",

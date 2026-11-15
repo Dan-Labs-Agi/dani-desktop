@@ -222,7 +222,7 @@ describe("the send key in hints", () => {
 
     type(textarea(), "");
     render(createElement(Composer, { bot: { ...bot, busy: true, tasks: [{ ...bot.tasks![0]!, busy: true }] } }));
-    expect(textarea().placeholder).toBe("Pepper is working. Ctrl+Enter sends this into the running turn");
+    expect(textarea().placeholder).toBe("Ctrl+Enter to send, Ctrl+Shift+Enter to queue for later");
     render(createElement(Composer, { group: { ...room, busyBotId: "bot" }, members: [{ ...bot, modelSelection: { instanceId: "none", model: "x" } }] }));
     expect(textarea().placeholder).toBe("Pepper is working. Ctrl+Enter queues your message");
   });
@@ -233,7 +233,7 @@ describe("the send key in hints", () => {
     setLocale("ja");
     try {
       render(createElement(Composer, { bot: { ...bot, busy: true, tasks: [{ ...bot.tasks![0]!, busy: true }] } }));
-      expect(textarea().placeholder).toBe("Pepper が作業中です — Ctrl+Enter で実行中のターンに送ります");
+      expect(textarea().placeholder).toBe("Ctrl+Enter で送信、Ctrl+Shift+Enter で後で送るように予約");
     } finally {
       setLocale("en");
     }

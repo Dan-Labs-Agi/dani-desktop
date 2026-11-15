@@ -2148,6 +2148,8 @@
   "composer.placeholder.approval": "Responde a la aprobación de arriba para continuar",
   "composer.placeholder.attaching": "Adjuntando archivos…",
   "composer.placeholder.listening": "Escuchando…",
+  "composer.placeholder.sendOrQueue": "{key} para enviar, {alternate} para poner en cola para después",
+  "composer.placeholder.queueOrSend": "{key} para poner en cola para después, {alternate} para enviar ahora",
   "composer.placeholder.steer": "{name} está trabajando: {key} envía esto al turno en curso",
   "composer.placeholder.steerQueued": "{name} está trabajando: pulsa {key} otra vez para redirigir el mensaje en cola al turno en curso",
   "composer.placeholder.queueGroup": "{name} está trabajando: {key} pone tu mensaje en la cola",

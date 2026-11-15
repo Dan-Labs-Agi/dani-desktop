@@ -1869,6 +1869,8 @@
   "composer.placeholder.approval": "Devam etmek için yukarıdaki onayı yanıtlayın",
   "composer.placeholder.attaching": "Dosyalar ekleniyor…",
   "composer.placeholder.listening": "Dinleniyor…",
+  "composer.placeholder.sendOrQueue": "Göndermek için {key}, sonraya sıraya almak için {alternate}",
+  "composer.placeholder.queueOrSend": "Sonraya sıraya almak için {key}, şimdi göndermek için {alternate}",
   "composer.placeholder.steer": "{name} çalışıyor — {key} bunu çalışan tura gönderir",
   "composer.placeholder.steerQueued": "{name} çalışıyor — sıraya alınan mesajı çalışan tura yönlendirmek için {key} tuşuna tekrar basın",
   "composer.placeholder.queueGroup": "{name} çalışıyor — {key} mesajınızı sıraya alır",

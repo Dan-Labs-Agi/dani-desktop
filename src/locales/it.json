@@ -2215,6 +2215,8 @@
   "composer.placeholder.approval": "Rispondi all'approvazione qui sopra per continuare",
   "composer.placeholder.attaching": "Allegati in corso…",
   "composer.placeholder.listening": "In ascolto…",
+  "composer.placeholder.sendOrQueue": "{key} per inviare, {alternate} per mettere in coda per dopo",
+  "composer.placeholder.queueOrSend": "{key} per mettere in coda per dopo, {alternate} per inviare ora",
   "composer.placeholder.steer": "{name} sta lavorando — {key} invia questo nel turno in corso",
   "composer.placeholder.steerQueued": "{name} sta lavorando — premi di nuovo {key} per reindirizzare il messaggio in coda nel turno in corso",
   "composer.placeholder.queueGroup": "{name} sta lavorando — {key} mette in coda il tuo messaggio",

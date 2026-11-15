@@ -1869,6 +1869,8 @@
   "composer.placeholder.approval": "Trả lời yêu cầu phê duyệt ở trên để tiếp tục",
   "composer.placeholder.attaching": "Đang đính kèm tệp…",
   "composer.placeholder.listening": "Đang nghe…",
+  "composer.placeholder.sendOrQueue": "{key} để gửi, {alternate} để xếp hàng gửi sau",
+  "composer.placeholder.queueOrSend": "{key} để xếp hàng gửi sau, {alternate} để gửi ngay",
   "composer.placeholder.steer": "{name} đang làm việc — {key} gửi nội dung này vào lượt đang chạy",
   "composer.placeholder.steerQueued": "{name} đang làm việc — nhấn {key} lần nữa để điều hướng tin nhắn trong hàng đợi vào lượt đang chạy",
   "composer.placeholder.queueGroup": "{name} đang làm việc — {key} thêm tin nhắn của bạn vào hàng đợi",

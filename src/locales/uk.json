@@ -1101,6 +1101,8 @@
   "composer.placeholder.approval": "Дайте відповідь на погодження вище, щоб продовжити",
   "composer.placeholder.attaching": "Прикріплюємо файли…",
   "composer.placeholder.listening": "Слухаю…",
+  "composer.placeholder.sendOrQueue": "{key} — надіслати, {alternate} — додати в чергу на потім",
+  "composer.placeholder.queueOrSend": "{key} — додати в чергу на потім, {alternate} — надіслати зараз",
   "composer.placeholder.steer": "{name} працює — {key} надішле це в поточний запит",
   "composer.placeholder.queueGroup": "{name} працює — {key} поставить повідомлення в чергу",
   "composer.placeholder.queue": "{name} працює — надішлеться, коли запит завершиться",

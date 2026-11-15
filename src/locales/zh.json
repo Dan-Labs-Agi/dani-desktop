@@ -2556,6 +2556,8 @@
   "composer.placeholder.approval": "先回应上面的批准请求才能继续",
   "composer.placeholder.attaching": "正在附加文件…",
   "composer.placeholder.listening": "正在聆听…",
+  "composer.placeholder.sendOrQueue": "{key} 发送，{alternate} 排队稍后发送",
+  "composer.placeholder.queueOrSend": "{key} 排队稍后发送，{alternate} 立即发送",
   "composer.placeholder.steer": "{name} 正在工作——按 {key} 会把这条送进当前轮次",
   "composer.placeholder.steerQueued": "{name} 正在工作——再按一次 {key}，便可将排队中的消息并入正在进行的一轮",
   "composer.placeholder.queueGroup": "{name} 正在工作——按 {key} 会把消息排队",

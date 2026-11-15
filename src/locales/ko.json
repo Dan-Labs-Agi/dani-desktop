@@ -2444,6 +2444,8 @@
   "composer.placeholder.approval": "계속하려면 위의 승인 요청에 답하세요",
   "composer.placeholder.attaching": "파일 첨부 중…",
   "composer.placeholder.listening": "듣는 중…",
+  "composer.placeholder.sendOrQueue": "{key}로 보내기, {alternate}로 나중에 보내도록 대기열에 추가",
+  "composer.placeholder.queueOrSend": "{key}로 나중에 보내도록 대기열에 추가, {alternate}로 지금 보내기",
   "composer.placeholder.steer": "{name} 작업 중 — {key}를 누르면 실행 중인 턴에 바로 반영돼요",
   "composer.placeholder.steerQueued": "{name} 작업 중 — {key}를 한 번 더 누르면 대기 중인 메시지를 실행 중인 턴에 바로 반영해요",
   "composer.placeholder.queueGroup": "{name} 작업 중 — {key}를 누르면 메시지가 대기열에 들어가요",

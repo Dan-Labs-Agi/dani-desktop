@@ -1595,6 +1595,8 @@
   "composer.placeholder.approval": "請先回覆上方的核准要求以繼續",
   "composer.placeholder.attaching": "正在附加檔案…",
   "composer.placeholder.listening": "聆聽中…",
+  "composer.placeholder.sendOrQueue": "{key} 傳送，{alternate} 排入佇列稍後傳送",
+  "composer.placeholder.queueOrSend": "{key} 排入佇列稍後傳送，{alternate} 立即傳送",
   "composer.placeholder.steer": "{name} 正在進行中——按 {key} 可將內容送入執行中的回合",
   "composer.placeholder.steerQueued": "{name} 正在工作 — 再按一次 {key}，便可將排隊中的訊息導入目前回合",
   "composer.placeholder.queueGroup": "{name} 正在進行中——按 {key} 可將訊息排入佇列",

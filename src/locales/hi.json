@@ -939,6 +939,8 @@
   "composer.placeholder.approval": "जारी रखने के लिए ऊपर की मंज़ूरी का जवाब दें",
   "composer.placeholder.attaching": "फ़ाइलें संलग्न हो रही हैं…",
   "composer.placeholder.listening": "सुन रहे हैं…",
+  "composer.placeholder.sendOrQueue": "भेजने के लिए {key}, बाद के लिए कतार में रखने के लिए {alternate}",
+  "composer.placeholder.queueOrSend": "बाद के लिए कतार में रखने के लिए {key}, अभी भेजने के लिए {alternate}",
   "composer.placeholder.steer": "{name} काम कर रहा है — {key} इसे चालू बारी में भेजता है",
   "composer.placeholder.queueGroup": "{name} काम कर रहा है — {key} आपका संदेश कतार में रखता है",
   "composer.placeholder.queue": "{name} काम कर रहा है — यह बारी खत्म होते ही भेजा जाएगा",

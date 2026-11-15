@@ -2209,6 +2209,8 @@
   "composer.placeholder.approval": "Responda à aprovação acima para continuar",
   "composer.placeholder.attaching": "Anexando arquivos…",
   "composer.placeholder.listening": "Ouvindo…",
+  "composer.placeholder.sendOrQueue": "{key} para enviar, {alternate} para enfileirar para depois",
+  "composer.placeholder.queueOrSend": "{key} para enfileirar para depois, {alternate} para enviar agora",
   "composer.placeholder.steer": "{name} está trabalhando — {key} envia isto para dentro do turno em andamento",
   "composer.placeholder.steerQueued": "{name} está trabalhando — aperte {key} de novo para direcionar a mensagem da fila para o turno em andamento",
   "composer.placeholder.queueGroup": "{name} está trabalhando — {key} põe sua mensagem na fila",
