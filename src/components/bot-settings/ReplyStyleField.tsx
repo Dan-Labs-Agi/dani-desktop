@@ -11,7 +11,7 @@ const LABELS = {
 export function ReplyStyleField({ bot, patch }: { bot: Bot; patch: (patch: BotPatch) => void }) {
   const current: ReplyStyle = bot.replyStyle ?? "default";
   return (
-    <div className="flex flex-col gap-3 rounded-xl bg-card p-4" data-reply-style>
+    <div className="flex flex-col gap-3 rounded-xl border border-ink/[0.08] p-4" data-reply-style>
       <div>
         <div className="text-[15px] font-medium text-ink">{t("botSettings.replyStyle.title")}</div>
         <div className="mt-0.5 text-[13px] text-ink-secondary">{t("botSettings.replyStyle.subtitle")}</div>

@@ -51,7 +51,7 @@ export function ToolSelectionCard({ bot, engineKind }: { bot: Bot; engineKind?: 
     : engineKind === "grokAgent" ? "native:read_file\nnative:search_replace\nnative:write"
       : support === "mcp" ? "native:*\nmcp:mail:read_notes" : "native:ask_user\nmcp:mail:read_notes";
 
-  return <div className="rounded-xl bg-card p-4">
+  return <div className="rounded-xl border border-ink/[0.08] p-4">
     <div className="text-[15px] font-medium text-ink">{t("botAccess.tools.title")}</div>
     <p className="mt-0.5 text-[13px] text-ink-secondary">{t("botAccess.tools.description")}</p>
     <p role={saved.ok ? "status" : "alert"} className={`mt-2 text-[12px] ${saved.ok ? "text-ink-secondary" : "text-danger"}`}>

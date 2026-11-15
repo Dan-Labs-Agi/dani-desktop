@@ -103,7 +103,7 @@ export function PermissionsSection({
         {bot.chiefOfStaff && <ProposalStatus bot={bot} kind="owner" />}
       </div>}
 
-      {shows("peers") && <div className="rounded-xl bg-card p-4">
+      {shows("peers") && <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-[15px] font-medium text-ink">{t("permissions.peers.title")}</div>
@@ -127,7 +127,7 @@ export function PermissionsSection({
           onOpen={() => patch({ peers: null, acknowledgePeerScope: true })} />}
       </div>}
 
-      {shows("approval") && <div className="rounded-xl bg-card p-4">
+      {shows("approval") && <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("permissions.approval.title")}</div>
         <div className="mt-0.5 text-[13px] text-ink-secondary">
           {draft ? t("permissions.approval.draft") : t("permissions.approval.help")}
@@ -221,7 +221,7 @@ function OutboundControl({ bot, onChange }: { bot: Bot; onChange: (policy: Outbo
   };
 
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <div className="text-[15px] font-medium text-ink">{t("permissions.outbound.title")}</div>
       <div className="mt-0.5 text-[13px] text-ink-secondary">
         {t("permissions.outbound.help")}

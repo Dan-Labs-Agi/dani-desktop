@@ -60,7 +60,7 @@ export function WriteCommandCard({ bot, taken, onSaved }: { bot: Bot; taken: rea
   };
 
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <div className="flex items-center gap-2">
         <SquareSlash size={16} className="text-ink-secondary" />
         <div className="text-[15px] font-medium text-ink">{t("skills.write.title")}</div>

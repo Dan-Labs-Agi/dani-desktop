@@ -59,7 +59,7 @@ export function OverviewSection({
       )}
 
       {remaining.length > 0 && (
-        <div className="rounded-xl border border-accent/30 bg-accent/[0.06] p-4">
+        <div className="rounded-xl border border-ink/[0.08] p-4">
           <div className="text-[15px] font-medium text-ink">{t("botSetup.ideas")}</div>
           <p className="mt-1 text-[13px] text-ink-secondary">{t("botSetup.optional")}</p>
           <ul className="mt-2 flex flex-col gap-1">
@@ -89,7 +89,7 @@ export function OverviewSection({
               <button
                 type="button"
                 onClick={onSetup}
-                className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-[13px] font-medium text-accent-ink hover:brightness-110"
+                className="ui-button ui-button-md ui-button-primary shrink-0 gap-1.5 whitespace-nowrap"
               >
                 <Sparkles size={14} /> {t("botSetup.withBot")}
               </button>
@@ -99,7 +99,7 @@ export function OverviewSection({
         </div>
       )}
 
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{overview.who.name}</div>
         {overview.who.title && <div className="mt-0.5 text-[13px] text-ink-secondary">{overview.who.title}</div>}
         {overview.who.blurb && <p className="mt-2 text-[13px] leading-relaxed text-ink">{overview.who.blurb}</p>}
@@ -117,7 +117,7 @@ export function OverviewSection({
         )}
       </div>
 
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("botOverview.does")}</div>
         {overview.does.length === 0 ? (
           <p className="mt-2 text-[13px] text-ink-secondary">{t("botOverview.doesEmpty")}</p>
@@ -130,7 +130,7 @@ export function OverviewSection({
         )}
       </div>
 
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("botOverview.canReach")}</div>
         {overview.reaches.length === 0 ? (
           <p className="mt-2 text-[13px] text-ink-secondary">{t("botOverview.reachEmpty")}</p>
@@ -143,7 +143,7 @@ export function OverviewSection({
         )}
       </div>
 
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("botOverview.wont")}</div>
         <ul className="mt-2 flex flex-col gap-1.5 text-[13px] leading-relaxed text-ink">
           {overview.wont.map((line, i) => (
@@ -159,7 +159,7 @@ export function OverviewSection({
         onToggle={() => setPromptOpen((current) => !current)}
       />
 
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="flex items-baseline justify-between gap-3">
           <div className="text-[15px] font-medium text-ink">{t("botOverview.recentChanges")}</div>
           <button

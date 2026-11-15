@@ -20,7 +20,7 @@ export function VoiceSection({
     <div className="flex flex-col gap-4">
       <VoiceSettings bot={bot} onPatch={patch} />
 
-      <div className="flex items-center justify-between gap-4 rounded-xl bg-card p-4">
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-ink/[0.08] p-4">
         <div>
           <div className="text-[15px] font-medium text-ink">{t("voice.notifications.title")}</div>
           <div className="mt-0.5 text-[13px] text-ink-secondary">

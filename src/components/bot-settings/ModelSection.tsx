@@ -14,7 +14,7 @@ export function ModelSection({ bot }: { bot: Bot }) {
   const modelVariants = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId)?.capabilities?.modelVariants;
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <ModelPicker
           bot={bot}
           contained
@@ -33,7 +33,7 @@ export function ModelSection({ bot }: { bot: Bot }) {
 
       <EffortRow
         bot={bot}
-        className="rounded-xl bg-card p-4"
+        className="rounded-xl border border-ink/[0.08] p-4"
         label={
           <div>
             <div className="text-[15px] font-medium text-ink">{modelVariants ? t("model.simple.reasoning") : t("model.section.effort")}</div>
@@ -57,7 +57,7 @@ export function ModelSection({ bot }: { bot: Bot }) {
 function KeepWarmRow({ bot, workspaceOn, onChange }: { bot: Bot; workspaceOn: boolean; onChange: (value: boolean | null) => void }) {
   const value = bot.cacheKeepWarm === true ? "on" : bot.cacheKeepWarm === false ? "off" : "follow";
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <label htmlFor="bot-cache-keepwarm" className="text-[15px] font-medium text-ink">{t("bot.keepWarm.title")}</label>
       <div className="mt-0.5 text-[13px] text-ink-secondary">{t("bot.keepWarm.help")}</div>
       <Select className="mt-3 max-w-full" id="bot-cache-keepwarm" value={value}
@@ -94,7 +94,7 @@ export function FallbackChain({ bot, onChange }: { bot: Bot; onChange: (fallback
   };
 
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <div className="text-[15px] font-medium text-ink">{t("model.fallback.title")}</div>
       <div className="mt-0.5 text-[13px] text-ink-secondary">
         {t("model.fallback.uses")}
