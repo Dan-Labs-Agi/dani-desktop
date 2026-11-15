@@ -11,6 +11,7 @@ import { mcpSignInLink } from "@/lib/mcp-sign-in";
 import { cn } from "@/lib/cn";
 import { askPrimary, ASK_QUIET_BUTTON, AskCard, AskSettledLine } from "./AskCard";
 import { CardHint } from "./CardHint";
+import { ServiceIcon } from "./ServiceIcon";
 
 const STATUS_CHECK_MS = 4_000;
 /** Composio marks an unfinished account EXPIRED shortly after its link lapses; the card keeps asking until it can say so. */
@@ -177,7 +178,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     <AskCard
       tour="connector"
       ariaLabel={connector.label}
-      icon={<PlugZap size={15} />}
+      icon={isMcp ? <PlugZap size={15} /> : <ServiceIcon card={{ slug: connector.slug, label: connector.label, logo: null, domain: null }} className="size-[18px] rounded-[5px]" />}
       title={isMcp ? t("connectors.card.signInTo", { label: connector.label }) : connector.label}
       explanation={connector.description}
       onDismiss={dismiss}

@@ -29,6 +29,11 @@ describe("ConnectorCard ask card", () => {
     expect(html).toContain(`aria-label="${t("connectors.card.notNow")}"`);
   });
 
+  it("shows the app's own logo, and a plug for an MCP server's sign-in", () => {
+    expect(view({ slug: "gmail", label: "Gmail" })).toContain('src="https://logos.composio.dev/api/gmail"');
+    expect(view({ source: "mcp", slug: "notes", label: "Notes" })).not.toContain("logos.composio.dev");
+  });
+
   it("folds into one line once connected and the bot is continuing", () => {
     const html = view({ status: "connected", resumed: true });
     expect(html).toContain('data-ask-card="settled"');
