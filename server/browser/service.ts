@@ -566,7 +566,7 @@ export class BrowserService {
   async previewFrame(session: string): Promise<{ png: string; format: "jpeg" }> {
     const profile = this.#bySession(session);
     const tab = profile?.run ? profile.active() : null;
-    if (!profile || !tab) throw new Error("the browser has no open page to picture");
+    if (!profile || !tab || tab.page.url() === "about:blank") throw new Error("the browser has no open page to picture");
     if (profile.control.agents > 0 || this.#lanes.held(profile.key)) throw new Error("The browser is busy with an agent action.");
     if (profile.control.owner !== null) throw new Error("a person holds the browser");
     return profile.control.agent(tab, async () => {
