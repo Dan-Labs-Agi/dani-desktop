@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Search } from "@/components/icons";
+import { ServiceIcon } from "@/components/ServiceIcon";
 
-/** The sites a blank tab offers. Each opens by its address, as if typed in the address bar. */
-export const START_SITES: readonly { name: string; address: string }[] = [
-  { name: "Google", address: "google.com" },
-  { name: "YouTube", address: "youtube.com" },
-  { name: "Gmail", address: "mail.google.com" },
-  { name: "GitHub", address: "github.com" },
+/** The sites a blank tab offers. Each opens by its address, as if typed in the address bar. `slug` is the Composio app
+ * whose logo it shows; logos.composio.dev has none of its own for Wikipedia (checked 2026-11), which shows its initial. */
+export const START_SITES: readonly { name: string; address: string; slug?: string }[] = [
+  { name: "Google", address: "google.com", slug: "google_search" },
+  { name: "YouTube", address: "youtube.com", slug: "youtube" },
+  { name: "Gmail", address: "mail.google.com", slug: "gmail" },
+  { name: "GitHub", address: "github.com", slug: "github" },
   { name: "Wikipedia", address: "wikipedia.org" },
-  { name: "Reddit", address: "reddit.com" },
-  { name: "X", address: "x.com" },
-  { name: "LinkedIn", address: "linkedin.com" },
+  { name: "Reddit", address: "reddit.com", slug: "reddit" },
+  { name: "X", address: "x.com", slug: "twitter" },
+  { name: "LinkedIn", address: "linkedin.com", slug: "linkedin" },
 ];
 
 /** A blank tab's start page: a search box and a few common sites. Drawn by the panel over the blank page, so the bot's
@@ -38,10 +40,13 @@ export function BrowserStartPage({ onOpen }: { onOpen: (text: string) => void })
             <button
               type="button"
               onClick={() => onOpen(site.address)}
-              className="flex w-full flex-col items-start rounded-lg px-3 py-2 text-left hover:bg-ink/[0.06]"
+              title={site.address}
+              className="flex w-full flex-col items-center gap-2 rounded-xl px-2 py-3 text-center hover:bg-ink/[0.06]"
             >
-              <span className="text-[13px] text-ink">{site.name}</span>
-              <span className="w-full truncate text-[12px] text-ink-tertiary">{site.address}</span>
+              <span className="flex size-11 items-center justify-center rounded-xl bg-inset">
+                <ServiceIcon card={{ slug: site.slug, logo: null, domain: null, label: site.name }} className="size-6" />
+              </span>
+              <span className="w-full truncate text-[13px] text-ink">{site.name}</span>
             </button>
           </li>
         ))}
