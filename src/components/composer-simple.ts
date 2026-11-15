@@ -21,7 +21,7 @@ export function slotColors(color: Bot["color"] | undefined, room: boolean): { fi
   return { fill: tone.fill, ink: tone.ink, button: { className: BOT_BUTTON, style: botButtonStyle(own) } };
 }
 
-export function composerPlaceholder({ simple, locked, approval, attaching, listening, replying, busy, canSteer, queued, busyName, sendLabel, group, members, jevOn, goal, botName, setupHint }: {
+export function composerPlaceholder({ simple, locked, approval, attaching, listening, replying, busy, canSteer, queued, busyName, sendLabel, alternateLabel = "", queueFirst = false, group, members, jevOn, goal, botName, setupHint }: {
   simple: boolean;
   locked: boolean;
   approval: boolean;
@@ -33,6 +33,9 @@ export function composerPlaceholder({ simple, locked, approval, attaching, liste
   queued: boolean;
   busyName: string;
   sendLabel: string;
+  /** The key that does the other follow-up while a bot works, and whether Enter queues rather than steers. */
+  alternateLabel?: string;
+  queueFirst?: boolean;
   group?: Group;
   members: Bot[];
   jevOn: boolean;
@@ -45,6 +48,9 @@ export function composerPlaceholder({ simple, locked, approval, attaching, liste
   if (attaching) return t("composer.placeholder.attaching");
   if (listening) return t("composer.placeholder.listening");
   if (replying && !busy) return t("composer.placeholder.reply");
+  if (busy && canSteer && !queued && !group && alternateLabel) {
+    return t(queueFirst ? "composer.placeholder.queueOrSend" : "composer.placeholder.sendOrQueue", { key: sendLabel, alternate: alternateLabel });
+  }
   if (simple) {
     if (!busy && goal) return group ? t("composer.placeholder.goal", { name: group.name }) : t("composer.placeholder.goalSolo", { name: botName });
     if (!busy && !group && setupHint) return setupHint;

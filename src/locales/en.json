@@ -2660,6 +2660,8 @@
   "composer.placeholder.approval": "Answer the approval above to continue",
   "composer.placeholder.attaching": "Attaching files…",
   "composer.placeholder.listening": "Listening…",
+  "composer.placeholder.sendOrQueue": "{key} to send, {alternate} to queue for later",
+  "composer.placeholder.queueOrSend": "{key} to queue for later, {alternate} to send now",
   "composer.placeholder.steer": "{name} is working. {key} sends this into the running turn",
   "composer.placeholder.steerQueued": "{name} is working. Press {key} again to steer the queued message into the running turn",
   "composer.placeholder.queueGroup": "{name} is working. {key} queues your message",
