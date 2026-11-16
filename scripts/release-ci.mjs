@@ -7,10 +7,12 @@ import { versionOnlyPackageJson } from "./ci-scope.mjs";
 const RELEASE_EVENTS = { push: true, merge_group: true, schedule: true, workflow_dispatch: true };
 /** @type {Record<string, true>} */
 const FINISHED_CONCLUSIONS = { success: true, skipped: true, neutral: true };
+// The CI matrix shards vitest per OS; keep these counts in sync with
+// .github/workflows/ci.yml (ubuntu 8, windows 8, macos 4).
+const VITEST_SHARDS = [["macos-latest", 4], ["ubuntu-latest", 8], ["windows-latest", 8]];
 const REQUIRED_JOBS = [
-  "typecheck + test (macos-latest)",
-  "typecheck + test (ubuntu-latest)",
-  "typecheck + test (windows-latest)",
+  ...VITEST_SHARDS.flatMap(([os, shards]) =>
+    Array.from({ length: shards }, (_, i) => `vitest (${os}, shard ${i + 1}/${shards})`)),
   "package + smoke (Ubuntu 24.04 x64)",
   "control-plane check + workerd tests + dry run",
   "Detect optional jobs",
@@ -32,7 +34,7 @@ export function judgeRun(jobs) {
   const unsettled = jobs.find((job) => !Object.hasOwn(FINISHED_CONCLUSIONS, job.conclusion ?? ""));
   if (unsettled) return unsettled.conclusion ?? "no verdict";
   if (REQUIRED_JOBS.every((name) => jobs.some((job) => job.name === name && job.conclusion === "success"))) return "green";
-  const platforms = jobs.filter((job) => job.name.startsWith("typecheck + test ("));
+  const platforms = jobs.filter((job) => job.name.startsWith("vitest (") || job.name.startsWith("typecheck + test ("));
   if (platforms.length === 0 || platforms.some((job) => job.conclusion !== "success")) return "scoped";
   return "partial";
 }

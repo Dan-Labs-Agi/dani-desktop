@@ -17,12 +17,14 @@ type Run = {
 type Commit = { tree: string; parents: string[]; files: string[] };
 
 const started: Step[] = [{ status: "completed", conclusion: "success" }];
-const platformJob = (os: string, conclusion: string | null, steps: Step[] = started): Job =>
-  ({ name: `typecheck + test (${os})`, conclusion, steps });
+const SHARDS: Record<string, number> = { "macos-latest": 4, "ubuntu-latest": 8, "windows-latest": 8 };
+const platformJobs = (os: string, conclusion: string | null, steps: Step[] = started): Job[] =>
+  Array.from({ length: SHARDS[os]! }, (_, i) => ({ name: `vitest (${os}, shard ${i + 1}/${SHARDS[os]})`, conclusion, steps }));
+const platformJob = (os: string, conclusion: string | null, steps: Step[] = started): Job => platformJobs(os, conclusion, steps)[0]!;
 const gate = (conclusion: string | null): Job => ({ name: "package + smoke (Ubuntu 24.04 x64)", conclusion, steps: started });
 const green = (): Job[] => [
   gate("success"),
-  ...["ubuntu-latest", "macos-latest", "windows-latest"].map((os) => platformJob(os, "success")),
+  ...["ubuntu-latest", "macos-latest", "windows-latest"].flatMap((os) => platformJobs(os, "success")),
   { name: "control-plane check + workerd tests + dry run", conclusion: "success", steps: started },
   { name: "Detect optional jobs", conclusion: "success", steps: started },
 ];
@@ -92,7 +94,7 @@ describe("what a CI run proves", () => {
 
   it("is partial when only some platforms ran", () => {
     expect(judgeRun(mainLane())).toBe("partial");
-    expect(judgeRun(green().filter((job) => job.name !== "typecheck + test (macos-latest)"))).toBe("partial");
+    expect(judgeRun(green().filter((job) => job.name !== "vitest (macos-latest, shard 1/4)"))).toBe("partial");
     expect(judgeRun([...mainLane(), platformJob("windows-latest", "success")])).toBe("partial");
   });
 
