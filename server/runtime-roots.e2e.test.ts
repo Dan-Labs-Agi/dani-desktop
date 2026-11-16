@@ -19,7 +19,7 @@ import { withAnswer } from "./testing/your-computer.ts";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const RERUN_NOTE = "DaniBot restarted while your previous turn here was running";
 const RERUN_CHIP = "Resuming after a restart";
-const SECRET_PROVIDED = "DaniBot credential update: the user securely provided";
+const SECRET_PROVIDED = "Dani Bot credential update: the user securely provided";
 const CONNECTED = "DaniBot connection update: the user securely connected";
 const STEP_CAP_CONTINUES = "stopped at the step limit";
 const SEAT_FREE = "the computer this conversation waited for is free again";

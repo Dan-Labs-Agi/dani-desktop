@@ -35,9 +35,9 @@ it("adds the private capability only after authenticating and authorizing, never
   const call = async (path: string, token = "paired", method = "POST") => {
     const res = await fetch(`http://127.0.0.1:${port}${path}`, { method, headers: {
       authorization: `Bearer ${token}`,
-      "x-DaniBot-companion-auth": "forged",
-      "x-DaniBot-desktop-owner": "forged-owner",
-      "x-DaniBot-companion-device": "forged-phone",
+      "x-danibot-companion-auth": "forged",
+      "x-danibot-desktop-owner": "forged-owner",
+      "x-danibot-companion-device": "forged-phone",
     } });
     await res.text();
     return res.status;
@@ -51,11 +51,11 @@ it("adds the private capability only after authenticating and authorizing, never
   expect(received).toHaveLength(0);
   expect(await call("/api/bots/b/read")).toBe(200);
   expect(received).toHaveLength(1);
-  expect(received[0]["x-DaniBot-companion-auth"]).toBe(capability);
-  expect(received[0]["x-DaniBot-companion-device"]).toBe("real-phone");
-  expect(received[0]["x-DaniBot-desktop-owner"]).toBeUndefined();
+  expect(received[0]["x-danibot-companion-auth"]).toBe(capability);
+  expect(received[0]["x-danibot-companion-device"]).toBe("real-phone");
+  expect(received[0]["x-danibot-desktop-owner"]).toBeUndefined();
   expect(received[0].authorization).toBeUndefined();
   await call("/api/health", "unpaired", "GET");
-  expect(received[1]["x-DaniBot-companion-auth"]).toBeUndefined();
+  expect(received[1]["x-danibot-companion-auth"]).toBeUndefined();
 });
 

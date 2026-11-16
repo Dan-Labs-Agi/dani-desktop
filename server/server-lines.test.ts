@@ -5,8 +5,8 @@ import { serverLine } from "./server-lines.ts";
 
 describe("serverLine", () => {
   it("writes the line in the language given, with its values filled in", () => {
-    expect(serverLine("de", "server.reports.sent", { report: "r-1" })).toBe("An das Dani-Team gesendet (Bericht r-1). Milind und Omkar bekommen ihn per E-Mail.");
-    expect(serverLine(undefined, "server.reports.sent", { report: "r-1" })).toBe("Sent to the Dani team (report r-1). Milind and Omkar get it by email.");
+    expect(serverLine("de", "server.reports.sent", { report: "r-1" })).toBe("An den Berichtsserver gesendet (Bericht r-1).");
+    expect(serverLine(undefined, "server.reports.sent", { report: "r-1" })).toBe("Sent to the report server (report r-1).");
     expect(serverLine("en", "server.reports.when.minutes", { count: 5 })).toBe("in about 5 minutes");
   });
 

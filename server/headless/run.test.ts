@@ -121,7 +121,7 @@ describe("run", () => {
     const h = harness([], { jobRead: () => { throw Object.assign(new Error("DaniBot API error (404): not found"), { status: 404 }); } });
     const { code, result } = await h.run(["run", "--bot", "lead", "Go", "--json"]);
     expect(code).toBe(5);
-    expect(result).toMatchObject({ ok: false, exitCode: 5, error: "this DaniBot server cannot report a conversation's job" });
+    expect(result).toMatchObject({ ok: false, exitCode: 5, error: "this Dani Bot server cannot report a conversation's job" });
     expect(h.calls.map((call) => call.name)).toEqual(["create_task"]);
   });
 });

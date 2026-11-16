@@ -1443,7 +1443,7 @@ describe("RoutineManager", () => {
     // A second restart while that second start runs fails it.
     const again = new RoutineManager(h.options);
     expect(again.listRuns()).toMatchObject([
-      { routineId: routine.id, status: "failed", retried: "restarted", threadId: "thread-1", error: "DaniBot restarted while this routine was running" },
+      { routineId: routine.id, status: "failed", retried: "restarted", threadId: "thread-1", error: "Dani Bot restarted while this routine was running" },
     ]);
     expect(failureWasPersistedBeforeCallback).toBe(true);
     expect(cut).toHaveLength(2);
@@ -1453,7 +1453,7 @@ describe("RoutineManager", () => {
         routineName: "Morning brief",
         status: "failed",
         threadId: "thread-1",
-        error: "DaniBot restarted while this routine was running",
+        error: "Dani Bot restarted while this routine was running",
       },
     ]);
     expect(new RoutineManager(h.options).listRuns()).toHaveLength(1);

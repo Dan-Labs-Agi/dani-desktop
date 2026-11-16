@@ -24,7 +24,7 @@ it("sends history once through the real OpenAI-compatible server route after a r
   let fixture: Awaited<ReturnType<typeof launchVerificationServer>> | undefined;
   const evidence: unknown[] = [];
   try {
-    fixture = await launchVerificationServer();
+    fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, ["openaiCompat"]);
     const api = fixtureApi(fixture.info.url);
     const cli = async (...args: string[]) => {
       const result = await runControlOmb([...args, "--url", fixture!.info.url]) as any;

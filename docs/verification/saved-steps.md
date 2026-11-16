@@ -202,8 +202,8 @@ spans it cannot tell apart (one that appears twice in the request it was learned
 from, or one that is part of another). The targets never vary: the app, window
 title, element role, label and path are the ones that were learned, found fresh
 at replay, and every step still goes through the normal Full-access handler.
-Shapes are proven by `server/saved-steps/slots.test.ts`, `store.test.ts` and
-`dispatch.test.ts` only; no shape has been replayed against a real driver.
+Shapes are proven by `server/saved-steps/slots.test.ts`, `server/saved-steps/store.test.ts` and
+`server/saved-steps/dispatch.test.ts` only; no shape has been replayed against a real driver.
 
 No real app has been driven by a replay: the driver and the engine are
 fakes. This proves the harness path (journal, save, fresh target resolution,

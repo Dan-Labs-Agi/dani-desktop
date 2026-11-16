@@ -93,7 +93,7 @@ it.each(["openaiCompat", "groq", "meta"] as const)("%s runs structured MCP calls
   await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   const address = upstream.address();
   if (!address || typeof address === "string") throw new Error("fixture provider address missing");
-  const fixture = await launchVerificationServer().catch(async (error) => {
+  const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, ["openaiCompat"]).catch(async (error) => {
     upstream.closeAllConnections();
     await new Promise<void>((resolve) => upstream.close(() => resolve()));
     throw error;

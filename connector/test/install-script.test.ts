@@ -1,4 +1,4 @@
-﻿import { spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,7 +60,7 @@ describe("install.sh", () => {
     for (const bashism of [/\[\[/, /\bfunction\s+\w+/, /\blocal\s/, /<<</, /\$\{[A-Za-z_]+\[/, /\bsource\s/, /&>/]) expect(script, String(bashism)).not.toMatch(bashism);
   });
 
-  it("names the same Docker objects, labels and profiles as the connector, and waits for DaniBot to fill in its address and image", () => {
+  it("names the same Docker objects, labels and profiles as the connector, and waits for Dani Bot to fill in its address and image", () => {
     const value = (name: string) => new RegExp(`^${name}=(\\S+)$`, "m").exec(script)?.[1];
     expect(value("CONNECTOR")).toBe(NAMES.connector);
     expect(value("CONNECTOR_NEXT")).toBe(NAMES.connectorNext);
@@ -73,7 +73,7 @@ describe("install.sh", () => {
     expect(value("SECCOMP")).toBe(SECCOMP_FILE);
     expect(script).toContain('ADMIN_URL="${DaniBOT_ADMIN_URL:-@DaniBOT_ADMIN_URL@}"');
     expect(script).toContain('CONNECTOR_IMAGE="${DaniBOT_CONNECTOR_IMAGE:-@DaniBOT_CONNECTOR_IMAGE@}"');
-    expect(script).toContain('say "Connected. Your server shows up in DaniBot in a minute."');
+    expect(script).toContain('say "Connected. Your server shows up in Dani Bot in a minute."');
     expect(script).toContain(`com.Danibot.instance=$instance`);
     expect(script).toContain("--restart unless-stopped --network host");
     expect(script).toContain("-v /var/run/docker.sock:/var/run/docker.sock -v \"$STATE_VOLUME:/state\" -v \"$ETC_DIR:/etc/Danibot:ro\"");
@@ -102,7 +102,7 @@ describe("install.sh", () => {
       `docker volume rm ${NAMES.dataVolume}`, `docker volume rm ${NAMES.snapshotVolume}`,
       "docker volume rm Danibot-backup-20261028-000000-ab12", "docker volume rm Danibot-backup-20261029-000000-cd34",
     ]));
-    expect(deleted.stdout).toContain("DaniBot is removed from this server, and so is its data.");
+    expect(deleted.stdout).toContain("Dani Bot is removed from this server, and so is its data.");
     for (const typo of [["uninstall", "--delete-dat"], ["uninstall", "--delete-data=yes"], ["uninstall", "-f"]]) {
       const refused = run(typo);
       expect(refused.status, typo.join(" ")).toBe(1);
@@ -111,15 +111,15 @@ describe("install.sh", () => {
     }
   });
 
-  it.skipIf(!posix)("says in plain words what to run instead: as root, from DaniBot's own command, with a code as DaniBot shows it", () => {
+  it.skipIf(!posix)("says in plain words what to run instead: as root, from Dani Bot's own command, with a code as Dani Bot shows it", () => {
     const user = run(["MB-1A2B-3C4D"], { uid: 1000 });
     expect(user.status).toBe(1);
     expect(user.stderr).toContain("Please run this as root: put sudo before sh, like this: curl -fsSL https://cloud.example.test/install.sh | sudo sh -s -- MB-1A2B-3C4D");
     expect(run(["uninstall"], { uid: 1000 }).stderr).toContain("Please run this as root");
     const copied = run(["MB-1A2B-3C4D"], { env: { DaniBOT_ADMIN_URL: "", DaniBOT_CONNECTOR_IMAGE: "" } });
-    expect(copied.stderr).toContain("This installer was not downloaded from DaniBot. Copy the install command from DaniBot and run that.");
+    expect(copied.stderr).toContain("This installer was not downloaded from Dani Bot. Copy the install command from Dani Bot and run that.");
     const odd = run(["MB-1A2B;reboot"]);
-    expect(odd.stderr).toContain("That code doesn't look right. Copy the install command from DaniBot again.");
+    expect(odd.stderr).toContain("That code doesn't look right. Copy the install command from Dani Bot again.");
     expect(odd.calls).toEqual([]);
   });
 });

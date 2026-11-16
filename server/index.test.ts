@@ -1566,10 +1566,10 @@ describe("harness HTTP API", () => {
     expect(room.messages.find(
       (message: { id: string }) => message.id === "restarted-goal-card",
     )).toMatchObject({
-      text: "Goal failed: DaniBot restarted before this goal finished.",
+      text: "Goal failed: Dani Bot restarted before this goal finished.",
       goalRun: {
         status: "failed",
-        detail: "DaniBot restarted before this goal finished.",
+        detail: "Dani Bot restarted before this goal finished.",
         turnCount: 2,
         finishedAt: expect.any(Number),
       },

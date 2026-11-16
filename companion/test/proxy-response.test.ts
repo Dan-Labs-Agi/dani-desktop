@@ -50,8 +50,8 @@ const device = async (
 
 beforeAll(async () => {
   harness = createServer((req, res) => {
-    companionMarker = String(req.headers["x-DaniBot-companion"] ?? "");
-    companionDevice = String(req.headers["x-DaniBot-companion-device"] ?? "");
+    companionMarker = String(req.headers["x-danibot-companion"] ?? "");
+    companionDevice = String(req.headers["x-danibot-companion-device"] ?? "");
     companionRange = String(req.headers.range ?? "");
     respond(res);
   });
@@ -128,7 +128,7 @@ describe("preparing a harness response for a device", () => {
     const response = await fetch(`http://127.0.0.1:${sidecarPort}/api/bots`, {
       headers: {
         authorization: `Bearer ${TOKEN}`,
-        "x-DaniBot-companion-device": "another-phone",
+        "x-danibot-companion-device": "another-phone",
       },
     });
     expect(response.status).toBe(200);

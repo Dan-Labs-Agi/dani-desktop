@@ -102,7 +102,7 @@ it("offers the built-in browser and cloud computers, never this computer or a Lo
 
 it("refuses the places it never offers with what is true there, not a setup step", () => {
   const local = cloudHomePlaceRefusal("local")!, vm = cloudHomePlaceRefusal("vm")!;
-  expect(local).toBe("This computer isn't a place in the Cloud. Set Works on to Auto, Cloud desktop or Browser; your own computer is reached while DaniBot is open on it.");
+  expect(local).toBe("This computer isn't a place in the Cloud. Set Works on to Auto, Cloud desktop or Browser; your own computer is reached while Dani Bot is open on it.");
   expect(vm).toBe("Cloud bots can't use a private desktop. Set Works on to Auto, Cloud desktop or Browser.");
   for (const text of [local, vm]) {
     expect(text).not.toMatch(/configure|Computer panel|install|set (?:it|one) up/i);
@@ -381,7 +381,7 @@ it("gives the edge only its routing name and the server the contract, never a ga
   expect(edge.OMB_CLOUD_PUBLIC_HOST).toBe(cloudHomeHost(config));
   expect(JSON.stringify(edge)).not.toContain(token);
   expect(JSON.stringify(edge)).not.toContain(secret);
-  expect(passwdIds("root:x:0:0::/root:/bin/sh\nmaus:x:1001:1002::/data:/bin/bash\n", "dani")).toEqual({ uid: 1001, gid: 1002 });
+  expect(passwdIds("root:x:0:0::/root:/bin/sh\ndani:x:1001:1002::/data:/bin/bash\n", "dani")).toEqual({ uid: 1001, gid: 1002 });
   expect(passwdIds("root:x:0:0::/root:/bin/sh\n", "dani")).toBeNull();
 });
 

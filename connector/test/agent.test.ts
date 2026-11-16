@@ -119,7 +119,7 @@ describe("the connector's connection to DaniBot", () => {
   });
 
   it("connects to the Admin's own origin over wss, and to a test Admin on loopback over ws only", () => {
-    expect(connectUrl("https://cloud.DaniBot.com")).toBe("wss://cloud.DaniBot.com/api/cloud/servers/agent/connect");
+    expect(connectUrl("https://cloud.DaniBot.com")).toBe("wss://cloud.danibot.com/api/cloud/servers/agent/connect");
     expect(connectUrl("http://127.0.0.1:9000")).toBe("ws://127.0.0.1:9000/api/cloud/servers/agent/connect");
     expect(adminOrigin("https://cloud.DaniBot.com/")).toBe("https://cloud.DaniBot.com");
     expect(adminOrigin("http://127.0.0.1:9000")).toBe("http://127.0.0.1:9000");

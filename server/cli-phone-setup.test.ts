@@ -48,7 +48,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("phone origin validation", () => {
   it.each([
     ["https://dani.example", "https://dani.example"],
-    ["  https://MAUS.example:443/  ", "https://dani.example"],
+    ["  https://DANI.example:443/  ", "https://dani.example"],
     ["https://mini.tail1234.ts.net:8443", "https://mini.tail1234.ts.net:8443"],
     ["https://[2001:db8::1]:8443/", "https://[2001:db8::1]:8443"],
   ])("normalizes an HTTPS origin without claiming reachability: %s", (input, expected) => {
