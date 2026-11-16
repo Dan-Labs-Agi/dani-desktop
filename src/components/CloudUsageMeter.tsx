@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { ArrowUpRight, Gauge, Loader2, X } from "lucide-react";
+import { ArrowUpRight, Gauge, Loader2, X } from "@/components/icons";
 
 import type { CloudPlanBridge, CloudPlanSnapshot, CloudUpgradePreview, CloudUpgradeRefusal } from "../../electron/cloud-account.mjs";
 import type { CloudUsage, CloudUsageMeter } from "../../electron/cloud-home.mjs";

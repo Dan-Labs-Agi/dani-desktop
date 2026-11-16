@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronLeft, ChevronRight, Clipboard, Keyboard, Maximize, Minimize, Monitor, RefreshCw, Send, X, type LucideIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clipboard, Keyboard, Maximize, Minimize, Monitor, RefreshCw, Send, X, type IconType } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import type RFB from "@novnc/novnc";
 import { connectDesktop, DesktopUnreachable, typeOnDesktop } from "@/lib/desktop-connection";
@@ -176,7 +176,7 @@ export function DesktopViewer() {
 }
 
 function ViewerTool({ id, label, icon: Icon, disabled, active, expanded, onClick }: {
-  id?: string; label: string; icon: LucideIcon; disabled?: boolean; active?: boolean; expanded?: boolean; onClick: () => void;
+  id?: string; label: string; icon: IconType; disabled?: boolean; active?: boolean; expanded?: boolean; onClick: () => void;
 }) {
   return <button id={id} type="button" title={label} aria-label={label} aria-pressed={active} aria-expanded={expanded} disabled={disabled} onClick={onClick} className={cn(
     "ui-icon-button size-11 min-h-11 shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-focus",

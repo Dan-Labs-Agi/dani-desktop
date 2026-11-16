@@ -1,4 +1,4 @@
-import { FileText, Loader2, Repeat2 } from "lucide-react";
+import { FileText, Loader2, Repeat2 } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { Routine, RoutineRun } from "@/lib/routines";

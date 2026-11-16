@@ -56,6 +56,8 @@ extraResources:
     to: licenses/DaniBot-LICENSE.txt
   - from: NOTICE
     to: licenses/DaniBot-NOTICE.txt
+  - from: electron/resources/speech-helper.ps1
+    to: speech-helper.ps1
   # cloudflared is distributed under Apache-2.0 as a separate executable.
   # Dani Bot itself uses the same full license text; ship another named
   # copy so the third-party executable's terms remain unambiguous.

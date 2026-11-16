@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   Blocks, Brain, CalendarClock, Database, FileText, Globe, Image, LayoutDashboard, ListChecks, Monitor, Newspaper, Plug,
-  Search, Smartphone, Sparkles, SquareTerminal, Users, Wrench, type LucideIcon,
-} from "lucide-react";
+  Search, Smartphone, Sparkles, SquareTerminal, Users, Wrench, type IconType,
+} from "@/components/icons";
 import { cn } from "@/lib/cn";
 import type { Bot } from "@/state/store";
 import type { TraceToolIcon } from "../../../shared/usage-trace";
@@ -10,7 +10,7 @@ import { BotAvatar } from "../Avatar";
 import { loadAppCards } from "../bot-settings/useBotApps";
 import { ServiceIcon, type ToolkitCard } from "../ServiceIcon";
 
-const ICONS: Record<Exclude<TraceToolIcon, "app">, LucideIcon> = {
+const ICONS: Record<Exclude<TraceToolIcon, "app">, IconType> = {
   search: Search, web: Globe, browser: Globe, computer: Monitor, phone: Smartphone, files: FileText, terminal: SquareTerminal,
   memory: Brain, routine: CalendarClock, page: Newspaper, widget: LayoutDashboard, bots: Users, plan: ListChecks, image: Image,
   data: Database, mcp: Plug, tool: Wrench,

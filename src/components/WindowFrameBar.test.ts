@@ -66,7 +66,7 @@ describe("the window frame's top bar", () => {
     expect(bar()!.hasAttribute("data-window-drag"), "the drag region every header marks (window-drag-regions.test.ts)").toBe(true);
     expect(host.querySelector("[data-frame-bar-start]")!.className).toContain("pl-20");
     const buttons = [...bar()!.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"));
-    expect(buttons, "the rail's button, then the app's settings; no update while there is none").toEqual(["Hide your computers", "App settings"]);
+    expect(buttons, "the rail's button; no update while there is none").toEqual(["Hide your computers"]);
     expect(bar()!.querySelector("[data-rail-toggle]")!.className).toContain("size-[22px]");
   });
 
@@ -100,7 +100,7 @@ describe("the window frame's top bar", () => {
     fixture.config = config;
     await mount(createElement(WindowFrameBar));
     expect(middle()!.querySelector("span:last-child")!.textContent).toBe(name);
-    expect(Boolean(middle()!.querySelector("svg.lucide-laptop")), "This computer's laptop").toBe(shown.local);
+    expect(Boolean(middle()!.querySelector("svg.icon-laptop")), "This computer's laptop").toBe(shown.local);
   });
 
   it("names nothing where main says nothing (a browser, a remote client, an older app)", async () => {
@@ -141,10 +141,9 @@ describe("the window frame's top bar", () => {
     expect(fixture.frameDrawn).toHaveBeenLastCalledWith(true);
   });
 
-  it("opens the app's settings", async () => {
+  it("leaves Settings to the sidebar's account row, so the window shows one gear", async () => {
     await mount(createElement(WindowFrameBar));
-    await act(async () => bar()!.querySelector<HTMLButtonElement>("[data-frame-settings]")!.click());
-    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "toggleAppSettings", open: true });
+    expect(bar()!.querySelector("[data-frame-settings]")).toBeNull();
   });
 
   it("shows a download arrow in the accent while an update waits, its words in its name, and the sidebar's round buttons step aside for it", async () => {
@@ -157,7 +156,7 @@ describe("the window frame's top bar", () => {
     expect(arrow().querySelector("svg")!.getAttribute("class"), "it pulses while it downloads").toContain("animate-pulse");
     expect(host.querySelector("aside")!.innerHTML, "one update button in a framed window").toBe("");
     const order = [...bar()!.querySelectorAll("button")].map((button) => button.hasAttribute("data-update-indicator") ? "update" : button.getAttribute("aria-label"));
-    expect(order, "before Settings, at the right end").toEqual(["Hide your computers", "update", "App settings"]);
+    expect(order, "at the right end").toEqual(["Hide your computers", "update"]);
     fixture.update = { status: "downloaded", version: "0.1.136" };
     await act(async () => root!.render(createElement(WindowFrameBar)));
     expect(arrow().getAttribute("aria-label")).toContain("0.1.136");

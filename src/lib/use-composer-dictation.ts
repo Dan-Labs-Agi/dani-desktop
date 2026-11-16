@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { withOpenSettings } from "@/components/OpenSystemSettings";
 import { t } from "./i18n";
 
+/** How long a finished take may take to come back before the session is cancelled. */
+const FINISH_LIMIT_MS = 10_000;
+
 export function useComposerDictation({ draftId, text, onText, available }: {
   draftId: string;
   text: string;
@@ -14,6 +17,7 @@ export function useComposerDictation({ draftId, text, onText, available }: {
   draft.current = { id: draftId, text };
   const session = useRef({ draftId: "", base: "" });
   const cancel = useRef<(() => void) | null>(null);
+  const finishing = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stop = useCallback(() => {
     cancel.current?.();
     setRecording(false);
@@ -66,6 +70,8 @@ export function useComposerDictation({ draftId, text, onText, available }: {
       setSpeechError(t("composer.dictation.failed"));
     });
     return () => {
+      if (finishing.current) clearTimeout(finishing.current);
+      finishing.current = null;
       if (cancel.current === cancelSession) cancel.current = null;
       offTranscript();
       offEnd();
@@ -80,7 +86,12 @@ export function useComposerDictation({ draftId, text, onText, available }: {
     if (!available || !window.ogb) {
       setSpeechError(t("composer.dictation.unavailable"));
     } else if (recording) {
-      stop();
+      if (finishing.current || !window.ogb.speechFinish) {
+        stop();
+      } else {
+        void window.ogb.speechFinish();
+        finishing.current = setTimeout(stop, FINISH_LIMIT_MS);
+      }
     } else {
       session.current = { draftId, base: text };
       setRecording(true);

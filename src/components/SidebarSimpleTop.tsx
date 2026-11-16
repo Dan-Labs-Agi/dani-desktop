@@ -1,4 +1,4 @@
-import { Search, X } from "lucide-react";
+import { Search, X } from "@/components/icons";
 import type { Ref } from "react";
 
 import { cn } from "@/lib/cn";

@@ -1,4 +1,4 @@
-import { AppWindow, Brain, FileText, Folder, Globe, Zap } from "lucide-react";
+import { AppWindow, Brain, FileText, Folder, Globe, Zap } from "@/components/icons";
 import { useMemo } from "react";
 
 import { t } from "@/lib/i18n";

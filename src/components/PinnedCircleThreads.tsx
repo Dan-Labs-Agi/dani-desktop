@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type DragEvent, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, FolderPlus, Plus } from "lucide-react";
+import { ChevronRight, FolderPlus, Plus } from "@/components/icons";
 import { openBot, visibleMessages, type Bot, type Message } from "@/state/store";
 import { avatarCropRadius, botAvatarProfile } from "../../shared/bot-avatar";
 import { liveActivityLabel } from "@/lib/live-activity";

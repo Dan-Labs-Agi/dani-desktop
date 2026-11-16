@@ -336,7 +336,7 @@ const delayedJsonBody = async (
 
 const claudePrompts = (file = fakeClaudePrompts): string[] =>
   existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean) : [];
-const COMPUTER_FREE_NOTE = "DaniBot computer update: the computer this conversation waited for is free again. Continue the task that parked waiting for it.";
+const COMPUTER_FREE_NOTE = "Dani Bot computer update: the computer this conversation waited for is free again. Continue the task that parked waiting for it.";
 
 const readJsonFileWhenReady = async <T = unknown>(file: string, timeout = 5_000): Promise<T> => {
   let parsed: unknown;
@@ -1566,10 +1566,10 @@ describe("harness HTTP API", () => {
     expect(room.messages.find(
       (message: { id: string }) => message.id === "restarted-goal-card",
     )).toMatchObject({
-      text: "Goal failed: DaniBot restarted before this goal finished.",
+      text: "Goal failed: Dani Bot restarted before this goal finished.",
       goalRun: {
         status: "failed",
-        detail: "DaniBot restarted before this goal finished.",
+        detail: "Dani Bot restarted before this goal finished.",
         turnCount: 2,
         finishedAt: expect.any(Number),
       },
@@ -1666,7 +1666,7 @@ describe("harness HTTP API", () => {
       req.end();
     });
     expect(brand.status).toBe(200);
-    expect(Reflect.get(Object(Reflect.get(Object(brand.body), "brand")), "name")).toBe("DaniBot");
+    expect(Reflect.get(Object(Reflect.get(Object(brand.body), "brand")), "name")).toBe("Dani Bot");
     expect(await statusWithHeaders({ origin: "https://example.com" })).toBe(403);
     expect(await statusWithHeaders({ host: `127.0.0.2:${PORT}` })).toBe(200);
     expect(await statusWithHeaders({ host: `[::1]:${PORT}` })).toBe(200);
@@ -3890,13 +3890,13 @@ describe("harness HTTP API", () => {
     const leadReplies = [
       [
         "Parker should do the desktop work.",
-        '<openmaus-goal>{"status":"continue",',
-        '"next":"Parker","instruction":"Use the shared desktop","detail":"Delegated to Parker"}</openmaus-goal>',
+        '<danibot-goal>{"status":"continue",',
+        '"next":"Parker","instruction":"Use the shared desktop","detail":"Delegated to Parker"}</danibot-goal>',
       ].join("\n"),
       [
         "The desktop stayed busy, so I finished without it.",
-        '<openmaus-goal>{"status":"completed",',
-        '"detail":"Parker parked at the computer; the lead finished the goal directly."}</openmaus-goal>',
+        '<danibot-goal>{"status":"completed",',
+        '"detail":"Parker parked at the computer; the lead finished the goal directly."}</danibot-goal>',
       ].join("\n"),
     ];
     mkdirSync(join(isolatedStatic, "assets"), { recursive: true });
@@ -5709,7 +5709,7 @@ describe("harness HTTP API", () => {
       .map((bot: { name: string }) => bot.name);
     const exported = await api("POST", "/api/teams/export", { name: "Field Team" });
     expect(exported.status).toBe(200);
-    expect(exported.body).toMatchObject({ format: "openmaus.team", version: 2, team: { name: "Field Team" } });
+    expect(exported.body).toMatchObject({ format: "danibot.team", version: 2, team: { name: "Field Team" } });
     expect(exported.body.team.members.map((member: { name: string }) => member.name)).toEqual(visibleNames);
     expect(exported.body.team.members).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: "mira", name: "Mira", title: "Project Lead", appearance: { color: "purple", mascotExpression: "focused", mascotBody: first.mascotBody } }),
@@ -5834,7 +5834,7 @@ describe("harness HTTP API", () => {
     try {
       for (const suffix of [3, 4]) {
         const imported = await api("POST", "/api/teams/import", {
-          format: "openmaus.team", version: 2,
+          format: "danibot.team", version: 2,
           team: { name: `${stem} long template name`, members: [{ key: "helper", name: "Template helper", section: "Must not choose destination", appearance: { color: "blue" } }] },
         });
         expect(imported.status).toBe(201);
@@ -5853,7 +5853,7 @@ describe("harness HTTP API", () => {
 
   it("installs a complete bot package with a Chief, room, playbook, connector intent, and paused routine", async () => {
     const packageFile = {
-      format: "openmaus.package",
+      format: "danibot.package",
       version: 1,
       package: {
         id: "signal-desk",
@@ -6048,7 +6048,7 @@ describe("harness HTTP API", () => {
     const room = (await api("POST", "/api/groups", { memberIds: [trusted.id], name: "War Room" })).body.group;
 
     const smuggled = {
-      format: "openmaus.team",
+      format: "danibot.team",
       version: 2,
       team: {
         name: "Trap Team",
@@ -6107,7 +6107,7 @@ describe("harness HTTP API", () => {
     expect(after.bots.filter((bot: { chiefOfStaff?: boolean }) => bot.chiefOfStaff).map((bot: { id: string }) => bot.id).sort()).toEqual(chiefsBefore);
 
     const legacy = await api("POST", "/api/teams/import", {
-      format: "openmaus.team",
+      format: "danibot.team",
       version: 1,
       team: {
         name: "Trap Team Legacy",
@@ -6251,7 +6251,7 @@ describe("harness HTTP API", () => {
         .find((message: { id: string }) => message.id === messageId);
       expect(directCard).toMatchObject({
         kind: "secret",
-        text: "Securely provide the OpenAI API key from DaniBot on your phone or computer. It is never added to chat.",
+        text: "Securely provide the OpenAI API key from Dani Bot on your phone or computer. It is never added to chat.",
       });
       expect(directCard.secret.description).toContain(
         `${bot.name} can use it but never read it back.`,
@@ -6392,7 +6392,7 @@ describe("harness HTTP API", () => {
       expect((await card(firstCard.messageId)).signIn).toMatchObject({ site: "example.com", superseded: true });
       expect(await card(secondCard.messageId)).toMatchObject({
         kind: "signin",
-        text: `${bot.name} needs you to sign in to example.com. Open this conversation in DaniBot to sign in, then press Done.`,
+        text: `${bot.name} needs you to sign in to example.com. Open this conversation in Dani Bot to sign in, then press Done.`,
         signIn: { url: "https://www.example.com/", site: "example.com", place: "browser", reason: "Still behind a login." },
       });
       expect((await card(secondCard.messageId)).signIn.superseded).toBeUndefined();
@@ -8857,7 +8857,7 @@ describe("harness HTTP API", () => {
 
       const page = await viaProxy("GET", callback.pathname + callback.search);
       expect(page.status).toBe(200);
-      expect(page.text).toBe("Signed in. You can close this tab and return to DaniBot.");
+      expect(page.text).toBe("Signed in. You can close this tab and return to Dani Bot.");
       expect(page.headers).toMatchObject({ "cache-control": "no-store", "referrer-policy": "no-referrer", "content-type": "text/plain; charset=utf-8" });
       expect(page.text).not.toContain(callback.searchParams.get("code"));
       expect(JSON.parse((await viaProxy("GET", `${base}/${auth.flowId}`, signedIn)).text).auth.phase).toBe("succeeded");
@@ -9071,7 +9071,7 @@ describe("harness HTTP API", () => {
       })).status).toBe(202);
       const seen = await readJsonFileWhenReady<{ systemPrompt?: string }>(fakeClaudeDump, 15_000);
       const system = seen.systemPrompt ?? "";
-      expect(system).toContain('<openmaus-skill id="create-verification-skill"');
+      expect(system).toContain('<danibot-skill id="create-verification-skill"');
       expect(system).toContain("skill_manage");
     } finally {
       await api("POST", `/api/bots/${bot.id}/interrupt`);
@@ -9091,11 +9091,11 @@ describe("harness HTTP API", () => {
       })).status).toBe(202);
       const seen = await readJsonFileWhenReady<{ systemPrompt?: string }>(fakeClaudeDump, 15_000);
       const system = seen.systemPrompt ?? "";
-      const root = /<openmaus-skill id="data-dashboards" version="[^"]+" root="([^"]+)">/.exec(system)?.[1];
+      const root = /<danibot-skill id="data-dashboards" version="[^"]+" root="([^"]+)">/.exec(system)?.[1];
       expect(root).toBeTruthy();
       expect(existsSync(join(root!, "dashboard.html"))).toBe(true);
       expect(system).toContain("publish_page");
-      expect(system).not.toContain('<openmaus-skill id="create-verification-skill"');
+      expect(system).not.toContain('<danibot-skill id="create-verification-skill"');
     } finally {
       await api("POST", `/api/bots/${bot.id}/interrupt`);
       await api("DELETE", `/api/bots/${bot.id}`);
@@ -9113,8 +9113,8 @@ describe("harness HTTP API", () => {
       expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "hello" })).status).toBe(202);
       const seen = await readJsonFileWhenReady<{ systemPrompt?: string }>(fakeClaudeDump, 15_000);
       const system: string = seen.systemPrompt ?? "";
-      expect(system.startsWith("You are Kiwi, a personal bot in DaniBot. Role: Tracker.")).toBe(true);
-      const persona = "You are Kiwi, a personal bot in DaniBot. Role: Tracker.";
+      expect(system.startsWith("You are Kiwi, a personal bot in Dani Bot. Role: Tracker.")).toBe(true);
+      const persona = "You are Kiwi, a personal bot in Dani Bot. Role: Tracker.";
       const afterPersona = system.slice(persona.length);
       expect(afterPersona.startsWith("\n\nYour standing instructions follow.")).toBe(true);
       expect(system).toContain("--- BEGIN STANDING INSTRUCTIONS (SOUL.md, 28 bytes) ---\nFile bugs. Never file noise.\n--- END STANDING INSTRUCTIONS ---");
@@ -9210,7 +9210,7 @@ describe("harness HTTP API", () => {
       rmSync(fakeClaudeDump, { force: true });
       expect((await api("POST", `/api/bots/${bot.id}/messages`, { text: "hello" })).status).toBe(202);
       let system = (await readJsonFileWhenReady<{ systemPrompt: string }>(fakeClaudeDump, 15_000)).systemPrompt;
-      expect(system.startsWith("You are Blank, a personal bot in DaniBot.")).toBe(true);
+      expect(system.startsWith("You are Blank, a personal bot in Dani Bot.")).toBe(true);
       expect(system).not.toContain("at most four questions");
       expect(system).toContain("propose_profile");
 
@@ -9244,7 +9244,7 @@ describe("harness HTTP API", () => {
         expect((await api("POST", `/api/bots/${bot.id}/messages`, { text })).status).toBe(202);
         const seen = await readJsonFileWhenReady<{ systemPrompt: string; mcpConfig: { mcpServers: Record<string, unknown> } }>(fakeClaudeDump, 15_000);
         expect(seen.mcpConfig.mcpServers.phone, text).toBeDefined();
-        expect(seen.systemPrompt.includes('<openmaus-skill id="phone-harness"'), text).toBe(instructed);
+        expect(seen.systemPrompt.includes('<danibot-skill id="phone-harness"'), text).toBe(instructed);
         expect((await api("POST", `/api/bots/${bot.id}/interrupt`)).status).toBe(200);
         await expect.poll(async () => (await api("GET", "/api/bots?messages=0")).body.bots
           .find((candidate: { id: string }) => candidate.id === bot.id)?.busy, { timeout: 5_000 }).toBe(false);
@@ -9538,8 +9538,8 @@ describe("harness HTTP API", () => {
       })).status).toBe(202);
       let seen = await readJsonFileWhenReady<{ systemPrompt?: string }>(fakeClaudeDump);
       let system = seen.systemPrompt ?? "";
-      expect(system).toContain('<openmaus-skill id="create-verification-skill"');
-      expect(system).toContain('<openmaus-skill id="phone-harness"');
+      expect(system).toContain('<danibot-skill id="create-verification-skill"');
+      expect(system).toContain('<danibot-skill id="phone-harness"');
       expect((await api("POST", `/api/groups/${room.id}/interrupt`, {})).status).toBe(200);
       await expect.poll(async () => {
         const state = (await api("GET", "/api/bots?messages=0")).body;
@@ -9552,8 +9552,8 @@ describe("harness HTTP API", () => {
       })).status).toBe(202);
       seen = await readJsonFileWhenReady<{ systemPrompt?: string }>(fakeClaudeDump);
       system = seen.systemPrompt ?? "";
-      expect(system).not.toContain('<openmaus-skill id="create-verification-skill"');
-      expect(system).toContain('<openmaus-skill id="phone-harness"');
+      expect(system).not.toContain('<danibot-skill id="create-verification-skill"');
+      expect(system).toContain('<danibot-skill id="phone-harness"');
     } finally {
       if (room) {
         expect((await api("POST", `/api/groups/${room.id}/interrupt`, {})).status).toBe(200);
@@ -9883,7 +9883,7 @@ describe("harness HTTP API", () => {
       writeFileSync(failureMarker, "fail only this fixture's browser close");
       rmSync(fakeClaudeDump, { force: true });
       expect((await api("POST", `/api/groups/${room.id}/messages`, { text: "Check the website" })).status).toBe(202);
-      await expect.poll(() => readFileSync(join(home, "browser-calls.jsonl"), "utf8").includes('"session":"prep-failure"')).toBe(true);
+      await expect.poll(() => readFileSync(join(home, "browser-calls.jsonl"), "utf8").includes('"session":"prep-failure"'), { timeout: 10_000 }).toBe(true);
       await expect.poll(async () => {
         const current = (await api("GET", "/api/bots?messages=20")).body;
         const member = current.bots.find((candidate: { id: string }) => candidate.id === bot.id);
@@ -10627,7 +10627,7 @@ describe("harness HTTP API", () => {
 
       const removed = await api("POST", `/api/bots/${bot.id}/local-computer/remove`, {});
       expect(removed.status).toBe(409);
-      expect(removed.body.error).toMatch(/not created by DaniBot.*remove it manually/i);
+      expect(removed.body.error).toMatch(/not created by Dani Bot.*remove it manually/i);
       expect(readFileSync(fakeDockerLog, "utf8").split("\n")).not.toContain(
         `rm -f ${status.body.container_name}`,
       );
@@ -10861,7 +10861,7 @@ describe("harness HTTP API", () => {
         .find((message: { id: string }) => message.id === messageId);
       expect(roomCard).toMatchObject({
         kind: "secret",
-        text: "Securely provide the OpenAI API key from DaniBot on your phone or computer. It is never added to chat.",
+        text: "Securely provide the OpenAI API key from Dani Bot on your phone or computer. It is never added to chat.",
         from: { botId: second.id, name: second.name, color: second.color },
       });
 
@@ -13462,7 +13462,7 @@ describe("bot memory API", () => {
       expect(before.body.sections[0]).toEqual({
         id: "persona",
         label: "Identity",
-        text: "You are Kiwi, a personal bot in DaniBot. Role: Tracker. About: Files bugs.",
+        text: "You are Kiwi, a personal bot in Dani Bot. Role: Tracker. About: Files bugs.",
         bytes: 78,
       });
       expect(before.body.sections.map((s: { id: string }) => s.id)).not.toContain("soul");

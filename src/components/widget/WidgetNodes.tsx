@@ -1,5 +1,5 @@
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
-import { Check, LoaderCircle } from "lucide-react";
+import { Check, LoaderCircle } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { widgetNumber, widgetString, type WidgetNode } from "../../../shared/widget";
 import { ChatMarkdown } from "../ChatMarkdown";

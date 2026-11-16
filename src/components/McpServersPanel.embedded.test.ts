@@ -33,7 +33,8 @@ function render(embedded: boolean, whopCard = false) {
   return renderToStaticMarkup(createElement(Capture));
 }
 
-/** useState order in McpServersPanel: the server whose sign-in is open, then its flow. */
+/** useState order in McpServersPanel: the load error, the server whose sign-in is open, then its flow. */
+const ERROR = 3;
 const SIGNING_IN = 6;
 const SIGN_IN_FLOW = 7;
 
@@ -58,6 +59,20 @@ describe("Your MCP servers inside the Apps pop-up", () => {
     expect(html).toContain('aria-label="Edit notes"');
     expect(html.match(/> Test</g)).toHaveLength(2);
     expect(html).not.toContain("overflow-y-auto");
+  });
+
+  it("shows a failed first load in plain words, with no status line and no endless loading", () => {
+    fixture.servers = null;
+    for (const [raw, plain] of [
+      ["500 Internal Server Error", "Something went wrong on the other end. Try again."],
+      ["Failed to fetch", "Couldn&#x27;t reach Dani Bot. Check that it&#x27;s running, then try again."],
+    ]) {
+      fixture.seeded = { [ERROR]: raw };
+      const html = render(true);
+      expect(html).toContain(plain);
+      expect(html).not.toContain(raw);
+      expect(html).not.toContain("Loading MCP servers");
+    }
   });
 
   it("says which computer a server of another computer's runs on, and offers no sign-in to it here", () => {

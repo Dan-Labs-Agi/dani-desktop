@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { SmilePlus } from "lucide-react";
+import { SmilePlus } from "@/components/icons";
 import { REACTIONS, type Reaction } from "../../shared/reactions";
 import { ACTION_ICON, messageActionClass } from "@/components/MessageActions";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";

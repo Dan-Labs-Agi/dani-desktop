@@ -1,6 +1,6 @@
 ---
 name: windows-release
-description: Build and verify the Windows desktop build (NSIS installer + latest.yml) for the canonical DaniBot release and its legacy updater mirror. Use when cutting a release, shipping a new version to Windows users, or when a Windows user reports they are stuck on an old version. Windows only — does not cover the macOS dmg/notarization flow.
+description: Build and verify the Windows desktop build (NSIS installer + latest.yml) for the canonical Dani Bot release and its legacy updater mirror. Use when cutting a release, shipping a new version to Windows users, or when a Windows user reports they are stuck on an old version. Windows only — does not cover the macOS dmg/notarization flow.
 ---
 
 # Windows release

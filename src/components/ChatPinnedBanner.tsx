@@ -1,4 +1,4 @@
-import { Pin, X } from "lucide-react";
+import { Pin, X } from "@/components/icons";
 import type { Bot, Message } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { peerLine } from "@/lib/peer-message";

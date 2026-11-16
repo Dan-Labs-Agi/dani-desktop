@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Globe, Hand, Loader2, LockKeyhole, Moon, X } from "lucide-react";
+import { Globe, Hand, Loader2, LockKeyhole, Moon, X } from "@/components/icons";
 import { browserUnavailableReason } from "@/lib/feature-flags";
 import { t } from "@/lib/i18n";
 import { usePageVisible } from "@/lib/page-visible";
 import { api, useStore, type Bot } from "@/state/store";
 import { BrowserProfilesManager } from "./BrowserProfilesManager";
 import { ChromeRow, type BrowserNav, type BrowserTab } from "./browser/ChromeRow";
+import { BrowserStartPage } from "./browser/StartPage";
 import { MoreMenu } from "./browser/MoreMenu";
 import { PasskeyNotice } from "./browser/PasskeyNotice";
 import { StreamSurface, type StreamSurfaceHandle, type SurfaceConnect } from "./browser/StreamSurface";
@@ -278,6 +279,11 @@ export function LiveBrowser({ bot, signIn, page }: { bot: Bot; signIn?: BrowserS
   const typingReady = connected && you;
   const pipSupported = stream && supportsBrowserPictureInPicture();
   const passkeyWall = passkeyWallAt(nav.url);
+  const openAddress = (text: string) => {
+    const url = resolveAddressBarInput(text);
+    if (commandsReady && url) interact({ type: "navigate", url });
+    else if (text.trim()) setError(t("browser.panel.enterAddress"));
+  };
   return <div ref={panel} className={maximized
     ? "fixed inset-0 z-50 flex flex-col overflow-hidden bg-card text-ink"
     : "flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-hairline/40 bg-card text-ink"} data-browser-transport={stream ? "stream" : "live"}>
@@ -295,11 +301,7 @@ export function LiveBrowser({ bot, signIn, page }: { bot: Bot; signIn?: BrowserS
       fullscreen={fullscreen}
       maximized={maximized}
       onCommand={interact}
-      onAddress={(text) => {
-        const url = resolveAddressBarInput(text);
-        if (commandsReady && url) interact({ type: "navigate", url });
-        else if (text.trim()) setError(t("browser.panel.enterAddress"));
-      }}
+      onAddress={openAddress}
       onTake={takeControl}
       onHandBack={handBack}
       onFullscreen={toggleFullscreen}
@@ -342,6 +344,9 @@ export function LiveBrowser({ bot, signIn, page }: { bot: Bot; signIn?: BrowserS
           onClose={(code, reason) => { if (code === 1013 && reason) setError(reason); }}
           onLeave={() => address.current?.focus()}
         />
+      ) : null}
+      {connected && !starting && !gone && !asleep && !heldElsewhere && (nav.url === "" || nav.url === "about:blank") && !nav.loading ? (
+        <BrowserStartPage onOpen={openAddress} />
       ) : null}
       {asleep || heldElsewhere || gone || !connected || starting ? (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-card/95 p-6 text-center text-[13px] text-ink-secondary">

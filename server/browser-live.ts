@@ -114,6 +114,13 @@ function engineAnsweredFailure(error: unknown): boolean {
   try { return object(JSON.parse(stdout))?.success === false; } catch { return false; }
 }
 
+/** agent-browser 0.36.0-omb.2 closes the tab and then answers "Tab tN not found" (exit 1); either way the tab is not open. */
+function tabAlreadyClosed(args: readonly string[], error: unknown): boolean {
+  const stdout = (error as { stdout?: unknown } | null)?.stdout;
+  if (args[0] !== "tab" || args[1] !== "close" || typeof stdout !== "string") return false;
+  try { return /\bnot found\b/i.test(String(object(JSON.parse(stdout))?.error ?? "")); } catch { return false; }
+}
+
 function browserLaunchFailure(error: unknown): boolean {
   const detail = [
     (error as { stderr?: unknown })?.stderr,
@@ -579,6 +586,7 @@ export class BrowserLive {
       return data;
     } catch (error) {
       if (timedOut(error)) throw new BrowserBusyError();
+      if (tabAlreadyClosed(args, error)) return {};
       console.warn("browser-live:", error);
       if (browserLaunchFailure(error)) {
         // A daemon holding a launch config Chrome cannot satisfy here (headed, no display) fails every command until killed, so discard the session once.

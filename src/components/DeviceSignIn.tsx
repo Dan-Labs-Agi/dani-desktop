@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, Loader2, LogIn, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Loader2, LogIn, X } from "@/components/icons";
 import { api, ApiError, useStore } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { openExternalLink } from "@/lib/app-links";

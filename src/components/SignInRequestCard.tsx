@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Hand, KeyRound, Loader2, LockKeyhole, LogIn, RefreshCw, X } from "lucide-react";
+import { Check, Hand, KeyRound, Loader2, LockKeyhole, LogIn, RefreshCw, X } from "@/components/icons";
 
 import type { ComputerHelpRef } from "../../shared/wire";
 import { signInOutcome } from "../../shared/sign-in-request";

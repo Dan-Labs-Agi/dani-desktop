@@ -15,11 +15,17 @@ const turnsOnThisComputer = (): CallCapabilityHelp => ({
   reason: t("call.capability.turnsOnThisComputerReason"),
 });
 
+/** Calls where you take turns listen with Apple Speech. Windows' recognizer serves composer dictation only. */
+export function turnCallsAvailable(capabilities: Pick<DesktopCapabilities, "dictation">): boolean {
+  return capabilities.dictation.available && capabilities.dictation.engine !== "windows-speech";
+}
+
 export function callCapabilityHelp(
   capabilities: DesktopCapabilities,
   speechServiceAvailable: boolean,
 ): CallCapabilityHelp | null {
-  if (!capabilities.dictation.available) {
+  if (!turnCallsAvailable(capabilities)) {
+    if (capabilities.dictation.available) return turnsNeedMac();
     switch (capabilities.dictation.reasonCode) {
       case "remote-server":
         return capabilities.host.platform === "darwin" ? turnsOnThisComputer() : turnsNeedMac();

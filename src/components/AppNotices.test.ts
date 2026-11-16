@@ -341,7 +341,7 @@ describe("What's new after the update", () => {
     expect(steps().map(props => props.action)).toEqual(["seen", "not_now"]);
   });
 
-  it("a new install sees it once onboarding is done and a bot has answered, in a later launch than the welcome's, after DaniBot's card", async () => {
+  it("a new install sees it once onboarding is done and a bot has answered, in a later launch than the welcome's, after Dani Bot's card", async () => {
     f.state.config.onboarding = { ...EMPTY_ONBOARDING };
     expect(on(await launch()), "onboarding not done").toBeNull();
     f.state.config.onboarding = { ...EMPTY_ONBOARDING, completedAt: "2026-10-16", version: 1, hintsSeen: [] };
@@ -354,11 +354,11 @@ describe("What's new after the update", () => {
     f.state.bots = structuredClone(FIRST_REPLY); markWelcomeFinished();
     expect(on(await launch()), "the launch the welcome finished in").toBeNull();
     session.clear(); markLaunchDialog("danibot");
-    expect(on(await launch()), "the launch DaniBot's first card took").toBeNull();
+    expect(on(await launch()), "the launch Dani Bot's first card took").toBeNull();
     expect(on(await relaunch())).toBe("pro");
   });
 
-  it("claims the launch for the popups, so DaniBot's card waits for a later one", async () => {
+  it("claims the launch for the popups, so Dani Bot's card waits for a later one", async () => {
     await launch();
     expect(launchDialogShown()).toBe("notices");
   });
@@ -503,7 +503,7 @@ describe("the product-updates question after the update", () => {
     expect(render(), "right after the popup closes, as #3379 orders it").toContain(QUESTION);
   });
 
-  it("waits while DaniBot's first-launch card is due, then follows it in the same launch once it closes", async () => {
+  it("waits while Dani Bot's first-launch card is due, then follows it in the same launch once it closes", async () => {
     f.viewerEmail = null;
     f.state.bots = [{ ...structuredClone(FIRST_REPLY[0]), id: "dani", defaultBot: {} }];
     expect(await launch(), "the card is due: the question waits for it").not.toContain(QUESTION);

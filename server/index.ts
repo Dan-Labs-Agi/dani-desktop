@@ -1583,7 +1583,7 @@ const managedDesktop = new ManagedDesktopProviders({
     resyncOpenCodeProviderKeys();
   },
 });
-const cloudCredit = CLOUD_HOME ? new CloudCreditProvider({
+const cloudCredit = CLOUD_HOME || trialCreditCredential() ? new CloudCreditProvider({
   registry, dataDirectory: DATA_DIR, credential: trialCreditCredential(),
   onChange: ids => {
     registry.forgetSnapshots(); bus.attach(ids.flatMap(id => { const instance = registry.get(id); return instance ? [instance] : []; }));
@@ -7112,7 +7112,7 @@ function turnAnswers(threadId: string, opts?: {
 }
 
 // Provider sessions only know their own turns' messages, so a harness-appended result marks the task for one replay; the unique suffix keeps a newer marker through a racing replay.
-const EXTERNAL_CONTEXT_MARKER_PREFIX = "__openmaus_external_context__:";
+const EXTERNAL_CONTEXT_MARKER_PREFIX = "__danibot_external_context__:";
 
 function isExternalContextMarker(value: string | undefined): boolean {
   return Boolean(value?.startsWith(EXTERNAL_CONTEXT_MARKER_PREFIX));
@@ -12009,7 +12009,7 @@ async function describeInstances() {
     if (hostedModels) return { ...described, readOnly: true,
       install: undefined, authentication: undefined, cli: undefined, cliCandidates: [],
     };
-    if (cloudCredit?.owns(instance.instanceId)) return { ...described, readOnly: true, trialCredit: cloudCredit.status(),
+    if (cloudCredit?.owns(instance.instanceId)) return { ...described, readOnly: true, icon: { kind: "preset" as const, preset: "anthropic" as const }, trialCredit: cloudCredit.status(),
       install: undefined, authentication: undefined, cli: undefined, cliCandidates: [],
       ...(ownReady && described.snapshot.state === "available" ? { snapshot: { state: "unavailable" as const, reason: TRIAL_CREDIT_OWN_AI } } : {}),
     };

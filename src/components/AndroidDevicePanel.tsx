@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Circle, Loader2, RotateCcw, ShieldCheck, Smartphone, Usb } from "lucide-react";
+import { ArrowLeft, Circle, Loader2, RotateCcw, ShieldCheck, Smartphone, Usb } from "@/components/icons";
 import { usePageVisible } from "@/lib/page-visible";
 import { t } from "@/lib/i18n";
 import { Select } from "./Select";

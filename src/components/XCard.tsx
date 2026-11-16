@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ExternalLink, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Loader2 } from "@/components/icons";
 
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { activeLocale, t } from "@/lib/i18n";
 import { xResearchAction } from "@/lib/cloud-plan";
+import { plainErrorLine } from "@/lib/plain-error";
 import { keyRemoved, keySaved, keySaveFailure, keyTestResult } from "@/lib/product-events";
 import { isXConnectorStatus, type XConnectorStatus, type XIncludedUsage } from "../../shared/x-connector";
 import { looksLikeKey, saveCredential, tregVerdict } from "./keys/key-save";
 import { useCloudPlan } from "./ProIntroduction";
 
 const TREG_URL = "https://treg.to";
-const pill = "inline-flex h-7 min-w-[64px] shrink-0 items-center justify-center gap-2 rounded-full bg-control/80 px-3 text-[13px] font-medium leading-5 text-ink transition-colors hover:bg-raised-hover disabled:opacity-40";
+const pill = "ui-button ui-button-md min-w-[64px] shrink-0";
+const primaryPill = "ui-button ui-button-md ui-button-primary min-w-[64px] shrink-0";
 const field = "h-8 w-full min-w-0 rounded-lg bg-inset px-2.5 text-[13px] text-ink placeholder:text-ink-secondary focus:outline-none focus:ring-1 focus:ring-accent/50";
 
 /** What the card's search box matches. */
@@ -153,7 +155,7 @@ export function XCard({ refreshKey = 0, onConnection }: {
         : connecting && !status.unavailable ? t("apps.x.connecting") : t("apps.x.addKey");
 
   return (
-    <div data-app-tile="x" data-x-state={status === null ? "loading" : using ?? "none"} className="flex min-w-0 flex-col rounded-xl px-2 py-2 transition-colors hover:bg-raised/40">
+    <div data-app-tile="x" data-x-state={status === null ? "loading" : using ?? "none"} className="flex min-w-0 flex-col rounded-xl px-2 py-2">
       <div className="flex items-center gap-3">
         <XIcon />
         <div className="min-w-0 flex-1">
@@ -209,7 +211,7 @@ export function XCard({ refreshKey = 0, onConnection }: {
                 onPaste={() => { saveAfterPaste.current = true; }}
                 className={field}
               />
-              <button type="submit" disabled={busy !== null || !key.trim()} className={pill}>
+              <button type="submit" disabled={busy !== null || !key.trim()} className={primaryPill}>
                 {busy === "save" ? <Loader2 size={14} className="animate-spin" /> : t("common.save")}
               </button>
             </div>
@@ -220,7 +222,7 @@ export function XCard({ refreshKey = 0, onConnection }: {
           </form>
         )}
         {verdict && <p role="status" className="mt-1.5 text-[12px] text-ink-secondary">{verdict}</p>}
-        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{error}</p>}
+        {error && <p role="alert" className="mt-1.5 text-[12px] text-danger">{plainErrorLine(error) ?? error}</p>}
       </div>
     </div>
   );

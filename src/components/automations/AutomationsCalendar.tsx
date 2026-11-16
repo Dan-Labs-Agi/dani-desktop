@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "@/components/icons";
 
 import { CalendarSidebar } from "@/components/routines/CalendarSidebar";
 import type { CalendarCall } from "@/lib/calendar-calls";

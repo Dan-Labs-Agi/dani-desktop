@@ -1,9 +1,8 @@
-import { ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Trash2 } from "@/components/icons";
 
 import type { Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import {
-  PICKABLE_STATES,
   MAUS_COLOR_LABEL,
   colorSwatch,
   MAUS_COLOR_NAMES,
@@ -18,7 +17,6 @@ import type { MausColor } from "@/lib/mascot";
 import { AvatarImageGenerator } from "./AvatarImageGenerator";
 import { AvatarFraming, OrganizationAvatarIcons, RESET_MASCOT_PATCH, useAvatarImage, type AvatarPatch } from "./avatar-editing";
 import { t } from "@/lib/i18n";
-import { MascotFaceColorPicker } from "./MascotFaceColorPicker";
 
 export function BotProfileAvatarCard({
   bot,
@@ -94,7 +92,7 @@ export function BotProfileAvatarCard({
         </div>
         <div className="mt-1.5 text-[12px] text-ink-secondary">{t("botIdentity.imageTypes")}</div>
 
-        <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+        <div className="mb-2 mt-4 text-[13px] font-medium text-ink-secondary">
           {t("botIdentity.shape")}
         </div>
         <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-hairline/40">
@@ -118,34 +116,10 @@ export function BotProfileAvatarCard({
 
         {crop === "mascot" && (
           <>
-            <MascotFaceColorPicker bot={bot} disabled={busy} onPatch={onPatch} />
-            <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
-              {t("botIdentity.expression")}
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {PICKABLE_STATES.map((expression) => (
-                <button
-                  key={expression}
-                  type="button"
-                  disabled={busy}
-                  aria-pressed={activeState === expression}
-                  onClick={() => onPatch({ mascotExpression: expression })}
-                  className={cn(
-                    "flex h-[58px] items-center justify-center rounded-xl bg-inset transition-colors hover:bg-control disabled:opacity-50",
-                    activeState === expression && "ring-2 ring-accent-border",
-                  )}
-                  title={expression}
-                  aria-label={`Use ${expression} expression`}
-                >
-                  <RobotAvatar variant={daniVariantForBot(bot.name, bot.color)} label={bot.name} state={expression} size={42} animated={false} />
-                </button>
-              ))}
-            </div>
-
-            <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+            <div className="mb-2 mt-4 text-[13px] font-medium text-ink-secondary">
               {t("botIdentity.color")}
             </div>
-            <div className="flex flex-wrap gap-2.5">
+            <div className="flex flex-wrap gap-2">
               {MAUS_COLOR_NAMES.map((color) => (
                 <button
                   key={color}
@@ -154,8 +128,8 @@ export function BotProfileAvatarCard({
                   aria-pressed={bot.color === color}
                   onClick={() => onPatch({ color })}
                   className={cn(
-                    "size-10 rounded-full border-2 border-transparent transition-transform hover:scale-110 disabled:opacity-50",
-                    bot.color === color && "ring-2 ring-accent-border ring-offset-2 ring-offset-card",
+                    "size-8 rounded-full transition-transform hover:scale-110 disabled:opacity-50",
+                    bot.color === color && "ring-2 ring-ink ring-offset-2 ring-offset-card",
                   )}
                   style={{ background: colorSwatch(color) }}
                   title={t(MAUS_COLOR_LABEL[color])}
@@ -164,7 +138,7 @@ export function BotProfileAvatarCard({
               ))}
             </div>
 
-            <div className="mb-2 mt-4 text-[12px] font-medium uppercase tracking-[0.08em] text-ink-secondary">
+            <div className="mb-2 mt-4 text-[13px] font-medium text-ink-secondary">
               {t("danibotWelcome.look")}
             </div>
             <div className="grid grid-cols-7 gap-1.5">

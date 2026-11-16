@@ -66,7 +66,7 @@ describe("archiving a bot", () => {
     const danibot = make("danibot", { chiefOfStaff: true, defaultBot: {} });
     expect(archivableChief([chief, scout], "chief")).toBe(chief);
     expect(archivableChief([chief], "chief"), "the last active bot stays").toBeUndefined();
-    expect(archivableChief([danibot, scout], "danibot"), "the place's own DaniBot is never deleted or archived").toBeUndefined();
+    expect(archivableChief([danibot, scout], "danibot"), "the place's own Dani Bot is never deleted or archived").toBeUndefined();
     expect(archivableChief([chief, scout], "scout"), "only a Chief is offered this").toBeUndefined();
     expect(botConfirmCopy("delete", "Chief", true).body).toContain("Archive it instead to keep every conversation");
     expect(botConfirmCopy("delete", "Scout").body).not.toContain("Archive it instead");

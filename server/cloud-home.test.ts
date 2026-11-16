@@ -22,7 +22,7 @@ const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await removeTempDir(directory); });
 const directory = () => { const value = mkdtempSync(join(tmpdir(), "omb-cloud-home-")); directories.push(value); return value; };
 
-// Shapes exactly as openmaus-cloud's provisioner writes them.
+// Shapes exactly as danibot-cloud's provisioner writes them.
 const secret = "S".repeat(43);
 const machineId = "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93";
 const contract = (extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
@@ -102,7 +102,7 @@ it("offers the built-in browser and cloud computers, never this computer or a Lo
 
 it("refuses the places it never offers with what is true there, not a setup step", () => {
   const local = cloudHomePlaceRefusal("local")!, vm = cloudHomePlaceRefusal("vm")!;
-  expect(local).toBe("This computer isn't a place in the Cloud. Set Works on to Auto, Cloud desktop or Browser; your own computer is reached while DaniBot is open on it.");
+  expect(local).toBe("This computer isn't a place in the Cloud. Set Works on to Auto, Cloud desktop or Browser; your own computer is reached while Dani Bot is open on it.");
   expect(vm).toBe("Cloud bots can't use a private desktop. Set Works on to Auto, Cloud desktop or Browser.");
   for (const text of [local, vm]) {
     expect(text).not.toMatch(/configure|Computer panel|install|set (?:it|one) up/i);
@@ -118,7 +118,7 @@ function fixture() {
   const sessions = new SessionRegistry({ file: join(root, "sessions.json"), now: () => now });
   const pairing = createCloudPairing({ secret, sessions, now: () => now });
   let counter = 0;
-  const sign = (body = JSON.stringify({ label: "DaniBot app (Cloud)", ttlSeconds: 300 }), options: { key?: string; at?: number; nonce?: string } = {}) => {
+  const sign = (body = JSON.stringify({ label: "Dani Bot app (Cloud)", ttlSeconds: 300 }), options: { key?: string; at?: number; nonce?: string } = {}) => {
     const timestamp = String(Math.floor((options.at ?? now) / 1000)), nonce = options.nonce ?? `nonce-${String(++counter).padStart(12, "0")}`;
     return { timestamp, nonce, signature: `v1=${cloudPairingSignature(options.key ?? secret, timestamp, nonce, body)}`, body: Buffer.from(body) };
   };
@@ -136,7 +136,7 @@ it("opens one ordinary pairing window for a correctly signed request", () => {
   expect(granted.body.credential).toMatch(/^omb_pair_[A-Za-z0-9_-]{43}$/);
   expect(granted.body.expiresAt).toBe(f.now() + 300_000);
   const paired = f.exchange(granted.body.code as string);
-  expect(paired).toMatchObject({ ok: true, session: { label: "DaniBot app (Cloud)", scopes: ["admin", "client"] } });
+  expect(paired).toMatchObject({ ok: true, session: { label: "Dani Bot app (Cloud)", scopes: ["admin", "client"] } });
 });
 
 it("matches the Admin's signature byte for byte", () => {
@@ -147,7 +147,7 @@ it("matches the Admin's signature byte for byte", () => {
 });
 
 it("signs a health read over its method, path and query, byte for byte as the Admin does", () => {
-  // Same vector in openmaus-cloud tests/cloud-health.test.ts:
+  // Same vector in danibot-cloud tests/cloud-health.test.ts:
   // printf 'v1\n1800000000\nnonce-fixture-0001\nGET\n/api/cloud/health?after=0\n<b64url sha256 of the empty body>' | openssl dgst -sha256 -hmac k -binary | base64url
   expect(cloudRequestSignature("k", "1800000000", "nonce-fixture-0001", "GET", "/api/cloud/health?after=0", "")).toBe("qX07j43XUqYYi8T3l9T8WnC-hWLZSYuuvmRguJpbJKc");
   expect(cloudRequestSignature("k", "1800000000", "nonce-fixture-0001", "GET", "/api/cloud/health?after=1", "")).not.toBe("qX07j43XUqYYi8T3l9T8WnC-hWLZSYuuvmRguJpbJKc");
@@ -158,7 +158,7 @@ it("refuses a wrong key, a tampered request or a malformed signature, and counts
   const good = f.sign();
   const variants = [
     f.sign(undefined, { key: "W".repeat(43) }),
-    { ...good, body: Buffer.from(JSON.stringify({ label: "DaniBot app (Cloud)", ttlSeconds: 600 })) },
+    { ...good, body: Buffer.from(JSON.stringify({ label: "Dani Bot app (Cloud)", ttlSeconds: 600 })) },
     { ...good, nonce: "nonce-tampered-000" },
     { ...good, timestamp: String(Number(good.timestamp) + 1) },
     { ...good, signature: good.signature.slice(3) },
@@ -596,7 +596,7 @@ it("a Team Cloud's pairing binds the Admin's member claim to the session it open
   const pairing = createCloudPairing({ secret, sessions, team: { id: "team-1", name: "Acme" }, now: () => now });
   let counter = 0;
   const mint = (claims: Record<string, unknown>) => {
-    const body = JSON.stringify({ label: "DaniBot app (Team Cloud)", ttlSeconds: 300, ...claims });
+    const body = JSON.stringify({ label: "Dani Bot app (Team Cloud)", ttlSeconds: 300, ...claims });
     const timestamp = String(Math.floor(now / 1000)), nonce = `nonce-${String(++counter).padStart(12, "0")}`;
     return pairing.handle({ timestamp, nonce, signature: `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`, body: Buffer.from(body), source: "203.0.113.9" });
   };
@@ -635,7 +635,7 @@ it("a Team Cloud pairing at a new role ends that person's sessions, phones and w
   const pairing = createCloudPairing({ secret, sessions, team: { id: "team-1", name: "Acme" }, now: () => now });
   let counter = 0;
   const mint = (email: string, role: string) => {
-    const body = JSON.stringify({ label: "DaniBot app (Team Cloud)", ttlSeconds: 300, member: { email, role } });
+    const body = JSON.stringify({ label: "Dani Bot app (Team Cloud)", ttlSeconds: 300, member: { email, role } });
     const timestamp = String(Math.floor(now / 1000)), nonce = `nonce-${String(++counter).padStart(12, "0")}`;
     return pairing.handle({ timestamp, nonce, signature: `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}`, body: Buffer.from(body), source: "203.0.113.9" });
   };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot as BotIcon, MessageSquare, Search, Users } from "lucide-react";
+import { Bot as BotIcon, MessageSquare, Search, Users } from "@/components/icons";
 import { api, openBot, useStore, type Bot, type Group } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { rankByName } from "@/lib/palette-rank";

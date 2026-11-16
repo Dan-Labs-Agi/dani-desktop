@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut } from "@/components/icons";
 import { api } from "@/state/store";
 import { t } from "@/lib/i18n";
 

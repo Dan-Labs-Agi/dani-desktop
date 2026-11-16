@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Maximize2, Monitor } from "lucide-react";
+import { Loader2, Maximize2, Monitor } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 

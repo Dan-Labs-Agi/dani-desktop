@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "@/lib/i18n";
-import { Laptop, Loader2, Unplug } from "lucide-react";
+import { Laptop, Loader2, Unplug } from "@/components/icons";
 import { Select } from "./Select";
 import { Card } from "./SettingsPrimitives";
 

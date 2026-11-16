@@ -1,11 +1,11 @@
 import { useMemo, useState, type DragEvent } from "react";
-import { GripVertical, Search, UsersRound } from "lucide-react";
+import { GripVertical, Search, UsersRound } from "@/components/icons";
 import { BotAvatar } from "@/components/Avatar";
 import type { Bot } from "@/state/store";
 import { MiniMonth } from "./MiniMonth";
 import { t } from "@/lib/i18n";
 
-export const BOT_CALENDAR_DRAG_TYPE = "application/x-openmaus-bot";
+export const BOT_CALENDAR_DRAG_TYPE = "application/x-danibot-bot";
 
 export interface CalendarSidebarProps {
   bots: Bot[];

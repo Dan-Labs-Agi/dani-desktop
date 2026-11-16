@@ -1,4 +1,4 @@
-import { FileText, FolderOpen, RotateCcw, Trash2 } from "lucide-react";
+import { FileText, FolderOpen, RotateCcw, Trash2 } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -291,7 +291,7 @@ export function MemorySection({ bot, active = true, onToggle }: { bot: Bot; acti
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("memory.title")}</div>
         <label className="mt-3 flex items-center gap-2 text-[13px] text-ink">
           <input type="checkbox" checked={bot.memoryEnabled !== false} disabled={bot.busy} onChange={(event) => onToggle(event.target.checked)} />
@@ -353,7 +353,7 @@ export function MemorySection({ bot, active = true, onToggle }: { bot: Bot; acti
       />}
 
       {editing && (
-        <div className="rounded-xl bg-card p-4">
+        <div className="rounded-xl border border-ink/[0.08] p-4">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate font-mono text-[13px] text-ink">{editing.path}</span>
             {editing.path !== MEMORY_INDEX && (
@@ -411,7 +411,7 @@ export function MemorySection({ bot, active = true, onToggle }: { bot: Bot; acti
       )}
 
       {overview && (
-        <div className="rounded-xl bg-card p-4">
+        <div className="rounded-xl border border-ink/[0.08] p-4">
           <MemoryFileRows
             title={t("memory.topicFiles")}
             hint={t("memory.topicFilesHint")}
@@ -450,7 +450,7 @@ export function MemorySection({ bot, active = true, onToggle }: { bot: Bot; acti
         </div>
       )}
 
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("memory.changes")}</div>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-secondary">
           {t("memory.changesHelp")}
@@ -488,7 +488,7 @@ export function MemoryUpkeepCard({
   rooms?: { enabled: boolean; saving: boolean; error: string; onToggle: () => void };
 }) {
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[15px] font-medium text-ink">{t("memory.upkeep.title")}</div>

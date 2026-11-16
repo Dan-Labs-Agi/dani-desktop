@@ -12,7 +12,7 @@ import {
 } from "@/lib/sidebar-preferences";
 
 export function sidebarDefaultWidth(simple: boolean): number {
-  return simple ? 280 : 320;
+  return simple ? 280 : 288;
 }
 
 /** Narrower than this, the sidebar's dragged edge leaves its column of avatars; wider again, the sidebar opens. */

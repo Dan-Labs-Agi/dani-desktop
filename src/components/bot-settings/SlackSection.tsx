@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 

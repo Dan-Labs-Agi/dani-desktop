@@ -1,5 +1,5 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Video } from "lucide-react";
+import { Video } from "@/components/icons";
 
 import { BotAvatar } from "@/components/Avatar";
 import { cn } from "@/lib/cn";

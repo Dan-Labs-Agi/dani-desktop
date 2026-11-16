@@ -441,7 +441,7 @@ await import(${JSON.stringify(pathToFileURL(join(ROOT, "server", "testing", "fak
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
   const edge = { host: CLOUD_HOST, "x-forwarded-for": "203.0.113.9", "x-forwarded-proto": "https" };
-  const body = JSON.stringify({ label: "DaniBot app (Cloud)", ttlSeconds: 300 });
+  const body = JSON.stringify({ label: "Dani Bot app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await (await fetch(`${url}/api/cloud/pairing`, { method: "POST", headers: { ...edge, "content-type": "application/json",
     "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce, "x-omb-cloud-signature": `v1=${cloudPairingSignature(secret, timestamp, nonce, body)}` }, body })).json() as { code: string };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, CalendarClock, CloudOff, CreditCard } from "lucide-react";
+import { ArrowUpRight, CalendarClock, CloudOff, CreditCard } from "@/components/icons";
 import type { CloudPlanBridge, CloudPlanSnapshot } from "../../electron/cloud-account.mjs";
 import type { CloudTrialState } from "../../electron/cloud-home.mjs";
 import type { CloudTrialView } from "@/lib/cloud-plan";

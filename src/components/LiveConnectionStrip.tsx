@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CloudOff, Loader2 } from "lucide-react";
+import { CloudOff, Loader2 } from "@/components/icons";
 import { cloudAsleep, onCloudPower } from "@/lib/cloud-power";
 import { t } from "@/lib/i18n";
 

@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { Users } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import type { SidebarDensity } from "@/lib/sidebar-preferences";
 import type { Bot } from "@/state/store";

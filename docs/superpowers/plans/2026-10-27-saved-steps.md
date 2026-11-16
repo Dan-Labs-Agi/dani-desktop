@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Work only in `/Users/omkar/Desktop/openmaus/OpenGrokBot-learn-watch-talk` on `feat/learned-replay`. Never push. Every commit message ends with a blank line and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- Work only in `/Users/omkar/Desktop/danibot/OpenGrokBot-learn-watch-talk` on `feat/learned-replay`. Never push. Every commit message ends with a blank line and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Comments follow `AGENTS.md`: only what code cannot say (vendor facts with version, wire doc comments in `shared/`, security invariants, known open risks). No narration.
 - The server runs on type stripping: type-only imports are `import type` (or inline `type`).
 - `server/index.ts` is at 16170 lines against a file-size ratchet of 16173 (`scripts/testing/file-size-ratchet.test.ts`). This plan adds exactly three lines there and removes one. `server/config.ts` (1365/1365), `src/components/ChatView.tsx` (1348/1348) and `src/state/store.tsx` (3456/3456) may not grow at all: their edits extend existing lines.

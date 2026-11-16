@@ -267,7 +267,9 @@ export function daniVariantForColor(color: string): DaniVariantId {
   }
 }
 
+/** A coordinator shows Dani until another colour or look is picked; green is the default and Reset mascot's colour.
+ * ponytail: a coordinator who picks green on purpose still shows Dani; store the chosen look if that matters. */
 export function daniVariantForBot(name: string | undefined, color: string): DaniVariantId {
-  if (!name || /\b(chief|chief of staff|cos|coordinator|director|dani)\b/i.test(name)) return "dani";
+  if (!name || (color === "green" && /\b(chief|chief of staff|cos|coordinator|director|dani)\b/i.test(name))) return "dani";
   return daniVariantForColor(color);
 }

@@ -22,7 +22,7 @@ describe("SidebarSectionHeader", () => {
     expect(html).toContain('aria-hidden="true"');
     expect(html).not.toContain('role="button"');
     expect(html).not.toContain("Delete Work department");
-    expect(html.indexOf(">Work</span>")).toBeLessThan(html.indexOf("lucide-chevron-down"));
+    expect(html.indexOf(">Work</span>")).toBeLessThan(html.indexOf("icon-chevron-down"));
     expect(html).not.toContain("uppercase");
   });
 
@@ -107,9 +107,9 @@ describe("SidebarSectionHeader as a Simple-mode line", () => {
     expect(html).toContain('aria-label="Actions for Work department" title="Actions for Work department" aria-haspopup="menu" aria-expanded="false"');
     expect(html).toMatch(/aria-label="Actions for Work department"[^>]*class="[^"]*\bopacity-0\b[^"]*\bgroup-hover\/section:opacity-100\b[^"]*\baria-expanded:opacity-100\b/);
     expect(html).not.toContain("Delete Work department");
-    expect(html).not.toContain("lucide-grip-vertical");
-    expect(html).not.toContain("lucide-trash");
-    expect(html).toMatch(/lucide-chevron-down absolute text-ink-secondary opacity-0 transition-opacity group-hover\/section:opacity-100 group-focus-within\/section:opacity-100 touch:opacity-100/);
+    expect(html).not.toContain("icon-grip-vertical");
+    expect(html).not.toContain("icon-trash");
+    expect(html).toMatch(/icon-chevron-down absolute text-ink-secondary opacity-0 transition-opacity group-hover\/section:opacity-100 group-focus-within\/section:opacity-100 touch:opacity-100/);
     expect(html.indexOf(">Work</span>")).toBeLessThan(html.indexOf("Actions for Work department"));
     const button = { id: "dots" };
     const dots = nodes(element.props.children).find((node) => node.props["aria-label"] === "Actions for Work department")!;
@@ -159,10 +159,10 @@ describe("SidebarSectionHeader as a Simple-mode line", () => {
   it("shows a collapsed line's chevron and attention badges", () => {
     const html = renderToStaticMarkup(line({ collapsed: true, attention: { waiting: 1, unread: 2, working: 1 } }));
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain("lucide-chevron-right");
+    expect(html).toContain("icon-chevron-right");
     expect(html).toContain("1 waiting for you");
     expect(html).toContain("2 unread");
     expect(html).toContain("1 working");
-    expect(renderToStaticMarkup(line())).not.toContain("lucide-chevron-right");
+    expect(renderToStaticMarkup(line())).not.toContain("icon-chevron-right");
   });
 });

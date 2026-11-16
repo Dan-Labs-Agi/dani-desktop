@@ -1,4 +1,4 @@
-import { Calendar, Sparkles } from "lucide-react";
+import { Calendar, Sparkles } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

@@ -22,6 +22,7 @@ import {
   updateNoteworthy,
   updateLabel,
   updatePhase,
+  accountPlanLabel,
 } from "./SidebarProfileMenu";
 import { DOCS_URL, FEEDBACK_URL, HELP_CENTER_URL, platformLabel } from "@/lib/app-links";
 import { profileForSession } from "@/lib/session";
@@ -66,6 +67,17 @@ describe("profileLabel", () => {
     expect(profileLabel({ name: "Omkar", email: "o@x.dev" })).toBe("Omkar");
     expect(profileLabel({ email: "o@x.dev" })).toBe("o@x.dev");
     expect(profileLabel(undefined)).toBe("You");
+  });
+});
+
+describe("the plan beside the account name", () => {
+  it("names a paid plan and stays silent for a free, signed-out or unknown account", () => {
+    expect(accountPlanLabel({ kind: "paid", label: "Pro", checking: false })).toBe("Pro");
+    expect(accountPlanLabel({ kind: "paid", label: "Max", checking: true, trial: true })).toBe("Max");
+    expect(accountPlanLabel({ kind: "free" })).toBeNull();
+    expect(accountPlanLabel({ kind: "signed-out" })).toBeNull();
+    expect(accountPlanLabel({ kind: "attention", label: "Pro" })).toBeNull();
+    expect(accountPlanLabel(undefined)).toBeNull();
   });
 });
 
@@ -310,7 +322,7 @@ describe("choosing where the phone connects", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it("when the Cloud cannot be opened, lands on Settings → DaniBot Cloud, which says what to do", async () => {
+  it("when the Cloud cannot be opened, lands on Settings → Dani Bot Cloud, which says what to do", async () => {
     const bridge = { connectHomeForPhone: vi.fn().mockRejectedValue(new Error("offline")) };
     const dispatch = vi.fn();
     selectPhoneDestination(destinations(readyCloud)[0]!, { bridge, dispatch });
@@ -420,7 +432,7 @@ describe("Simple mode's account menu", () => {
     phone: simplePhoneItems({ connected: false, onGetApp: noop }),
     usage: true,
     update: { key: "update", label: "Check for updates", onSelect: noop },
-    account: "DaniBot Cloud",
+    account: "Dani Bot Cloud",
     simple: { tools, places: placeMenuItems(place(), { owner: null, onCloudSettings: noop }) },
     onUsage: noop, onSettings: noop, onShortcuts: noop, onAbout: noop, onHelp: noop, onFeedback: noop, onAccount: noop,
     ...patch,

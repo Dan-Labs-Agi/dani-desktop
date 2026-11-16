@@ -1,4 +1,4 @@
-import { EyeOff } from "lucide-react";
+import { EyeOff } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -7,7 +7,7 @@ import { useStore, type Action, type Bot } from "@/state/store";
 import { Card, NavRow } from "./bot-panel/rows";
 import { SettingRow, Switch } from "./SettingsPrimitives";
 
-/** Hiding DaniBot is the Settings switch turned off: one place says whether it is in the sidebar. */
+/** Hiding Dani Bot is the Settings switch turned off: one place says whether it is in the sidebar. */
 export function showDefaultBot(dispatch: (action: Action) => void, bot: Pick<Bot, "id" | "name">, shown: boolean): void {
   dispatch({ type: "updateBot", botId: bot.id, patch: { sidebarHidden: !shown } });
   if (!shown) dispatch({ type: "notice", notice: { kind: "note", botName: null, text: t("defaultBot.hidden", { name: bot.name }) } });
@@ -30,7 +30,7 @@ export function HideDefaultBotItem({ bot, onDone, className = "flex w-full items
   );
 }
 
-/** Settings → General: whether the viewer's own DaniBot has a row in the sidebar. */
+/** Settings → General: whether the viewer's own Dani Bot has a row in the sidebar. */
 export function DefaultBotSidebarRow({ simple = false }: { simple?: boolean }) {
   const { state, dispatch } = useStore();
   const bot = myDefaultBot(state.bots, useViewerEmail());
@@ -48,7 +48,7 @@ export function DefaultBotSidebarRow({ simple = false }: { simple?: boolean }) {
   );
 }
 
-/** Bot settings: DaniBot is never deleted, only taken off the sidebar. */
+/** Bot settings: Dani Bot is never deleted, only taken off the sidebar. */
 export function DefaultBotHideRow({ bot }: { bot: Bot }) {
   const { dispatch } = useStore();
   if (!bot.defaultBot || bot.sidebarHidden) return null;

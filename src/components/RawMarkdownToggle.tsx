@@ -1,4 +1,4 @@
-import { Code, Eye } from "lucide-react";
+import { Code, Eye } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { ACTION_ICON } from "@/components/MessageActions";

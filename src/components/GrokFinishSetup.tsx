@@ -1,4 +1,4 @@
-import { Check, Crown, MessageSquare } from "lucide-react";
+import { Check, Crown, MessageSquare } from "@/components/icons";
 
 import { prependComposerDraft } from "@/lib/drafts";
 import { t } from "@/lib/i18n";

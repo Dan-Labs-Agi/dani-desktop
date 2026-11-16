@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { api } from "@/state/store";
 import { Switch } from "./SettingsPrimitives";

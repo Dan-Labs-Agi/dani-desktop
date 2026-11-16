@@ -107,6 +107,8 @@ export class ChatToolCalls {
         throw new ChatProtocolError("provider returned an incomplete or duplicate tool call");
       }
       ids.add(call.id);
+      // Anthropic streams no input_json_delta characters for a tool_use whose input is {}; relays pass that on as "".
+      if (!call.function.arguments.trim()) call.function.arguments = "{}";
     }
     return calls;
   }

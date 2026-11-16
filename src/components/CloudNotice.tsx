@@ -1,4 +1,4 @@
-import { Cloud } from "lucide-react";
+import { Cloud } from "@/components/icons";
 import type { CloudAccountBridge, CloudAccountState } from "../../electron/cloud-account.mjs";
 import type { CloudNoticeKind } from "@/lib/cloud-plan";
 import { t } from "@/lib/i18n";

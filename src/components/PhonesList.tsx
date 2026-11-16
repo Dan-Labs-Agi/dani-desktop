@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2 } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { api, useStore } from "@/state/store";

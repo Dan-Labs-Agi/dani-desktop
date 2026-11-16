@@ -102,7 +102,7 @@ function requestJson(url: URL, address: LookupAddress, signal: AbortSignal): Pro
     };
     const request = httpsRequest(url, {
       method: "GET", agent: false, lookup, signal, rejectUnauthorized: true,
-      headers: { Accept: "application/json", "User-Agent": "Dani Bot-domain-check" },
+      headers: { Accept: "application/json", "User-Agent": "DaniBot-domain-check" },
     }, (response) => {
       // Node's HTTPS client does not follow Location redirects.
       if (response.statusCode !== 200) {

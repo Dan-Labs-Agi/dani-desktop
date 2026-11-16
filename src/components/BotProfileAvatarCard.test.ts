@@ -9,8 +9,8 @@ function makeBot(overrides: Partial<Bot> = {}): Bot {
   return {
     id: "bot-1",
     threadId: "thread-1",
-    name: "Dani",
-    title: "Dani",
+    name: "Momo",
+    title: "Momo",
     description: "",
     notifications: false,
     color: "green",
@@ -58,6 +58,17 @@ describe("BotProfileAvatarCard character picker", () => {
 
     expect(markup).toContain('aria-pressed="true" aria-label="Bow"');
     expect(markup).toContain('aria-pressed="false" aria-label="Sweep"');
+  });
+
+  it("shows a coordinator as Dani until another look is picked, then follows the pick", () => {
+    expect(renderCard(makeBot({ name: "Dani" }))).toContain('aria-pressed="true" aria-label="Dani"');
+    expect(renderCard(makeBot({ name: "Dani", color: "pink" }))).toContain('aria-pressed="true" aria-label="Bow"');
+  });
+
+  it("offers only what changes the robot mascot: no expressions or facial features", () => {
+    const markup = renderCard(makeBot());
+    expect(markup).not.toContain("expression");
+    expect(markup).not.toContain("data-avatar-face-color");
   });
 
   it("offers zoom and drag framing for a custom image", () => {

@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info } from "@/components/icons";
 import { openBotSettings } from "@/components/bot-panel/panel-link";
 import { requestAiSwitch, useAiSwitchRow } from "@/lib/ai-switch";
 import { t } from "@/lib/i18n";

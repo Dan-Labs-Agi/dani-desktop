@@ -159,7 +159,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   writeFileSync(join(home, "web", "index.html"), "<!doctype html><title>DaniBot</title>");
   relayUrl = relay;
   await boot();
-  const body = JSON.stringify({ label: "DaniBot app (Cloud)", ttlSeconds: 300 });
+  const body = JSON.stringify({ label: "Dani Bot app (Cloud)", ttlSeconds: 300 });
   const timestamp = String(Math.floor(Date.now() / 1000)), nonce = randomBytes(16).toString("base64url");
   const granted = await api("POST", "/api/cloud/pairing", { remote: true, headers: {
     "content-type": "application/json", "x-omb-cloud-timestamp": timestamp, "x-omb-cloud-nonce": nonce,
@@ -174,7 +174,7 @@ afterAll(async () => {
   if (home) await removeTempDir(home);
 });
 
-type Instance = { instanceId: string; readOnly?: boolean; trialCredit?: string; snapshot: { state: string; authenticated?: boolean; reason?: string }; models: { default: string; options: Array<{ id: string }> } };
+type Instance = { instanceId: string; readOnly?: boolean; icon?: { kind: string; preset?: string }; trialCredit?: string; snapshot: { state: string; authenticated?: boolean; reason?: string }; models: { default: string; options: Array<{ id: string }> } };
 type Message = { role: string; kind: string; tool?: { name: string; setup?: boolean; ok?: boolean } };
 type Bot = { id: string; name: string; busy?: boolean; modelSelection: { instanceId: string; model: string }; messages: Message[] };
 const SONNET = { instanceId: CLOUD_CREDIT_INSTANCE, model: "claude-sonnet-5" };
@@ -202,7 +202,7 @@ describe("the free trial's Claude credit on a Cloud home", { timeout: 90_000 }, 
   let claudeModel = "";
 
   it("is a read-only engine on the relay's models, Sonnet first, and the first bot runs on Sonnet while the person has no AI of their own", async () => {
-    expect(await credit()).toMatchObject({ readOnly: true, trialCredit: "active", snapshot: { state: "available", authenticated: true }, models: { default: "claude-sonnet-5" } });
+    expect(await credit()).toMatchObject({ readOnly: true, icon: { kind: "preset", preset: "anthropic" }, trialCredit: "active", snapshot: { state: "available", authenticated: true }, models: { default: "claude-sonnet-5" } });
     const claude = (await instances()).find((instance) => instance.instanceId === "claude")!;
     expect(claude.snapshot.authenticated).toBe(false);
     claudeModel = claude.models.options.map((option) => option.id).find((id) => id !== claude.models.default) ?? claude.models.default;

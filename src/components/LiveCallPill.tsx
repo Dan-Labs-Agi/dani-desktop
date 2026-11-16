@@ -1,4 +1,4 @@
-import { Mic, MicOff, Phone, PhoneOff } from "lucide-react";
+import { Mic, MicOff, Phone, PhoneOff } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";

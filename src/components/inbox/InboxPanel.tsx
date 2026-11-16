@@ -2,7 +2,7 @@
 // each line a dense row that reads in full in the panel. At phone width it is a sheet over the chat.
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { X } from "@/components/icons";
 import type { InboxRow, InboxTab } from "../../../shared/inbox";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

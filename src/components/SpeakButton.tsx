@@ -1,4 +1,4 @@
-import { Loader2, Square, Volume2 } from "lucide-react";
+import { Loader2, Square, Volume2 } from "@/components/icons";
 
 import { speaker } from "@/lib/tts";
 import { useSpeech } from "@/lib/tts/useSpeech";

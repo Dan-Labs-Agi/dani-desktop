@@ -1,4 +1,4 @@
-import { Check, TriangleAlert } from "lucide-react";
+import { Check, TriangleAlert } from "@/components/icons";
 
 import { AUTOMATION_FIX_LABEL, type Automation, type AutomationStatus } from "@/lib/automations";
 import { cn } from "@/lib/cn";

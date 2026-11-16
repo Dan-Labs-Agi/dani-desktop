@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 export interface SelectPopupOption {

@@ -147,7 +147,7 @@ describe("CallRecordRow", () => {
       expect(lineTexts(markup)).toEqual(["Reading a file"]);
       expect(markup).not.toContain("animate-status-pulse");
       expect(markup).not.toContain("Running");
-      expect(markup).toContain("lucide-minus");
+      expect(markup).toContain("icon-minus");
     });
 
     it("leaves a step that did report alone, busy or not", () => {

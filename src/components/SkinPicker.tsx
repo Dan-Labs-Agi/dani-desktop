@@ -1,6 +1,6 @@
 // Works because styles.css keys skins on [data-skin], not :root[data-skin], so any element opens a skin context for its
 // subtree.
-import { Check } from "lucide-react";
+import { Check } from "@/components/icons";
 import { SKINS, applySkin, resolveSkin, type SkinId } from "@/lib/skins";
 import { cn } from "@/lib/cn";
 import { useSkinChoice } from "./ThemeRow";

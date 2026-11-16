@@ -1,4 +1,4 @@
-import { FolderOpen, Globe, Puzzle, UsersRound, Zap } from "lucide-react";
+import { FolderOpen, Globe, Puzzle, Settings, UsersRound, Zap } from "@/components/icons";
 import type { ReactNode } from "react";
 
 import { useAppTriggers } from "@/lib/app-triggers";
@@ -52,7 +52,7 @@ function NavRow({
       )}
     >
       {icon(active)}
-      {!iconsOnly && <span className="flex-1 truncate text-[14px] font-medium leading-5">{label}</span>}
+      {!iconsOnly && <span className="flex-1 truncate text-[14px] leading-5">{label}</span>}
       {attention && (
         <span
           data-testid="routines-attention"
@@ -63,24 +63,20 @@ function NavRow({
   );
 }
 
-export function SidebarAppsButton() {
+export function SidebarSettingsButton() {
   const { state, dispatch } = useStore();
-  const label = t("sidebar.nav.apps");
+  const label = t("sidebar.appSettings");
   return (
     <button
       type="button"
-      data-tour="nav-apps"
-      data-sidebar-nav="apps"
-      onClick={() => dispatch({ type: "togglePlugins", open: true })}
+      data-sidebar-settings
+      onClick={() => dispatch({ type: "toggleAppSettings", open: true })}
       aria-label={label}
       title={label}
-      aria-pressed={state.pluginsOpen}
-      className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors",
-        state.pluginsOpen ? "bg-raised text-accent" : "text-ink-secondary hover:bg-raised/50 hover:text-ink",
-      )}
+      aria-pressed={state.appSettingsOpen}
+      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink aria-pressed:bg-ink/[0.08] aria-pressed:text-ink"
     >
-      <Puzzle size={18} />
+      <Settings size={18} strokeWidth={1.5} />
     </button>
   );
 }
@@ -95,8 +91,8 @@ export function useAutomationsNeedYou(): boolean {
 export function SidebarBottomButtons() {
   return (
     <div data-sidebar-bottom-buttons="" className="flex shrink-0 items-center gap-0.5">
-      <SidebarAppsButton />
       <UpdateIndicator />
+      <SidebarSettingsButton />
     </div>
   );
 }
@@ -141,11 +137,11 @@ export function SidebarFooterNav({
     onClick={() => dispatch({ type: "showFiles" })}
   />;
   if (!advanced && !iconsOnly) return null;
-  const appsRow = iconsOnly && <NavRow
+  const appsRow = <NavRow
     id="apps"
     label={t("sidebar.nav.apps")}
     tourId="nav-apps"
-    iconsOnly={iconsOnly}
+    iconsOnly={iconsOnly || toolbar}
     rail={rail}
     active={state.pluginsOpen}
     icon={(active) => <Puzzle size={iconSize} className={tone(active)} />}

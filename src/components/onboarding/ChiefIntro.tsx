@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type SyntheticEvent } from "react";
-import { Crown } from "lucide-react";
+import { Crown } from "@/components/icons";
 import { BotAvatar } from "@/components/Avatar";
 import { RobotAvatar } from "@/components/robot/RobotAvatar";
 import { usePrefersReducedMotion } from "@/components/mascot-clock";
@@ -19,7 +19,7 @@ const PRIMARY = "ui-button ui-button-pill ui-button-primary";
 
 function ChiefBadge() {
   return (
-    <span aria-hidden="true" data-chief-badge="" className="absolute bottom-0 right-0 flex size-4 items-center justify-center rounded-full bg-[#E8993A] text-white ring-2 ring-menu">
+    <span aria-hidden="true" data-chief-badge="" className="absolute bottom-0 right-0 flex size-4 items-center justify-center rounded-full bg-(--color-chief) text-white ring-2 ring-menu">
       <Crown size={9} strokeWidth={2.5} fill="currentColor" />
     </span>
   );
@@ -30,9 +30,9 @@ function canLead(bot: Bot, instances: ReturnType<typeof useStore>["state"]["inst
   return Boolean(bot.chiefOfStaff) || instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId)?.capabilities?.agentsMcp === true;
 }
 
-/** The first run's second screen, over the empty app: DaniBot as the person's Chief of Staff (Create), or, where they
+/** The first run's second screen, over the empty app: Dani Bot as the person's Chief of Staff (Create), or, where they
  * already have bots, one of those (Choose, then Confirm). It shows only where no other bot is the Chief (chiefStepFits)
- * and asks for a choice, so Escape leaves only the list. Create flies DaniBot onto its sidebar tile; the chat comes when
+ * and asks for a choice, so Escape leaves only the list. Create flies Dani Bot onto its sidebar tile; the chat comes when
  * it lands (`onDone`), and `onLeave` fades the scrim with the dialog. */
 export function ChiefIntro({ replay, onDone, onLeave }: { replay: boolean; onDone: (botId: string | null) => void; onLeave?: () => void }) {
   const { state, dispatch } = useStore();

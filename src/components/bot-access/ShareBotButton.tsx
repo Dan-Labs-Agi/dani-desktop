@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Share } from "lucide-react";
+import { Share } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { useStore, type Bot } from "@/state/store";

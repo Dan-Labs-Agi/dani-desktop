@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, X } from "@/components/icons";
 
 import { landOnSearchHit } from "@/lib/focus-message";
 import { t } from "@/lib/i18n";

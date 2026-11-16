@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { createPortal } from "react-dom";
-import { Undo2, Zap } from "lucide-react";
+import { Undo2, Zap } from "@/components/icons";
 
 import { automationFor, automationSentence, automationStatus, capital, cardAutomation, firstRunLine, lastWhen, nextWhen, runLine } from "@/lib/automations";
 import { cn } from "@/lib/cn";

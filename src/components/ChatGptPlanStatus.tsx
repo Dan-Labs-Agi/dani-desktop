@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { openExternalLink } from "@/lib/app-links";
 import { CodexMark } from "./ProviderIcons";

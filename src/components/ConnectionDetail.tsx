@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, X } from "@/components/icons";
 import { useCopyFeedback } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
 

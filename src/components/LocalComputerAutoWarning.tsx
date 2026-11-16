@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@/components/icons";
 import { t } from "@/lib/i18n";
 
 export function LocalComputerAutoWarning({

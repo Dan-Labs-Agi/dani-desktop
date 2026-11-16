@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Keyboard, Search, X } from "lucide-react";
+import { Keyboard, Search, X } from "@/components/icons";
 
 import {
   filterShortcutGroups,

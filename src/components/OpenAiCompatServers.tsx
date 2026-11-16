@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Plus, RotateCw, Trash2 } from "lucide-react";
+import { Loader2, Plus, RotateCw, Trash2 } from "@/components/icons";
 import { api, useStore, type InstanceInfo } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { keySaved } from "@/lib/product-events";

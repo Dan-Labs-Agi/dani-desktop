@@ -4,7 +4,7 @@ import { activeLocale, t } from "@/lib/i18n";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { useReactor } from "@/lib/cloud-guest";
 import { otherSpeaker } from "@/lib/own-profile";
-import { Check, ChevronDown, FolderOpen, Loader2, Pin, Square, X } from "lucide-react";
+import { Check, ChevronDown, FolderOpen, Loader2, Pin, Square, X } from "@/components/icons";
 import {
   api,
   useStore,
@@ -1090,7 +1090,7 @@ export function GroupView({ group }: { group: Group }) {
 
       <div
         ref={scrollRef}
-        className="glass-scroller h-full overflow-x-hidden overflow-y-auto px-5 [overflow-anchor:none]"
+        className="glass-scroller h-full overflow-x-hidden overflow-y-auto px-5 [@media(pointer:fine)]:px-3 [@media(pointer:fine)]:[scrollbar-gutter:stable_both-edges] [overflow-anchor:none]"
         {...scrollHandlers}
       >
         {setupPending ? (

@@ -35,7 +35,7 @@ Assertions cover the two screens: no field, step count, Back or Skip on the
 first; a reload on the second coming back to it; Create landing in the Chief's
 chat with its first messages and one saved follow-up even when the completion
 save fails, and the next browser without this one's mark seeing the welcome
-again, without the Chief step DaniBot already had, and saving it (with
+again, without the Chief step Dani Bot already had, and saving it (with
 `met-chief-v1`); no app tour after the welcome or a reload; automatic
 starter-model selection and a successful first composer message without opening
 the model picker; every app tour step from Settings, persistence after reload,
@@ -56,7 +56,7 @@ pnpm exec vitest run src/components/onboarding/WelcomeFlow.test.ts src/component
 
 They cover when the Chief step shows, its 300 ms input guard, the Cloud Pro
 popup settled by a first run that could offer the Cloud, the chips' order and
-cap, the follow-up written once and only by DaniBot's own person, the default
+cap, the follow-up written once and only by Dani Bot's own person, the default
 profile name's guards, and the Advanced intro and spotlights kept as they were.
 
 ## Providers connected after first launch
@@ -139,7 +139,7 @@ What each first-run surface depends on, and how it was checked:
 |---|---|---|
 | Desktop app, own server (full bridge, `remoteClient` present) | The two-screen first run, decided without a new request | `src/components/onboarding/WelcomeGate.test.ts`, `src/components/onboarding/WelcomeFlow.test.ts` |
 | Hosted workspace opened inside the desktop app (reduced bridge, no `remoteClient`) | Treated like a browser: the server is asked | `src/components/onboarding/WelcomeGate.test.ts` |
-| Packaged desktop with the organization bridge | An optional "Using DaniBot at work?" row under Other ways in Connect an AI; a signed-in Company engine counts as ready | `src/components/onboarding/beats/OrganisationRow.test.ts`, `src/components/onboarding/ConnectAi.test.ts` (fake bridge) |
+| Packaged desktop with the organization bridge | An optional "Using Dani Bot at work?" row under Other ways in Connect an AI; a signed-in Company engine counts as ready | `src/components/onboarding/beats/OrganisationRow.test.ts`, `src/components/onboarding/ConnectAi.test.ts` (fake bridge) |
 | Browser, admin of a hosted workspace | The first screen only, with the shared-workspace line, then the chat | `src/components/onboarding/WelcomeGate.test.ts`, `src/components/onboarding/WelcomeFlow.test.ts`, `src/lib/onboarding.test.ts` |
 | Browser, hosted member (no admin scope) | No welcome flow; one dismissible note kept in browser storage; no first-conversation spotlights | `src/components/onboarding/WelcomeGate.test.ts`, `src/components/onboarding/FirstConversationTour.test.ts` |
 | Browser, client-scope session on a server that is not hosted | Nothing new: the flow does not open itself (it could not be saved); Settings replay and spotlights as before | `src/components/onboarding/WelcomeGate.test.ts`, `src/lib/onboarding.test.ts` |
@@ -198,7 +198,7 @@ desktop's preload bridge are not exercised here; they are covered by
 ## Bring what you already use (Oct 16 2026)
 
 Skills and MCP servers another AI tool keeps on this computer, brought in with
-one button: in Settings → Import, and offered by DaniBot's first messages as a
+one button: in Settings → Import, and offered by Dani Bot's first messages as a
 "Bring in your skills" chip when its look around finds some within two seconds.
 Desktop app only.
 
@@ -235,20 +235,20 @@ pnpm exec vitest run src/lib/onboarding.test.ts src/lib/welcome-draft.test.ts sr
   holding Connect an AI, Next held until one connects and Later moving on;
   Escape and Enter; a reload on the second screen; a hosted admin's one screen;
   a replay saving nothing about a first chat.
-- `src/components/onboarding/ChiefIntro.test.ts` covers Create (DaniBot made the
+- `src/components/onboarding/ChiefIntro.test.ts` covers Create (Dani Bot made the
   Chief only where there is none, an existing Chief never replaced), Choose with
   its radio list and Confirm (a bot whose AI cannot lead held back), Escape
   leaving only the list, and the choice finishing in a window that runs no
   animation frames.
 - `src/components/onboarding/ConnectAi.test.ts` covers the recommended sign-in,
   Other ways and the failed check.
-- `src/components/HelperIntro.test.ts` covers DaniBot's first messages: the
+- `src/components/HelperIntro.test.ts` covers Dani Bot's first messages: the
   three bubbles, the look around, chips for only what is missing, and the
   staged arrival.
 - `src/lib/corner-popup.test.ts` and `src/components/AppNotices.test.ts` keep
   every corner notice out of the first conversation until a reply;
   `src/components/onboarding/FirstConversationTour.test.ts` keeps its
-  spotlights off; `src/components/DaniBotWelcome.gate.test.ts` keeps DaniBot's
+  spotlights off; `src/components/DaniBotWelcome.gate.test.ts` keeps Dani Bot's
   first-launch card for older installs only.
 - `src/components/onboarding/GuidedTour.test.ts` and
   `src/components/onboarding/WelcomeGate.test.ts` check the app tour never

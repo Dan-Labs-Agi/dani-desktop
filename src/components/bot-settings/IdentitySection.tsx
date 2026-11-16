@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DefaultBotHideRow } from "../DefaultBotControls";
-import { BookOpen } from "lucide-react";
+import { BookOpen } from "@/components/icons";
 
 import { useStore, type Bot } from "@/state/store";
 import type { MausMotion, MausState } from "@/lib/mascot";

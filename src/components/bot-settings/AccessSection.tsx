@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { browserUnavailableReason } from "@/lib/feature-flags";
-import { ChevronDown, ChevronRight, FolderOpen, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderOpen, Plus } from "@/components/icons";
 
 import { api, useStore, type Bot } from "@/state/store";
 import { useBotEditor } from "./BotEditorContext";
@@ -73,7 +73,7 @@ export function WorkingFolder({ bot }: { bot: Bot }) {
   const pinnedElsewhere = pinned !== undefined && (pinned ?? undefined) !== bot.cwd && !isOwnThreadFolder(pinned, bot.id, bot.threadId);
 
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <div className="text-[15px] font-medium text-ink">{t("botAccess.folder.title")}</div>
       <div className="mt-0.5 text-[13px] text-ink-secondary">{t("botAccess.folder.description")}</div>
       <ProposalStatus bot={bot} kind="chief" />
@@ -144,7 +144,7 @@ export function McpServersCard({ bot, patch }: { bot: Bot; patch: (patch: { mcpS
   };
 
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-[15px] font-medium text-ink">{t("connectors.tab.mcp")}</div>
@@ -485,7 +485,7 @@ function ResearchCard({ bot, patch }: { bot: Bot; patch: (patch: { xResearch: bo
   const line = !available ? t(connecting ? "research.connecting" : "research.addKey")
     : !on ? t("research.off") : t(ownKey ? "research.ownOn" : "research.planOn");
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl bg-card p-4" data-testid="access-x-research">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-ink/[0.08] p-4" data-testid="access-x-research">
       <div>
         <div className="text-[15px] font-medium text-ink">{t("research.title")}</div>
         <div className="mt-0.5 text-[13px] text-ink-secondary">{line}</div>
@@ -676,7 +676,7 @@ export function AccessSection({
 
   return (
     <div className="flex flex-col gap-4">
-      {shows("worksOn") && <div className="rounded-xl bg-card p-4" data-testid="access-works-on">
+      {shows("worksOn") && <div className="rounded-xl border border-ink/[0.08] p-4" data-testid="access-works-on">
         <div className="text-[15px] font-medium text-ink">{t("access.worksOn", { name: bot.name, short: worksOn.short })}</div>
         <ProposalStatus bot={bot} kind="owner" />
         <button
@@ -694,7 +694,7 @@ export function AccessSection({
 
       {shows("folder") && <WorkingFolder bot={bot} />}
 
-      {shows("apps") && <div className="rounded-xl bg-card p-4">
+      {shows("apps") && <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-[15px] font-medium text-ink">{t("botAccess.apps.title")}</div>
@@ -755,7 +755,7 @@ export function AccessSection({
       {shows("mcp") && <McpServersCard bot={bot} patch={patch} />}
       {shows("tools") && <ToolSelectionCard key={bot.id} bot={bot} engineKind={derived.engine?.driverKind} />}
 
-      {shows("browser") && <div className="rounded-xl bg-card p-4">
+      {shows("browser") && <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-[15px] font-medium text-ink">{t("botAccess.browser.title")}</div>
@@ -800,7 +800,7 @@ export function AccessSection({
 
       {!draft && shows("xResearch") && <ResearchCard bot={bot} patch={patch} />}
 
-      {!draft && shows("webhooks") && <div className="rounded-xl bg-card p-4">
+      {!draft && shows("webhooks") && <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("botAccess.webhooks.title")}</div>
         <div className="mt-0.5 text-[13px] text-ink-secondary">{t("botAccess.webhooks.description")}</div>
         <ProposalStatus bot={bot} kind="owner" />
@@ -828,7 +828,7 @@ export function AccessSection({
         )}
       </div>}
 
-      {!draft && shows("always") && <div className="rounded-xl bg-card p-4">
+      {!draft && shows("always") && <div className="rounded-xl border border-ink/[0.08] p-4">
         <div className="text-[15px] font-medium text-ink">{t("botAccess.always.title")}</div>
         <div className="mt-0.5 text-[13px] text-ink-secondary">{t("botAccess.always.description")}</div>
         <ProposalStatus bot={bot} kind="owner" />

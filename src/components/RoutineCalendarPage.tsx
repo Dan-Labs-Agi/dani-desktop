@@ -30,7 +30,7 @@ import {
   Video,
   X,
   XCircle,
-} from "lucide-react";
+} from "@/components/icons";
 
 import { BotAvatar } from "@/components/Avatar";
 import { useBotEditor } from "./bot-settings/BotEditorContext";

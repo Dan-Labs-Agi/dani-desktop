@@ -52,7 +52,7 @@ describe("a turn the trial's Claude credit refused", () => {
     for (const kind of ["used_up", "ended"] as const) {
       const { html, buttons } = show(stored(kind));
       expect(html).toContain(`role="note" data-trial-credit-notice="${kind}"`);
-      expect(html).not.toMatch(/danger|lucide-triangle-alert|lucide-alert-triangle/);
+      expect(html).not.toMatch(/danger|icon-triangle-alert|icon-alert-triangle/);
       expect(buttons).toEqual(["Connect your own AI"]);
     }
     for (const kind of ["paused", "too_low"] as const) expect(show(stored(kind), vi.fn()).html).toContain("danger");

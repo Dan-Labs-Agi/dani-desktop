@@ -8,7 +8,7 @@ import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { browserProcessesRunning, browserProcessTree, orphanedBrowsers, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
+import { browserProcessesRunning, browserProcessTree, orphanedBrowsers, orphanedWindowsChromes, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 // The real tools, except where a test stands in for Windows' tasklist and taskkill.
@@ -245,5 +245,25 @@ describe("a browser on Windows", () => {
     } finally {
       holder.kill("SIGKILL");
     }
+  });
+});
+
+describe("a Windows Chrome whose engine died", () => {
+  const dir = String.raw`D:\data\agent-browser-profiles\83bf2f14`;
+  const row = (pid: number, ancestors: string, args: string) => ({ pid, ancestors, args });
+  it("is stopped only when no running agent-browser is above it, and only on its own profile", () => {
+    const listing = JSON.stringify([
+      row(1, "cmd.exe agent-browser.exe", `chrome.exe --remote-debugging-port=0 --user-data-dir=${dir} --headless=new`),
+      row(2, "cmd.exe", `chrome.exe --remote-debugging-port=0 --user-data-dir=${dir} --headless=new`),
+      row(3, "", `chrome.exe --type=renderer --user-data-dir=${dir}`),
+      row(4, "", `chrome.exe --user-data-dir=${dir}0`),
+      row(5, "explorer.exe", `"chrome.exe" "--user-data-dir=${dir}" --no-first-run`),
+    ]);
+    expect(orphanedWindowsChromes(listing, dir)).toEqual([2, 5]);
+  });
+  it("reads a single row, an empty listing and garbage as what they are", () => {
+    expect(orphanedWindowsChromes(JSON.stringify(row(7, "", `chrome.exe --user-data-dir=${dir}`)), dir)).toEqual([7]);
+    expect(orphanedWindowsChromes("", dir)).toEqual([]);
+    expect(orphanedWindowsChromes("not json", dir)).toEqual([]);
   });
 });

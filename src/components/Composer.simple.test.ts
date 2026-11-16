@@ -222,7 +222,7 @@ describe("the Simple composer in a bot chat", () => {
     const level = popover()!;
     expect(level.textContent).toContain("Ask me first");
     expect(level.textContent).toContain("Command allowlist");
-    expect(level.querySelector('[data-menu-key="approval:full"] .lucide-check')).not.toBeNull();
+    expect(level.querySelector('[data-menu-key="approval:full"] .icon-check')).not.toBeNull();
     click(level.querySelector('[data-menu-key="approval:ask"]'));
     expect(fixture.dispatch).toHaveBeenCalledWith({ type: "updateTask", botId: "atlas", threadId: "atlas-thread", patch: { approvalMode: "ask" } });
   });
@@ -232,7 +232,7 @@ describe("the Simple composer in a bot chat", () => {
     render({ bot });
     const chip = container.querySelector<HTMLButtonElement>("[data-goal-chip]")!;
     expect(chip.textContent).toBe("Work until done");
-    expect(chip.querySelector(".lucide-x")).not.toBeNull();
+    expect(chip.querySelector(".icon-x")).not.toBeNull();
     expect(chip.getAttribute("aria-label")).toBe("Turn off Work until done");
     expect(chip.hasAttribute("aria-pressed")).toBe(false);
     expect(chip.className.split(" ")).toEqual(expect.arrayContaining(["h-7", "gap-1", "px-2.5", "text-[13px]"]));
@@ -274,7 +274,7 @@ describe("the Simple composer in a group chat", () => {
     expect(chip?.getAttribute("aria-label")).toBe("Turn off Finish together");
     expect(container.querySelector("textarea")!.getAttribute("placeholder")).toContain("finish together");
     openPlus();
-    expect(item("goal")!.querySelector(".lucide-check")).not.toBeNull();
+    expect(item("goal")!.querySelector(".icon-check")).not.toBeNull();
     click(chip);
     expect(container.querySelector("[data-goal-chip]")).toBeNull();
   });
@@ -286,15 +286,14 @@ describe("the Simple composer in a group chat", () => {
 });
 
 describe("the Advanced composer", () => {
-  it("keeps the paperclip, the approval shield and the split call button, with no +, on Simple's floating surface", () => {
+  it("attaches from the + menu and keeps the approval level under the box with no call button, on Simple's floating surface", () => {
     fixture.advanced = true;
     render({ bot });
-    expect(plus()).toBeNull();
+    expect(plus()).not.toBeNull();
     expect(container.querySelector('[data-tour="composer"]')!.className.split(" ")).toEqual(expect.arrayContaining(["rounded-2xl", "bg-composer", "ring-[0.5px]", "shadow-(--shadow-float)"]));
-    expect(container.querySelector('button[aria-label="Attach a file"]')).not.toBeNull();
-    expect(container.querySelector('[aria-haspopup="menu"][aria-label$="for Claude"]')).not.toBeNull();
-    expect(fixture.call).toMatchObject({ placement: "composer" });
-    expect(fixture.call?.fill).toBeUndefined();
+    expect(container.querySelector('button[aria-label="Attach a file"]')).toBeNull();
+    expect(container.querySelector('[data-composer-status] [aria-haspopup="menu"][aria-label$="for Claude"]')).not.toBeNull();
+    expect(fixture.call ?? null).toBeNull();
     expect(container.querySelector("[data-composer-backdrop]")!.className.split(" ")).toContain("top-1/2");
   });
 
@@ -312,81 +311,11 @@ describe("the Advanced composer", () => {
     expect(sendButton()!.style.backgroundColor).toBe("var(--color-accent)");
   });
 
-  it("keeps the room's Goal chip and its header call button", () => {
+  it("keeps the room's Goal in the + menu until it is on, and its header call button", () => {
     fixture.advanced = true;
     render({ group: room, members: [bot, peer] });
-    expect(container.querySelector('[aria-label="Finish together"]')?.getAttribute("aria-pressed")).toBe("false");
+    expect(container.querySelector('[aria-label="Finish together"]')).toBeNull();
+    expect(plus()).not.toBeNull();
     expect(fixture.groupCall).toBeNull();
-  });
-
-  describe("with a message longer than one line", () => {
-    const type = (value: string) => {
-      const field = container.querySelector("textarea")!;
-      flushSync(() => {
-        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, value);
-        field.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    };
-    const classes = (selector: string) => container.querySelector(selector)!.className.split(" ");
-    const stacked = () => classes(".mention-editor").includes("basis-full");
-    /** A field 20 characters wide: longer text wraps onto a second 24px line. */
-    const wrapPast20 = () => vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get")
-      .mockImplementation(function (this: HTMLTextAreaElement) { return this.value.length > 20 ? 48 : 24; });
-
-    it("gives the text the full width above the buttons, and puts it back beside them on one line", () => {
-      fixture.advanced = true;
-      render({ bot });
-      expect(stacked()).toBe(false);
-      type("Okay I have done my outreach.\nAnother line of text.");
-      expect(classes(".mention-editor")).toEqual(expect.arrayContaining(["order-first", "basis-full"]));
-      expect(classes("[data-composer-row]")).toContain("flex-wrap");
-      expect(classes("[data-composer-actions]")).toContain("ml-auto");
-      type("Okay I have done my outreach.");
-      expect(stacked()).toBe(false);
-      expect(classes("[data-composer-row]")).not.toContain("flex-wrap");
-    });
-
-    it("stacks once the text wraps beside the buttons, and stays stacked until it is shorter than where it wrapped", () => {
-      wrapPast20();
-      fixture.advanced = true;
-      render({ bot });
-      type("a".repeat(25));
-      expect(stacked()).toBe(true);
-      // Wider on its own line, it would fit on one row there; it still must not flip back and forth.
-      type("a".repeat(30));
-      expect(stacked()).toBe(true);
-      type("a".repeat(24));
-      expect(stacked()).toBe(true);
-      type("a".repeat(10));
-      expect(stacked()).toBe(false);
-    });
-
-    it("measures each new message afresh, so a wrap from a narrower composer does not stick", () => {
-      const wrap = wrapPast20();
-      fixture.advanced = true;
-      render({ bot });
-      type("a".repeat(25));
-      expect(stacked()).toBe(true);
-      type("");
-      // Wider now: 30 characters fit on the one row.
-      wrap.mockImplementation(function (this: HTMLTextAreaElement) { return this.value.length > 40 ? 48 : 24; });
-      type("a".repeat(30));
-      expect(stacked()).toBe(false);
-    });
-
-    it("never stacks an empty field, even when its placeholder wraps", () => {
-      vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get").mockReturnValue(48);
-      fixture.advanced = true;
-      render({ bot });
-      expect(stacked()).toBe(false);
-    });
-
-    it("leaves Simple's pill alone", () => {
-      wrapPast20();
-      render({ bot });
-      type("a".repeat(25) + "\nb");
-      expect(stacked()).toBe(false);
-      expect(classes("[data-composer-row]")).not.toContain("flex-wrap");
-    });
   });
 });

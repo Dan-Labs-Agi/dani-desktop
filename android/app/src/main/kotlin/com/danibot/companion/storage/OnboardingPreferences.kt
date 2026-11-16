@@ -88,7 +88,7 @@ class OnboardingPreferences(
     }
 
     companion object {
-        const val NAME = "openmaus.onboarding"
+        const val NAME = "danibot.onboarding"
 
         /** The on-disk file, named here so the backup rules can be asserted against it. */
         const val FILE = "$NAME.xml"

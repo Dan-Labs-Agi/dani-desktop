@@ -40,7 +40,7 @@ describe("Try asking", () => {
     expect(f.dispatch).toHaveBeenCalledWith({ type: "send", botId: "dani", text: "Set up a bot for my inbox", threadId: "t" });
   });
 
-  it("is DaniBot's alone, and Simple mode's", async () => {
+  it("is Dani Bot's alone, and Simple mode's", async () => {
     await show(bot({ defaultBot: undefined }));
     expect(host.textContent).toBe("");
     f.advanced = true;

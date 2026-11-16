@@ -1,4 +1,4 @@
-import { Bug } from "lucide-react";
+import { Bug } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import type { BugReportStatus } from "../../shared/devs-report-status";
 

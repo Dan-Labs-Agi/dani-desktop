@@ -259,6 +259,18 @@ describe("authenticated browser viewer relay", () => {
     await expect(action({ type: "navigate", url: "https://duckduckgo.com/?q=google" })).resolves.toEqual({ ok: true });
   });
 
+  it("counts a tab close the engine answers with 'not found' as closed", async () => {
+    const { action } = await open();
+    await action({ type: "take" });
+    const notFound = JSON.stringify({ success: false, data: null, error: "Tab t2 not found; run `agent-browser tab` to list open tabs" });
+    execute.mockResolvedValueOnce({ stdout: notFound, stderr: "" });
+    await expect(action({ type: "tab-close", tabId: "t2" })).resolves.toEqual({ ok: true });
+    execute.mockRejectedValueOnce(Object.assign(new Error("Command failed"), { code: 1, stdout: `${notFound}\n`, stderr: "" }));
+    await expect(action({ type: "tab-close", tabId: "t2" })).resolves.toEqual({ ok: true });
+    execute.mockRejectedValueOnce(Object.assign(new Error("Command failed"), { code: 1, stdout: notFound, stderr: "" }));
+    await expect(action({ type: "tab-select", tabId: "t2" })).rejects.toMatchObject({ status: 422 });
+  });
+
   it("still treats a command with no answer (killed, aborted) as interrupted, not settled", async () => {
     const { action } = await open();
     await action({ type: "take" });

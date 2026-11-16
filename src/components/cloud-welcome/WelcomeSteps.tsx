@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Ref } from "react";
-import { Check, ChevronDown, CircleAlert, FolderOpen, Plug } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, FolderOpen, Plug } from "@/components/icons";
 import { cloudEngine, cloudEngineChoices, useCloudEngineChoices } from "@/components/CloudEngineSignIn";
 import { useCloudPlanSnapshot } from "@/components/CloudTrialNotice";
 import { engineReady } from "@/components/EngineLibrary";

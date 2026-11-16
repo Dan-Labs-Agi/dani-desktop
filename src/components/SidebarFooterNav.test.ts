@@ -18,7 +18,7 @@ vi.mock("@/lib/sidebar-preferences", async (importOriginal) => ({
 }));
 vi.mock("@/lib/web-panel-preferences", () => ({ useWebPanels: () => fixture.panels }));
 vi.mock("./UpdateIndicator", () => ({ UpdateIndicator: () => null }));
-import { SidebarAppsButton, SidebarBottomButtons, SidebarFooterNav } from "./SidebarFooterNav";
+import { SidebarBottomButtons, SidebarFooterNav, SidebarSettingsButton } from "./SidebarFooterNav";
 
 type Props = { children?: ReactNode; [key: string]: unknown };
 function nodes(value: ReactNode): ReactElement<Props>[] {
@@ -47,16 +47,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("sidebar footer places", () => {
-  it("leads Advanced mode's places with Automations, then Team map, with Apps beside the profile instead", () => {
+  it("leads Advanced mode's places with Automations, then Apps, then Team map", () => {
     fixture.advanced = true;
     const { html } = render("comfortable");
-    const order = ["automations", "team-map"].map((id) => html.indexOf(`data-sidebar-nav="${id}"`));
+    const order = ["automations", "apps", "team-map"].map((id) => html.indexOf(`data-sidebar-nav="${id}"`));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(html).toContain(">Automations</span>");
     expect(html).not.toContain('data-sidebar-nav="routines"');
     expect(html).not.toContain('data-sidebar-nav="triggers"');
-    expect(html).not.toContain('data-sidebar-nav="apps"');
   });
 
   it("leaves no places in Simple mode's sidebar while Files is off: Automations and Team map are in the bottom bar", () => {
@@ -211,25 +210,19 @@ function renderBottom() {
   return { html, nodes: nodes(tree) };
 }
 describe("the bottom bar beside the profile", () => {
-  it.each([false, true])("carries Apps alone: Automations and Team map are Tools rows in Advanced and account menu items in Simple (advanced: %s)", (advanced) => {
-    fixture.advanced = advanced;
+  it("carries the Settings gear, which opens app settings; Apps is a Tools row", () => {
+    fixture.advanced = true;
     const { html } = renderBottom();
-    expect(html).not.toContain('data-sidebar-nav="automations"');
-    expect(html).not.toContain('data-sidebar-nav="team-map"');
-    expect(html).toContain('data-sidebar-nav="apps"');
-  });
-});
-
-describe("Apps beside the profile", () => {
-  it.each([false, true])("is one icon button that opens Apps and carries the tour's Apps anchor (advanced: %s)", (advanced) => {
-    fixture.advanced = advanced;
-    let tree!: ReturnType<typeof SidebarAppsButton>;
-    function Capture() { tree = SidebarAppsButton(); return tree; }
-    const html = renderToStaticMarkup(createElement(Capture));
-    expect(html).toMatch(/data-tour="nav-apps" data-sidebar-nav="apps"/);
-    expect(html).toContain('aria-label="Apps"');
-    (tree.props.onClick as () => void)();
-    expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "togglePlugins", open: true });
+    expect(html).not.toContain('data-sidebar-nav="apps"');
+    expect(html).toMatch(/data-sidebar-settings[^>]*aria-label="App settings"/);
+    let gear!: ReturnType<typeof SidebarSettingsButton>;
+    function Gear() { gear = SidebarSettingsButton(); return gear; }
+    renderToStaticMarkup(createElement(Gear));
+    (gear.props.onClick as () => void)();
+    expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "toggleAppSettings", open: true });
+    const tools = render("comfortable").html;
+    expect(tools).toMatch(/data-tour="nav-apps" data-sidebar-nav="apps"/);
+    expect(tools).toContain(">Apps</span>");
   });
 });
 
@@ -269,9 +262,9 @@ describe("toolbar tools layout", () => {
     expect(render("comfortable", { toolsLayout: "toolbar" }).html).not.toContain('data-testid="routines-attention"');
   });
 
-  it("toolbar applies to Advanced mode's two places; Simple mode keeps them in the bottom bar instead", () => {
+  it("toolbar applies to Advanced mode's three places; Simple mode keeps them in the bottom bar instead", () => {
     fixture.advanced = true;
-    expect(render("comfortable", { toolsLayout: "toolbar" }).html.match(/data-sidebar-nav="/g)).toHaveLength(2);
+    expect(render("comfortable", { toolsLayout: "toolbar" }).html.match(/data-sidebar-nav="/g)).toHaveLength(3);
     fixture.advanced = false;
     expect(render("comfortable", { toolsLayout: "toolbar" }).html).toBe("");
   });

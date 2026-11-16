@@ -20,8 +20,8 @@ describe("Settings → Decision and extraction", () => {
   it("is a sidebar item of its own, not a row under Connections", async () => {
     const { SettingsModal } = await import("./SettingsModal");
     const html = renderToStaticMarkup(createElement(StoreProvider, null, createElement(SettingsModal)));
-    expect(html).toContain('<option value="decisionModel">Decision and extraction</option>');
-    expect(html).toMatch(/<button[^>]*>(?:<svg[\s\S]*?<\/svg>)?Decision and extraction<\/button>/);
+    expect(html).toContain('data-settings-section="decisionModel"');
+    expect(html).toMatch(/<button[^>]*data-settings-section="decisionModel"[^>]*>(?:<svg[\s\S]*?<\/svg>)?<span[^>]*>Decision and extraction<\/span><\/button>/);
   });
 
   it("matches searches for decision, extraction, jev, typesafe, cloudflare, routing and auto", async () => {

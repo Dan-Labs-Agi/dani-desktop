@@ -14,7 +14,7 @@ import {
   RotateCcw,
   Square,
   Trash2,
-} from "lucide-react";
+} from "@/components/icons";
 import { Card, CommandLine } from "./SettingsPrimitives";
 import { MacLocalControl } from "./MacLocalControl";
 import { Select } from "./Select";

@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, ArrowUp, Check, Copy, Download, Maximize2, Search, WrapText, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Download, Maximize2, Search, WrapText, X } from "@/components/icons";
 import { isTableNumber, tableCsv, tableRowOrder, type TableSort } from "@/lib/table-data";
 import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";

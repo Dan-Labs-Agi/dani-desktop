@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Merge } from "lucide-react";
+import { Loader2, Merge } from "@/components/icons";
 import { ipcErrorText } from "@/lib/cloud-send";
 import { t } from "@/lib/i18n";
 import type { TwoPlacesSuggestion } from "@/lib/two-places";

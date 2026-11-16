@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, Crown } from "lucide-react";
+import { Cloud, Crown } from "@/components/icons";
 import type { CloudAccountState } from "../../electron/cloud-account.mjs";
 import { useStore } from "@/state/store";
 import { buyOfferAllowed, cloudPlanLine, cloudPlanView, moneyBackLine, offerTrialDays, usd, type CloudPlanView } from "@/lib/cloud-plan";

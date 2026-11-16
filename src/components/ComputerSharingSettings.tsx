@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FolderPlus, X } from "lucide-react";
+import { FolderPlus, X } from "@/components/icons";
 import { Card } from "./SettingsPrimitives";
 import { useStore } from "@/state/store";
 import { sharedComputersEnabled } from "@/lib/feature-flags";

@@ -5,7 +5,7 @@
 // &current=pro (a subscriber's own plan says Your plan; current=personal shows a Personal subscriber's own card)
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Cloud, FolderOpen, MessageSquare, Repeat } from "lucide-react";
+import { Cloud, FolderOpen, MessageSquare, Repeat } from "@/components/icons";
 import type { CloudAccountState } from "../electron/cloud-account.mjs";
 import type { CloudOffer } from "../electron/cloud-home.mjs";
 import { CloudAddPanel, CloudAddSheet, type CloudAddActions, type CloudAddUi } from "@/components/CloudAddDialog";

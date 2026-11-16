@@ -61,7 +61,7 @@ describe("the bot panel's Call button", () => {
     expect(button.getAttribute("aria-label")).toBe("Call Atlas");
     expect(button.className.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "size-8"]));
     expect(button.className).not.toContain("rounded-l-3xl");
-    expect(button.querySelector("svg.lucide-phone")).not.toBeNull();
+    expect(button.querySelector("svg.icon-phone")).not.toBeNull();
     expect(host.querySelector('[aria-label="Call mode"]')).toBeNull();
   });
 

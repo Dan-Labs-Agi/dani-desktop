@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "@/components/icons";
 
 import { api, useStore, type Bot } from "@/state/store";
-import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { BotVisibility } from "../../../shared/wire";
 
@@ -151,7 +150,7 @@ export function VisibilitySection({ bot }: { bot: Bot }) {
           type="button"
           onClick={() => void save()}
           disabled={busy || !dirty}
-          className={cn("flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-white hover:brightness-110 disabled:opacity-50")}
+          className="ui-button ui-button-md ui-button-primary gap-1.5"
         >
           {busy && <Loader2 size={13} className="animate-spin" />}
           {busy ? t("botSettings.visibility.saving") : t("botSettings.visibility.save")}

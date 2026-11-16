@@ -29,7 +29,7 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
     submenu: [
       { id: "back-to-my-cloud", label: "Back to My Cloud", enabled: away, click: () => home?.onBack() },
       { type: "separator" },
-      ...others.map((e) => ({ label: `${e.name} — ${new URL(e.origin).host}`, type: "radio", checked: e.id === activeId, click: () => onSwitch(e.id) })),
+      ...others.map((e) => ({ label: `${e.name} — ${new URL(e.origin).host}`, type: "checkbox", checked: e.id === activeId, click: () => onSwitch(e.id) })),
       { type: "separator" },
       { label: "Add Server from Copied Pairing Link…", click: () => onAddFromClipboard() },
       { label: away ? `Forget “${active.name}”` : "Forget Server", enabled: away, click: () => away && onForget(active.id) },
@@ -38,10 +38,10 @@ export function buildApplicationMenu({ environments, activeId, onSwitch, onAddFr
   const server = home ? homeServer : {
     label: "Server",
     submenu: [
-      { label: "This computer", type: "radio", checked: !active, click: () => onSwitch("local") },
+      { label: "This computer", type: "checkbox", checked: !active, click: () => onSwitch("local") },
       ...environments.map((e) => ({
         label: `${e.name} — ${Object.hasOwn(sublabels, e.id) ? sublabels[e.id] : whereItLives(e)}`,
-        type: "radio",
+        type: "checkbox",
         checked: e.id === activeId,
         click: () => onSwitch(e.id),
       })),

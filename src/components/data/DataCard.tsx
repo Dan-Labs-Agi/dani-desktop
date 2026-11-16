@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type RefObject } from "react";
-import { ChevronDown, Download, Loader2 } from "lucide-react";
+import { ChevronDown, Download, Loader2 } from "@/components/icons";
 import { DATA_ROUTES, type DataCard as DataCardModel, type DataColumn, type DataExportFormat, type DataExportRequest, type DataReduction } from "../../../shared/data-surface";
 import { api, type Bot } from "@/state/store";
 import { t } from "@/lib/i18n";

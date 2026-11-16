@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Check, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, X } from "@/components/icons";
 import cloudHomeDark from "@/assets/whats-new/cloud-home-dark.webp";
 import cloudHomeLight from "@/assets/whats-new/cloud-home-light.webp";
 import { cn } from "@/lib/cn";

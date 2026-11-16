@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronRight, Download, Loader2 } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { activeLocale, documentLanguage, t } from "@/lib/i18n";
 import { listenLiveFrames } from "@/lib/live-events";
@@ -106,34 +106,31 @@ export function GroupBars({ groupBy, groups }: { groupBy: UsageGroupBy; groups: 
 }
 
 function WhereItWent({ range, version, onBudget }: { range: { from: string; to: string }; version: number; onBudget: (budget: BudgetState | null) => void }) {
-  const [other, setOther] = useState<UsageGroupBy>("model");
+  const [groupBy, setGroupBy] = useState<UsageGroupBy>("bot");
   const byBot = useUsageGroups(range, "bot", version);
-  const byOther = useUsageGroups(range, other, version);
+  const byOther = useUsageGroups(range, groupBy === "bot" ? OTHER_GROUPINGS[0]! : groupBy, version);
+  const shown = groupBy === "bot" ? byBot : byOther?.groupBy === groupBy ? byOther : null;
   useEffect(() => { onBudget(byBot?.budget ?? null); }, [byBot, onBudget]);
   return (
     <section className="rounded-2xl border border-hairline/50 bg-card p-5" aria-label={t("usage.page.where")}>
-      <h3 className="text-[15px] font-medium text-ink">{t("usage.page.where")}</h3>
-      <div className="mt-4 grid gap-6 md:grid-cols-2">
-        <div>
-          <div className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ink-secondary">{t(GROUP_LABEL_KEYS.bot)}</div>
-          {byBot ? <GroupBars groupBy="bot" groups={byBot.groups} /> : <Loader2 size={14} className="animate-spin text-ink-secondary" />}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h3 className="text-[15px] font-medium text-ink">{t("usage.page.where")}</h3>
+        <div role="tablist" aria-label={t("usage.history.groupBy")} className="flex flex-wrap gap-0.5">
+          {(["bot", ...OTHER_GROUPINGS] as UsageGroupBy[]).map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="tab"
+              aria-selected={groupBy === option}
+              onClick={() => setGroupBy(option)}
+              className={cn("h-7 rounded-full px-2.5 text-[13px]",
+                groupBy === option ? "bg-ink/[0.08] text-ink" : "text-ink-secondary hover:text-ink")}
+            >{t(GROUP_LABEL_KEYS[option])}</button>
+          ))}
         </div>
-        <div>
-          <div role="tablist" aria-label={t("usage.history.groupBy")} className="-mt-1 mb-2 flex flex-wrap gap-1">
-            {OTHER_GROUPINGS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="tab"
-                aria-selected={other === option}
-                onClick={() => setOther(option)}
-                className={cn("rounded-md px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.06em]",
-                  other === option ? "bg-accent/12 text-accent" : "text-ink-secondary hover:bg-raised/60 hover:text-ink")}
-              >{t(GROUP_LABEL_KEYS[option])}</button>
-            ))}
-          </div>
-          {byOther?.groupBy === other ? <GroupBars groupBy={other} groups={byOther.groups} /> : <Loader2 size={14} className="animate-spin text-ink-secondary" />}
-        </div>
+      </div>
+      <div className="mt-4">
+        {shown ? <GroupBars groupBy={groupBy} groups={shown.groups} /> : <Loader2 size={14} className="animate-spin text-ink-secondary" />}
       </div>
     </section>
   );

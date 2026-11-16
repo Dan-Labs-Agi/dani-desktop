@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Check, ChevronDown, LoaderCircle, X } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, X } from "@/components/icons";
 import { EngineSetup } from "@/components/EngineSetup";
 import { InstanceProviderMark } from "@/components/ProviderIcons";
 import { cn } from "@/lib/cn";

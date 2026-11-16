@@ -244,7 +244,7 @@ describe("HighLevel OAuth relay", () => {
     expect(page.headers.get("cache-control")).toBe("no-store");
     const html = await page.text();
     expect(html).toContain("Connected");
-    expect(html).toContain("Close this tab and go back to DaniBot.");
+    expect(html).toContain("Close this tab and go back to Dani Bot.");
     expect(html).not.toContain(flow.state);
 
     expect(highLevel.calls).toHaveLength(1);
@@ -423,7 +423,7 @@ describe("HighLevel OAuth relay", () => {
     expect(page.status).toBe(502);
     const html = await page.text();
     expect(html).toContain("Connection failed");
-    expect(html).toContain("Go back to DaniBot and try again.");
+    expect(html).toContain("Go back to Dani Bot and try again.");
     expect(highLevel.calls).toHaveLength(1);
     expect(logs.some((line) => line.includes('"errorCode":"highlevel_exchange_failed"') && line.includes('"status":400'))).toBe(true);
     expect((await claim(worker, testEnv, flow.state)).status).toBe(404);

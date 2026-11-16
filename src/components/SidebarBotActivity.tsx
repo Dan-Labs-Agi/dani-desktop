@@ -1,4 +1,4 @@
-import { BellDot, CircleAlert, Clock3, Loader2, Pin, PinOff, type LucideIcon } from "lucide-react";
+import { BellDot, CircleAlert, Clock3, Loader2, Pin, PinOff, type IconType } from "@/components/icons";
 import type { Dispatch } from "react";
 import type { Action, AppState, Bot, Group, Task } from "@/state/store";
 import { cn } from "@/lib/cn";
@@ -93,7 +93,7 @@ export function attentionHasRunningWork(entries: readonly AttentionThread[]): bo
   return entries.some((entry) => entry.task.activity === "working" || (entry.task.busy === true && entry.task.activity !== "waiting-on-you") || entry.task.queued === true);
 }
 
-export function attentionRowStatus(task: AttentionThread["task"]): { active: boolean; Icon: LucideIcon; colorClass: string; label: string } {
+export function attentionRowStatus(task: AttentionThread["task"]): { active: boolean; Icon: IconType; colorClass: string; label: string } {
   const waiting = task.activity === "waiting-on-you";
   const teammateWait = !waiting && task.waitingForTeammates === true;
   const working = !waiting && !teammateWait && (task.busy || task.activity === "working");

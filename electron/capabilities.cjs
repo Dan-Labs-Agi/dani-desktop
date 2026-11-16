@@ -119,12 +119,13 @@ function desktopCapabilities({
     screenPreview.reasonCode =
       hostPlatform === "linux" ? "headless-session" : "unsupported-platform";
   }
+  const isWindows = hostPlatform === "win32";
   const dictation = {
-    available: isMac,
-    engine: isMac ? "apple-speech" : "none",
-    onDevice: isMac,
+    available: isMac || isWindows,
+    engine: isMac ? "apple-speech" : isWindows ? "windows-speech" : "none",
+    onDevice: isMac || isWindows,
   };
-  if (!isMac) dictation.reasonCode = "unsupported-platform";
+  if (!dictation.available) dictation.reasonCode = "unsupported-platform";
   const localComputer = {
     available: localAvailable,
     support:

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronRight, Download, Loader2, RefreshCw } from "lucide-react";
+import { ChevronRight, Download, Loader2, RefreshCw } from "@/components/icons";
 
 import { api } from "@/state/store";
 import { cn } from "@/lib/cn";

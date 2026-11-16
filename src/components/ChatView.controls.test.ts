@@ -75,12 +75,11 @@ describe("the header's right side", () => {
     return { markup, controls: markup.slice(markup.indexOf("data-chathead-controls"), markup.indexOf("role=\"log\"")) };
   };
 
-  it("keeps the model picker and the bot's computer in view in Simple mode, with ⋯ left to the bot panel", () => {
+  it("keeps the bot's computer in view in Simple mode with no model picker, and ⋯ left to the bot panel", () => {
     fixture.advanced = false;
     try {
       const { markup, controls } = header();
-      expect(controls).toContain("data-test-model-control");
-      expect(fixture.model).toMatchObject({ threadId: "selected" });
+      expect(controls).not.toContain("data-test-model-control");
       const computer = controls.match(/<button[^>]*data-tour="computer"[^>]*>/)?.[0] ?? "";
       expect(computer.split(" ")).toEqual(expect.arrayContaining(["rounded-full", "size-8"]));
       expect(markup).not.toContain('data-testid="chat-more"');
@@ -128,10 +127,10 @@ describe("the header's right side", () => {
     expect(controls).toContain('title="Stop this turn"');
   });
 
-  it("leaves Advanced mode's model, computer and ⋯ exactly as they were, the inspector unlocked", () => {
+  it("keeps Advanced mode's computer and ⋯ with no model picker, the inspector unlocked", () => {
     fixture.advanced = true;
     const { markup } = header();
-    expect(markup).toContain("data-test-model-control");
+    expect(markup).not.toContain("data-test-model-control");
     expect(markup).toContain('data-tour="computer"');
     expect(markup).toContain('data-testid="chat-more"');
     const more = fixture.menus.find((menu) => menu.ariaLabel === "More")!;
@@ -272,11 +271,11 @@ describe("header name", () => {
     expect(button(pinned)).toContain('data-testid="computer-button-live"');
   });
 
-  it("centres the bot in the header's middle column, with the controls in the last", () => {
+  it("puts the title on the left like Claude desktop, with the controls in the last column", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
     const row = markup.match(/data-chathead-row="true" class="([^"]*)"/)?.[1] ?? "";
     expect(row).toContain("@min-[30rem]/chathead:grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(max-content,1fr)]");
-    expect(markup).toMatch(/data-chathead-identity="true" class="[^"]*@min-\[30rem\]\/chathead:col-start-2[^"]*justify-self-center/);
+    expect(markup).toMatch(/data-chathead-identity="true" class="[^"]*@min-\[30rem\]\/chathead:col-start-1[^"]*justify-self-start/);
     expect(markup).toMatch(/data-chathead-controls="true" class="[^"]*@min-\[30rem\]\/chathead:col-start-3/);
   });
 });
@@ -328,27 +327,25 @@ describe("thread control placement", () => {
     fixture.advanced = true;
   });
 
-  it.each([true, false])("calls from the composer beside dictation, not the header (advanced %s)", (advanced) => {
+  it.each([true, false])("calls from the header in Advanced and from the composer in Simple, once (advanced %s)", (advanced) => {
     fixture.advanced = advanced;
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
     const header = markup.slice(markup.indexOf("data-chathead-controls"), markup.indexOf("data-composer-row"));
-    expect(header).not.toContain("data-call-button");
-    expect(markup).not.toContain('data-call-button="header"');
     const actions = markup.slice(markup.indexOf("data-composer-actions"));
-    expect(actions).toContain('data-call-button="composer"');
+    expect(header.includes('data-call-button="header"')).toBe(advanced);
+    expect(actions.includes('data-call-button="composer"')).toBe(!advanced);
     expect(markup.match(/data-call-button=/g)).toHaveLength(1);
     fixture.advanced = true;
   });
 
-  it("keeps the editor and its controls on one line, wrapping only in a narrow composer", () => {
+  it("keeps the editor and its controls on one line at every width, never a second row", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
-    expect(markup).toContain("@container/composer");
     const row = /data-composer-row="[^"]*" class="([^"]*)"/.exec(markup)!.at(1)!.split(" ");
-    expect(row).toContain("@max-[30rem]/composer:flex-wrap");
-    expect(row).not.toContain("flex-wrap");
+    expect(row).toContain("items-end");
+    expect(row.join(" ")).not.toContain("flex-wrap");
     const editor = /class="mention-editor ([^"]*)"/.exec(markup)!.at(1)!.split(" ");
-    expect(editor).toEqual(expect.arrayContaining(["min-w-0", "flex-1", "@max-[30rem]/composer:order-first", "@max-[30rem]/composer:basis-full"]));
-    expect(editor).not.toContain("basis-full");
+    expect(editor).toEqual(expect.arrayContaining(["min-w-0", "flex-1"]));
+    expect(editor.join(" ")).not.toContain("basis-full");
     const textarea = /<textarea[^>]*class="([^"]*)"/.exec(markup)!.at(1)!.split(" ");
     expect(textarea).toContain("min-h-6");
     expect(textarea).not.toContain("min-h-14");
@@ -539,7 +536,7 @@ describe("thread control placement", () => {
     fixture.localMessage = "Screen Recording required";
     window.ogb = { platform: "darwin", permOpenSettings: vi.fn(), relaunch: vi.fn() } as unknown as NonNullable<Window["ogb"]>;
     const screen = renderToStaticMarkup(createElement(ErrorRow, {
-      message: "Dani Bot can't use this computer yet — embedded host failed: Screen Recording required. Relaunch DaniBot after granting any missing macOS permission.",
+      message: "Dani Bot can't use this computer yet — embedded host failed: Screen Recording required. Relaunch Dani Bot after granting any missing macOS permission.",
     }));
     expect(screen).toContain("Open Screen Recording Settings");
     expect(screen).toContain("Relaunch Dani Bot");
@@ -588,20 +585,18 @@ describe("thread control placement", () => {
 
   it("keeps the Chief of Staff badge on one line instead of stacking a word per line", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot: { ...bot, busy: false, chiefOfStaff: true } }));
-    const badge = /<span title="Chief of Staff" class="([^"]*)"><svg[^>]*lucide-crown[^]*?<\/svg> <span class="([^"]*)">Chief of Staff<\/span>/.exec(markup)!;
+    const badge = /<span title="Chief of Staff" class="([^"]*)"><svg[^>]*icon-crown[^]*?<\/svg> <span class="([^"]*)">Chief of Staff<\/span>/.exec(markup)!;
     expect(badge[1].split(" ")).toEqual(expect.arrayContaining(["shrink-0", "whitespace-nowrap"]));
     expect(badge[2].split(" ")).toContain("@max-4xl/chathead:sr-only");
   });
 
-  it("keeps the selected thread's model in the header and permissions inside the composer pill", () => {
+  it("keeps the selected thread's permissions in the strip under the composer pill, with no model picker", () => {
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
-    expect(markup.match(/data-test-model-control/g)).toHaveLength(1);
-    expect(markup.indexOf("data-test-model-control")).toBeLessThan(markup.indexOf('role="log"'));
+    expect(markup).not.toContain("data-test-model-control");
     expect(markup.indexOf('data-tour="composer"')).toBeGreaterThan(-1);
-    expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf('data-tour="composer"'));
-    expect(markup.indexOf("data-test-approval-control")).toBeLessThan(markup.indexOf("<textarea"));
+    expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf("<textarea"));
+    expect(markup.indexOf("data-test-approval-control")).toBeGreaterThan(markup.indexOf("data-composer-status"));
     expect(markup).not.toContain('aria-label="Thread settings"');
-    expect(fixture.model).toMatchObject({ threadId: "selected", bot: { busy: false, modelSelection: { model: "thread-model" } } });
     expect(fixture.approval).toMatchObject({ approvalMode: "ask", busy: false, trustedModesAvailable: false });
     fixture.approval!.onSelect("auto");
     expect(fixture.dispatch).toHaveBeenLastCalledWith({ type: "updateTask", botId: "bot", threadId: "selected", patch: { approvalMode: "auto" } });
@@ -625,8 +620,9 @@ describe("thread control placement", () => {
   it.each([true, false])("pins a place per conversation from the composer only in Advanced (advanced: %s)", (advanced) => {
     fixture.advanced = advanced;
     const markup = renderToStaticMarkup(createElement(ChatView, { bot }));
-    const pill = markup.slice(markup.indexOf('data-tour="composer"'), markup.indexOf("<textarea"));
-    expect(pill.match(/data-testid="place-chip"/g) ?? []).toHaveLength(advanced ? 1 : 0);
+    const status = markup.indexOf("data-composer-status");
+    expect(markup.slice(Math.max(status, 0)).match(/data-testid="place-chip"/g) ?? []).toHaveLength(advanced ? 1 : 0);
+    expect(status >= 0).toBe(advanced);
     expect(markup.includes("Where this conversation works")).toBe(advanced);
     fixture.advanced = true;
   });

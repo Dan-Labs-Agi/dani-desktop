@@ -1,4 +1,4 @@
-﻿// Boots the real harness behind the real proxy: the bugs this design can have
+// Boots the real harness behind the real proxy: the bugs this design can have
 // live in the seam between them.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, request, type IncomingMessage, type Server } from "node:http";
@@ -84,7 +84,7 @@ const device = async (
 
 /** fetch will not set a Host header */
 const CONTROL_TOKEN = "fixture-control-token";
-const controlHeaders = { "x-DaniBot-control-token": CONTROL_TOKEN };
+const controlHeaders = { "x-danibot-control-token": CONTROL_TOKEN };
 
 const withHost = (port: number, host: string, path = "/api/health", headers: Record<string, string> = {}) =>
   new Promise<number>((resolve, reject) => {
@@ -239,7 +239,7 @@ describe("the sidecar in front of an unmodified harness", () => {
   it("serves a minimal, non-cacheable companion health identity", async () => {
     const health = await device("GET", "/api/health", { token: null });
     expect(health.status).toBe(200);
-    expect(health.body).toEqual({ app: "DaniBot" });
+    expect(health.body).toEqual({ app: "danibot" });
     expect(health.headers.get("cache-control")).toBe("private, no-store");
     expect(health.headers.get("cdn-cache-control")).toBe("no-store");
     expect(JSON.stringify(health.body)).not.toContain("pid");
@@ -390,7 +390,7 @@ describe("the sidecar in front of an unmodified harness", () => {
     const { body } = await device("GET", "/api/bots");
     const bot = body.bots[0];
     const refused = await device("PATCH", `/api/bots/${bot.id}`, {
-      headers: { "x-DaniBot-companion": "0" },
+      headers: { "x-danibot-companion": "0" },
       body: { color: "coral", autoApprove: true },
     });
     expect(refused.status).toBe(403);

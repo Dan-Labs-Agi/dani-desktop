@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Quote, X } from "lucide-react";
+import { Quote, X } from "@/components/icons";
 import {
   CITATION_MAX_COMMENT_LENGTH,
   CITATION_MAX_QUOTE_LENGTH,

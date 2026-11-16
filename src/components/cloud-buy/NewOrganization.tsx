@@ -1,7 +1,7 @@
 // A new organization on the Team plan the person pays for, from the rail's ＋: a name and a color, then it is added at once
 // (no checkout, nothing to pay) and its circle shows it being set up. Main asks the Admin; the page sees only what it says.
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons";
 import type { CloudSwatch, OrganizationBlock } from "../../../electron/cloud-list.mjs";
 import type { AddCloudView } from "../../../electron/cloud-rail.mjs";
 import { track } from "@/lib/analytics";

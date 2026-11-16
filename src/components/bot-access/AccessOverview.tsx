@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, Search } from "lucide-react";
+import { ChevronLeft, Search } from "@/components/icons";
 
 import { sharedLevel, type BotAccess, type BotAccessLevel, type GrantedLevel } from "../../../shared/bot-access";
 import { botOwner } from "../../../shared/bot-owner";
@@ -27,7 +27,7 @@ const SUMMARY = {
   edit: "botAccess.overview.everyoneEdit",
 } as const satisfies Record<BotAccessLevel, string>;
 
-/** The team's bots a person shares: each person's own DaniBot is theirs alone and stays out. */
+/** The team's bots a person shares: each person's own Dani Bot is theirs alone and stays out. */
 export const sharedBots = (bots: readonly Bot[]): Bot[] =>
   bots.filter((bot) => !bot.hidden && !bot.defaultBot?.person).sort((a, b) => a.name.localeCompare(b.name));
 

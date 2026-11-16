@@ -463,7 +463,7 @@ describe("a deleted bot's browser", () => {
     vi.unstubAllEnvs();
     for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
   });
-  /** agent-browser on PATH, as the Cloud image installs it; with `managed`, also the one DaniBot installed. */
+  /** agent-browser on PATH, as the Cloud image installs it; with `managed`, also the one Dani Bot installed. */
   function engines({ managed = false }: { managed?: boolean } = {}) {
     vi.mocked(browserEngineStatus).mockImplementation((options) => (options?.managedOnly && !managed
       ? { kind: "unavailable", reason: "not installed", installable: true }

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { Link2, Link2Off, Pin } from "lucide-react";
+import { Link2, Link2Off, Pin } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import { threadLinkUrl } from "../../shared/thread-link";

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, PlugZap, RefreshCw, X } from "lucide-react";
+import { Loader2, PlugZap, RefreshCw, X } from "@/components/icons";
 
 import { api, type Bot, type Message } from "@/state/store";
 import { ApiError } from "@/state/api";
@@ -11,6 +11,7 @@ import { mcpSignInLink } from "@/lib/mcp-sign-in";
 import { cn } from "@/lib/cn";
 import { askPrimary, ASK_QUIET_BUTTON, AskCard, AskSettledLine } from "./AskCard";
 import { CardHint } from "./CardHint";
+import { ServiceIcon } from "./ServiceIcon";
 
 const STATUS_CHECK_MS = 4_000;
 /** Composio marks an unfinished account EXPIRED shortly after its link lapses; the card keeps asking until it can say so. */
@@ -153,10 +154,13 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     );
   }
 
+  const appLogo = (className: string) => isMcp ? undefined : <ServiceIcon card={{ slug: connector.slug, label: connector.label, logo: null, domain: null }} className={className} />;
+
   if (connected) {
     return (
       <AskSettledLine
         ariaLabel={connector.label}
+        icon={appLogo("size-4 rounded-[4px]")}
         action={!connector.resumed && !stopped && (
           <button type="button" onClick={() => void resume()} disabled={busy} className={cn(ASK_QUIET_BUTTON, "text-accent-text")}>
             {busy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -177,7 +181,7 @@ export function ConnectorCard({ botId, color, threadId, message }: { botId: stri
     <AskCard
       tour="connector"
       ariaLabel={connector.label}
-      icon={<PlugZap size={15} />}
+      icon={appLogo("size-[18px] rounded-[5px]") ?? <PlugZap size={15} />}
       title={isMcp ? t("connectors.card.signInTo", { label: connector.label }) : connector.label}
       explanation={connector.description}
       onDismiss={dismiss}

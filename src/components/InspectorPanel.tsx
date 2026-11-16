@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bug, ChevronDown, ChevronRight, RefreshCw, X } from "lucide-react";
+import { Bug, ChevronDown, ChevronRight, RefreshCw, X } from "@/components/icons";
 import { useStore, visibleMessages, type Bot } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { useCaptionChrome } from "@/components/DesktopCapabilities";

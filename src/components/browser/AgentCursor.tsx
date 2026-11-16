@@ -1,7 +1,7 @@
 // Adapted from pingdotgg/t3code@00cdceb1 apps/web/src/components/preview/AgentBrowserCursor.tsx (AgentCursorMark) and
 // agentBrowserCursorLogic.ts, MIT License, Copyright (c) 2026 T3 Tools Inc. (full text in third_party/t3-code/LICENSE);
 // modified: Dani Bot's colours.
-import { MousePointer2 } from "lucide-react";
+import { MousePointer2 } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 const CURSOR_ACTIVE_MS = 700;

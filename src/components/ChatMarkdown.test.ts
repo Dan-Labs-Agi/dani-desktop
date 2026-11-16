@@ -723,7 +723,7 @@ describe("message-scoped file targets", () => {
     expect(chatUrlTransform("file:///Users/milind/report.md")).toBe("file:///Users/milind/report.md");
     expect(chatUrlTransform("C:/Users/Dani/report.md")).toBe("C:/Users/Dani/report.md");
     expect(chatUrlTransform("\\\\server\\share\\report.md")).toBe("\\\\server\\share\\report.md");
-    expect(chatUrlTransform("C:%5CUsers%5CMaus%5Crelease%20notes.md")).toBe("C:\\Users\\Dani\\release%20notes.md");
+    expect(chatUrlTransform("C:%5CUsers%5CDani%5Crelease%20notes.md")).toBe("C:\\Users\\Dani\\release%20notes.md");
     expect(chatUrlTransform("javascript:alert(1)")).toBe("");
     expect(chatUrlTransform("https://example.test/report.md")).toBe("https://example.test/report.md");
   });
@@ -903,9 +903,9 @@ describe("ChatMarkdown attachments", () => {
     });
 
     it("does not offer a retry for a refusal that happens on every try", () => {
-      expect(render(true)).not.toContain("lucide-rotate-ccw");
-      expect(render(true, "file:///Users/dani/Desktop/designs/Posts/2026-10-08_News")).not.toContain("lucide-rotate-ccw");
-      expect(render(false)).toContain("lucide-rotate-ccw");
+      expect(render(true)).not.toContain("icon-rotate-ccw");
+      expect(render(true, "file:///Users/dani/Desktop/designs/Posts/2026-10-08_News")).not.toContain("icon-rotate-ccw");
+      expect(render(false)).toContain("icon-rotate-ccw");
     });
 
     it("shows the path in a browser, which has no desktop bridge", () => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Search, SquarePen } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, SquarePen } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { llmThreadTitlesEnabled } from "@/lib/feature-flags";

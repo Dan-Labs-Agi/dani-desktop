@@ -1,5 +1,5 @@
 import { useId, type ComponentProps, type ReactNode } from "react";
-import { Check, ChevronRight, Copy, X } from "lucide-react";
+import { Check, ChevronRight, Copy, X } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { useCopyFeedback } from "@/lib/copy-text";
 import { t } from "@/lib/i18n";
@@ -23,17 +23,15 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       className={cn(
-        "relative cursor-pointer h-6 w-11 shrink-0 rounded-full transition-colors enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
-        "in-data-[settings-look=simple]:h-5 in-data-[settings-look=simple]:w-8",
-        checked ? "bg-accent" : "bg-control in-data-[settings-look=simple]:bg-ink/[0.12] in-data-[settings-look=simple]:ring-1 in-data-[settings-look=simple]:ring-inset in-data-[settings-look=simple]:ring-ink/45",
+        "relative h-5 w-8 shrink-0 cursor-pointer rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 motion-reduce:transition-none",
+        checked ? "bg-ink enabled:hover:bg-ink/85" : "bg-ink/[0.14] ring-1 ring-inset ring-ink/20 enabled:hover:bg-ink/[0.2]",
         className,
       )}
     >
       <span
         className={cn(
-          "absolute top-[3px] h-[18px] w-[18px] rounded-full bg-white transition-[left] motion-reduce:transition-none",
-          "in-data-[settings-look=simple]:top-0.5 in-data-[settings-look=simple]:size-4",
-          checked ? "left-[21px] in-data-[settings-look=simple]:left-[14px]" : "left-[3px] in-data-[settings-look=simple]:left-0.5",
+          "absolute top-0.5 size-4 rounded-full transition-[left,background-color] motion-reduce:transition-none",
+          checked ? "left-[14px] bg-app" : "left-0.5 bg-ink-secondary",
         )}
       />
     </button>
@@ -73,11 +71,11 @@ export function SettingRow({
 }) {
   const titleId = useId();
   return (
-    <div role="group" aria-labelledby={titleId} className={cn("px-4 in-data-[settings-look=simple]:py-2.5", className)}>
+    <div role="group" data-setting-row aria-labelledby={titleId} className={cn("px-4 in-data-[settings-look=simple]:py-2.5", className)}>
       <div className="grid min-w-0 grid-cols-1 items-center gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-6 in-data-[settings-look=simple]:flex in-data-[settings-look=simple]:min-h-6 in-data-[settings-look=simple]:flex-wrap in-data-[settings-look=simple]:gap-x-5 in-data-[settings-look=simple]:gap-y-2">
         <div className="min-w-0 in-data-[settings-look=simple]:flex in-data-[settings-look=simple]:min-w-[min(100%,15rem)] in-data-[settings-look=simple]:flex-1 in-data-[settings-look=simple]:flex-col in-data-[settings-look=simple]:gap-0.5">
-          <div id={titleId} className="text-[14px] font-medium text-ink in-data-[settings-look=simple]:font-normal in-data-[settings-look=simple]:leading-5">{title}</div>
-          {subtitle && <div className="mt-1 text-[12px] leading-relaxed text-pretty text-ink-secondary in-data-[settings-look=simple]:mt-0 in-data-[settings-look=simple]:text-[13px] in-data-[settings-look=simple]:leading-[18px]">{subtitle}</div>}
+          <div id={titleId} className="text-[14px] leading-5 text-ink">{title}</div>
+          {subtitle && <div className="mt-0.5 text-[13px] leading-[18px] text-pretty text-ink-secondary in-data-[settings-look=simple]:mt-0">{subtitle}</div>}
         </div>
         <div className="min-w-0 sm:max-w-[240px] in-data-[settings-look=simple]:ml-auto in-data-[settings-look=simple]:shrink-0 in-data-[settings-look=simple]:sm:max-w-none">{children}</div>
       </div>

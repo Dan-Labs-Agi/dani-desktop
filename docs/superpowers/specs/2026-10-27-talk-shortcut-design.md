@@ -1,21 +1,21 @@
-# Talk shortcut: hold a key, talk to DaniBot from any app
+# Talk shortcut: hold a key, talk to Dani Bot from any app
 
 Date: 2026-10-27 · Branch: `feat/talk-shortcut` · Idea source: Atticus's hold-to-talk box (SaarthurR/atticus-mac, MIT). We take the idea, not the code.
 
 ## Why
 
-Asking DaniBot something means switching to the app, finding the chat and
+Asking Dani Bot something means switching to the app, finding the chat and
 typing. Holding a key from wherever you are, saying it and letting go is the
-fastest way in. DaniBot is the orchestrator, so it is the right place for a
+fastest way in. Dani Bot is the orchestrator, so it is the right place for a
 quick ask to land.
 
 ## Goals
 
 - macOS: hold ⌃⌥Space from any app, speak, release ⌃⌥ to send.
 - A small floating box near the bottom of the screen shows the live words, then
-  DaniBot's reply. It never takes focus and never brings the DaniBot window
+  Dani Bot's reply. It never takes focus and never brings the Dani Bot window
   forward.
-- Clicking the box opens that chat in DaniBot.
+- Clicking the box opens that chat in Dani Bot.
 - On/off in Settings → General.
 
 ## Non-goals (v1)
@@ -57,7 +57,7 @@ helper is not the only thing that holds the mic: Live calls use
 `getUserMedia`, and voice calls stop the helper while the bot speaks. So the
 renderer also tells main when any call starts and ends (`call:active` IPC), and
 the talk shortcut refuses during a call or while composer dictation is on: the
-box says "Voice is in use in DaniBot" and nothing starts. If the renderer starts
+box says "Voice is in use in Dani Bot" and nothing starts. If the renderer starts
 speech while the talk box is listening, the talk sink's `replaced()` closes the
 box.
 
@@ -84,21 +84,21 @@ the panel.
 
 ### Sending (Electron main)
 
-Asks always go to the DaniBot on this Mac's own server, even when the window is
+Asks always go to the Dani Bot on this Mac's own server, even when the window is
 showing a Team Cloud (my call for v1). Once this Mac's bots moved to My Cloud
 (home is My Cloud, or this Mac's copy is frozen) the shortcut is unavailable and
 its key free, until home is this Mac again; a frozen server's 409 `moved` says
-"DaniBot lives on My Cloud now — talk to it there".
+"Dani Bot lives on My Cloud now — talk to it there".
 
-`GET /api/bots?messages=0` → DaniBot (`defaultBot` without `person`, else the
+`GET /api/bots?messages=0` → Dani Bot (`defaultBot` without `person`, else the
 Chief of Staff). `POST /api/bots/:id/messages {text, sendId}` with the desktop
 owner header (`localServerRequest`). Follow the reply on `GET
 /api/events?screens=off` for that thread: assistant deltas update the box, the
 final bot message wins, `turn.completed` ends it, a request card switches to
 "needs you". No reply in 120 s shows "Still working · Open chat". An empty
 transcript closes the box silently. If the local server is not running, the box
-says "Open DaniBot to talk"; while it is still starting, "DaniBot is still
-starting. Try again in a moment."; with no DaniBot, "Set up DaniBot first, then
+says "Open Dani Bot to talk"; while it is still starting, "Dani Bot is still
+starting. Try again in a moment."; with no Dani Bot, "Set up Dani Bot first, then
 try again." Speech problems use the composer's words: only a refused permission
 asks for access, a microphone or recognizer failure says "Talking couldn't
 start. Try again."
@@ -107,7 +107,7 @@ start. Try again."
 
 `desktop-prefs.json` gets `talkShortcut: boolean` (default `true` on macOS),
 `talkKey: "ctrl-opt-space" | "ctrl-shift-space" | "opt-shift-space"` and the
-Quick asks chat id. Settings → General gets a switch: "Talk to DaniBot from any
+Quick asks chat id. Settings → General gets a switch: "Talk to Dani Bot from any
 app · hold ⌃⌥Space, speak, let go" with the key picker under it. Hidden where
 Apple speech is unavailable, on a remote client and while home is My Cloud. Not
 in `REMOTE_SAFE`.
@@ -123,11 +123,11 @@ in `REMOTE_SAFE`.
   the keys were released).
 - By hand on a Mac (OMB2 side-by-side build): hold, speak, release from Safari;
   the box never takes focus; a call in progress blocks it; the reply lands in
-  DaniBot's chat.
+  Dani Bot's chat.
 
 ## Decisions
 
-- Omkar, 2026-10-27: asks land in one dedicated DaniBot chat, "Quick asks",
+- Omkar, 2026-10-27: asks land in one dedicated Dani Bot chat, "Quick asks",
   created on first use and reused (follow-ups keep context; asks never mix into
   work running in another chat). If it was deleted, a new one is made. Its id is
   kept in desktop prefs per server.

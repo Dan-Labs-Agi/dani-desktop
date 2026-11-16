@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { AudioLines, Check, GraduationCap, ListChecks, Paperclip, Phone, Plus, Target, X } from "lucide-react";
+import { AudioLines, Check, GraduationCap, ListChecks, Paperclip, Phone, Plus, Target, X } from "@/components/icons";
 import { approvalModeFor } from "../../shared/approval-mode";
 import {
   approvalModeOptions,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/approval-mode-options";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { CALL_MODES, effectiveCallMode, useCallMode } from "@/lib/call-mode";
-import { callCapabilityHelp } from "@/lib/call-capability";
+import { callCapabilityHelp, turnCallsAvailable } from "@/lib/call-capability";
 import { requestCallStart } from "@/lib/call-start-request";
 import { useOnCall } from "@/lib/call";
 import { isLiveCallRunning, useLiveMedia } from "@/lib/live-call-media";
@@ -170,7 +170,7 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
   const storedMode = useCallMode();
   const onCall = useOnCall();
   const media = useLiveMedia();
-  const turnsHere = !ready || capabilities.dictation.available;
+  const turnsHere = !ready || turnCallsAvailable(capabilities);
   const callMode = effectiveCallMode(storedMode, { turnsHere, canLive: true });
   const turnsHelp = turnsHere ? null : callCapabilityHelp(capabilities, Boolean(window.ogb?.speechStart));
   const { state } = useStore();
@@ -219,8 +219,8 @@ export function ComposerPlusMenu({ onAttach, goal, teach, approval, callBotId, e
       <Plus size={22} aria-hidden="true" />
     </span>
   ) : (
-    <span data-composer-plus className={cn("flex items-center justify-center transition-colors", SIMPLE_CONTROL, open && "bg-ink/[0.09] text-ink")}>
-      <Plus size={20} strokeWidth={1.75} absoluteStrokeWidth aria-hidden="true" />
+    <span data-composer-plus className={cn("flex items-center justify-center transition-colors", simple ? SIMPLE_CONTROL : "size-7 rounded-full text-ink-secondary hover:bg-ink/[0.09] hover:text-ink", open && "bg-ink/[0.09] text-ink")}>
+      <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
     </span>
   );
   if (!circle && items.length === 1) {

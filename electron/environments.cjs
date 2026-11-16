@@ -117,14 +117,14 @@ function workspaceMenuTemplate(state, { onSwitch, onConnect, onForget, onAddClou
   if (homeOrigin) return homeMenuTemplate(state, { onSwitch, onForget, sublabels, iconFor, foldSublabels, homeOrigin });
   return [
     ...(places ? [{ id: "workspace-places", label: places, enabled: false }, { type: "separator" }] : []),
-    { id: "workspace-local", label: "This computer", type: "radio", checked: !active, ...(iconFor && cleanColor(state.localColor) ? { icon: iconFor(state.localColor) } : {}), click: () => onSwitch(LOCAL_ID) },
+    { id: "workspace-local", label: "This computer", type: "checkbox", checked: !active, ...(iconFor && cleanColor(state.localColor) ? { icon: iconFor(state.localColor) } : {}), click: () => onSwitch(LOCAL_ID) },
     ...[...state.environments].sort((a, b) => listedPlace(b) - listedPlace(a)).map((entry) => {
       const icon = iconFor && cleanColor(entry.color) ? iconFor(entry.color) : null;
       const status = Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role) : null;
       return {
         id: `workspace-${entry.id}`, label: foldSublabels && status ? `${entry.name} · ${status}` : entry.name,
         sublabel: status ?? (entry.kind === "local" ? entry.dataDir : new URL(entry.origin).host),
-        ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
+        ...(icon ? { icon } : {}), type: "checkbox", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
       };
     }),
     ...(copyToCloud ? [{ id: "workspace-copy-to-cloud", label: copyToCloud.label, click: copyToCloud.click }] : []),
@@ -147,7 +147,7 @@ function homeMenuTemplate(state, { onSwitch, onForget, sublabels, iconFor, foldS
       const status = Object.hasOwn(sublabels, entry.id) ? sublabels[entry.id] : entry.team ? teamRoleLabel(entry.team.role) : null;
       return {
         id: `workspace-${entry.id}`, label: foldSublabels && status ? `${entry.name} · ${status}` : entry.name, sublabel: status ?? new URL(entry.origin).host,
-        ...(icon ? { icon } : {}), type: "radio", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
+        ...(icon ? { icon } : {}), type: "checkbox", checked: entry.id === state.activeId, click: () => onSwitch(entry.id),
       };
     }),
     ...(active && active.origin !== homeOrigin && !listedPlace(active) ? [{ type: "separator" }, { id: "workspace-forget", label: `Forget “${active.name}”…`, click: () => onForget(active.id) }] : []),

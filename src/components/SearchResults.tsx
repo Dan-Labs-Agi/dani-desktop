@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GitBranch, Wrench } from "lucide-react";
+import { GitBranch, Wrench } from "@/components/icons";
 import { api, useStore, formatTime } from "@/state/store";
 import { BotAvatar } from "./Avatar";
 import { cn } from "@/lib/cn";

@@ -1,4 +1,4 @@
-import { ChevronRight, MessagesSquare } from "lucide-react";
+import { ChevronRight, MessagesSquare } from "@/components/icons";
 import { openThread, useStore, type Message } from "@/state/store";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { t } from "@/lib/i18n";

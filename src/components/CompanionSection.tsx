@@ -8,7 +8,7 @@ import {
   Smartphone,
   Trash2,
   Wifi,
-} from "lucide-react";
+} from "@/components/icons";
 import {
   PhoneSetupFlowView,
   companionAccountActionError,

@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { CircleHelp } from "lucide-react";
+import { CircleHelp } from "@/components/icons";
 import { api, useStore, type ConfigStatus } from "@/state/store";
 import { t } from "@/lib/i18n";
 import { saveTeamProfile } from "@/lib/own-profile";

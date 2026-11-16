@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { Plus, Users, X } from "lucide-react";
+import { Plus, Users, X } from "@/components/icons";
 import { openBot, useStore, type Bot } from "@/state/store";
 import { rankByName } from "@/lib/palette-rank";
 import { useShowThreads } from "@/lib/thread-preferences";

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AppWindow, CircleAlert, Info, Loader2, RotateCw } from "lucide-react";
+import { AppWindow, CircleAlert, Info, Loader2, RotateCw } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { AppNetwork } from "../../../shared/app";

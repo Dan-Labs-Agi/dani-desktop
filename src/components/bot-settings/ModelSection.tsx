@@ -1,5 +1,5 @@
 import { EffortRow, ModelPicker } from "../ModelPicker";
-import { X } from "lucide-react";
+import { X } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { useStore, type Bot } from "@/state/store";
 import { useBotEditor } from "./BotEditorContext";
@@ -7,6 +7,7 @@ import { ProposalStatus } from "./ProposalStatus";
 import { ThreadModelsLine } from "../ThreadModelsLine";
 import { t } from "@/lib/i18n";
 import { Select } from "../Select";
+import { DANI_FREE_INSTANCE_IDS } from "../../../shared/dani-free";
 
 export function ModelSection({ bot }: { bot: Bot }) {
   const { state, dispatch } = useStore();
@@ -14,7 +15,7 @@ export function ModelSection({ bot }: { bot: Bot }) {
   const modelVariants = state.instances.find((instance) => instance.instanceId === bot.modelSelection.instanceId)?.capabilities?.modelVariants;
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl bg-card p-4">
+      <div className="rounded-xl border border-ink/[0.08] p-4">
         <ModelPicker
           bot={bot}
           contained
@@ -33,7 +34,7 @@ export function ModelSection({ bot }: { bot: Bot }) {
 
       <EffortRow
         bot={bot}
-        className="rounded-xl bg-card p-4"
+        className="rounded-xl border border-ink/[0.08] p-4"
         label={
           <div>
             <div className="text-[15px] font-medium text-ink">{modelVariants ? t("model.simple.reasoning") : t("model.section.effort")}</div>
@@ -57,7 +58,7 @@ export function ModelSection({ bot }: { bot: Bot }) {
 function KeepWarmRow({ bot, workspaceOn, onChange }: { bot: Bot; workspaceOn: boolean; onChange: (value: boolean | null) => void }) {
   const value = bot.cacheKeepWarm === true ? "on" : bot.cacheKeepWarm === false ? "off" : "follow";
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <label htmlFor="bot-cache-keepwarm" className="text-[15px] font-medium text-ink">{t("bot.keepWarm.title")}</label>
       <div className="mt-0.5 text-[13px] text-ink-secondary">{t("bot.keepWarm.help")}</div>
       <Select className="mt-3 max-w-full" id="bot-cache-keepwarm" value={value}
@@ -73,13 +74,16 @@ function KeepWarmRow({ bot, workspaceOn, onChange }: { bot: Bot; workspaceOn: bo
 export function FallbackChain({ bot, onChange }: { bot: Bot; onChange: (fallback: Bot["fallback"]) => void }) {
   const { state } = useStore();
   const chain = bot.fallback ?? [];
+  // Dani's two routes (server and CLI) reach the same free models under one name: list Dani once, and not beside itself.
+  const dani = (instanceId: string) => DANI_FREE_INSTANCE_IDS[instanceId] === true;
+  const daniTaken = dani(bot.modelSelection.instanceId) || chain.some((entry) => dani(entry.instanceId));
   const available = state.instances.filter(
     (instance) =>
       instance.snapshot.state === "available" &&
       Boolean(instance.models.default.trim()) &&
       instance.instanceId !== bot.modelSelection.instanceId &&
       !chain.some((entry) => entry.instanceId === instance.instanceId),
-  );
+  ).filter((instance, index, list) => !dani(instance.instanceId) || (!daniTaken && list.findIndex((other) => dani(other.instanceId)) === index));
   const nameOf = (instanceId: string) => state.instances.find((instance) => instance.instanceId === instanceId)?.displayName ?? instanceId;
   const modelsOf = (entry: NonNullable<Bot["fallback"]>[number]) => {
     const instance = state.instances.find((candidate) => candidate.instanceId === entry.instanceId);
@@ -94,7 +98,7 @@ export function FallbackChain({ bot, onChange }: { bot: Bot; onChange: (fallback
   };
 
   return (
-    <div className="rounded-xl bg-card p-4">
+    <div className="rounded-xl border border-ink/[0.08] p-4">
       <div className="text-[15px] font-medium text-ink">{t("model.fallback.title")}</div>
       <div className="mt-0.5 text-[13px] text-ink-secondary">
         {t("model.fallback.uses")}

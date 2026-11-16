@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowUp, Check, Clock3, LoaderCircle, Square, X } from "lucide-react";
+import { ArrowUp, Check, Clock3, LoaderCircle, Square, X } from "@/components/icons";
 import { botButton, type BotButton } from "@/lib/bot-button";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

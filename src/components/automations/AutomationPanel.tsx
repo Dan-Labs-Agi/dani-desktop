@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Copy, Pause, Pencil, Play, RotateCw, Trash2, X } from "lucide-react";
+import { Check, Copy, Pause, Pencil, Play, RotateCw, Trash2, X } from "@/components/icons";
 
 import { automationStatus, automationSubtitle, capital, lastReceived, lastWhen, runLine, STATUS_WORD, webhookCalls, type Automation } from "@/lib/automations";
 import { cn } from "@/lib/cn";

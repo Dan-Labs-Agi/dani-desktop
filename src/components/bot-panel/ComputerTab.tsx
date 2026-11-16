@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyRound, Monitor } from "lucide-react";
+import { KeyRound, Monitor } from "@/components/icons";
 
 import { writeComputerPanelView, type ComputerPanelView } from "@/lib/computer-panel-view";
 import { t } from "@/lib/i18n";

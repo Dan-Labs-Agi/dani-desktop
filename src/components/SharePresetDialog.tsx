@@ -1,4 +1,4 @@
-import { Check, Loader2, ShieldCheck, X } from "lucide-react";
+import { Check, Loader2, ShieldCheck, X } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 

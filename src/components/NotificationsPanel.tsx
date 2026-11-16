@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, AtSign, Bell, CheckCircle2, CircleHelp, HandHelping, Info, LogIn, Newspaper, Pin, RotateCcw, Wallet, X, type LucideIcon } from "lucide-react";
+import { AlertTriangle, AtSign, Bell, CheckCircle2, CircleHelp, HandHelping, Info, LogIn, Newspaper, Pin, RotateCcw, Wallet, X, type IconType } from "@/components/icons";
 import { api, useStore, openNotificationTarget, type Action } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -10,7 +10,7 @@ import { threadUpdatedLabel } from "./SidebarThreadRow";
 import type { NotificationLogEntry, NotifyKind } from "../../shared/notification";
 import { Select } from "./Select";
 
-const KIND_LOOK: Record<NotifyKind, { Icon: LucideIcon; className: string; status: LocaleKey }> = {
+const KIND_LOOK: Record<NotifyKind, { Icon: IconType; className: string; status: LocaleKey }> = {
   done: { Icon: CheckCircle2, className: "text-success", status: "notifications.status.done" },
   "delegation-settled": { Icon: CheckCircle2, className: "text-success", status: "notifications.status.done" },
   approval: { Icon: HandHelping, className: "text-warning", status: "notifications.status.approval" },

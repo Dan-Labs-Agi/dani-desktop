@@ -50,7 +50,7 @@ function entry(packageId: string, rel: { document: any; bytes: string; sha256: s
 }
 
 function catalog(packages: unknown[], extra: Record<string, unknown> = {}) {
-  return { format: "openmaus.org-library", version: 1, libraryVersion: 3, organization: { id: ORG, name: "Customer Co" }, packages, ...extra };
+  return { format: "danibot.org-library", version: 1, libraryVersion: 3, organization: { id: ORG, name: "Customer Co" }, packages, ...extra };
 }
 
 function relay(body: unknown, overrides: Record<string, unknown> = {}) {
@@ -178,7 +178,7 @@ describe("the catalog", () => {
     await library.settled();
     const readBlob = vi.spyOn(library, "readBlob");
     expect(library.list().packages[0]).toMatchObject({ blob: "unsupported", installed: null });
-    expect(library.add(TEAM_ID, app.importDeps)).toMatchObject({ ok: false, status: 409, code: "newer_app_required", error: "Update DaniBot to add this package." });
+    expect(library.add(TEAM_ID, app.importDeps)).toMatchObject({ ok: false, status: 409, code: "newer_app_required", error: "Update Dani Bot to add this package." });
     expect(readBlob).not.toHaveBeenCalled();
     expect(app.store.bots).toHaveLength(0);
   });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, FileText, Folder, MessagesSquare, Users, X } from "lucide-react";
+import { ChevronRight, FileText, Folder, MessagesSquare, Users, X } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

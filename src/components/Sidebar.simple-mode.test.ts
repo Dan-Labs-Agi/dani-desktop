@@ -283,7 +283,7 @@ describe("bot-first sidebar", () => {
     expect(markup.match(/data-testid="model-badge"/g)).toHaveLength(1);
     expect(markup.match(/data-provider-mark=/g)).toHaveLength(1);
     expect(markup).toMatch(/<span class="absolute -left-1 -top-1 flex rounded-full bg-raised p-\[3px\]"><svg[^>]*role="img"[^>]*aria-label="Chief of Staff"[^>]*data-testid="chief-crown"/);
-    expect(markup).not.toContain("lucide-pin");
+    expect(markup).not.toContain("icon-pin");
     expect(markup).not.toMatch(/tabular-nums text-ink-secondary transition-opacity group-hover:opacity-0/);
     const row = findElement(tree, "data-sidebar-bot-row", bot.id)!;
     expect(row.props.title).toBe("Atlas · Research · Chief of Staff · Model: Sonnet (Claude)");

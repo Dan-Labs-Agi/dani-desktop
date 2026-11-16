@@ -1,6 +1,6 @@
 // Providers such as Grok narrate before tools.
 import { useEffect, useState } from "react";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "@/components/icons";
 
 export function TurnNarrationRun({
   label,

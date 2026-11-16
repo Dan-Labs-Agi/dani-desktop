@@ -1,4 +1,4 @@
-/** Boat's credit for people DaniBot introduces to Boat. The person claims it by writing to Boat themselves: the app only
+/** Boat's credit for people Dani Bot introduces to Boat. The person claims it by writing to Boat themselves: the app only
  * opens a draft they send, so nothing is ever claimed for them. */
 export interface BoatOffer {
   url: string;
@@ -14,8 +14,8 @@ export interface BoatOffer {
 export const BOAT_OFFER: BoatOffer = {
   url: "https://boat.dev",
   claimTo: "support@ascii.dev",
-  subject: "DaniBot introduced me: $50 Boat credit",
-  body: "Hi Boat team,\n\nDaniBot introduced me to Boat. I'm on the $___ plan.\nMy Boat account email: ___\n\nThanks!",
+  subject: "Dani Bot introduced me: $50 Boat credit",
+  body: "Hi Boat team,\n\nDani Bot introduced me to Boat. I'm on the $___ plan.\nMy Boat account email: ___\n\nThanks!",
   until: null,
 };
 

@@ -1,7 +1,7 @@
 // On Windows, Antigravity's runtime unpacks a large set of files on every start and leaves them behind when stopped by
 // force.
 import { useState } from "react";
-import { HardDrive, Loader2 } from "lucide-react";
+import { HardDrive, Loader2 } from "@/components/icons";
 import { api, type InstanceInfo } from "@/state/store";
 import { t } from "@/lib/i18n";
 

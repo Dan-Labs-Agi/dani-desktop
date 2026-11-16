@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Lock, UserRound, Users } from "lucide-react";
+import { Lock, UserRound, Users } from "@/components/icons";
 import { t } from "@/lib/i18n";
 
 const SEEN_KEY = (teamId: string) => `omb.team-private-chats.${teamId}`;
@@ -33,7 +33,7 @@ function ChatHeadAudience({ icon, label, ...data }: { icon: ReactNode; label: st
   </span>;
 }
 
-/** In a member's own DaniBot's chats: that member's helper, which other members never see. */
+/** In a member's own Dani Bot's chats: that member's helper, which other members never see. */
 export function TeamOwnHelperHeader() {
   return <ChatHeadAudience icon={<UserRound size={12} aria-hidden="true" className="shrink-0" />} label={t("team.ownHelperHeader")} data-chathead-own-helper="" />;
 }

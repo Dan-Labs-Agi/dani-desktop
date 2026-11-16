@@ -2,7 +2,7 @@
 // one), buy a Cloud (the buying sheet: another Cloud right here, or the first one on this computer's own sheet), or add a
 // server of the person's own by pasting its pairing link.
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Building2, Cloud, Loader2, Server, X } from "lucide-react";
+import { Building2, Cloud, Loader2, Server, X } from "@/components/icons";
 import type { RailAddChoices } from "../../electron/cloud-rail.mjs";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/cn";

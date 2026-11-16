@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { CircleAlert, X } from "lucide-react";
+import { CircleAlert, X } from "@/components/icons";
 import { useStore, type Message } from "@/state/store";
 import { usePageOpener } from "@/lib/page-open";
 import { phonePairingSettingsAction } from "@/lib/phone-pairing";

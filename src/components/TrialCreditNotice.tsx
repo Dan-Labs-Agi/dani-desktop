@@ -1,4 +1,4 @@
-import { Info } from "lucide-react";
+import { Info } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { useStore } from "@/state/store";
 

@@ -9,7 +9,7 @@ export function PhoneAppsCard({ bot, patch }: { bot: Bot; patch: (patch: BotPatc
   const { phones } = usePhones();
   if (phones.length === 0) return null;
   const rows = phoneAppRows(bot, phones);
-  return <div className="rounded-xl bg-card p-4" data-testid="access-phone-apps">
+  return <div className="rounded-xl border border-ink/[0.08] p-4" data-testid="access-phone-apps">
     <div className="text-[15px] font-medium text-ink">{t("botAccess.phone.title")}</div>
     <div className="mt-0.5 text-[13px] text-ink-secondary">{t("botAccess.phone.subtitle", { phone: phoneNames(phones) })}</div>
     {bot.phoneApps === undefined && <div className="mt-1 text-[12px] text-ink-secondary">{t("botAccess.phone.default")}</div>}

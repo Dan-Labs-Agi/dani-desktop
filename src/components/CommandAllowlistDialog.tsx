@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Trash2, X } from "lucide-react";
+import { Loader2, Trash2, X } from "@/components/icons";
 import type { CommandAllowRule, CommandAllowlistResponse } from "../../shared/command-allowlist";
 import { api, useStore } from "@/state/store";
 import { t } from "@/lib/i18n";

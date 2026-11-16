@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Trash2 } from "@/components/icons";
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 
 import { cn } from "@/lib/cn";
@@ -148,12 +148,12 @@ export function SidebarSectionHeader({
           aria-expanded={!collapsed}
           aria-keyshortcuts={reorderable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
           title={toggleTitle}
-          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-raised/50"
+          className="group/tools mr-auto flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left"
         >
-          <span className="truncate text-[12px] font-semibold text-ink-secondary">
+          <span className="truncate text-[12px] font-medium text-ink-secondary group-hover/tools:text-ink">
             {name}
           </span>
-          <Chevron size={13} className="shrink-0 text-ink-secondary" aria-hidden="true" />
+          <Chevron size={13} className="shrink-0 text-ink-tertiary group-hover/tools:text-ink" aria-hidden="true" />
           <SectionAttention attention={attention} label={attentionLabel} alert={alert} />
         </button>
       ) : (

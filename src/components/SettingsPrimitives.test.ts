@@ -11,7 +11,7 @@ describe("settings primitives", () => {
       children: createElement("select", { "aria-label": "App language" }, createElement("option", null, "English")),
       message: createElement("p", { role: "alert" }, "Could not save"),
     }));
-    expect(html).toMatch(/role="group" aria-labelledby="[^"]+"/);
+    expect(html).toMatch(/role="group" data-setting-row="true" aria-labelledby="[^"]+"/);
     expect(html).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
     expect(html).toContain('aria-label="App language"');
     expect(html).toContain('<p role="alert">Could not save</p>');

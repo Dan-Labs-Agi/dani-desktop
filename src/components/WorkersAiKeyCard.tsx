@@ -1,7 +1,7 @@
 // The person's own Cloudflare Workers AI key: an account ID (not a secret, shown back) and a write-only token. With it,
 // Clef decides and Clairic reads, and the free tier covers light use.
 import { useState } from "react";
-import { Check, ExternalLink, Loader2 } from "lucide-react";
+import { Check, ExternalLink, Loader2 } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

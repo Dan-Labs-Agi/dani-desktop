@@ -182,7 +182,7 @@
      "the app is talking to you", not as a browser default */
   --color-focus: #459ffe;
   --color-accent-text: #7fc0ff;
-  --color-bubble-user: #5a5a5a;
+  --color-bubble-user: #303030;
   --color-success: #38d591;
   --color-danger: #ff5667;
   --color-warning: #ff9800;
@@ -211,7 +211,7 @@
   --chat-card-pct: 88%;
   --chat-prose-max: 44rem;
   /* .chat-column: fills a narrow pane, then stops at this width and centers, so wider windows only grow the gutters. */
-  --chat-column-max: 60rem;
+  --chat-column-max: 48rem;
   /* Menus; a phone rounds them like its sheets. */
   --radius-menu: 14px;
 }
@@ -240,6 +240,8 @@
      bottom of this file, which is what makes them take effect) */
   --color-accent-ink: #ffffff;
   --color-danger-ink: #ffffff;
+  /* the Chief of Staff's crown badge: one gold on every skin, under white */
+  --color-chief: #e8993a;
   /* ink carried by the user's own bubble. A hex rather than the ink token so
      the contrast check can measure it; every dark skin repeats its ink here. */
   --color-bubble-user-ink: #f5f5f5;
@@ -282,7 +284,7 @@
   --color-accent-border: #459ffe;
   --color-accent-text: #7fc0ff;
   --color-accent-ink: #ffffff;
-  --color-bubble-user: #5a5a5a;
+  --color-bubble-user: #303030;
   --color-bubble-user-ink: #f5f5f5;   /* = ink: unchanged */
   --color-success: #38d591;
   --color-danger: #ff5667;
@@ -1110,9 +1112,10 @@
   max-width: var(--chat-prose-max);
 }
 
+/* Claude Desktop's message type: 15px on a 22px line. */
 .chat-text,
 .chat-md {
-  line-height: 1.75;
+  line-height: 1.4667;
   font-family: "omb-chat", var(--font-sans);
 }
 .chat-md :is(strong, b) {
@@ -1415,6 +1418,40 @@ body {
   @container style(--code-color-scheme: dark) {
     .ui-scrim-light { background: rgb(0 0 0 / 0.4); }
   }
+  /* A native radio: a 16px ring with an ink dot, and its label a selectable row, filled once chosen. In this layer,
+     so a call site's own utilities still win. */
+  input[type="radio"]:not(.sr-only) {
+    appearance: none;
+    display: inline-grid;
+    flex: none;
+    place-content: center;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    border: 1px solid color-mix(in srgb, var(--color-ink) 32%, transparent);
+    border-radius: 9999px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="radio"]:not(.sr-only)::before {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: var(--color-ink);
+    opacity: 0;
+  }
+  input[type="radio"]:not(.sr-only):checked { border-color: var(--color-ink); }
+  input[type="radio"]:not(.sr-only):checked::before { opacity: 1; }
+  input[type="radio"]:not(.sr-only):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+  input[type="radio"]:not(.sr-only):disabled { cursor: not-allowed; opacity: 0.45; }
+  label:has(> input[type="radio"]:not(.sr-only)) {
+    padding: 0.375rem 0.625rem;
+    border-radius: var(--radius-lg, 0.5rem);
+    cursor: pointer;
+  }
+  label:has(> input[type="radio"]:not(.sr-only):enabled):hover { background: var(--color-menu-hover); }
+  label:has(> input[type="radio"]:not(.sr-only):checked) { background: color-mix(in srgb, var(--color-ink) 7%, transparent); }
   @media (prefers-reduced-motion: reduce) {
     .ui-button,
     .ui-icon-button,
@@ -1513,6 +1550,15 @@ body {
 [data-settings-look] {
   --settings-edge: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
+/* Advanced Settings: the rows of a section sit straight on the sheet, on the title's left edge, a thin rule between
+   neighbours. The section's scroller spaces its blocks 1rem apart; a rule replaces that gap. */
+[data-settings-look="advanced"] [data-settings-scroll] > [data-setting-row] {
+  padding: 0.75rem 0;
+}
+[data-settings-look="advanced"] [data-settings-scroll] > [data-setting-row] + [data-setting-row] {
+  margin-top: -1rem;
+  border-top: 1px solid var(--settings-edge);
+}
 :root[data-skin="midnight"] [data-settings-look] {
   --settings-edge: color-mix(in srgb, var(--color-ink) 6%, transparent);
 }
@@ -1538,6 +1584,22 @@ body {
   background: rgb(0 0 0 / 0.7);
 }
 :root[data-skin="daylight"] [data-settings-look] > .glass-scrim {
+  background: rgb(0 0 0 / 0.5);
+}
+:root:is([data-skin="midnight"], [data-skin="daylight"]) .glass-surface {
+  background: var(--color-app);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  box-shadow: none;
+}
+:root:is([data-skin="midnight"], [data-skin="daylight"]) :is(.glass-card, .glass-surface .bg-card) {
+  background-color: var(--color-menu);
+}
+:root[data-skin="midnight"] .glass-scrim {
+  background: rgb(0 0 0 / 0.7);
+}
+:root[data-skin="daylight"] .glass-scrim {
   background: rgb(0 0 0 / 0.5);
 }
 @media (min-width: 768px) {
@@ -2031,6 +2093,28 @@ html[data-cloud-intent-morph] [data-tour="composer"] { view-transition-name: clo
   from { opacity: 0; }
 }
 .turn-phrase-in { animation: turn-phrase-in 0.32s ease-out both; }
+.turn-dots {
+  display: inline-flex;
+  align-self: center;
+  gap: 3px;
+  margin-inline-end: 2px;
+}
+.turn-dots > i {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  animation: turn-dot 1.2s ease-in-out infinite;
+}
+.turn-dots > i:nth-child(2) { animation-delay: 0.15s; }
+.turn-dots > i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes turn-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(0.75); }
+  30% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-dots > i { animation: none; opacity: 0.7; }
+}
 .turn-now-toggle {
   display: flex;
   min-width: 0;
@@ -2837,10 +2921,6 @@ button:disabled.bg-danger {
   ) {
     cursor: pointer;
   }
-  /* lucide writes stroke-width="2" as an attribute, which any CSS outranks; an explicit strokeWidth prop is left alone. */
-  :where(svg.lucide[stroke-width="2"]) {
-    stroke-width: 1.75;
-  }
 }
 
 ::highlight(omb-citation-source) {
@@ -2960,6 +3040,56 @@ button:disabled.bg-danger {
   outline-width: 1.5px;
   outline-offset: -1.5px;
 }
+/* Customizable <select> (Chromium 135+, so Electron 43): the open list is drawn as one of the app's menus, a check
+   at the end of the chosen row. Browsers without it keep their native list. The field draws its own chevron. */
+.ui-select,
+.ui-select::picker(select) {
+  appearance: base-select;
+}
+.ui-select::picker-icon {
+  display: none;
+}
+.ui-select::picker(select) {
+  margin-block: 4px;
+  padding: 4px;
+  border: none;
+  min-width: anchor-size(width);
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  background: var(--color-menu);
+  color: var(--color-ink);
+  border-radius: var(--radius-menu);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--color-ink) 10%, transparent), var(--menu-shadow);
+}
+.ui-select option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.ui-select option:is(:hover, :focus-visible) {
+  background: var(--color-menu-hover);
+  outline: none;
+}
+.ui-select option::checkmark {
+  order: 1;
+  margin-inline-start: auto;
+  color: var(--color-ink-secondary);
+}
+.ui-select option:disabled {
+  opacity: 0.4;
+}
+.ui-select optgroup {
+  padding: 4px 8px 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-secondary);
+}
 :root,
 :is([data-skin="midnight"], [data-skin="foundry"], [data-skin="graphite"], [data-skin="dusk"], [data-skin="halloween"]) {
   --radius-menu: 12px;
@@ -3062,12 +3192,6 @@ button:disabled.bg-danger {
 .bot-identity[data-bot-color="silver"] { color: var(--identity-silver); }
 .bot-identity[data-bot-color="chrome"] { color: var(--identity-chrome); }
 
-.user-bubble-colored {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
-}
-[data-chat-bubble="simple"].user-bubble-colored {
-  box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 0.16);
-}
 .user-bubble-colored .mention-highlight {
   color: var(--color-ink);
   background: color-mix(in srgb, var(--mention-color) 22%, var(--color-inset));

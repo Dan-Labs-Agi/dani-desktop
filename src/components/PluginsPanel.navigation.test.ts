@@ -58,6 +58,7 @@ vi.mock("./XCard", () => ({
 vi.mock("./PostizCard", () => ({
   PostizCard: () => createElement("div", { "data-postiz-card": true }, "Postiz"),
 }));
+import { openKeySettings } from "./keys/key-focus";
 import { APPS_PREVIEW_COUNT, PluginsPanel, USED_BY_AVATAR_SIZE, botsUsingService } from "./PluginsPanel";
 import { FACE_BOX } from "./cursor-face-data";
 import { MASCOT_BODIES } from "../../shared/mascot-bodies";
@@ -71,6 +72,7 @@ const X_CONNECTED = 22;
 const CATEGORY = 20;
 const POSTIZ_CONNECTED = 23;
 const MODE = 4;
+const SETUP = 5;
 const SEARCH = 15;
 const TAB = 16;
 
@@ -124,6 +126,28 @@ describe("Apps pop-up", () => {
     const grid = tree.find((node) => node.props["data-apps-grid"] !== undefined)!;
     expect(nodes(grid).some((node) => node.props.whopCard === true)).toBe(true);
     expect(fixture.dispatch).not.toHaveBeenCalled();
+  });
+  it("names a connected account by its label or its place, keeps its raw id to the tooltip, and ticks the app once", () => {
+    fixture.overrides.set(STATUS, { slack: { connected: true, accounts: [{ id: "ca_1", status: "ACTIVE" }, { id: "ca_2", alias: "work", status: "EXPIRED" }] } });
+    const { html, nodes: tree } = render();
+    const rows = tree.filter((node) => node.props["data-connected-account"] !== undefined).map((node) => renderToStaticMarkup(node));
+    expect(rows[0]).toContain(">Account 1<");
+    expect(rows[0]).not.toContain(">ca_1");
+    expect(rows[0]).toContain('title="ca_1 · active"');
+    expect(rows[0]).not.toContain("· active<");
+    expect(rows[1]).toContain(">work<");
+    expect(rows[1]).toContain("· expired");
+    expect(html.match(/text-success/g)?.length).toBe(1);
+  });
+  it("sends Connect to the connected-apps key setting while no key is set, instead of a dead button", () => {
+    fixture.overrides.set(CONFIGURED, false);
+    fixture.overrides.set(SETUP, "needs-setup");
+    const { nodes: tree } = render();
+    const connect = tree.find((node) => node.props["data-needs-key"] === true)!;
+    expect(connect.props.disabled).toBe(false);
+    connect.props.onClick!();
+    expect(fixture.dispatch).toHaveBeenCalledWith({ type: "togglePlugins", open: false });
+    expect(fixture.dispatch).toHaveBeenLastCalledWith(openKeySettings("composio"));
   });
   it("counts Whop among connected apps", () => {
     fixture.overrides.set(18, true);

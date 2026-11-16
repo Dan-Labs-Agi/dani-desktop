@@ -18,6 +18,14 @@ describe("streamed chat tool calls", () => {
     expect(calls.finish("tool_calls", false)).toEqual([completeCall]);
   });
 
+  it("reads a call that streamed no argument characters as one with no arguments", () => {
+    const calls = new ChatToolCalls();
+    calls.add([{ index: 0, ...completeCall, function: { ...completeCall.function, arguments: "" } }], true);
+    calls.add([{ index: 0, function: { arguments: "" } }], true);
+
+    expect(calls.finish("tool_calls", false)).toEqual([completeCall]);
+  });
+
   it("still rejects incomplete calls after null-only deltas", () => {
     const calls = new ChatToolCalls();
     calls.add([{ index: 0, id: null, type: null, function: { name: null, arguments: null } }], true);

@@ -1,7 +1,7 @@
-import { OrganizationIdentity } from "./OrganizationIdentity";
+import { OrganizationIdentity } from "./OrganizationIdentity";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch } from "react";
 import { createPortal } from "react-dom";
-import { Activity, Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, Library, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, PinOff, Plus, Search, TextQuote, Trash2, Users, X } from "lucide-react";
+import { Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, Library, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, PinOff, Plus, Search, TextQuote, Trash2, Users, X, ListChecks, SquarePen, PanelLeft } from "@/components/icons";
 import { api, useStore, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel } from "@/lib/live-activity";
@@ -448,9 +448,10 @@ export function currentArchivableBot(bots: readonly Bot[], id: string): Bot | un
 
 const NO_FOLDERS: BotProject[] = [];
 
-export function BotThreadList({ bot, selected, query, pendingQueued, reveal, locale, generatedTitles, dispatch, activityLabel, hidden = false }: BotRowProps & {
+export function BotThreadList({ bot, selected, query, pendingQueued, reveal, locale, generatedTitles, dispatch, activityLabel, hidden = false, indent = false }: BotRowProps & {
   activityLabel?: string;
   hidden?: boolean;
+  indent?: boolean;
 }) {
   const now = useRelativeNow();
   const tasks = (bot.tasks ?? [{ threadId: bot.threadId, title: t("task.newShort"), createdAt: 0 }])
@@ -543,7 +544,7 @@ export function BotThreadList({ bot, selected, query, pendingQueued, reveal, loc
     } finally { setMarkingRead(false); }
   };
   return (
-    <div hidden={hidden} className="mb-2 space-y-0.5" role="group" aria-label={t("task.namedList", { name: bot.name })}
+    <div hidden={hidden} className={cn("mb-2 space-y-0.5", indent && "mt-1 [--thread-indent:4rem]")} role="group" aria-label={t("task.namedList", { name: bot.name })}
       onDragOver={(event) => { if (event.dataTransfer.types.includes(FOLDER_DRAG_TYPE)) event.stopPropagation(); }}
       onDrop={(event) => { if (event.dataTransfer.types.includes(FOLDER_DRAG_TYPE)) { event.preventDefault(); event.stopPropagation(); resetFolderDrag(); } }}>
       {!hidden && <>
@@ -722,7 +723,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
       : simpleRow ? "gap-2 rounded-[10px] py-2 pl-2 pr-2 md:h-[54px] md:py-0"
         : cn(showThreads ? "gap-2 py-2" : "gap-3 py-2", showThreads ? "pl-6 pr-9 group-hover:pr-[5.75rem] group-focus-within:pr-[5.75rem] max-md:pr-9 touch:pr-[5.75rem]" : "pl-2.5 pr-9"),
     !iconOnly && "max-md:rounded-2xl max-md:py-2.5",
-    selected ? "bg-raised" : "hover:bg-raised/50",
+    selected && !expanded ? "bg-raised" : "hover:bg-raised/50",
     simpleRow && rowSurface(selected),
   );
   const { waiting, working, teammateWait, queued } = sidebarBotStatus(bot, pendingQueued);
@@ -758,7 +759,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
           className={cn("absolute -right-0.5 -bottom-0.5 rounded-full border-2 border-panel bg-ink-secondary", iconOnly ? "size-3" : "size-2.5")} />}
         {bot.chiefOfStaff && simpleRow && (
           <span className="absolute -left-1 -top-1 flex rounded-full bg-raised p-[3px]">
-            <Crown size={11} strokeWidth={2.25} className="shrink-0 text-accent" role="img" aria-label={t("sidebar.bot.chiefOfStaff")} data-testid="chief-crown">
+            <Crown size={11} strokeWidth={2.25} className="shrink-0 text-ink-secondary" role="img" aria-label={t("sidebar.bot.chiefOfStaff")} data-testid="chief-crown">
               <title>{t("sidebar.bot.chiefOfStaff")}</title>
             </Crown>
           </span>
@@ -794,7 +795,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
               inputClassName={cn("w-full rounded bg-inset px-1 py-0.5", simpleRow ? "text-[14px] font-medium" : "text-[15px] font-semibold")}
             />
             {!iconOnly && !simpleList && bot.chiefOfStaff && !renaming && (
-              <Crown size={13} strokeWidth={2.25} className="shrink-0 text-accent" role="img" aria-label={t("sidebar.bot.chiefOfStaff")} data-testid="chief-crown">
+              <Crown size={13} strokeWidth={2.25} className="shrink-0 text-ink-secondary" role="img" aria-label={t("sidebar.bot.chiefOfStaff")} data-testid="chief-crown">
                 <title>{t("sidebar.bot.chiefOfStaff")}</title>
               </Crown>
             )}
@@ -908,7 +909,7 @@ export const BotListItem = memo(function BotListItem(props: BotRowProps) {
         </span>
       )}
     </div>
-    {advanced && !iconOnly && threadsOpen && hasThreadList && <BotThreadList {...props} hidden={!showThreads}
+    {advanced && !iconOnly && threadsOpen && hasThreadList && <BotThreadList {...props} hidden={!showThreads} indent
       activityLabel={liveActivityLabel(last)}
       query={bot.name.toLowerCase().includes(query.toLowerCase()) || bot.title.toLowerCase().includes(query.toLowerCase()) ? "" : query} />}
     {(advanced || (!iconOnly && (waiting || unread))) && !expanded && <SidebarBotActivity bot={bot} rowThreadId={selected ? bot.threadId : botOpensTo(bot, showThreads)} density={density} pendingQueued={pendingQueued} dispatch={dispatch} waitingOnly={!advanced} />}
@@ -1150,6 +1151,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
     setSearchOpen(true);
     toggleCollapsed();
   };
+  const actionRows = advanced && density !== "icons" && !phone && !rail;
   const plusItem = cn(MENU_ITEM, "text-ink hover:bg-menu-hover");
   const plusControl = (
     <div ref={plusMenuRef} className="contents">
@@ -1157,19 +1159,22 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
       ref={importReturnRef}
       onClick={() => setPlusOpen((o) => !o)}
       aria-label={remoteClient ? t("sidebar.new") : t("sidebar.newOrShare")}
-      className={phone ? PHONE_TOP_BUTTON : corner ? SIMPLE_CORNER_BUTTON : rail || simple ? SIMPLE_TOP_BUTTON : cn(
+      className={phone ? PHONE_TOP_BUTTON : corner ? SIMPLE_CORNER_BUTTON : rail || simple ? SIMPLE_TOP_BUTTON : actionRows ? "relative flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[14px] text-ink transition-colors hover:bg-ink/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus" : cn(
         "flex items-center justify-center text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
         density === "icons" ? "size-[46px] shrink-0 rounded-xl" : "size-8 rounded-full",
       )}
       title={remoteClient ? t("sidebar.new") : t("sidebar.newOrShare")}
     >
-      <Plus size={corner ? 18 : phone || simple || density === "icons" ? 20 : 18} strokeWidth={phone ? 2 : 1.5} />
+      {advanced && !phone
+        ? <SquarePen size={density === "icons" ? 20 : 18} strokeWidth={1.5} className={actionRows ? "text-ink-secondary" : undefined} />
+        : <Plus size={corner ? 18 : phone || simple || density === "icons" ? 20 : 18} strokeWidth={phone ? 2 : 1.5} />}
+      {actionRows && <span className="min-w-0 flex-1 truncate">{t("sidebar.new")}</span>}
     </button>
     {plusMotion.shown && (
       <>
         <div role="menu" aria-label={remoteClient ? t("sidebar.new") : t("sidebar.newOrShare")} onKeyDown={navigateThreadMenu} className={cn(
           "absolute z-40 w-max min-w-[200px] overflow-hidden", MENU_SHEET,
-          rail ? "left-full top-0 ml-4" : cn("top-full", advanced ? "mt-1" : "mt-1.5", density === "icons" ? "left-0" : "right-0"),
+          rail ? "left-full top-0 ml-4" : cn("top-full", advanced ? "mt-1" : "mt-1.5", density === "icons" || actionRows ? "left-0" : "right-0"),
           plusMotion.className,
         )} {...plusMotion.exitProps}>
           {advanced && <button
@@ -1240,6 +1245,57 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
     </div>
   );
 
+  const attentionControl = advanced ? (
+            <div ref={attentionMenuRef} className={density === "icons" ? "relative" : "contents"}>
+            <button
+              type="button"
+              onClick={() => setAttentionOpen((o) => !o)}
+              aria-label={attentionTriggerLabel(attention.length)}
+              title={attentionTriggerLabel(attention.length)}
+              className={cn(
+                "relative flex items-center justify-center text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                density === "icons" ? "size-[46px] shrink-0 rounded-xl" : phone ? "size-10 shrink-0 rounded-full border border-hairline bg-card text-ink" : actionRows ? "h-8 w-full justify-start gap-2.5 rounded-lg px-2 text-[14px] text-ink" : "size-8 rounded-full",
+              )}
+            >
+              <ListChecks size={density === "icons" ? 20 : 18} strokeWidth={1.5} className={actionRows ? "text-ink-secondary" : undefined} />
+              {actionRows && <span className="min-w-0 flex-1 truncate text-left">{t("attention.title")}</span>}
+              {attention.length > 0 && (
+                <span className={cn("flex min-w-4 items-center justify-center rounded-full px-0.5 font-semibold leading-4", actionRows ? "text-[12px] tabular-nums font-normal text-ink-secondary" : "absolute -right-0.5 -top-0.5 bg-accent text-[10px] text-ink")}>{attention.length > 9 ? "9+" : attention.length}</span>
+              )}
+              {attentionHasRunningWork(attention) && (
+                <span data-header-activity="" className={cn("size-1.5 rounded-full bg-success", actionRows ? "shrink-0" : "absolute bottom-0.5 right-0.5")} aria-hidden="true" />
+              )}
+            </button>
+            {attentionMotion.shown && (
+              <>
+                <div className={cn(
+                  "absolute top-full z-40 mt-1 overflow-hidden", MENU_SHEET,
+                  density === "icons" || actionRows ? "left-0" : "right-0",
+                  density === "icons" ? "w-72" : "w-72 md:w-[min(288px,calc(var(--sidebar-width)_-_32px))]",
+                  attentionMotion.className,
+                )} {...attentionMotion.exitProps}>
+                  <div className="flex items-center gap-1 py-0.5 pl-2">
+                    <span className="flex-1 text-[13px] font-medium text-ink">{t("attention.title")}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAttentionPinned(!attentionPinned)}
+                      aria-label={t(attentionPinned ? "attention.unpin" : "attention.pin")}
+                      title={t(attentionPinned ? "attention.unpin" : "attention.pin")}
+                      className="flex size-6 items-center justify-center rounded-md text-ink-secondary hover:bg-menu-hover hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    >
+                      {attentionPinned ? <PinOff size={14} /> : <Pin size={14} />}
+                    </button>
+                  </div>
+                  {attention.length === 0 ? (
+                    <div className="px-2 py-1.5 text-[13px] text-ink-secondary">{t("attention.empty")}</div>
+                  ) : (
+                    <AttentionThreadRows inset entries={attention} onJump={(entry) => { setAttentionOpen(false); dispatch(attentionJumpAction(entry)); }} />
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+  ) : null;
   return (
     <aside
       ref={sidebarRef}
@@ -1255,7 +1311,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
       className={cn(
         "relative flex h-full shrink-0 flex-col border-r-[0.5px] border-edge bg-panel max-md:[--scroll-fade-surface:var(--color-app)]",
         sizing.resizing && !sizing.snapping ? "transition-none" : "transition-[width] duration-200 motion-reduce:transition-none",
-        density === "icons" ? rail ? "w-[92px]" : "w-[80px]" : advanced ? "w-[320px] md:w-[var(--sidebar-width)]" : "w-[280px] md:w-[var(--sidebar-width)]",
+        density === "icons" ? rail ? "w-[92px]" : "w-[80px]" : advanced ? "w-[288px] md:w-[var(--sidebar-width)]" : "w-[280px] md:w-[var(--sidebar-width)]",
         sidePanelOpen ? advanced ? "md:max-w-[320px]" : "md:max-w-[280px]" : "md:max-w-[calc(100vw-320px)]",
         // max-md: rather than an md: cancel: Tailwind v4 emits the native `translate`, and any value but `none` makes
         // this a containing block for its `fixed` descendants.
@@ -1291,10 +1347,21 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
         </div>}
         {density !== "icons" && (simpleDesk ? <div data-sidebar-top-slot className="min-w-0 flex-1" /> : (
           <div data-sidebar-top-slot className={cn("@container/sidebar-top flex min-w-0 flex-1 items-center", simple && "justify-end")}>
+            {actionRows && <button
+              type="button"
+              data-sidebar-collapse
+              onClick={() => setSidebarDensity("icons")}
+              aria-label={t("sidebar.resize")}
+              title={t("sidebar.resize")}
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              style={windowNoDragStyle}
+            >
+              <PanelLeft size={18} strokeWidth={1.5} aria-hidden="true" />
+            </button>}
             {!simple && <div data-sidebar-top-spacer className="min-w-0 flex-1 @min-[96px]/sidebar-top:min-w-6" />}
-            <div data-sidebar-top-switcher className={simple ? "flex min-w-0 items-center" : "flex min-w-0 max-w-[140px] items-center"}>
+            {!actionRows && <div data-sidebar-top-switcher className={simple ? "flex min-w-0 items-center" : "flex min-w-0 max-w-[140px] items-center"}>
               <DesktopWorkspaceSwitcher inline pill={simple} cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} />
-            </div>
+            </div>}
           </div>
         ))}
         {!rail && <div
@@ -1303,6 +1370,16 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
           style={windowNoDragStyle}
         >
           {simpleDesk && <SidebarSearchToggle ref={searchToggleRef} corner={corner} open={searchShown} onToggle={() => (searchShown ? closeSearch() : setSearchOpen(true))} />}
+          {density === "icons" && advanced && !phone && <button
+            type="button"
+            data-sidebar-expand
+            onClick={() => setSidebarDensity("comfortable")}
+            aria-label={t("sidebar.resize")}
+            title={t("sidebar.resize")}
+            className="flex size-[46px] shrink-0 items-center justify-center rounded-xl text-ink-secondary hover:bg-raised hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            <PanelLeft size={20} strokeWidth={1.5} aria-hidden="true" />
+          </button>}
           {density === "icons" && <button
             type="button"
             onClick={openCommandPalette}
@@ -1312,61 +1389,22 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
           >
             <Search size={20} strokeWidth={1.5} />
           </button>}
-          {advanced && <div ref={attentionMenuRef} className={density === "icons" ? "relative" : "contents"}>
-            <button
-              type="button"
-              onClick={() => setAttentionOpen((o) => !o)}
-              aria-label={attentionTriggerLabel(attention.length)}
-              title={attentionTriggerLabel(attention.length)}
-              className={cn(
-                "relative flex items-center justify-center text-ink-secondary transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-                density === "icons" ? "size-[46px] shrink-0 rounded-xl" : phone ? "size-10 shrink-0 rounded-full border border-hairline bg-card text-ink" : "size-8 rounded-full",
-              )}
-            >
-              <Activity size={density === "icons" ? 20 : 18} strokeWidth={1.5} />
-              {attention.length > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-accent px-0.5 text-[10px] font-semibold leading-4 text-ink">{attention.length > 9 ? "9+" : attention.length}</span>
-              )}
-              {attentionHasRunningWork(attention) && (
-                <span data-header-activity="" className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-success" aria-hidden="true" />
-              )}
-            </button>
-            {attentionMotion.shown && (
-              <>
-                <div className={cn(
-                  "absolute top-full z-40 mt-1 overflow-hidden", MENU_SHEET,
-                  density === "icons" ? "left-0" : "right-0",
-                  density === "icons" ? "w-72" : "w-72 md:w-[min(288px,calc(var(--sidebar-width)_-_32px))]",
-                  attentionMotion.className,
-                )} {...attentionMotion.exitProps}>
-                  <div className="flex items-center gap-1 py-0.5 pl-2">
-                    <span className="flex-1 text-[13px] font-medium text-ink">{t("attention.title")}</span>
-                    <button
-                      type="button"
-                      onClick={() => setAttentionPinned(!attentionPinned)}
-                      aria-label={t(attentionPinned ? "attention.unpin" : "attention.pin")}
-                      title={t(attentionPinned ? "attention.unpin" : "attention.pin")}
-                      className="flex size-6 items-center justify-center rounded-md text-ink-secondary hover:bg-menu-hover hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                    >
-                      {attentionPinned ? <PinOff size={14} /> : <Pin size={14} />}
-                    </button>
-                  </div>
-                  {attention.length === 0 ? (
-                    <div className="px-2 py-1.5 text-[13px] text-ink-secondary">{t("attention.empty")}</div>
-                  ) : (
-                    <AttentionThreadRows inset entries={attention} onJump={(entry) => { setAttentionOpen(false); dispatch(attentionJumpAction(entry)); }} />
-                  )}
-                </div>
-              </>
-            )}
-          </div>}
-          {plusControl}
+          {!actionRows && attentionControl}
+          {!actionRows && plusControl}
         </div>}
       </div>
 
       {density === "icons" && !rail && <DesktopWorkspaceSwitcher compact cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} />}
       <OrganizationIdentity compact={density === "icons"} />
-      {phone ? null : simple ? searchShown && <SidebarSearchPill query={query} onQuery={setQuery} onClose={closeSearch} /> : <div className={cn("pt-1 pb-3", density === "icons" ? "hidden" : "px-3")}>
+      {actionRows && <nav data-sidebar-actions aria-label={t("sidebar.new")} className="flex flex-col gap-0.5 px-3 pb-1">
+        <div className="relative flex">{plusControl}</div>
+        <button type="button" ref={searchToggleRef} data-sidebar-search-row aria-label={t("sidebar.searchAria")} aria-expanded={searchShown} onClick={() => (searchShown ? closeSearch() : setSearchOpen(true))} className="relative flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[14px] text-ink transition-colors hover:bg-ink/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+          <Search size={18} strokeWidth={1.5} className="text-ink-secondary" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">{t("sidebar.search")}</span>
+        </button>
+        <div className="relative flex">{attentionControl}</div>
+      </nav>}
+      {phone ? null : simple || actionRows ? searchShown && <SidebarSearchPill query={query} onQuery={setQuery} onClose={closeSearch} /> : <div className={cn("pt-1 pb-3", density === "icons" ? "hidden" : "px-3")}>
         <div className={cn("flex h-8 items-center gap-2 rounded-full px-3 focus-within:ring-focus", ELEVATED_CONTROL)}>
           <Search size={15} className="shrink-0 text-ink-secondary" />
           <input
@@ -1565,6 +1603,7 @@ export function Sidebar({ open, onClose, collapseToIcons = false }: {
         iconOnly={density === "icons"}
       />
 
+      {actionRows && <div data-sidebar-place className="[&>div]:py-0"><DesktopWorkspaceSwitcher cloudHome={state.config?.cloudHome === true} place={state.config?.team?.name} owner={cloudOwner} howTo={state.cloudHowTo} onMenuClosed={endHowTo} /></div>}
       {rail ? <SimpleRailFooter
         owner={cloudOwner}
         archived={archivedEntry}

@@ -1,7 +1,7 @@
 // The proactive bot's one suggestion to add a helper-model key (server/host/helper-suggestion.ts), in the person's own
 // language. A suggestion, not an approval: Add key opens Settings on this device, Not now is kept and ends it.
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

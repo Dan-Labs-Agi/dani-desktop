@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowRight, Check, ChevronDown, Cloud, Minus } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Cloud, Minus } from "@/components/icons";
 import { RobotAvatar } from "@/components/robot/RobotAvatar";
 import { robotMotionForMaus } from "@/components/robot/robot-avatar-engine";
 import { engineReady } from "@/components/EngineLibrary";

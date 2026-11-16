@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, ChevronRight, PinOff } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, PinOff } from "@/components/icons";
 import { t } from "@/lib/i18n";
 import { AttentionThreadRows, type AttentionThread } from "./SidebarBotActivity";
 

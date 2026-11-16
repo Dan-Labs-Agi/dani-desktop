@@ -71,7 +71,7 @@ Use GitHub Spec Kit if actually installed (`constitution → specify → clarify
 
 ## 4. Phase 0: mandatory evidence-based repository audit
 
-Before coding, record: repo URL and checked-out commit; branch and uncommitted changes; current build/package manager; `apps/`, runtime and data boundaries; relevant platforms; test baseline with exact commands and failures; actual DaniBot-derived features and what is missing; Hermes pinned ref and LICENSE; Laya model commit/license/size/dependencies/runtime shape; CUA support and OS permission requirements; current `dani-free`/OpenCode/Kilo configurations and quota mechanism; existing voice/memory/proactive implementations; secrets that must be rotated (do not print). Review DaniBot OSS/enterprise boundary and third-party attribution.
+Before coding, record: repo URL and checked-out commit; branch and uncommitted changes; current build/package manager; `apps/`, runtime and data boundaries; relevant platforms; test baseline with exact commands and failures; actual DaniBot-derived features and what is missing; Hermes pinned ref and LICENSE; Laya model commit/license/size/dependencies/runtime shape; CUA support and OS permission requirements; current `dani-free`/OpenCode/Kilo configurations and quota mechanism; existing voice/memory/proactive implementations; secrets that must be rotated (do not print). Review Dani Bot OSS/enterprise boundary and third-party attribution.
 
 Produce `docs/audit/repository-audit.md`, `docs/audit/feature-parity.md`, `docs/audit/dependency-licenses.md`, `docs/audit/baseline-tests.md` and `docs/audit/assumptions-and-unknowns.md`. Mark every capability `CONFIRMED_BY_TEST`, `CONFIRMED_BY_SOURCE`, `UNVERIFIED` or `UNAVAILABLE`. Assertions from earlier chats are requirements to VERIFY, not implementation evidence.
 
@@ -183,6 +183,6 @@ End each session with `docs/handoff/latest.md` containing: commit/branch; touche
 - Hermes toolsets: https://hermes-agent.nousresearch.com/docs/reference/toolsets-reference
 - Laya model card: https://huggingface.co/convaiinnovations/laya ; typed-decisions checkpoint: https://huggingface.co/convaiinnovations/laya-typed-decisions
 - CUA docs: https://github.com/trycua/cua
-- DaniBot licensing: https://github.com/milind-soni/DaniBot/blob/main/LICENSING.md
+- Dani Bot licensing: https://github.com/milind-soni/DaniBot/blob/main/LICENSING.md
 
 **Acceptance sentence:** The deliverable is DANI software that can receive a task, control the proper tools with enforceable authorization, survive interruption, verify the real-world result, and remain fast on measured hardware; Laya is never required to make that basic functionality work.

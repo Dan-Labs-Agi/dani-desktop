@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { Bug, Users } from "lucide-react";
+import { Bug, Users } from "@/components/icons";
 import type { Bot } from "@/state/store";
 import type { TeamPerson } from "@/state/team-people";
 import { cn } from "@/lib/cn";
@@ -12,10 +12,10 @@ import type { MenuMotion } from "./MenuMotion";
 import { PersonFace } from "./TeamOwner";
 import { DEVS_TAG } from "../../shared/devs-mention";
 
-/** One row of the @ list: a bot, a teammate on a Team Cloud, a whole team, everyone, or the DaniBot team (@devs). */
+/** One row of the @ list: a bot, a teammate on a Team Cloud, a whole team, everyone, or the Dani Bot team (@devs). */
 export type MentionChoice = { id: string; name: string; bot?: Bot; person?: TeamPerson; team?: { count: number }; all?: { count: number }; devs?: true };
 
-/** The last row of every @ list: a message that tags it is a bug report the app sends to the DaniBot team. */
+/** The last row of every @ list: a message that tags it is a bug report the app sends to the Dani Bot team. */
 export const DEVS_CHOICE: MentionChoice = { id: "__devs__", name: DEVS_TAG, devs: true };
 
 /** The @ list's rows for a Team Cloud's teammates, after the bots. */

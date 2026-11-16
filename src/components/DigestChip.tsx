@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { formatDuration } from "@/lib/usage-trace";

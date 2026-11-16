@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Table2 } from "lucide-react";
+import { LoaderCircle, Table2 } from "@/components/icons";
 import { requestMessageFile, type MessageAttachmentContext } from "./AttachmentPreview";
 import { RichTable, TableDialog } from "./RichTable";
 import { TABLE_FILE_MAX_BYTES, tableDelimiter, type TextTable } from "@/lib/table-data";

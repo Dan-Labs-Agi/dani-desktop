@@ -1,4 +1,4 @@
-import { BookmarkPlus, CheckCircle2, ChevronDown, ChevronUp, Circle, ListChecks, Loader2, X, XCircle } from "lucide-react";
+import { BookmarkPlus, CheckCircle2, ChevronDown, ChevronUp, Circle, ListChecks, Loader2, X, XCircle } from "@/components/icons";
 import { useState } from "react";
 
 import { cn } from "@/lib/cn";

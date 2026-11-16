@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { useStore, type Bot } from "@/state/store";
 import { t } from "@/lib/i18n";
@@ -11,14 +11,14 @@ export function UsageSection({ bot, bare = false }: { bot: Bot; bare?: boolean }
 
   if (usage.turns === 0) {
     return (
-      <div className={cn(bare ? "" : "rounded-xl bg-card p-4", "text-[13px] text-ink-secondary")}>
+      <div className={cn(bare ? "" : "rounded-xl border border-ink/[0.08] p-4", "text-[13px] text-ink-secondary")}>
         {t("usage.bot.empty")}
       </div>
     );
   }
 
   return (
-    <div className={bare ? undefined : "rounded-xl bg-card p-4"}>
+    <div className={bare ? undefined : "rounded-xl border border-ink/[0.08] p-4"}>
       {!bare && <div className="flex items-baseline justify-between">
         <div className="text-[15px] font-medium text-ink">{t("usage.title")}</div>
         <button

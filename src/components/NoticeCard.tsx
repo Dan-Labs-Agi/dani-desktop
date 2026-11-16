@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowUpRight, X, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, X, type IconType } from "@/components/icons";
 import { openExternalLink } from "@/lib/app-links";
 import { t } from "@/lib/i18n";
 
 export function NoticeCard({ titleId, icon: Icon, title, onDismiss, dismissLabel = t("notice.dismiss"), notice, children }: {
-  titleId: string; icon: LucideIcon; title: string; onDismiss: () => void;
+  titleId: string; icon: IconType; title: string; onDismiss: () => void;
   dismissLabel?: string;
   notice?: string;
   children: ReactNode;

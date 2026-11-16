@@ -1,5 +1,5 @@
 import { createContext, use, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, Copy, Ellipsis, Reply, X } from "lucide-react";
+import { Check, Copy, Ellipsis, Reply, X } from "@/components/icons";
 import { popoverClosesOnKey, usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { cn } from "@/lib/cn";
 import { useCopyFeedback } from "@/lib/copy-text";

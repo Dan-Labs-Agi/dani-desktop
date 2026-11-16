@@ -458,7 +458,7 @@ describe.skipIf(process.platform === "win32")("serve --tunnel", () => {
     const gateway = `http://127.0.0.1:${originPort}`;
     try {
       const deadline = Date.now() + 60_000;
-      while (!out.includes("DaniBot is running") && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
+      while (!out.includes("Dani Bot is running") && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 200));
       expect(out).toContain("using the installation credential from OMB_INSTALLATION_CREDENTIAL");
       expect(out).toContain(`reachable at ${stub.endpointUrl}`);
       expect(existsSync(join(dataDir, "tunnel-account.json"))).toBe(false);

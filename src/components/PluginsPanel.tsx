@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Loader2, RefreshCw, Search, Server, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Loader2, RefreshCw, Search, Server, TriangleAlert, X } from "@/components/icons";
 import { api, useStore, type Bot, type InstanceInfo } from "@/state/store";
 import { cn } from "@/lib/cn";
+import { plainErrorLine } from "@/lib/plain-error";
 import { glassPopupFrameStyle } from "@/lib/glass-popup";
 import { t } from "@/lib/i18n";
 import type { LocaleKey } from "@/locales";
@@ -406,7 +407,7 @@ export function PluginsPanel() {
   const connectedCount = Object.values(status).filter(hasActiveConnection).length + Number(whopConnected === true) + Number(highLevelConnected === true) + Number(xConnected === true) + Number(postizConnected === true);
   const connectedEmptyCopy = connectedInventoryCopy(inventoryPhase);
   const close = () => dispatch({ type: "togglePlugins", open: false });
-  const setupNotice = connectorSetupNotice({ configured, stale, setup, remoteClient });
+  const setupNotice = error ? null : connectorSetupNotice({ configured, stale, setup, remoteClient });
   const botsWithoutApps = hasUsableConnectedApps(configured, inventoryPhase, stale, status)
     ? botsMissingConnectedApps(state.bots, state.instances)
     : [];
@@ -477,7 +478,8 @@ export function PluginsPanel() {
                 aria-pressed={filter === "connected"}
                 onClick={() => chooseFilter(filter === "connected" ? "all" : "connected")}
                 className={cn(
-                  "inline-flex h-8 items-center gap-2 rounded-full ps-1.5 pe-2 text-[13px] font-medium leading-5 transition-colors",
+                  "inline-flex h-8 items-center gap-1.5 rounded-full text-[13px] font-medium leading-5 transition-colors",
+                  connectedCards.length > 0 ? "ps-1.5 pe-2" : "ps-3 pe-2",
                   filter === "connected" ? "bg-raised text-ink" : "text-ink-secondary hover:bg-raised/60 hover:text-ink",
                 )}
               >
@@ -531,7 +533,7 @@ export function PluginsPanel() {
               data-apps-filter="mcp"
               aria-pressed={filter === "mcp"}
               onClick={() => chooseFilter(filter === "mcp" ? "all" : "mcp")}
-              className={cn(pill, "h-9 border border-hairline/40 px-3.5", filter === "mcp" ? "bg-ink text-app" : "text-ink hover:bg-raised")}
+              className={cn(pill, "h-9 border border-ink/[0.08] px-3.5", filter === "mcp" ? "bg-ink text-app" : "text-ink hover:bg-raised")}
             >
               <Server size={14} aria-hidden="true" />
               <span className="hidden sm:inline">{t("apps.filter.mcp")}</span>
@@ -563,6 +565,7 @@ export function PluginsPanel() {
             {moreCategories.length > 0 && (
               <SidebarPopoverMenu
                 ariaLabel={t("apps.moreCategories")}
+                align="end"
                 items={moreCategories.map((name) => ({ key: name, label: appCategoryLabel(name), active: category === name, onSelect: () => pickCategory(name) }))}
                 renderTrigger={({ open }) => (
                   <span className={cn(pill, pillTone(filter === "all" && categoryInMore), open && !categoryInMore && "bg-raised-hover text-ink")}>
@@ -577,8 +580,8 @@ export function PluginsPanel() {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-7 sm:px-7">
           {stale && (
-            <div className="mb-3 flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2 text-[13px] text-warning">
-              <TriangleAlert size={14} className="mt-px shrink-0" />
+            <div className="mb-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-2.5 text-[13px] leading-5 text-warning">
+              <TriangleAlert size={14} className="mt-[3px] shrink-0" />
               <span>
                 {t("connectors.stale")}
               </span>
@@ -587,17 +590,13 @@ export function PluginsPanel() {
           {setupNotice && filter !== "mcp" && (
             <div
               className={cn(
-                "mb-3 rounded-xl px-4 py-3 text-[13px]",
-                setupNotice.tone === "warning" ? "bg-warning/10 text-warning" : "bg-control/50 text-ink-secondary",
+                "mb-3 flex items-center gap-3 rounded-xl px-4 py-2.5 text-[13px] leading-5 max-sm:flex-col max-sm:items-start",
+                setupNotice.tone === "warning" ? "bg-warning/10 text-warning" : "border border-ink/[0.08] text-ink-secondary",
               )}
             >
-              {t(whopConnected ? "whop.otherAppsSetup" : setupNotice.key)}{" "}
+              <span className="min-w-0 flex-1">{t(whopConnected ? "whop.otherAppsSetup" : setupNotice.key)}</span>
               <button
-                className={cn(
-                  "font-medium underline underline-offset-2",
-                  setupNotice.tone === "info" && "text-ink",
-                  remoteClient && "hidden",
-                )}
+                className={cn("ui-button ui-button-md ui-button-primary shrink-0 whitespace-nowrap", remoteClient && "hidden")}
                 onClick={() => { close(); dispatch(openKeySettings("composio")); }}
               >
                 {t("connectors.openSettings")}
@@ -605,16 +604,16 @@ export function PluginsPanel() {
             </div>
           )}
           {botsWithoutApps.length > 0 && (
-            <div className="mb-3 rounded-xl bg-control/50 px-4 py-3 text-[13px] leading-relaxed text-ink-secondary">
+            <div className="mb-3 rounded-xl border border-ink/[0.08] px-4 py-3 text-[13px] leading-5 text-ink-secondary">
               <span className="font-medium text-ink">{t("connectors.perBot.title")}</span>{" "}
               {t("connectors.perBot.body")}
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2.5 flex flex-wrap gap-2">
                 {botsWithoutApps.map((candidate) => (
                   <button
                     key={candidate.id}
                     type="button"
                     onClick={() => dispatch({ type: "updateBot", botId: candidate.id, patch: { composio: true } })}
-                    className={cn(pill, "bg-control text-ink hover:bg-raised-hover")}
+                    className="ui-button ui-button-md"
                   >
                     {t("connectors.perBot.allow", { name: candidate.name })}
                   </button>
@@ -637,7 +636,7 @@ export function PluginsPanel() {
               {t("connectors.featuredAfter")}
             </div>
           )}
-          {error && <div role="alert" className="mb-3 rounded-xl bg-danger/10 px-3 py-2 text-[12px] text-danger">{typeof error === "string" ? error : t(error.key)}</div>}
+          {error && <div role="alert" className="mb-3 rounded-xl bg-danger/10 px-4 py-2.5 text-[13px] leading-5 text-danger">{typeof error === "string" ? plainErrorLine(error) ?? error : t(error.key)}</div>}
 
           {filter !== "mcp" && (
             <div data-apps-grid className="@container flex flex-col gap-7 pt-1">
@@ -687,7 +686,7 @@ export function PluginsPanel() {
                         <button
                           type="button"
                           onClick={() => setShowAllApps(true)}
-                          className={cn(pill, "bg-control/70 px-4 text-ink hover:bg-raised-hover")}
+                          className="ui-button ui-button-md"
                         >
                           {t("apps.showAll", { count: allCards.length.toLocaleString() })}
                         </button>
@@ -701,12 +700,17 @@ export function PluginsPanel() {
                         <div className="mt-1 text-[13px] text-ink-secondary">
                           {filter === "connected" ? connectedEmptyCopy.description : t("connectors.tryDifferentSearch")}
                         </div>
+                        {filter === "connected" && inventoryPhase === "ready" && (
+                          <button type="button" onClick={() => chooseFilter("all")} className="ui-button ui-button-md ui-button-primary mt-4">
+                            {t("connectors.tab.marketplace")}
+                          </button>
+                        )}
                         {filter === "connected" && inventoryPhase === "error" && (
                           <button
                             type="button"
                             disabled={refreshing}
                             onClick={() => void loadConnectionInventory(true)}
-                            className={cn(pill, "mt-4 bg-raised text-ink hover:bg-raised-hover disabled:opacity-50")}
+                            className="ui-button ui-button-md mt-4"
                           >
                             <RefreshCw size={14} className={cn(refreshing && "animate-spin")} />
                             {t("connectors.action.retry")}
@@ -731,7 +735,7 @@ export function PluginsPanel() {
           )}
 
           {filter !== "connected" && category === null && (
-            <div className={cn(filter === "all" && "mt-8 border-t border-hairline/30 pt-6", filter === "mcp" && "pt-1")}>
+            <div className={cn(filter === "all" && "mt-8 border-t border-ink/[0.08] pt-6", filter === "mcp" && "pt-1")}>
               <McpServersPanel embedded hideWhop={filter === "all"} />
             </div>
           )}
@@ -753,9 +757,13 @@ export function PluginsPanel() {
     const reconnect = pending ? undefined : accountToReconnect(serviceStatus);
     const addingAccount = aliasSlug === card.slug && !included;
     const busy = busySlug === card.slug;
-    const policy = state.config?.managedPolicy, unavailableReason = policy?.apps && !policy.apps.allowAll && !policy.apps.allowlist.includes(card.slug) ? t("policy.managedBy", { organization: policy.organizationName })
+    const needsKey = !configured && setup === "needs-setup" && !remoteClient;
+    const policy = state.config?.managedPolicy;
+    const blockedByPolicy = Boolean(policy?.apps && !policy.apps.allowAll && !policy.apps.allowlist.includes(card.slug));
+    const unavailableReason = blockedByPolicy && policy ? t("policy.managedBy", { organization: policy.organizationName })
       : managedConnectorUnavailableReason(mode, card.slug) ? t("connectors.selfHostOnlyReason") : null;
     const usedBy = connected || included ? botsUsingService(state.bots, state.instances, card.slug) : [];
+    const staticLabel = blockedByPolicy ? t("connectors.action.unavailable") : unavailableReason ? t("connectors.selfHostOnly") : included && !needsKey ? t("connectors.action.included") : null;
     const description = unavailableReason ?? (
       pending
         ? authorizationUrl
@@ -771,7 +779,7 @@ export function PluginsPanel() {
       <div
         key={card.slug}
         data-app-tile={card.slug}
-        className="flex min-w-0 flex-col rounded-xl px-2 py-2 transition-colors hover:bg-raised/40"
+        className="flex min-w-0 flex-col rounded-xl px-2 py-2"
       >
         <div className="flex items-center gap-3">
           <ServiceIcon card={card} className="size-10 shrink-0 rounded-[10px]" />
@@ -804,12 +812,17 @@ export function PluginsPanel() {
               {description}
             </div>
           </div>
-          <button
+          {staticLabel ? (
+            <span className="shrink-0 px-1 text-[12px] leading-5 text-ink-secondary">{staticLabel}</span>
+          ) : <button
             type="button"
-            disabled={!configured || inventoryPhase !== "ready" || busy || included || Boolean(unavailableReason)}
-            title={unavailableReason ?? undefined}
+            disabled={!needsKey && (!configured || inventoryPhase !== "ready" || busy)}
+            data-needs-key={needsKey || undefined}
             onClick={() => {
-              if (pending && !failed) {
+              if (needsKey) {
+                close();
+                dispatch(openKeySettings("composio"));
+              } else if (pending && !failed) {
                 const url = reusableConnectionUrl(pendingAuthorization);
                 if (url) {
                   setError(null);
@@ -824,11 +837,9 @@ export function PluginsPanel() {
                 setAliasDraft("");
               }
             }}
-            className="inline-flex h-7 min-w-[64px] shrink-0 items-center justify-center gap-2 rounded-full bg-control/80 px-3 text-[13px] font-medium leading-5 text-ink transition-colors hover:bg-raised-hover disabled:opacity-40"
+            className="ui-button ui-button-md min-w-[64px] shrink-0"
           >
-            {unavailableReason ? (
-              t("connectors.selfHostOnly")
-            ) : busy ? (
+            {busy ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
               connectorActionLabel(inventoryPhase, {
@@ -841,7 +852,7 @@ export function PluginsPanel() {
                 failed: Boolean(failed),
               })
             )}
-          </button>
+          </button>}
         </div>
         <div className="ps-[52px]">
           {authorizationUrl && (
@@ -856,15 +867,14 @@ export function PluginsPanel() {
           )}
           {accounts.length > 0 && (
             <div className="mt-1.5 space-y-0.5">
-              {accounts.map((account) => {
+              {accounts.map((account, index) => {
                 const active = /^active$/i.test(account.status);
                 const reconnectable = needsReconnect(account) && account.id !== reconnect?.id;
                 return (
-                  <div key={account.id} className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
-                    {active ? <Check size={12} className="shrink-0 text-success" /> : <span className="size-3 shrink-0" />}
-                    <span className="min-w-0 truncate text-ink" title={`${account.alias ? `${account.id} · ` : ""}${account.status.toLowerCase()}`}>
-                      {account.alias || account.id}
-                      <span className="text-ink-secondary"> · {account.status.toLowerCase()}</span>
+                  <div key={account.id} data-connected-account className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
+                    <span className="min-w-0 truncate text-ink-secondary" title={`${account.id} · ${account.status.toLowerCase()}`}>
+                      {account.alias || t("connectors.accountNumber", { n: index + 1 })}
+                      {!active && <span className="text-warning"> · {account.status.toLowerCase()}</span>}
                     </span>
                     {reconnectable && (
                       <button
@@ -947,7 +957,7 @@ export function PluginsPanel() {
               <button
                 type="submit"
                 disabled={busy || !aliasDraft.trim()}
-                className="inline-flex h-7 shrink-0 items-center rounded-full bg-accent px-3 text-[13px] font-medium leading-5 text-accent-ink disabled:opacity-40"
+                className="ui-button ui-button-md ui-button-primary shrink-0"
               >
                 {t("connectors.action.continue")}
               </button>

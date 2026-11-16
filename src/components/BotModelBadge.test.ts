@@ -76,22 +76,27 @@ describe("sidebar bot row", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  // Every density puts the badge on the avatar's bottom-left: the status dots own the bottom-right, and a mark at the
-  // row's end sat under the hover actions (+, new folder, …) without lining up with them.
-  it.each<[SidebarDensity, string]>([["comfortable", "absolute -bottom-0.5 -left-0.5"], ["icons", "absolute -bottom-0.5 -left-0.5"]])(
-    "shows the model once in a %s row", (density, placement) => {
-      const found = badges(render(bot("claude", "opus"), density));
-      expect(found).toHaveLength(1);
-      expect(found[0]).toContain('aria-label="Model: Opus 4.1 (Claude)"');
-      expect(found[0]).toContain(placement);
-    });
-
-  // Simple mode shows the mark too (the owner's ask, 2026-10-22): a person sees which provider each bot runs on at a glance.
-  it.each<SidebarDensity>(["comfortable", "icons"])("shows the model once in a Simple mode %s row", (density) => {
-    fixture.advanced = false;
-    const found = badges(render(bot("claude", "opus"), density));
+  // The badge sits on the avatar's bottom-left: the status dots own the bottom-right, and a mark at the row's end sat
+  // under the hover actions (+, new folder, …) without lining up with them.
+  it("shows the model once in a comfortable row", () => {
+    const found = badges(render(bot("claude", "opus"), "comfortable"));
     expect(found).toHaveLength(1);
     expect(found[0]).toContain('aria-label="Model: Opus 4.1 (Claude)"');
+    expect(found[0]).toContain("absolute -bottom-0.5 -left-0.5");
+  });
+
+  // Simple mode shows the mark too (the owner's ask, 2026-10-22): a person sees which provider each bot runs on at a glance.
+  it("shows the model once in a Simple mode comfortable row", () => {
+    fixture.advanced = false;
+    const found = badges(render(bot("claude", "opus"), "comfortable"));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('aria-label="Model: Opus 4.1 (Claude)"');
+  });
+
+  // An icons row is the avatar alone, without the badge.
+  it.each([true, false])("draws no badge on an icons row (advanced: %s)", (advanced) => {
+    fixture.advanced = advanced;
+    expect(badges(render(bot("claude", "opus"), "icons"))).toHaveLength(0);
   });
 
   it("shows no badge while the bot's engine is missing", () => {

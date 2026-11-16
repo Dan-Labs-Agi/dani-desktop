@@ -1,7 +1,7 @@
 // One line of the inbox read in full inside the panel: who it is from, what about, when and where it came from, all of
 // it, then its answer: an ask's own card, the very one it asks with in the chat, or a reply, and the way back to the list.
 import { useState } from "react";
-import { ArrowLeft, Check, ExternalLink } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink } from "@/components/icons";
 import type { InboxRow, InboxView } from "../../../shared/inbox";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";

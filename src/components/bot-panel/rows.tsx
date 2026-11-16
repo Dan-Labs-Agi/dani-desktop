@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from "react";
-import { Check, ChevronLeft, ChevronRight, Trash2, type LucideIcon } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Trash2, type IconType } from "@/components/icons";
 
 import { cn } from "@/lib/cn";
 import { useAdvancedMode } from "@/lib/interface-mode";
@@ -63,7 +63,7 @@ export function RowText({ title, hint }: { title: ReactNode; hint?: ReactNode })
   );
 }
 
-export function RowIcon({ icon: Icon }: { icon: LucideIcon }) {
+export function RowIcon({ icon: Icon }: { icon: IconType }) {
   return (
     <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/[0.05] text-ink-secondary max-md:size-8 max-md:rounded-full" aria-hidden="true">
       <Icon size={15} />
@@ -108,7 +108,7 @@ export function NavRow({ title, hint, value, icon, onClick, drill = true, danger
   title: ReactNode;
   hint?: ReactNode;
   value?: ReactNode;
-  icon?: LucideIcon;
+  icon?: IconType;
   onClick: () => void;
   drill?: boolean;
   danger?: boolean;
@@ -143,7 +143,7 @@ export function NavRow({ title, hint, value, icon, onClick, drill = true, danger
 export function ItemRow({ title, hint, icon, children, ...rest }: {
   title: ReactNode;
   hint?: ReactNode;
-  icon?: LucideIcon;
+  icon?: IconType;
   children?: ReactNode;
   "data-panel-row"?: string;
 }) {
@@ -171,7 +171,7 @@ export function NoteRow({ children, tone }: { children: ReactNode; tone?: "warn"
 export function LinkRow({ children, onClick, icon: Icon = ChevronRight, ...rest }: {
   children: ReactNode;
   onClick: () => void;
-  icon?: LucideIcon;
+  icon?: IconType;
   "data-panel-link"?: string;
 }) {
   return (

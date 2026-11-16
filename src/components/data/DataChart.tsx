@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/icons";
 import type { Result } from "vega-embed";
 import { DATA_LIMITS, DATA_ROUTES, type DataPage } from "../../../shared/data-surface";
 import { vegaConfig } from "../../../shared/vega-config";

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowRight, BookOpen, Brain, Crown, MessageCircle, Minus, Monitor, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { ArrowRight, BookOpen, Brain, Crown, MessageCircle, Minus, Monitor, MoreHorizontal, Pencil, Plus, Trash2, Users } from "@/components/icons";
 import { api, openBot, useStore, type Bot } from "@/state/store";
 import { teamBotName, useTeamPeople } from "@/state/team-people";
 import { useShowThreads } from "@/lib/thread-preferences";

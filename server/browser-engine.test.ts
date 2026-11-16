@@ -192,7 +192,9 @@ describe("deleting one browser session's saved logins", () => {
     expect(await clearBrowserSessionState("fixture-browser", "work", options)).toBe(true);
     for (const name of removed) expect(existsSync(join(directory, name)), name).toBe(false);
     for (const name of preserved) expect(readFileSync(join(directory, name), "utf8"), name).toBe("fixture state");
-    expect(vi.mocked(spawn).mock.calls.map((call) => call[1])).toEqual([["session", "list", "--json"], ["close"], ["session", "list", "--json"]]);
+    const listed = ["session", "list", "--json"];
+    // Windows checks again after stopping a Chrome its dead daemon left on the profile.
+    expect(vi.mocked(spawn).mock.calls.map((call) => call[1])).toEqual([listed, ...(process.platform === "win32" ? [listed] : []), ["close"], listed]);
   });
 
   it("never sends close to a browser that is not running", async () => {

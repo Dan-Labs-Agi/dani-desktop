@@ -71,7 +71,7 @@ describe("sidebar bot threads", () => {
     // Native buttons do not inherit their parent's drag gesture in Chromium.
     expect(markup).toContain('<button type="button" data-sidebar-folder-label="research" draggable="true"');
     expect(markup).toContain("🧪");
-    expect(markup).toContain("lucide-folder");
+    expect(markup).toContain("icon-folder");
     expect(markup).toContain('aria-label="New thread in Research"');
     expect(markup).not.toContain('aria-label="Choose folder for new thread"');
     const folderToggle = markup.match(/<button[^>]*aria-label="Collapse Research threads"[^>]*>/)?.[0];

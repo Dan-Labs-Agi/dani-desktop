@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// The first run's second screen: DaniBot as the Chief of Staff (Create) or a bot the person already has (Choose).
+// The first run's second screen: Dani Bot as the Chief of Staff (Create) or a bot the person already has (Choose).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -4,9 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { setLocale } from "@/lib/i18n";
 
-vi.mock("@/components/Avatar", () => ({
-  MausAvatar: ({ color, animated, trackPointer }: { color: string; animated: boolean; trackPointer?: boolean }) =>
-    createElement("i", { "data-dani": color, "data-animated": String(animated), "data-pointer": String(trackPointer) }),
+vi.mock("@/components/robot/RobotAvatar", () => ({
+  RobotAvatar: ({ label, animated }: { label: string; animated: boolean }) =>
+    createElement("i", { "data-dani": label, "data-animated": String(animated) }),
 }));
 const { TeamPicture } = await import("./TeamPicture");
 
@@ -24,9 +24,8 @@ it("is one labelled picture: four teammates, each with a Chief of Staff of their
   const picture = host.querySelector('svg[role="img"]')!;
   expect(picture.getAttribute("aria-label")).toBe("Ada, Ben, Cleo and Dara, each with their own Chief of Staff, share the team's Support and Sales bots on one Team Cloud.");
   expect(texts()).toEqual(["Support", "Sales", "A", "Ada", "B", "Ben", "C", "Cleo", "D", "Dara"]);
-  expect(mascots().map(node => node.dataset.dani), "the departments' bots, then each person's Chief").toEqual(["cyan", "blue", "pink", "orange", "pink", "green", "yellow", "cyan"]);
+  expect(mascots().map(node => node.dataset.dani), "the departments' bots, then each person's Chief").toEqual(["cyan", "blue", "pink", "orange", "Dani", "Dani", "Dani", "Dani"]);
   expect(host.querySelectorAll('path[d^="M0 5.5"]'), "a crown on each Chief").toHaveLength(4);
-  expect(mascots().every(node => node.dataset.pointer === "false"), "no bot follows the pointer").toBe(true);
 });
 
 it("work moves to the shared bots only while it may: never under reduced motion, nor on a slide that isn't on screen", async () => {

@@ -1,7 +1,7 @@
 // A pinned web page shown in place of the chat, like Team map. The page is
 // framed with a sandbox and no referrer; a page that refuses framing (or
 // never loads) falls back to a button that opens it in the browser.
-import { ExternalLink, Globe, RotateCw } from "lucide-react";
+import { ExternalLink, Globe, RotateCw } from "@/components/icons";
 import { useEffect, useState } from "react";
 
 import { openExternalLink } from "@/lib/app-links";

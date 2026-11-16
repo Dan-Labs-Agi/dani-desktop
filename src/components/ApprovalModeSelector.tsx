@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ListChecks } from "lucide-react";
+import { Check, ChevronDown, ListChecks } from "@/components/icons";
 
 import { approvalModeFor, type ApprovalMode } from "../../shared/approval-mode";
 import { cn } from "@/lib/cn";
@@ -110,7 +110,7 @@ export function ApprovalModeSelector({
         className={cn(
           wide
             ? "flex h-10 w-full items-center justify-between rounded-lg border border-hairline/40 bg-inset px-3.5 text-[13px] text-ink hover:bg-raised"
-            : "flex size-8 shrink-0 items-center justify-center rounded-full text-ink-secondary hover:bg-control hover:text-ink",
+            : "flex h-7 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-[13px] text-ink-secondary hover:text-ink aria-expanded:text-ink",
         )}
       >
         {wide ? (
@@ -119,7 +119,10 @@ export function ApprovalModeSelector({
             <span className="truncate">{current.label}</span>
           </span>
         ) : (
-          <CurrentIcon size={16} className="shrink-0 opacity-80" />
+          <>
+            <CurrentIcon size={14} className="shrink-0" />
+            <span className="whitespace-nowrap">{current.chip}</span>
+          </>
         )}
         {wide && <ChevronDown size={14} aria-hidden className="shrink-0 text-ink-secondary" />}
       </button>

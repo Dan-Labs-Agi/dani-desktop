@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { Gift, Mail } from "lucide-react";
+import { Gift, Mail } from "@/components/icons";
 import { track } from "@/lib/analytics";
 import { openEmailDraft } from "@/lib/app-links";
 import { BOAT_OFFER, boatClaimMailto, boatOfferRuns } from "@/lib/boat-offer";

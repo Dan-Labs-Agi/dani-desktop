@@ -1,7 +1,7 @@
 # Team Clouds: the `team` role and the audience rule
 
 A **Team Cloud** is one Cloud machine several people use: the shared home of a team's bots. The Admin
-(openmaus-cloud, `docs/team-cloud.md` there) makes it, invites people and signs each person's pairing. This page is the
+(danibot-cloud, `docs/team-cloud.md` there) makes it, invites people and signs each person's pairing. This page is the
 machine's side: what the `team` role changes against a My Cloud ([cloud-pro.md](cloud-pro.md)), and the one rule that
 keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes that rule hold against a bot with a shell.
 
@@ -66,7 +66,7 @@ keeps people apart on it. The bot box ([bot-box.md](bot-box.md)) is what makes t
 
 ## Rules
 
-The team's rules live on the Admin (openmaus-cloud `docs/team-cloud.md` "Rules"): one document, `{ schema: 1, limits }`, that
+The team's rules live on the Admin (danibot-cloud `docs/team-cloud.md` "Rules"): one document, `{ schema: 1, limits }`, that
 only restricts. `server/cloud-team-policy.ts` fetches it at boot, every 5 minutes and when the Admin's signed `POST
 /api/cloud/team/policy-changed` nudges it, signed with the bootstrap secret (`POST /api/cloud/machines/team-policy`), and each
 request reports the fingerprint in force here. A change applies without a restart.
@@ -109,7 +109,7 @@ language new bots start in); a value that isn't a locale is ignored, never refus
 
 ## Team admin: the Admin's signed read
 
-The Admin's Team admin pages (openmaus-cloud docs/team-cloud.md "Team admin") show a team's Super admin and Admins what
+The Admin's Team admin pages (danibot-cloud docs/team-cloud.md "Team admin") show a team's Super admin and Admins what
 this server shares with every bot. It exists only on a Team Cloud.
 
 - `GET /api/cloud/team/admin`, signed like `/api/cloud/health` → `{ v: 1, apps: { available, services: [{ slug, status,
@@ -136,7 +136,7 @@ this server shares with every bot. It exists only on a Team Cloud.
 
 Every app (a Composio toolkit) and MCP server has a scope. `team`, the default and what every connection made before this
 is, is one connection an Admin makes and every turn uses. `person` is one connection per member, made by that member on
-their team page in DaniBot Cloud (the Admin's Cloud page calls the routes below as them).
+their team page in Cloud (the Admin's Cloud page calls the routes below as them).
 
 - **Who gets a member's own connection.** Only a turn that acts for them (server/host/acting-person.ts), read from the
   harness's records, and only in a chat that is theirs alone, where nobody else reads what their connection brings back.

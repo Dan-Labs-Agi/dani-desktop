@@ -111,12 +111,12 @@ describe("the phone composer", () => {
     expect(item("place")?.textContent).toContain("Works on");
   });
 
-  it("keeps Advanced mode's buttons in a row on a wider screen", () => {
+  it("keeps Advanced mode's + menu in the box and its place under it on a wider screen, with no call button", () => {
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: !query.includes("max-width"), addEventListener() {}, removeEventListener() {} }));
     fixture.advanced = true;
     render({ bot });
-    expect(container.querySelector('button[aria-label="Attach a file"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="place-chip"]')).not.toBeNull();
-    expect(fixture.call?.inverse).toBe(false);
+    expect(container.querySelector('button[aria-label="Attach a file"]')).toBeNull();
+    expect(container.querySelector('[data-composer-status] [data-testid="place-chip"]')).not.toBeNull();
+    expect(fixture.call ?? null).toBeNull();
   });
 });

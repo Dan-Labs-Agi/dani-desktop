@@ -1,5 +1,5 @@
 import type { ClipboardEvent } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import type { PastedGap } from "@/lib/mcp-paste";

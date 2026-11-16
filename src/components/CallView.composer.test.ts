@@ -100,12 +100,13 @@ afterEach(() => {
 });
 
 describe("composer call button", () => {
-  it("is a Send-sized filled button with a waveform, labelled for the bot", () => {
+  it("is a Send-sized quiet button with a waveform, labelled for the bot", () => {
     const { html, button } = render();
     expect(button.props["aria-label"]).toBe("Call Pepper");
-    expect(String(button.props.className).split(" ")).toEqual(expect.arrayContaining(["size-8", "rounded-l-3xl", "rounded-r-lg", "active:rounded-3xl", "transition-[color,background,border-radius]", "bg-control"]));
-    expect(html).toContain("lucide-audio-lines");
-    expect(html).not.toContain("lucide-phone");
+    expect(String(button.props.className).split(" ")).toEqual(expect.arrayContaining(["size-8", "rounded-l-3xl", "rounded-r-lg", "active:rounded-3xl", "transition-[color,background,border-radius]", "hover:bg-raised-hover"]));
+    expect(String(button.props.className).split(" ")).not.toContain("bg-control");
+    expect(html).toContain("icon-audio-lines");
+    expect(html).not.toContain("icon-phone");
   });
 
   it("starts the call with the same telemetry as the header button did", () => {
@@ -133,7 +134,7 @@ describe("composer call button", () => {
     const { html, button } = render();
     expect(button.props["aria-label"]).toBe("Hang up on Pepper");
     expect(String(button.props.className)).toContain("bg-danger");
-    expect(html).toContain("lucide-phone-off");
+    expect(html).toContain("icon-phone-off");
     button.props.onClick!();
     expect(fixture.endCall).toHaveBeenCalledWith("pepper");
     expect(fixture.startCall).not.toHaveBeenCalled();
@@ -194,7 +195,7 @@ describe("composer call button", () => {
     expect(classes).not.toContain("rounded-l-3xl");
     expect(classes).not.toContain("bg-control");
     expect(button.props.style).toEqual({ backgroundColor: "#8057c8", color: "#ffffff" });
-    expect(html).toContain("lucide-audio-lines");
+    expect(html).toContain("icon-audio-lines");
     expect(html).not.toContain('aria-label="Call mode"');
     expect(renderToStaticMarkup(createElement(() => CallButton({ bot, placement: "composer" })))).toContain('aria-label="Call mode"');
   });
@@ -218,7 +219,7 @@ describe("composer call button", () => {
     fixture.config = { tts: { configured: false } };
     const { html, button } = render("header");
     expect(String(button.props.className).split(" ")).toContain("size-9");
-    expect(html).toContain("lucide-phone");
+    expect(html).toContain("icon-phone");
     expect(html).not.toMatch(/role="group" aria-label="Call unavailable" class="[^"]*\bbottom-full\b/);
   });
 });

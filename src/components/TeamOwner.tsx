@@ -2,7 +2,7 @@
 // changes it (for an Admin, or the person it reports to now), and this person's Needs you.
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Bell, Check } from "lucide-react";
+import { Bell, Check } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { api, useStore, openThread, type Bot } from "@/state/store";

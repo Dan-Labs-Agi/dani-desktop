@@ -278,7 +278,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val STATE_CONSUMED_NOTIFICATION = "openmaus.consumedNotification"
+        const val STATE_CONSUMED_NOTIFICATION = "danibot.consumedNotification"
 
         /** One key per tracked permission, so a second one needs no new plumbing. */
         fun askedKey(permission: String): String =

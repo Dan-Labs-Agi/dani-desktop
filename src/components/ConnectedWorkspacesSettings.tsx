@@ -1,6 +1,6 @@
 import { t } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
-import { Check, Cloud, Laptop, Loader2, Trash2 } from "lucide-react";
+import { Check, Cloud, Laptop, Loader2, Trash2 } from "@/components/icons";
 import { Card } from "./SettingsPrimitives";
 import { ComputerSharingSettings } from "./ComputerSharingSettings";
 import { CloudTile } from "./cloud-buy/parts";

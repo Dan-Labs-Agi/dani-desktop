@@ -1,4 +1,4 @@
-// S6: a hostile page in a bot's real Chrome tries every way it has to reach DaniBot, this machine's other services,
+// S6: a hostile page in a bot's real Chrome tries every way it has to reach Dani Bot, this machine's other services,
 // the local network and the cloud metadata service. Each attempt must be refused at the egress gate and reported, and
 // Dani Bot's stand-in must see nothing.
 import type { ChildProcess } from "node:child_process";

@@ -4,14 +4,14 @@
 
 X research (`x_search`, `x_user_posts`, `x_post`, `x_profile`;
 `2026-10-08-x-research-tools-design.md`) currently runs on a treg token the
-person pastes. Change it to an included service of DaniBot Cloud plans:
+person pastes. Change it to an included service of Cloud plans:
 our Admin holds the treg key and relays calls for paying accounts only, with a
 monthly allowance per plan tier. Free users never get it. There is no
 bring-your-own token.
 
 Two repositories change:
 
-- **openmaus-cloud** (Admin): the X relay, its per-tier allowance, tokens for
+- **danibot-cloud** (Admin): the X relay, its per-tier allowance, tokens for
   Cloud homes and for signed-in desktops.
 - **DaniBot** (app): the included credential replaces the person's token;
   the desktop fetches its token from its Cloud sign-in; the bot setting shows
@@ -25,7 +25,7 @@ Two repositories change:
 - No bring-your-own treg token anywhere in the product.
 - The relay is the real gate. The app's check is presentation only.
 
-## Admin (openmaus-cloud)
+## Admin (danibot-cloud)
 
 ### Relay
 
@@ -87,7 +87,7 @@ Two repositories change:
 - The Cloud page's "Included" block gains `x: { calls, max }`.
 - `deploy/admin.env.example`, `docs/consumer-cloud.md`.
 
-## App (DaniBot)
+## App (Dani Bot)
 
 ### Removed
 
@@ -121,11 +121,11 @@ loading.
   `Authorization: Bearer <token>`. Endpoints, fallback, row mapping, links and
   the result cap are unchanged.
 - New sentences:
-  - 402: "X research comes with DaniBot Cloud plans, and this account's
+  - 402: "X research comes with Cloud plans, and this account's
     plan isn't active."
   - 429 `quota_exceeded`: the relay's own sentence (the plan, the allowance
     and the reset date).
-  - 401: "Sign in to DaniBot Cloud again in Settings to use X research."
+  - 401: "Sign in to Cloud again in Settings to use X research."
 - Tools are shown only when `xCredential()` exists and `bot.xResearch` is on.
   The routes re-check both on every call.
 - `configStatus` reports `xResearch: { included: boolean }` in place of
@@ -133,9 +133,9 @@ loading.
 
 ### Access card
 
-- Included: the switch, as today ("Included with your DaniBot Cloud plan").
+- Included: the switch, as today ("Included with your Cloud plan").
 - Not included, on the desktop app: locked. "X research is included with
-  DaniBot Cloud plans." Signed out: the existing sign-in action. Signed
+  Cloud plans." Signed out: the existing sign-in action. Signed
   in on Free: Get Pro.
 - Elsewhere (a browser): the locked sentence only.
 - A bot already switched on can still be switched off.

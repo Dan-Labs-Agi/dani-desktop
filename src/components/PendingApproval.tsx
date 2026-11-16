@@ -1,5 +1,5 @@
 import { memo, useState, type ReactNode } from "react";
-import { ChevronDown, Send, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ChevronDown, Send, ShieldCheck, TriangleAlert } from "@/components/icons";
 import { useStore, type Bot, type Message } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { t, tFromServer } from "@/lib/i18n";

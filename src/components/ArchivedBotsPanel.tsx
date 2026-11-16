@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Archive, Loader2, Trash2, X } from "lucide-react";
+import { Archive, Loader2, Trash2, X } from "@/components/icons";
 
 import { t } from "@/lib/i18n";
 import { useShowThreads } from "@/lib/thread-preferences";

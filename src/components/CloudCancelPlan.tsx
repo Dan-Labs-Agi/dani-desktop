@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { X } from "@/components/icons";
 
 import type { CloudCancelAnswer, CloudCancelSurvey, CloudRenewalResult } from "../../electron/cloud-account.mjs";
 import type { CloudRenewal } from "../../electron/cloud-list.mjs";

@@ -1,4 +1,4 @@
-import { AtSign, Check, ChevronDown } from "lucide-react";
+import { AtSign, Check, ChevronDown } from "@/components/icons";
 
 import { atLeast, GRANTED_LEVELS, type BotAccessLevel, type GrantedLevel } from "../../../shared/bot-access";
 import { cn } from "@/lib/cn";

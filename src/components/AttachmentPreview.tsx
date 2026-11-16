@@ -22,7 +22,7 @@ import {
   Maximize2,
   RotateCcw,
   X,
-} from "lucide-react";
+} from "@/components/icons";
 
 import {
   attachmentBasename,

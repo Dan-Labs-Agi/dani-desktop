@@ -1,4 +1,4 @@
-import { Crown, Loader2, Phone } from "lucide-react";
+import { Crown, Loader2, Phone } from "@/components/icons";
 import { memo, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import { cn } from "@/lib/cn";
@@ -90,7 +90,7 @@ export const SidebarBotTile = memo(function SidebarBotTile({ primary = false, dr
           animated={working || noticing || (mascotMotion?.kind ?? "none") !== "none"}
         />
         {primary && bot.chiefOfStaff && (
-          <span data-testid="chief-badge" className={cn("absolute -bottom-px -right-px flex size-4 items-center justify-center rounded-full bg-[#E8993A] text-white", RING)}>
+          <span data-testid="chief-badge" className={cn("absolute -bottom-px -right-px flex size-4 items-center justify-center rounded-full bg-(--color-chief) text-white", RING)}>
             <Crown size={10} strokeWidth={1.5} fill="currentColor" aria-hidden="true" />
           </span>
         )}
