@@ -2552,14 +2552,14 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
       requestType: "question",
       tool: "ask_user",
       summary: "Which source should I use?",
-      choices: ["Directly in DaniBot", "The official server in Executor"],
-      questions: [{ question: "Which source should I use?", options: [{ label: "Directly in DaniBot" }, { label: "The official server in Executor" }] }],
+      choices: ["Directly in Dani Bot", "The official server in Executor"],
+      questions: [{ question: "Which source should I use?", options: [{ label: "Directly in Dani Bot" }, { label: "The official server in Executor" }] }],
     });
     expect(recorder.events.find((e) => e.type === "item.completed" && e.itemType === "assistant_text")).toMatchObject({
-      text: "Which source should I use?\n- Directly in DaniBot\n- The official server in Executor",
+      text: "Which source should I use?\n- Directly in Dani Bot\n- The official server in Executor",
     });
 
-    const answer = "The user answered your questions.\n\nQ: Which source should I use?\nA: Directly in DaniBot";
+    const answer = "The user answered your questions.\n\nQ: Which source should I use?\nA: Directly in Dani Bot";
     await expect(instance.adapter.respondToRequest("t-async-question", opened.requestId!, { behavior: "answer", message: answer })).resolves.toBe("answered");
     expect(await recorder.until((e) => e.type === "request.resolved")).toMatchObject({ requestId: opened.requestId, behavior: "answer", source: "user" });
     expect(JSON.parse(readFileSync(dump, "utf8")).calls.find((c: any) => c.method === "turn/steer")?.params?.input).toEqual([{ type: "text", text: answer }]);
