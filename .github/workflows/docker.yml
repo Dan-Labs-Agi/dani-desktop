@@ -43,14 +43,16 @@ jobs:
           docker save danibot:ci -o /tmp/image-scan/server.tar
           docker save omb-cloud-home:ci -o /tmp/image-scan/home.tar
           python3 - <<'PY'
-          import re, tarfile
+          import json, re, tarfile
           cache = re.compile(r"tmp/(grok-install|node-compile-cache|npm-cache|omb-build-home)/")
           def files_in(image_path):
               files = {}
               with tarfile.open(image_path) as image:
-                  for member in image.getmembers():
-                      if not member.name.endswith("/layer.tar"): continue
-                      with tarfile.open(fileobj=image.extractfile(member)) as layer:
+                  manifest = json.load(image.extractfile("manifest.json"))
+                  layers = manifest[0]["Layers"]
+                  assert layers, f"{image_path}: no image layers found"
+                  for layer_path in layers:
+                      with tarfile.open(fileobj=image.extractfile(layer_path)) as layer:
                           for entry in layer.getmembers():
                               if entry.isfile():
                                   name = entry.name

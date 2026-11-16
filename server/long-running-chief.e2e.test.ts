@@ -254,8 +254,8 @@ it("carries a consult-and-implement job over several teammate turns, through a s
   expect(implement).not.toMatch(DISTRUST);
   expect(f.prompt(f.turn("M2"))).toMatch(ASSIGNED_BY_CLIVE);
   expect(f.prompt(f.turn("M2"))).toContain(personLineage(request));
-  expect(f.prompt(f.turn("A1"))).toContain("[DaniBot report from @Mira on assignment ");
-  expect(f.prompt(f.turn("A1"))).toContain("[DaniBot report from @Eli on assignment ");
+  expect(f.prompt(f.turn("A1"))).toContain("[Dani Bot report from @Mira on assignment ");
+  expect(f.prompt(f.turn("A1"))).toContain("[Dani Bot report from @Eli on assignment ");
   expect(f.prompt(f.turn("A1"))).not.toContain(ENVELOPE_MARK);
   for (const key of ["A1", "A2"]) {
     expect(f.prompt(f.turn(key))).toContain(`Review the results against the request: ${JSON.stringify(request)}`);
@@ -300,10 +300,10 @@ it("tells the Chief what happened to each approval: allowed, denied, or never an
   expect(settled).toEqual(["@Mira got your approval", "@Mira's request was denied", "Nobody answered @Mira's approval in time — that step did not run"]);
   expect(f.child(job, f.mira.id, "CHECK-HISTORY").result).toBe("HISTORY-RESULT: checked the history.");
   expect(f.child(job, f.mira.id, "PUSH-BRANCH").result).toBe("PUSH-RESULT: not pushed; the push was denied.");
-  const unanswered = "[DaniBot: nobody answered the approval for “Bash: pnpm test” in time, so it did not run. Do not report it as done; it needs the person's approval.]";
+  const unanswered = "[Dani Bot: nobody answered the approval for “Bash: pnpm test” in time, so it did not run. Do not report it as done; it needs the person's approval.]";
   expect(f.child(job, f.mira.id, "RUN-TESTS")).toMatchObject({ status: "completed", result: `${unanswered}\n\nTESTS-RESULT: I could not run the tests.` });
   expect(f.prompt(f.turn("B3"))).toContain(JSON.stringify(unanswered.replace(/^\[/, "(")).slice(1, -1));
-  expect(f.prompt(f.turn("B3"))).toContain("[DaniBot report from @Mira on assignment ");
+  expect(f.prompt(f.turn("B3"))).toContain("[Dani Bot report from @Mira on assignment ");
   expect((await f.cards(work)).map((message: any) => [message.card.subtitle, message.card.answered, message.card.dismissed, message.card.answeredBy?.kind]))
     .toEqual([["git log --oneline -5 -- src/export", "allow", false, "loopback"], ["git push origin export", "deny", false, "loopback"], ["pnpm test", "deny", true, undefined]]);
   await expect.poll(() => f.notifications.some((notification: any) => notification.kind === "done"), { timeout: 10_000 }).toBe(true);
@@ -506,7 +506,7 @@ it("tells a teammate the person's job is its task, and a routine's handoff is no
   expect(nightly).not.toMatch(/the user asked|sent on the user's behalf|PHASE-TRUST-JOB/);
   expect((await f.tasks(f.mira.id)).some((task: any) => task.title === "SENDWORK-ROUTINE: run the nightly QA checks and report back.")).toBe(true);
   const resumed = f.prompt(f.turn("T2"));
-  expect(resumed).toMatch(/\[DaniBot report from @Mira on assignment [^:]*: done\]/);
+  expect(resumed).toMatch(/\[Dani Bot report from @Mira on assignment [^:]*: done\]/);
   expect(resumed).toContain("NIGHTLY-QA-DONE");
   expect(resumed).toContain("check claims against what was observed; redo only what the evidence does not cover");
 }), hostTimeout(90_000));

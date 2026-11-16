@@ -3829,7 +3829,7 @@ describe("routine paths that cannot exist where the routine runs", () => {
     h.manager.update(routine.id, { prompt: routine.prompt });
     h.manager.runNow(routine.id);
     await h.manager.tick();
-    expect(h.started[0]!.prompt).toContain("[DaniBot: this run is on a Linux computer, where C:\\Users\\Ada\\Reports\\weekly.xlsx cannot exist.");
+    expect(h.started[0]!.prompt).toContain("[Dani Bot: this run is on a Linux computer, where C:\\Users\\Ada\\Reports\\weekly.xlsx cannot exist.");
     expect(JSON.parse(readFileSync(h.options.file!, "utf8")).routines[0]).not.toHaveProperty("warning");
   });
 });
