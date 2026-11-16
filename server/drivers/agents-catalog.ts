@@ -7,6 +7,7 @@ import { HELPER_TOOL_DEFINITIONS } from "./agents-helper-tools.ts";
 import { USAGE_LIMITS_TOOL_DEFINITION } from "./agents-usage-tool.ts";
 import { WAIT_TOOL_DEFINITIONS, WAIT_TOOL_NAMES } from "./agents-wait-tools.ts";
 import { COMPUTER_ASK_TOOL_DEFINITIONS, COMPUTER_ASK_TOOL_NAMES } from "./agents-computer-ask-tool.ts";
+import { DEVS_TOOL_DEFINITIONS } from "./agents-devs-tools.ts";
 import { MAUSBOT_TOOL_DEFINITIONS } from "./agents-danibot-tools.ts";
 import { PERSON_TOOL_DEFINITIONS, PERSON_TOOL_NAMES } from "./agents-person-tools.ts";
 import { RESEARCH_TOOL_DEFINITIONS, RESEARCH_TOOL_NAMES, X_TOOL_NAMES } from "./agents-research-tools.ts";
@@ -517,6 +518,7 @@ const TOOL_DEFINITIONS = [
     },
   },
   ...RESEARCH_TOOL_DEFINITIONS, ...HELPER_TOOL_DEFINITIONS, ...PERSON_TOOL_DEFINITIONS,
+  ...DEVS_TOOL_DEFINITIONS,
   {
     name: "memory_update",
     description:
