@@ -321,13 +321,69 @@ describe("the bots' browser tools", () => {
     const sent = backend.chrome.sent.length;
     try {
       await expect(runtime.agentRpc(target.session, spec, "tools/call", { name: "agent_browser_click", arguments: { ref: "e2" } }, undefined, undefined, controller.signal))
-        .rejects.toThrow(/cancelled before dispatch.*did not run/i);
+        .rejects.toThrow(/already sent.*uncertain/i);
+      expect(backend.chrome.sent.slice(sent).some((command) => command.method === "DOM.scrollIntoViewIfNeeded")).toBe(true);
       expect(backend.chrome.sent.slice(sent).filter((command) => command.method === "Input.dispatchMouseEvent")).toEqual([]);
-      expect(service.interrupted(target.session)).toBe(false);
+      expect(service.interrupted(target.session)).toBe(true);
       expect(backend.chrome.pages.values().next().value!.text).not.toContain("Hello");
     } finally {
       await viewer.close();
     }
+  });
+
+  it.each(["agent_browser_click", "agent_browser_hover"] as const)("fences a cancelled %s after scroll dispatch and before the pointer action, and does not dispatch it again", async (name) => {
+    const { service, target, call, backend, text } = setup();
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const controller = new AbortController();
+    const scrolled = Promise.withResolvers<void>();
+    backend.chrome.delay = (method) => {
+      if (method === "DOM.scrollIntoViewIfNeeded") {
+        scrolled.resolve();
+        return 80;
+      }
+      return 0;
+    };
+    const sent = backend.chrome.sent.length;
+    const pending = service.agentRpc(target, "tools/call", { name, arguments: { ref: "e2" } }, undefined, controller.signal);
+    const cancelled = expect(pending).rejects.toThrow(/already sent.*uncertain.*do not automatically replay/i);
+    await scrolled.promise;
+    expect(backend.chrome.sent.slice(sent).map((command) => command.method)).toContain("DOM.scrollIntoViewIfNeeded");
+    expect(backend.chrome.sent.slice(sent).filter((command) => command.method.startsWith("Input."))).toEqual([]);
+    controller.abort("private stop reason");
+    await cancelled;
+    expect(service.interrupted(target.session)).toBe(true);
+    expect(service.agentAvailable(target.session)).toBe(false);
+    await sleep(120);
+    expect(backend.chrome.sent.slice(sent).filter((command) => command.method.startsWith("Input."))).toEqual([]);
+    const after = backend.chrome.sent.length;
+    expect(text(await call(name, { ref: "e2" }))).toMatch(/stuck|busy/i);
+    expect(backend.chrome.sent.slice(after).filter((command) => command.method === "DOM.scrollIntoViewIfNeeded" || command.method.startsWith("Input."))).toEqual([]);
+    expect(service.interrupted(target.session)).toBe(true);
+  });
+
+  it("still reports no effect when Stop lands before scroll dispatch", async () => {
+    const { service, target, call, backend } = setup();
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const controller = new AbortController();
+    const observing = Promise.withResolvers<void>();
+    backend.chrome.delay = (method) => {
+      if (method === "Runtime.evaluate") {
+        observing.resolve();
+        return 80;
+      }
+      return 0;
+    };
+    const sent = backend.chrome.sent.length;
+    const pending = service.agentRpc(target, "tools/call", { name: "agent_browser_click", arguments: { ref: "e2" } }, undefined, controller.signal);
+    const cancelled = expect(pending).rejects.toThrow(/cancelled before dispatch.*did not run/i);
+    await observing.promise;
+    expect(backend.chrome.sent.slice(sent).some((command) => command.method === "DOM.scrollIntoViewIfNeeded")).toBe(false);
+    controller.abort("private stop reason");
+    await cancelled;
+    expect(service.interrupted(target.session)).toBe(false);
+    await sleep(120);
+    expect(backend.chrome.sent.slice(sent).filter((command) => command.method === "DOM.scrollIntoViewIfNeeded" || command.method.startsWith("Input."))).toEqual([]);
+    expect((await call("agent_browser_click", { ref: "e2" })).isError).toBeUndefined();
   });
 
   it("fences an accepted native click after Stop until the real dispatch drains and restart clears uncertainty", async () => {

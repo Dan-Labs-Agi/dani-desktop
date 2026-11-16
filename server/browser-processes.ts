@@ -164,17 +164,27 @@ export async function browserProcessTree(binaryPath: string, daemon: number, ses
   return { daemon, members, groups, profiles };
 }
 
+/** Trees already proved owned. `complete` is false when a candidate's environment
+ * could not be read or its ownership stayed ambiguous: that process is not
+ * signalled, and absence is not proved. */
+export interface BrowserSessionDiscovery {
+  trees: BrowserProcessTree[];
+  complete: boolean;
+}
+
 /** Finds a launch before its pid file was written, or Chrome re-parented after daemon
  * exit. Daemons require the complete expected scope; orphan Chrome requires the
- * inherited marker because launchers rewrite HOME. Unmarked ambiguous Chrome
- * returns null without being signalled. Windows cannot prove env-only identity. */
-export async function browserSessionProcessTrees(binaryPath: string, session: string, expected: NodeJS.ProcessEnv): Promise<BrowserProcessTree[] | null> {
+ * inherited marker because launchers rewrite HOME. An unreadable or unmarked
+ * candidate does not erase trees already proved owned, and is never signalled.
+ * Foreign scope and a reused pid stay negatives. Windows cannot prove env-only identity. */
+export async function browserSessionProcessTrees(binaryPath: string, session: string, expected: NodeJS.ProcessEnv): Promise<BrowserSessionDiscovery | null> {
   if (!expected.HOME && !expected.USERPROFILE && !expected.XDG_RUNTIME_DIR && !expected.AGENT_BROWSER_SOCKET_DIR) return null;
   const table = await processTable(true);
   if (!table) return null;
   const paths = new Set([binaryPath]);
   try { paths.add(realpathSync(binaryPath)); } catch {}
   const trees: BrowserProcessTree[] = [];
+  let complete = true;
   for (const [pid, entry] of table) {
     if (entry.zombie || pid === process.pid) continue;
     const args = entry.args ?? "";
@@ -184,27 +194,27 @@ export async function browserSessionProcessTrees(binaryPath: string, session: st
     const chrome = !expected.AGENT_BROWSER_CDP && !expected.AGENT_BROWSER_AUTO_CONNECT && entry.pgid === pid && debugging;
     if (!daemon && !chrome) continue;
     const env = await processEnvironment(pid);
-    if (!env) return null;
+    if (!env) { complete = false; continue; }
     if (env.get("AGENT_BROWSER_DAEMON") !== "1" || env.get("AGENT_BROWSER_SESSION") !== session) continue;
     if (daemon) {
       if (!daemonScopeMatches(env, expected)) continue;
-      if (!env.get("OMB_BROWSER_PROCESS_SCOPE") && expected.OMB_BROWSER_PROCESS_SCOPE) return null;
+      if (!env.get("OMB_BROWSER_PROCESS_SCOPE") && expected.OMB_BROWSER_PROCESS_SCOPE) { complete = false; continue; }
       if ((env.get("OMB_BROWSER_PROCESS_SCOPE") ?? "") !== (expected.OMB_BROWSER_PROCESS_SCOPE ?? "")) continue;
       const tree = await browserProcessTree(binaryPath, pid, session, true, expected);
-      if (!tree) return null;
+      if (!tree) { complete = false; continue; }
       trees.push(tree);
     } else {
       const marker = env.get("OMB_BROWSER_PROCESS_SCOPE");
-      if (!marker) return null;
-      if (!expected.OMB_BROWSER_PROCESS_SCOPE) return null;
+      // Never signal a debugging process that lacks the owned scope marker.
+      if (!marker || !expected.OMB_BROWSER_PROCESS_SCOPE) { complete = false; continue; }
       if (marker !== expected.OMB_BROWSER_PROCESS_SCOPE) continue;
-      // Only an owned Chrome group is named, never an attached person's browser.
-      if ((await processTable())?.get(pid)?.started !== entry.started) return null;
-      try { process.kill(pid, "SIGSTOP"); } catch { return null; }
+      // A reused pid is not this Chrome. Do not signal it.
+      if ((await processTable())?.get(pid)?.started !== entry.started) { complete = false; continue; }
+      try { process.kill(pid, "SIGSTOP"); } catch { complete = false; }
       trees.push({ daemon: pid, members: new Map([[pid, entry.started]]), groups: [pid], profiles: temporary ? [temporary] : [] });
     }
   }
-  return trees;
+  return { trees, complete };
 }
 
 /** Whether a Chrome's arguments name a profile folder inside `root`; a path may hold spaces where `ps` joins arguments with them. */

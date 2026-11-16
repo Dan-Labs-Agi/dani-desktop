@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { ProviderInstance, SendTurnInput } from "../../contracts.ts";
 import { removeTempDir } from "../../testing/cleanup.ts";
 import { recordEvents } from "../../testing/events.ts";
-import { TASK_ROUND_LIMIT, TASK_TOOL_CALL_LIMIT } from "../task-continuation.ts";
+import { OBSERVATION_RECOVERY_LIMIT, TASK_ROUND_LIMIT, TASK_TOOL_CALL_LIMIT } from "../task-continuation.ts";
 import { HermesAgentDriver, HERMES_CONFIG_MODEL_ID } from "./hermes.ts";
 import type * as ModelCatalogModule from "./hermes-model-catalog.ts";
 
@@ -43,6 +43,7 @@ interface Stage {
   used?: number;
   nativeId?: string;
   unkeyed?: boolean;
+  input?: Record<string, unknown>;
   usage?: { inputTokens: number; outputTokens: number; cachedReadTokens?: number; totalTokens?: number } | false;
 }
 interface FixtureOptions { phases?: number; stages?: Stage[]; reuseIds?: boolean }
@@ -76,7 +77,7 @@ createInterface({ input:process.stdin }).on('line', async line => {
     if (stage.openQuestion) send({id:'question-'+step,method:'session/request_permission',params:{sessionId:'continuation-session',toolCall:{toolCallId:'interaction_'+step,title:'Which account?',kind:'other'},options:[{optionId:'answer',kind:'allow_once',name:'Test account'}]}});
     for (let index=0; index<(stage.tools ?? 0); index++) {
       const id = stage.nativeId ?? (config.reuseIds ? 'browser-step' : 'browser-step-'+step)+'-'+index;
-      update({sessionUpdate:'tool_call',toolCallId:stage.unkeyed ? undefined : id,title:stage.title ?? 'browser step '+step,kind:stage.kind ?? 'other',status:'pending',rawInput:{step,index}});
+      update({sessionUpdate:'tool_call',toolCallId:stage.unkeyed ? undefined : id,title:stage.title ?? 'browser step '+step,kind:stage.kind ?? 'other',status:'pending',rawInput:stage.input ?? {step,index}});
       if (stage.permission) {
         const requestId = 'permission-'+step+'-'+index;
         const {promise:outcome,resolve} = Promise.withResolvers();
@@ -423,6 +424,85 @@ it("never uses observation recovery to override a denied permission", async () =
   expect(f.receipts()).toEqual([]);
 });
 
+const failedWait = (status: Stage["status"] = "failed"): Stage => ({
+  tools: 1, kind: "other", title: "mcp__browser__agent_browser_wait: 1s", status, input: { ms: 1_000 }, text: "The page observation failed.",
+});
+const verified: Stage = { tools: 1, kind: "read", title: "agent_browser_snapshot", text: "The requested receipt is verified." };
+
+it("recovers one stale canonical wait in the same session within the observation bound", async () => {
+  const f = await fixture({ stages: [failedWait(), verified] });
+  await f.start();
+  expect(await f.recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
+  expect(f.prompts().map((prompt) => prompt.session)).toEqual(["continuation-session", "continuation-session"]);
+  expect(f.prompts()[1]?.prompt[0]?.text).toContain("Re-read current state");
+  expect(f.receipts()).toEqual([{ step: 2, session: "continuation-session" }]);
+  expect(f.prompts().length).toBeLessThanOrEqual(OBSERVATION_RECOVERY_LIMIT + 1);
+});
+
+it("stops repeated canonical wait failures at the existing observation bound", async () => {
+  const f = await fixture({ stages: Array.from({ length: 10 }, () => failedWait()) });
+  await f.start();
+  expect(await f.recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "incomplete_action" });
+  expect(f.prompts()).toHaveLength(OBSERVATION_RECOVERY_LIMIT + 1);
+  expect(f.receipts()).toEqual([]);
+});
+
+it("recovers a correlated failed canonical tab list inside the same observation bound", async () => {
+  const failed: Stage = {
+    tools: 1, kind: "other", title: "mcp__browser__agent_browser_tabs: list", status: "failed", input: { action: "list" }, text: "The tab list failed.",
+  };
+  const f = await fixture({ stages: [failed, { ...verified, title: "mcp__browser__agent_browser_tabs: list", input: { action: "list" } }] });
+  await f.start();
+  expect(await f.recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: true });
+  expect(f.prompts()).toHaveLength(2);
+  expect(f.prompts().every((prompt) => prompt.session === "continuation-session")).toBe(true);
+  expect(f.prompts()[1]?.prompt[0]?.text).toContain("Re-read current state");
+  expect(f.receipts()).toEqual([{ step: 2, session: "continuation-session" }]);
+});
+
+it.each(["new", "switch", "close"] as const)("does not recover a failed canonical tab %s as an observation", async (action) => {
+  const f = await fixture({ stages: [{
+    tools: 1, kind: "read", title: `mcp__browser__agent_browser_tabs: ${action}`, status: "failed",
+    input: { action, ...(action === "new" ? { url: "https://example.test/mutate" } : { tab: "t2" }) },
+    text: "The tab change failed.",
+  }, verified] });
+  await f.start();
+  expect(await f.recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "incomplete_action" });
+  expect(f.prompts()).toHaveLength(1);
+  expect(f.receipts()).toEqual([]);
+});
+
+it("does not recover a denied canonical wait as an observation", async () => {
+  const f = await fixture({ stages: [{ ...failedWait(), permission: true }, verified] });
+  await f.start();
+  const opened = await f.recorder.until((event) => event.type === "request.opened");
+  if (!opened.requestId) throw new Error("expected permission request");
+  await f.adapter.respondToRequest("workflow-thread", opened.requestId, { behavior: "deny" });
+  expect(await f.recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "incomplete_action" });
+  expect(f.prompts()).toHaveLength(1);
+  expect(f.receipts()).toEqual([]);
+});
+
+it("does not refresh a canonical wait after Stop", async () => {
+  const f = await fixture({ stages: [failedWait(), { text: "Still waiting on the page.", hold: true }, verified] });
+  await f.start();
+  await f.recorder.until((event) => event.type === "content.delta" && event.delta === "Still waiting on the page.");
+  await f.adapter.interruptTurn("workflow-thread");
+  expect(await f.recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "cancelled" });
+  expect(f.prompts()).toHaveLength(2);
+  expect(f.receipts()).toEqual([]);
+});
+
+it("does not recover a failed URL-bearing read as an observation", async () => {
+  const f = await fixture({ stages: [{
+    tools: 1, kind: "read", title: "mcp__browser__agent_browser_read: https://example.test/page", status: "failed",
+    input: { url: "https://example.test/page" }, text: "The navigated read failed.",
+  }, verified] });
+  await f.start();
+  expect(await f.recorder.until((event) => event.type === "turn.completed")).toMatchObject({ ok: false, stopReason: "incomplete_action" });
+  expect(f.prompts()).toHaveLength(1);
+  expect(f.receipts()).toEqual([]);
+});
 it("does not mistake quoted page questions and URL queries for a request for human input", async () => {
   const f = await fixture({ stages: [
     { tools: 1, plan: "pending", text: "The page asks “Which draft?” at https://example.test/?draft=42. The receipt still needs verification." },

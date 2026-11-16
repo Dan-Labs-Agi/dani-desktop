@@ -119,6 +119,31 @@ it("requires one-use approval when a read can navigate to a supplied URL", async
   await expect(pending).resolves.toMatchObject({ isError: true });
   expect(navigated).toEqual([]);
 });
+it.each([
+  ["agent_browser_wait", { ms: 1 }],
+  ["agent_browser_tabs", { action: "list" }],
+  ["agent_browser_read", { selector: "main" }],
+])("runs %s without approval when it only observes", async (name, args) => {
+  const events: RuntimeEvent[] = [];
+  const broker = new BrowserCalls({ publish: (event) => events.push(event) });
+  const ran: string[] = [];
+  await expect(broker.run(call({ params: { name, arguments: args } }), async () => { ran.push(name); return "seen"; })).resolves.toBe("seen");
+  expect(ran).toEqual([name]);
+  expect(events).toEqual([]);
+});
+
+it.each(["new", "switch", "close"] as const)("keeps agent_browser_tabs %s behind one-use approval", async (action) => {
+  const events: RuntimeEvent[] = [];
+  const broker = new BrowserCalls({ publish: (event) => events.push(event) });
+  const ran: string[] = [];
+  const pending = broker.run(call({ params: { name: "agent_browser_tabs", arguments: { action, ...(action === "new" ? { url: "https://example.test/mutate" } : { tab: "t2" }) } } }), async () => { ran.push(action); });
+  expect(ran).toEqual([]);
+  const opened = events.find((event) => event.type === "request.opened");
+  expect(opened).toMatchObject({ tool: "agent_browser_tabs" });
+  broker.answer("thread-one", opened!.requestId!, "deny");
+  await expect(pending).resolves.toMatchObject({ isError: true });
+  expect(ran).toEqual([]);
+});
 
 it("retains generation cancellation after a browser RPC returns an uncertain outcome", async () => {
   const broker = new BrowserCalls({ publish: () => {} });
