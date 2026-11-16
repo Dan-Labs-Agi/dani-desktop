@@ -11,7 +11,7 @@ import { lanAddresses, lanInterfaces, tailnetName, tailscaleAddress } from "./li
 import { defaultHostName } from "./mdns.ts";
 import { publicNetworks } from "./windows-network.ts";
 
-export const CONTROL_TOKEN_HEADER = "x-DaniBot-control-token";
+export const CONTROL_TOKEN_HEADER = "x-danibot-control-token";
 
 export interface ControlOptions {
   devices: DeviceRegistry;
