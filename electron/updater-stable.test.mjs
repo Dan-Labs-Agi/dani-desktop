@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { relative, isAbsolute } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { stableUpdaterFixture } from "./fixtures/stable-updater.mjs";
 import { updateErrorMessage } from "./update-errors.mjs";
@@ -87,7 +88,9 @@ it("loopback smoke downloads real vendored bytes and enforces SHA-512 before acc
   expect((await h.updater.checkForUpdates()).isUpdateAvailable).toBe(true);
   const files = await h.updater.downloadUpdate();
   expect(files).toHaveLength(1);
-  expect(files[0].startsWith(`${h.directory}/`)).toBe(true);
+  const downloadedPath = relative(h.directory, files[0]);
+  expect(isAbsolute(downloadedPath)).toBe(false);
+  expect(downloadedPath.startsWith("..")).toBe(false);
   expect(readFileSync(files[0])).toEqual(h.bytes);
   expect(h.requests.some((path) => path.endsWith(".AppImage"))).toBe(true);
 });

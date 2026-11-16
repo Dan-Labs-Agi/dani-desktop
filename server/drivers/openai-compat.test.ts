@@ -818,7 +818,7 @@ describe("OpenAICompatDriver", () => {
       expect(third.slice(0, second.length)).toEqual(second);
       expect(third.at(-1)).toEqual({
         role: "user",
-        content: "The DaniBot context notes from earlier in this conversation have been cleared; the standing instructions still apply.\n\nagain",
+        content: "The Dani Bot context notes from earlier in this conversation have been cleared; the standing instructions still apply.\n\nagain",
       });
       await done();
     });
