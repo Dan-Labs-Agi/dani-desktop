@@ -355,7 +355,7 @@ describe("server-side scope check (audit M1)", () => {
       expect(sharedComputerScopeRefusal(current, { action, folder_id: readOnly.id })).toMatch(/read-only/);
       expect(sharedComputerScopeRefusal(current, { action, folder_id: randomUUID() })).toMatch(/not been shared/);
       expect(sharedComputerScopeRefusal(current, { action, folder_id: writable.id })).toBeNull();
-      expect(sharedComputerScopeRefusal(lent, { action, folder_id: writable.id })).toMatch(/older DaniBot .* write_file/);
+      expect(sharedComputerScopeRefusal(lent, { action, folder_id: writable.id })).toMatch(/older Dani Bot .* write_file/);
     }
   });
   it("names the computer when its terminal isn't lent, sends the bot to no switch, and tells it not to run the command another way", () => {
@@ -366,9 +366,9 @@ describe("server-side scope check (audit M1)", () => {
     expect(sharedComputerScopeRefusal({ ...lent, terminal: true }, { action: "run_command" })).toBeNull();
   });
   it("says where the person lends apps and screen, in the refusal and in the list a bot reads", () => {
-    const steps = "DaniBot on that Mac lends them by itself once macOS allows it Accessibility and Screen Recording: tell the person in one sentence to allow both for DaniBot in System Settings → Privacy & Security on that Mac, and to update DaniBot there if it is an older version.";
+    const steps = "Dani Bot on that Mac lends them by itself once macOS allows it Accessibility and Screen Recording: tell the person in one sentence to allow both for Dani Bot in System Settings → Privacy & Security on that Mac, and to update Dani Bot there if it is an older version.";
     expect(sharedComputerScopeRefusal({ ...lent, platform: "darwin" }, { action: "computer_call" })).toBe(`Apps and screen are not lent to this server. ${steps}`);
-    expect(sharedComputerScopeRefusal({ ...lent, platform: "win32" }, { action: "computer_call" })).toContain("DaniBot on that PC lends them by itself once its computer control works");
+    expect(sharedComputerScopeRefusal({ ...lent, platform: "win32" }, { action: "computer_call" })).toContain("Dani Bot on that PC lends them by itself once its computer control works");
     expect(sharedComputerScopeRefusal(lent, { action: "computer_call" })).not.toMatch(/Settings|use-my-computer/u);
     const broker = new SharedComputers(() => true);
     const mac = { ...registration(), platform: "darwin" as const };

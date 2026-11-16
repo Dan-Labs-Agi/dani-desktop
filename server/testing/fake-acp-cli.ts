@@ -210,6 +210,7 @@ const dumpEnv = Object.fromEntries(
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
     "XAI_API_KEY",
     "GROK_AGENT",
     "BOX_TOKEN",

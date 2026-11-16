@@ -28,6 +28,8 @@ function askInBox(socket: string, rw: string[]): Promise<{ content: Array<{ text
   return new Promise((resolve, reject) => {
     let out = "";
     const timer = setTimeout(() => { child.kill(); reject(new Error(`no answer from the helper in the box: ${out}`)); }, 20_000);
+    child.once("error", error => { clearTimeout(timer); reject(error); });
+    child.once("exit", code => { clearTimeout(timer); reject(new Error(`helper exited before answering (code ${code}): ${out}`)); });
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       out += chunk;
@@ -44,6 +46,7 @@ function askInBox(socket: string, rw: string[]): Promise<{ content: Array<{ text
 describe.skipIf(!available)(`a bot's question from inside a real box (${available ? "bubblewrap works here" : `skipped: ${detection.reason}`})`, () => {
   it("reaches the broker through the socket put back in the box, and says what to do instead without it", async () => {
     mkdirSync(cwd, { recursive: true });
+    mkdirSync(join(dataDir, "workspaces", "bot-a"), { recursive: true });
     const asked: string[] = [];
     const broker = await createPermissionBroker({
       socketPaths: [join(dataDir, "perm-test.sock")],
