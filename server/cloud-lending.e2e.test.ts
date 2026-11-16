@@ -504,7 +504,7 @@ it("My Cloud remembers a lent computer across its restart, says it is offline by
   await expect.poll(async () => (await api("GET", "/api/shared-computers", { token: owner })).body.known, { timeout: 5000 })
     .toEqual([expect.objectContaining({ online: false, lent: false, scopes: { folders: 0, terminal: false, screen: true, internet: false, chrome: false } })]);
   call = await ask();
-  expect(JSON.parse((await call("list_shared_computers")).content[0].text).say).toMatch(new RegExp(`^Their ${device} .+ no longer shares itself with the Cloud: DaniBot on it is paused`, "u"));
+  expect(JSON.parse((await call("list_shared_computers")).content[0].text).say).toMatch(new RegExp(`^Their ${device} .+ no longer shares itself with the Cloud: Dani Bot on it is paused`, "u"));
   connector.close();
   connector = undefined;
   rmSync(join(home, "desktop-profile"), { recursive: true, force: true });
