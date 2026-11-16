@@ -263,7 +263,7 @@ export async function launchVerificationServer(
   enterprise?: { dir: string; licenseKey: string },
   room?: { scripted: boolean },
   /** Optional repository-owned fake providers for multi-engine setup checks. */
-  extraProviders: Array<"codex" | "cline" | "copilot" | "customAcp"> = [],
+  extraProviders: Array<"codex" | "cline" | "copilot" | "customAcp" | "openaiCompat"> = [],
   /** Programmatic tests only: an owned loopback Boat provider, never a live account. */
   boatFixtureApi?: string,
   /** Programmatic web UI qualification against the fixture's static server. */
@@ -303,9 +303,11 @@ export async function launchVerificationServer(
     instances: {
       // A sealed PATH does not isolate local HTTP engines. Shadow the whole product
       // fleet so config migrations cannot add real providers beside these explicit fakes.
-      ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+      ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).filter((id) => !(id === "openaiCompat" && extraProviders.includes("openaiCompat"))).map((id) => [
         id, { driver: "not-a-real-driver", enabled: false },
       ])),
+      // The key-flow check needs the real driver so a saved key reaches the engine: the built-in default otherwise stays a shadow.
+      ...(extraProviders.includes("openaiCompat") ? { openaiCompat: { driver: "openai-compat" } } : {}),
       ...(extraProviders.includes("codex") ? { codex: {
         driver: "codex", displayName: "Verification Codex", config: { cli: fileURLToPath(new URL("../server/testing/fake-codex-app-server.ts", import.meta.url)) },
       } } : {}),
