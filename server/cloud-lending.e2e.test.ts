@@ -493,7 +493,7 @@ it("My Cloud remembers a lent computer across its restart, says it is offline by
   expect(away.say, "on the person's own Cloud the bot asks with a card instead of explaining the fix").toContain("If the request needs it, call ask_for_computer");
   const refused = await call("shared_computer", { computer_id: id, action: "list_files", folder_id: randomUUID(), path: "." });
   expect(refused.isError).toBe(true);
-  expect(JSON.stringify(refused)).toContain(`is offline: DaniBot on that ${device} is closed, or the ${device} is asleep or off.`);
+  expect(JSON.stringify(refused)).toContain(`is offline: Dani Bot on that ${device} is closed, or the ${device} is asleep or off.`);
   for (const text of [away.say, JSON.stringify(refused)]) if (device !== "Mac") expect(text).not.toMatch(/\bMac\b/u);
 
   // Lent again from the same computer, then paused there: no longer lent, not merely offline.
