@@ -84,7 +84,7 @@ describe("filterTasks", () => {
   });
 
   it("matches titles case-insensitively", () => {
-    expect(filterTasks(tasks, "openmaus").map((task) => task.title)).toEqual(["DaniBot Update"]);
+    expect(filterTasks(tasks, "danibot").map((task) => task.title)).toEqual(["DaniBot Update"]);
   });
 
   it("ranks prefix hits ahead of substring hits, keeping input order in each tier", () => {

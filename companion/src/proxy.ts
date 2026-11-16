@@ -415,13 +415,13 @@ export function createProxyHandler(options: ProxyOptions) {
             if (
               (harness.statusCode ?? 500) < 200 ||
               (harness.statusCode ?? 500) >= 300 ||
-              (identity as { app?: unknown } | null)?.app !== "DaniBot"
+              (identity as { app?: unknown } | null)?.app !== "danibot"
             ) {
               fail();
               return;
             }
             finished = true;
-            sendJson(res, 200, { app: "DaniBot" });
+            sendJson(res, 200, { app: "danibot" });
           });
           return;
         }
