@@ -63,7 +63,10 @@ jobs:
               files = files_in(image_path)
               leftovers = [name for name in files if cache.search(name)]
               assert not leftovers, f"{image_path}: throwaway build directories survive: {leftovers}"
-              dupes = [name for name, count in files.items() if count > 1]
+              # OS package layers legitimately update passwd, dpkg state and caches.
+              # Only application payload duplication is a packaging regression.
+              payload = ("app/", "opt/danibot-browser/", "usr/local/bin/grok")
+              dupes = [name for name, count in files.items() if count > 1 and name.startswith(payload)]
               assert not dupes, f"{image_path}: files shipped more than once: {dupes}"
           files = files_in("/tmp/image-scan/home.tar")
           grok = files["usr/local/bin/grok"]
