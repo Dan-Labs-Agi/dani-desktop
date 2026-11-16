@@ -12,6 +12,11 @@ it("sends history once through the real OpenAI-compatible server route after a r
       res.end(JSON.stringify({ data: [{ id: "fixture-model" }] }));
       return;
     }
+    if (req.method !== "POST" || req.url !== "/v1/chat/completions") {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
     let body = "";
     for await (const chunk of req) body += chunk;
     requests.push(JSON.parse(body));
