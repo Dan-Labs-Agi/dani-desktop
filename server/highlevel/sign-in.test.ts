@@ -12,7 +12,7 @@ import { createHighLevelRoutes } from "../routes/highlevel.ts";
 import { PASS } from "../routes/table.ts";
 import { removeTempDir } from "../testing/cleanup.ts";
 import { FAKE_LOCATION_ID, startFakeHighLevel, startFakeRelay, type FakeHighLevel, type FakeRelay } from "../testing/fake-highlevel.ts";
-import { HIGHLEVEL_RELAY_URL_DEFAULT, HighLevelRelayError, createHighLevelRelay, highlevelRelayUrl, type HighLevelRelay, type RelayTokens } from "./relay.ts";
+import { HighLevelRelayError, createHighLevelRelay, highlevelRelayUrl, type HighLevelRelay, type RelayTokens } from "./relay.ts";
 import { HighLevelSignIn } from "./sign-in.ts";
 import { HighLevelStore } from "./store.ts";
 import { createHighLevelService, type HighLevelService } from "./service.ts";
