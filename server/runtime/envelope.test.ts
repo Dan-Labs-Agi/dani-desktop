@@ -586,3 +586,11 @@ describe("composeReport: what went outward", () => {
     expect(posing).not.toContain("[Dani Bot assignment x]");
   });
 });
+
+it("a partial result does not claim all work settled or repeat the waiting person's question", () => {
+  const text = composeResume(base, names, ["independent result"], [], true);
+  expect(text).toContain("other requests are still open");
+  expect(text).toContain("do not answer for them or ask them again");
+  expect(text).not.toContain("Your downstream room requests have settled");
+  expect(text).toContain("independent result");
+});

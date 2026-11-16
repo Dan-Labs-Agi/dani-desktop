@@ -156,18 +156,21 @@ describe("Just do it: nothing a bot can settle reaches the person", () => {
       { key: "JD3-L", match: ["JD3-JOB"], steps: [
         { arguments: { bot_ids: [dachs.id], message: "JD3-BRIEF-B: Lade die Notion-Seite herunter." } },
         { arguments: { bot_ids: [otter.id], message: "JD3-BRIEF-O: Fasse die Notizen zusammen." } }], reply: "JD3-L: verteilt." },
-      { key: "JD3-L-MID", match: ["[Dani Bot note from @Dachs", "JD3-JOB"], reply: "JD3-L-MID: Otter ist fertig; Dachs wartet auf deine Notion-Anmeldung." },
-      done("JD3"));
+      { key: "JD3-L-MID", match: ["[Dani Bot note from @Dachs", "JD3-JOB"], reply: "JD3-L-MID: Dachs wartet auf deine Notion-Anmeldung." },
+      done("JD3"),
+      { key: "JD3-L-OTTER", match: ["[Dani Bot report from @Otter", "JD3-JOB"], reply: "JD3-L-OTTER: Otter ist fertig; Dachs wartet noch." });
     script(dachs.id,
       { key: "JD3-B2", match: ["JD3-BRIEF-B", "instead of pressing Done"], reply: "JD3-B2: Seite geladen." },
-      { key: "JD3-B", match: ["JD3-BRIEF-B"], delayMs: 2_000, steps: [{ tool: "request_sign_in", arguments: { site: "notion.so", reason: "Die Seite liegt hinter einer Anmeldung." } }],
+      { key: "JD3-B", match: ["JD3-BRIEF-B"], steps: [{ tool: "request_sign_in", arguments: { site: "notion.so", reason: "Die Seite liegt hinter einer Anmeldung." } }],
         reply: "JD3-B: Ich brauche deine Anmeldung bei Notion." });
     script(otter.id, { key: "JD3-O", match: ["JD3-BRIEF-O"], reply: "JD3-O: Zusammenfassung fertig." });
     const before = (await notes()).length;
     await say(fuchs, inbox, "JD3-JOB: Lass Dachs die Notion-Seite laden und Otter die Notizen zusammenfassen.");
     await until(() => keys(fuchs.id, "JD3").includes("JD3-L-MID"), 90_000);
 
-    expect(told(fuchs.id, "JD3-L-MID"), "Fuchs carries on with Otter's result while the sign-in waits").toContain("JD3-O: Zusammenfassung fertig.");
+    // Partial resumes are event-driven: Dachs's question may arrive before Otter finishes.
+    // Otter must still report to Fuchs without waiting for Marco to sign in.
+    await until(() => turns(fuchs.id).some(turn => turn.planKey?.startsWith("JD3-L-") && JSON.stringify(turn.prompt).includes("JD3-O: Zusammenfassung fertig.")), 90_000);
     expect(told(fuchs.id, "JD3-L-MID")).toContain("can do that and it is already in front of them: do not ask them again.");
     const work = (await workThread())!;
     const signIns = (await messages(work)).filter((line) => line.kind === "signin");

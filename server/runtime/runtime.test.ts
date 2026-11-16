@@ -361,13 +361,15 @@ describe("Runtime: one tree, one lane", () => {
     second.runtime.answer(asker.id, "eu");
     second.runtime.tick(); await flush();
     second.runtime.tick();
-    const [rootAsked, rootResume] = second.runner.runs.filter(r => r.a.id === root.id);
+    const rootTurns = second.runner.runs.filter(r => r.a.id === root.id);
+    const rootAsked = rootTurns[0], rootResume = rootTurns.at(-1);
     expect(rootAsked!.input.asked?.map(s => s.id)).toEqual([asker.id]);
     expect(rootAsked!.input.restartNote).toBe("");
     expect(rootResume!.input.resumed).toBe(true);
     expect(rootResume!.input.asked).toBeUndefined();
     expect(rootResume!.input.settled?.map(s => s.id)).toEqual([solo.id, lead.id, asker.id]);
-    expect(rootResume!.input.restartNote).toMatch(/restarted before your previous turn here finished.*A restart cut these teammates' turns: solo \(resumed once in place/);
+    expect(rootTurns.some(turn => /restarted before your previous turn here finished.*A restart cut these teammates' turns: solo \(resumed once in place/.test(turn.input.restartNote))).toBe(true);
+    expect(rootResume!.input.restartNote).toBe("");
     await flush();
     expect(store.get(root.id)?.status).toBe("completed");
     invariants(second);
@@ -1013,7 +1015,34 @@ describe("Runtime: a teammate's question reaches the requester waiting on it", (
     invariants(w);
   });
 
-  it("a question parked before a restart resumes the requester once after it, and not again after the next restart", async () => {
+  it("delivers a sibling that finishes after the sign-in question once, without answering the question", async () => {
+    const w = world(asks);
+    const root = w.runtime.begin(beginReq());
+    const builder = ok(w.runtime.enqueue(toBot("builder", root.id)));
+    const tester = ok(w.runtime.enqueue(toBot("tester", root.id)));
+    w.runtime.end(root.id, { ok: true, text: "Handed out" });
+    w.runtime.tick(); await flush();
+    w.runtime.tick(); await flush();
+    expect(runsOf(w, root.id)).toHaveLength(1);
+    expect(runsOf(w, root.id)[0].input.asked?.map(a => a.id)).toEqual([builder.id]);
+    await w.runner.release(tester.id, { kind: "completed", text: "independent result" });
+    w.runtime.tick(); await flush();
+    expect(runsOf(w, root.id)).toHaveLength(2);
+    expect(runsOf(w, root.id)[1].input).toMatchObject({ partial: true, settled: [{ id: tester.id, result: "independent result" }] });
+    expect(runsOf(w, root.id)[1].input.asked).toBeUndefined();
+    expect(w.store.get(builder.id)).toMatchObject({ status: "needs_input", question: "Which region?" });
+    expect(w.store.get(builder.id)?.answer).toBeUndefined();
+    w.runtime.tick(); await flush(); w.runtime.tick(); await flush();
+    expect(runsOf(w, root.id)).toHaveLength(2);
+    expect(w.runtime.answer(builder.id, "eu-west")).toBe(true);
+    w.runtime.tick(); await flush(); w.runtime.tick(); await flush();
+    expect(w.store.get(root.id)?.status).toBe("completed");
+    expect(runsOf(w, root.id)).toHaveLength(3);
+    expect(runsOf(w, root.id)[2].input.partial).toBeUndefined();
+    invariants(w);
+  });
+
+  it("a parked question is delivered once across restarts, and a newly failed sibling is delivered separately", async () => {
     const store = openRuntimeStore(":memory:");
     const first = world(asks, {}, store);
     const root = first.runtime.begin(beginReq());
@@ -1033,7 +1062,11 @@ describe("Runtime: a teammate's question reaches the requester waiting on it", (
 
     const third = world(asks, {}, store);
     third.runtime.tick(); await flush(); third.runtime.tick(); await flush();
-    expect(runsOf(third, root.id)).toEqual([]);
+    expect(runsOf(third, root.id)).toHaveLength(1);
+    expect(runsOf(third, root.id)[0].input.asked).toBeUndefined();
+    expect(runsOf(third, root.id)[0].input).toMatchObject({ partial: true, settled: [{ status: "failed", outcome: "interrupted" }] });
+    third.runtime.tick(); await flush();
+    expect(runsOf(third, root.id)).toHaveLength(1);
     expect(store.get(root.id)?.status).toBe("waiting");
     expect(store.get(builder.id)?.status).toBe("needs_input");
     expect(third.runner.parks.map(p => p.a.id)).toEqual([builder.id]);
