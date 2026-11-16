@@ -52,7 +52,10 @@ jobs:
                       if not member.name.endswith("/layer.tar"): continue
                       with tarfile.open(fileobj=image.extractfile(member)) as layer:
                           for entry in layer.getmembers():
-                              if entry.isfile(): files[entry.name] = files.get(entry.name, 0) + 1
+                              if entry.isfile():
+                                  name = entry.name
+                                  while name.startswith("./"): name = name[2:]
+                                  files[name] = files.get(name, 0) + 1
               return files
           for image_path in ("/tmp/image-scan/server.tar", "/tmp/image-scan/home.tar"):
               files = files_in(image_path)
