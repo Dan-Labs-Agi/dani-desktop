@@ -17,7 +17,8 @@ vi.mock("@/state/store", async (importOriginal) => {
   return { ...original, useStore: () => ({ state: { ...original.initialState, ...fixture.state }, dispatch: fixture.dispatch }) };
 });
 
-import { BotContextMenu, BotListItem, BotThreadList, botRowProps, GroupListItem, PinnedBotCircle, type BotRowProps } from "./Sidebar";
+import { BotContextMenu, BotListItem, BotThreadList, GroupListItem, PinnedBotCircle } from "./Sidebar";
+import { botRowProps, type BotRowProps } from "@/lib/sidebar-selection";
 import { SidebarBotActivity, sidebarBotActivityTasks } from "./SidebarBotActivity";
 import { forgetSearchDisclosuresForTests } from "@/lib/search-disclosure";
 import { noteTurnEvent, resetTurnLive } from "@/state/turn-status";

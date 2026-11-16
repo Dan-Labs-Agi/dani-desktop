@@ -36,7 +36,8 @@ export interface AskCardsDeps {
   /** The parked node's next turn carries the person's answer. */
   answerNode(id: string, text: string): boolean;
   /** Answers a card as a tap on it would, with the same checks on who may answer, through an inbox copy too. */
-  answerCard(input: { auth: RequestAuth; threadId: string; requestId: string; behavior: "answer"; message: string }): Promise<{ ok: true } | { ok: false; status: number; error: string }>;
+  answerCard(input: { auth: RequestAuth; threadId: string; requestId: string; behavior: "answer"; message: string; onAnswered?: () => void }): Promise<{ ok: true } | { ok: false; status: number; error: string }>;
+  bindAcceptedAnswer(threadId: string, answer: Message, sourceMessageId: string | undefined): Message;
   /** The conversation a card in `threadId` was asked in: an inbox copy's original. */
   answeredIn(threadId: string, requestId: string): string;
 }
@@ -242,10 +243,17 @@ export function createAskCards(deps: AskCardsDeps) {
     if (origin === threadId && !(handedOn && deps.live(threadId, requestId))) return null;
     const again = line.sendId ? store.messagesFor(threadId).find((message) => message.sendId === line.sendId) : undefined;
     if (again) return { status: 202, message: again };
-    const answered = await deps.answerCard({ auth, threadId, requestId, behavior: "answer", message: typedAnswer(asked.card, text) });
+    let posted: Message | undefined;
+    const post = (accepted: boolean) => {
+      if (posted) return;
+      posted = store.appendMessage(threadId, { role: "user", kind: "text", text, replyToId: asked.id,
+        ...(line.sendId ? { sendId: line.sendId } : {}), ...(line.sender ? { sender: line.sender } : {}) });
+      if (accepted && origin === threadId) posted = deps.bindAcceptedAnswer(threadId, posted, asked.requestMessageId);
+    };
+    const answered = await deps.answerCard({ auth, threadId, requestId, behavior: "answer", message: typedAnswer(asked.card, text),
+      onAnswered: () => post(true) });
     if (!answered.ok) return { status: answered.status, error: answered.error };
-    const posted = store.appendMessage(threadId, { role: "user", kind: "text", text, replyToId: asked.id,
-      ...(line.sendId ? { sendId: line.sendId } : {}), ...(line.sender ? { sender: line.sender } : {}) });
+    post(false);
     return { status: 202, message: posted };
   }
 

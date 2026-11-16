@@ -1,7 +1,10 @@
 import type { InstanceInfo } from "@/state/store";
 import { DANI_FREE_INSTANCE_IDS, isDaniFreeInstance } from "../../shared/dani-free";
+import { isHermesHarness } from "../../shared/hermes-harness";
 
 export function configuredModelInstances(instances: readonly InstanceInfo[], selectedInstanceId?: string): InstanceInfo[] {
+  const roots = instances.filter(isHermesHarness);
+  if (roots.length) return roots;
   const hasDaniFree = instances.some(isDaniFreeInstance);
   return instances.filter((instance) => {
     if (hasDaniFree && instance.instanceId === "opencodeGo" && instance.driverKind === "opencodeGo"

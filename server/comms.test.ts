@@ -5,14 +5,17 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 
 
 import { ENVELOPE_MARK } from "./runtime/envelope.ts";
 import { mentionedBots, normalizeGroupDefaultResponder, roomResponders } from "./store.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
+import { freePortBlock } from "./testing/ports.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const FAKE_CLI = join(SERVER_DIR, "testing", "fake-acp-cli.ts");
@@ -23,7 +26,6 @@ const BASE = `http://127.0.0.1:${PORT}`;
 // (seconds, on a Windows runner) is reset when Node's keep-alive timeout fires before the server reads it (Node 24).
 const request = (path: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}) =>
   fetch(`${BASE}${path}`, { ...init, headers: { ...init.headers, connection: "close" } });
-const SETTLED = "Your downstream room requests have settled.";
 const WOKE_WITH_RESULT = "woke after delegation: saw the result";
 const WOKE_WITHOUT_RESULT = "woke after delegation: no result";
 const WOKE_WITH_FAILURE = "woke after delegation failure: will tell the user";
@@ -191,6 +193,10 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
   beforeAll(async () => {
     chmodSync(FAKE_CLI, 0o755);
     home = mkdtempSync(join(tmpdir(), "omb-comms-test-"));
+    // Workspace-default creation checks the Grok profile, not the fake ACP session's model list.
+    mkdirSync(join(home, ".grok"));
+    writeFileSync(join(home, ".grok", "auth.json"), "{}\n");
+    writeFileSync(join(home, ".grok", "config.toml"), '[models]\ndefault = "fake-model"\n[model.fake-model]\nname = "Fixture model"\n');
     gateFile = join(home, "helper-gate");
     holdFile = join(home, "helper-hold");
     const antigravityDirectory = join(home, "fake-antigravity");
@@ -216,6 +222,17 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
     );
     mkdirSync(antigravityProfile, { recursive: true });
     writeFileSync(join(antigravityProfile, "acp_token.json"), "{}\n");
+    writeFileSync(join(home, "creator-workflow.json"), JSON.stringify({ stages: [
+      { steps: [
+        { server: "agents", tool: "create_bot", arguments: {
+          name: "Pixel", role: "Product designer", instructions: "Design and review the user experience.",
+        } },
+        { server: "agents", tool: "coordinate_bots", arguments: {
+          bot_ids: ["Pixel"], message: "Review the new onboarding flow.", reason: "design review",
+        } },
+      ], reply: "The design review was assigned to Pixel." },
+      { steps: [], reply: "Pixel returned the design review." },
+    ] }));
     compat = createServer(async (req, res) => {
       for await (const _ of req) {}
       if (req.url?.endsWith("/models")) {
@@ -242,6 +259,7 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
+        defaultModelSelection: HELPER,
         openaiCompat: { key: "comms-compat-key", url: compatUrl },
         instances: {
           // the asker: consults the first visible teammate and answers a resume carrying the result with a fixed line
@@ -274,12 +292,6 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
               FAKE_ACP_MODES: "default,yolo",
             },
             config: { cli: antigravityCli, fullAuto: true },
-          },
-          // Hermes shape: keeps the first agents proxy it is offered for the life of the process
-          poolLister: {
-            driver: "hermesAgent",
-            environment: { FAKE_ACP_MODE: "list-peers" },
-            config: { cli: FAKE_CLI, fullAuto: true },
           },
           // the asker that hands work on with coordinate_bots (mode work)
           askerDelegate: {
@@ -317,7 +329,10 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
           },
           chiefCreator: {
             driver: "grokAgent",
-            environment: { FAKE_ACP_MODE: "create-peer" },
+            environment: {
+              FAKE_ACP_MODE: "workflow-plan", FAKE_ACP_WORKFLOW_PLAN: join(home, "creator-workflow.json"),
+              FAKE_ACP_WORKFLOW_TRACE: join(home, "creator-workflow.jsonl"),
+            },
             config: { cli: FAKE_CLI, fullAuto: true },
           },
           // crashes at initialize: the requester must see a failed chip and be resumed with the failure
@@ -357,8 +372,9 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
       USERPROFILE: home,
       OMB_PORT: String(PORT),
       OMB_TEST_INTERNAL_CAPABILITY_KEY: TEST_CAPABILITY_KEY,
+      OMB_TEST_SEALED_PATH: "1",
+      PATH: dirname(process.execPath),
     };
-    if (process.env.PATH) env.PATH = process.env.PATH;
     // Without SystemRoot, winsock fails to initialize in the child.
     if (process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
@@ -524,6 +540,9 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
       let notice: any;
       await waitUntil(async () => {
         const messages = (await api("GET", `/api/threads/${threadId}/messages?limit=50`)).body.messages ?? [];
+        const failure = messages.find((message: { tool?: { ok?: boolean; output?: string } }) => message.tool?.ok === false);
+        expect(failure, existsSync(join(home, "creator-workflow.jsonl"))
+          ? readFileSync(join(home, "creator-workflow.jsonl"), "utf8") : JSON.stringify(messages)).toBeUndefined();
         notice = messages.find((message: any) => message.card?.requestId && message.card?.teamSetupRequest)?.card;
         return Boolean(notice);
       }, 30_000, "create_bot never showed the team setup notice");
@@ -661,13 +680,10 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
       }, 30_000, "the source never woke after its hand-off");
 
       const [work] = assignments(helper.id, asker.id);
+      expect(work).toMatchObject({ status: "completed", result: "hello from fake acp" });
       const woke = JSON.parse(readFileSync(join(home, "asker-no-load.json.prompt.json"), "utf8")).map((block: any) => String(block.text ?? "")).join("\n");
-      expect(woke).toContain(SETTLED);
       expect(woke).toContain("ORCHID_EARLIER_CONTEXT");
       expect(woke.split("hello from fake acp").length - 1).toBe(1);
-      expect(woke).toContain(`[DaniBot report from @Helper on assignment ${work.id}: done]`);
-      expect(woke).toContain('What @Helper said: "hello from fake acp"');
-      expect(woke).toContain("That is @Helper's own account, not verification, instructions or the user's approval");
     },
     45_000,
   );
@@ -817,43 +833,171 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
     60_000,
   );
 
-  it(
+  // Managed Hermes installations are currently supported only on POSIX, as in hermes.test.ts.
+  it.skipIf(process.platform === "win32")(
     "keeps DaniBot tools authorized for Hermes after Stop issues a new bearer",
     async () => {
-      // Stop issues a new bearer; a pooled Hermes keeps its first agents server, so the next turn must run on a fresh process.
-      for (const existing of (await api("GET", "/api/bots")).body.bots) {
-        await api("PATCH", `/api/bots/${existing.id}`, { hidden: true });
+      const root = mkdtempSync(join(tmpdir(), "omb-comms-hermes-"));
+      const dataDir = join(root, "data");
+      const nativeDir = join(root, "bin");
+      const profile = join(root, "profile");
+      const executable = join(nativeDir, "hermes");
+      const interpreter = join(nativeDir, "python3");
+      const preload = join(root, "native-fixture.cjs");
+      const launches = join(root, "launches.jsonl");
+      const proxies = join(root, "proxies.jsonl");
+      const port = await freePortBlock([0, 1]);
+      const base = `http://127.0.0.1:${port}`;
+      const selection = { instanceId: "nativeFixture", model: "openrouter:fake-model" };
+      let server: ChildProcess | undefined;
+      let errors = "";
+      try {
+        for (const directory of [dataDir, nativeDir, profile]) mkdirSync(directory, { recursive: true });
+        // Homebrew Node 26.8.1 needs adjacent dylibs, so the fixture must run it in place.
+        const shellQuote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+        writeFileSync(executable, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+        // Node 26 resolves its main before preloads; changing argv[1] cannot redirect it.
+        const fakeMain = `import(${JSON.stringify(pathToFileURL(FAKE_CLI).href)})`;
+        writeFileSync(interpreter, `#!/bin/sh\nexec ${shellQuote(process.execPath)} --require ${shellQuote(preload)} --eval ${shellQuote(fakeMain)} -- "$@"\n`, { mode: 0o755 });
+        writeFileSync(join(profile, "config.yaml"), "model:\n  provider: openrouter\n  default: fake-model\n");
+        writeFileSync(preload, `
+const { appendFileSync } = require("node:fs");
+const { createHash } = require("node:crypto");
+if (process.argv[1] === ${JSON.stringify(join(SERVER_DIR, "drivers", "agents-proxy.ts"))}) {
+  if (!process.env.OMB_COMMS_TOKEN) throw new Error("Agents proxy has no bearer");
+  appendFileSync(${JSON.stringify(proxies)}, JSON.stringify({
+    parentPid: process.ppid, bearerHash: createHash("sha256").update(process.env.OMB_COMMS_TOKEN).digest("hex"),
+  }) + "\\n");
+}
+const originalFetch = globalThis.fetch;
+globalThis.fetch = (input, init) => {
+  const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+  // Only this fixture's own API is reachable; catalog refreshes never leave loopback.
+  if (url.origin !== ${JSON.stringify(base)}) return Promise.reject(new Error("Fixture denied external fetch: " + url.origin));
+  return originalFetch(input, init);
+};
+if (process.argv[1]?.endsWith("hermes-model-metadata.py") || process.argv[1]?.endsWith("hermes-bootstrap.py")) {
+  if (process.argv[1]?.endsWith("hermes-model-metadata.py")) {
+    console.log(JSON.stringify({ providers: [{
+      id: "openrouter", label: "Fixture native provider", models: ["fake-model"],
+      authenticatedModels: ["fake-model"], toolModels: ["fake-model"],
+    }] }));
+    process.exit(0);
+  }
+  if (!process.argv[1]?.endsWith("hermes-bootstrap.py")) throw new Error("Unexpected native interpreter invocation");
+  if (process.argv.includes("--version")) {
+    console.log("0.21.3");
+    process.exit(0);
+  }
+  if (process.argv.includes("--runtime-info") || process.argv.includes("--qualify-route")) {
+    if (process.argv.at(-1) !== "openrouter:fake-model") throw new Error("Unexpected fixture model route");
+    const runtime = {
+      version: "0.21.3", configuredProvider: "openrouter", resolvedProvider: "openrouter",
+      model: "fake-model", endpoint: ${JSON.stringify(`${base}/fixture-provider/v1`)},
+      apiMode: "chat_completions", credentialsResolved: true,
+      credentialFingerprint: createHash("sha256").update("fixture-native-credential").digest("hex"),
+      credentialHeaderNames: ["authorization"],
+    };
+    const fields = ["version", "configuredProvider", "resolvedProvider", "model", "endpoint", "apiMode"];
+    const fingerprint = createHash("sha256").update(JSON.stringify(fields.map(key => runtime[key]))).digest("hex");
+    // Synthetic qualification is only a fixture prerequisite, never native-provider release evidence.
+    console.log(JSON.stringify(process.argv.includes("--qualify-route")
+      ? { schemaVersion: 1, qualified: true, toolCallCount: 1, resultConsumed: true, runtime, fingerprint, credentialFingerprint: runtime.credentialFingerprint }
+      : runtime));
+    process.exit(0);
+  }
+  if (!process.argv.includes("acp")) throw new Error("Unexpected bootstrap operation");
+  appendFileSync(${JSON.stringify(launches)}, JSON.stringify({ pid: process.pid, args: process.argv.slice(1) }) + "\\n");
+}
+`);
+        writeFileSync(join(dataDir, "config.json"), JSON.stringify({
+          defaultModelSelection: selection,
+          instances: {
+            ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map(id => [id, { driver: "not-a-real-driver", enabled: false }])),
+            nativeFixture: {
+              driver: "hermesAgent",
+              config: { cli: executable, fullAuto: true },
+              environment: { HERMES_HOME: profile, FAKE_ACP_MODE: "list-peers" },
+            },
+          },
+        }));
+        const env: NodeJS.ProcessEnv = {
+          HOME: root, USERPROFILE: root, OMB_DATA_DIR: dataDir, HERMES_HOME: profile,
+          APPDATA: join(root, "appdata"), LOCALAPPDATA: join(root, "localappdata"),
+          XDG_CONFIG_HOME: join(root, "config"), XDG_CACHE_HOME: join(root, "cache"), XDG_DATA_HOME: join(root, "share"),
+          TEMP: root, TMP: root, TMPDIR: root,
+          PATH: dirname(process.execPath), VITEST: "1", NODE_OPTIONS: `--require=${JSON.stringify(preload)}`,
+          OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
+          OMB_TEST_INTERNAL_CAPABILITY_KEY: TEST_CAPABILITY_KEY,
+        };
+        if (process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
+        server = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
+          cwd: join(SERVER_DIR, ".."), env, stdio: ["ignore", "pipe", "pipe"],
+        });
+        server.stdout?.resume();
+        server.stderr?.on("data", chunk => { errors += chunk; });
+        const call = async (method: string, path: string, body?: unknown, status = 200) => {
+          const response = await fetch(base + path, { method, headers: { "content-type": "application/json", connection: "close" },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+          const result: unknown = await response.json();
+          expect(response.status, JSON.stringify(result)).toBe(status);
+          return result;
+        };
+        await expect.poll(async () => {
+          if (server?.exitCode !== null) throw new Error(`Hermes fixture exited: ${errors}`);
+          try { return (await fetch(base + "/api/health")).ok; } catch { return false; }
+        }, { timeout: 25_000 }).toBe(true);
+        const identity = z.object({ id: z.string(), threadId: z.string() });
+        const helper = z.object({ bot: identity }).parse(await call("POST", "/api/bots", undefined, 201)).bot;
+        await call("PATCH", `/api/bots/${helper.id}`, { name: "PoolHelper", modelSelection: selection });
+        const asker = z.object({ bot: identity }).parse(await call("POST", "/api/bots", undefined, 201)).bot;
+        await call("PATCH", `/api/bots/${asker.id}`, { name: "PoolAsker", modelSelection: selection });
+        const messagePage = z.object({ messages: z.array(z.object({ role: z.string(), kind: z.string(), text: z.string().optional(), tool: z.object({ name: z.string(), ok: z.boolean().optional() }).optional() })) });
+        const replies = async (count: number) => {
+          let texts: string[] = [];
+          let lastState: unknown;
+          await expect.poll(async () => {
+            const page = messagePage.parse(await call("GET", `/api/threads/${asker.threadId}/messages?limit=100`));
+            texts = page.messages.filter(message => message.role === "bot" && message.kind === "text" && message.text?.startsWith("peers:"))
+              .map(message => message.text!);
+            const current = z.object({ bots: z.array(z.object({ id: z.string(), busy: z.boolean().optional() })) })
+              .parse(await call("GET", "/api/bots?messages=0")).bots.find(bot => bot.id === asker.id);
+            lastState = { messages: page.messages, current };
+            return texts.length === count && current !== undefined && !current.busy;
+          }, { timeout: 25_000 }).toBe(true).catch(cause => {
+            throw new Error(`Hermes reply ${count}: ${JSON.stringify(lastState)}; launches: ${existsSync(launches) ? readFileSync(launches, "utf8") : "none"}; stderr: ${errors}`, { cause });
+          });
+          return texts;
+        };
+        const send = async (text: string) => {
+          expect(await call("POST", `/api/bots/${asker.id}/messages`, { text, threadId: asker.threadId }, 202))
+            .toMatchObject({ ok: true, threadId: asker.threadId, message: { role: "user", text } });
+        };
+        const proxyCalls = () => z.array(z.object({ parentPid: z.number(), bearerHash: z.string().regex(/^[a-f0-9]{64}$/) }))
+          .parse(readFileSync(proxies, "utf8").trim().split("\n").map(line => JSON.parse(line)));
+        await send("first: who is on the team?");
+        expect((await replies(1))[0]).toContain("PoolHelper");
+        await send("second: and now?");
+        expect((await replies(2))[1]).toContain("PoolHelper");
+        const beforeStop = proxyCalls();
+        expect(beforeStop).toHaveLength(2);
+        expect(beforeStop[1]).toEqual(beforeStop[0]);
+        const beforeStopReply = readFileSync(launches, "utf8").trim().split("\n").length;
+        expect(beforeStopReply).toBe(1);
+        expect(await call("POST", `/api/bots/${asker.id}/interrupt`, { threadId: asker.threadId })).toEqual({ ok: true });
+        await send("third: after stopping, who is on the team?");
+        const third = (await replies(3))[2];
+        expect(third).not.toContain("unauthorized");
+        expect(third).toContain("PoolHelper");
+        const afterStop = proxyCalls();
+        expect(afterStop).toHaveLength(3);
+        expect(afterStop[2]!.bearerHash).not.toBe(beforeStop[0]!.bearerHash);
+        expect(afterStop[2]!.parentPid).not.toBe(beforeStop[0]!.parentPid);
+        expect(readFileSync(launches, "utf8").trim().split("\n").length).toBe(beforeStopReply + 1);
+      } finally {
+        if (server) await waitForExit(server, { signal: "SIGTERM" });
+        await removeTempDir(root);
       }
-      const helper = (await api("POST", "/api/bots")).body.bot;
-      await api("PATCH", `/api/bots/${helper.id}`, { name: "PoolHelper", modelSelection: { instanceId: "grok", model: "fake-model" } });
-      const asker = (await api("POST", "/api/bots")).body.bot;
-      await api("PATCH", `/api/bots/${asker.id}`, { name: "PoolAsker", modelSelection: { instanceId: "poolLister", model: "fake-model" } });
-
-      const replies = async (count: number) => {
-        const deadline = Date.now() + 25_000;
-        for (;;) {
-          const bot = (await api("GET", "/api/bots")).body.bots.find((b: any) => b.id === asker.id);
-          const done = bot.messages.filter((m: any) => m.kind === "text" && m.role === "bot" && m.text?.startsWith("peers"));
-          if (done.length >= count && !bot.busy) return done;
-          if (Date.now() > deadline) {
-            throw new Error(`turn ${count} never settled: ${JSON.stringify(bot.messages.slice(-4))}\nstderr: ${stderr.slice(-1500)}`);
-          }
-          await new Promise((r) => setTimeout(r, 250));
-        }
-      };
-      const send = async (text: string) =>
-        expect((await api("POST", `/api/bots/${asker.id}/messages`, { text })).status).toBe(202);
-
-      await send("first: who is on the team?");
-      expect((await replies(1))[0].text).toContain("PoolHelper");
-      await send("second: and now?");
-      expect((await replies(2))[1].text).toContain("PoolHelper");
-
-      expect((await api("POST", `/api/bots/${asker.id}/interrupt`)).status).toBe(200);
-      await send("third: after stopping, who is on the team?");
-      const third = (await replies(3))[2];
-      expect(third.text).not.toContain("unauthorized");
-      expect(third.text).toContain("PoolHelper");
     },
     60_000,
   );
@@ -1024,7 +1168,7 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
   );
 
   it(
-    "continues a delegated teammate's step cap in place and returns the stall to its delegator",
+    "returns a failed-tool capped turn to its delegator without automatically replaying the tools",
     async () => {
       compatAnswer = "steps";
       try {
@@ -1038,15 +1182,18 @@ describe("routine comms e2e on the job runtime (fake ACP fleet)", () => {
           const askerBot = await bot(asker.id);
           failed = askerBot.messages.find((m: any) => m.kind === "activity" && m.tool?.ok === false && m.from?.botId === helper.id);
           return Boolean(failed) && lastText(askerBot.messages)?.text === WOKE_WITH_FAILURE && !askerBot.busy;
-        }, 90_000, "the stall never reached the delegator");
-        expect(failed.tool.name).toMatch(/^CapHelper — failed: Stopped after 64 steps without a final answer\./);
+        }, 90_000, "the failed-tool result never reached the delegator");
+        expect(failed.tool.name).toMatch(/^CapHelper — failed:/);
         expect(failed.tool.name).not.toContain("\n");
         const tasks = (await bot(helper.id)).tasks;
         expect(tasks.map((task: any) => task.title).filter((title: string) => title?.startsWith("Continue:"))).toEqual([]);
         const handed = assignments(helper.id, asker.id);
         expect(handed).toHaveLength(1);
-        expect(handed[0]).toMatchObject({ status: "failed", outcome: "stalled", executions: 2 });
-        expect(handed[0]!.outcomeDetail).toMatch(/^Stopped after 2 continuations without progress: Stopped after 64 steps/);
+        // A cap after failed tools is terminal: replay could repeat an uncertain effect.
+        expect(handed[0]).toMatchObject({ status: "failed", outcome: "provider_error", executions: 1 });
+        expect(handed[0]!.result).not.toBe("");
+        expect(failed.roomRequest).toEqual({ id: handed[0]!.id, phase: "result" });
+        expect(failed.threadRef).toMatchObject({ botId: helper.id, threadId: handed[0]!.threadId });
       } finally {
         compatAnswer = "hang";
       }

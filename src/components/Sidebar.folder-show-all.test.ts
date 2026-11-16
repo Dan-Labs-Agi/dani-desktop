@@ -6,7 +6,8 @@ import { initialState, type Bot } from "@/state/store";
 vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({}) }));
 vi.mock("@/lib/interface-mode", async (original) => ({ ...await original<typeof import("@/lib/interface-mode")>(), useAdvancedMode: () => true }));
 
-const { BotThreadList, botRowProps } = await import("./Sidebar");
+const { BotThreadList } = await import("./Sidebar");
+import { botRowProps } from "@/lib/sidebar-selection";
 
 // The short thread list keeps the six newest open threads, across folders and loose ones.
 const loose = Array.from({ length: 7 }, (_, index) => ({ threadId: `loose-${index}`, title: `Loose chat ${index}`, createdAt: 100 + index }));

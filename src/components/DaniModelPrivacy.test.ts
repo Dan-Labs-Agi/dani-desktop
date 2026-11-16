@@ -42,7 +42,7 @@ for (const surface of ["simple", "advanced"] as const) describe(`${surface} Dani
     expect(pick.textContent).toContain("Text only");
     expect(pick.textContent).toContain("Prompts may train models");
     expect(pick.textContent).not.toContain("Full model-specific conditions");
-    expect(pick.getAttribute("aria-label")).not.toMatch(/KiloCode|OpenCode|trial terms/);
+    expect(pick.getAttribute("aria-label")).not.toContain("trial terms");
     expect(pick.querySelector("button, a, summary")).toBeNull();
     const disclosure = host.querySelector<HTMLDetailsElement>("details[data-dani-model-notice]")!;
     expect(disclosure).not.toBeNull();

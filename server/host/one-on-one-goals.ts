@@ -24,6 +24,7 @@ export interface OneOnOneGoalDeps {
     onSettled: (outcome: HostTurnResult) => void;
   }): Promise<unknown>;
   isUnattended(botId: string, threadId: string): boolean;
+  waitForBrowser?(session: string, cancelled: () => boolean): Promise<boolean>;
 }
 
 export interface OneOnOneGoalStart {
@@ -148,6 +149,8 @@ export function createOneOnOneGoals(deps: OneOnOneGoalDeps) {
           replyText: result.ok ? lead.assistantItems.join("\n") : "",
           outcome,
           ...(result.ok ? {} : { stopReason: result.text }),
+          ...(result.waitingOnBrowser ? { waitingOnBrowser: result.waitingOnBrowser } : {}),
+          ...(result.blocked ? { blocked: result.blocked } : {}),
         };
       } finally {
         deps.turns.end(threadId, lead, outcome);
@@ -185,6 +188,7 @@ export function createOneOnOneGoals(deps: OneOnOneGoalDeps) {
       solo: true,
       cancelled: () => goal.cancelled,
       current: (id) => store.bot(id) ?? undefined,
+      waitForBrowser: deps.waitForBrowser,
       step: (member, _coordinator, instructions) => step(goal, threadId, request, member, instructions),
       finish: (status, detail) => finish(threadId, goal, status, detail),
       progress: (detail) => deps.cards.progress(threadId, goal.run, detail),
@@ -209,7 +213,7 @@ export function createOneOnOneGoals(deps: OneOnOneGoalDeps) {
     return true;
   }
 
-  return { start, stop };
+  return { start, stop, has: (threadId: string) => live.has(threadId) };
 }
 
 export type OneOnOneGoals = ReturnType<typeof createOneOnOneGoals>;

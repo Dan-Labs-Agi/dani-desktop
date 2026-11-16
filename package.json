@@ -41,6 +41,7 @@
     "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
     "typecheck": "tsc -b && tsc -p tsconfig.server.json",
     "test": "vitest run && pnpm broker:test && pnpm test:electron && pnpm test:packaged-server",
+    "test:agent-fast": "vitest run server/drivers/acp/hermes.test.ts server/drivers/acp/hermes-continuation.test.ts server/drivers/acp/hermes-model-catalog.test.ts server/drivers/acp/hermes-configured-providers.test.ts server/default-model-selection.test.ts src/components/ModelPicker.dom.test.ts server/runtime-coordinator.test.ts server/turn-outcome.test.ts server/group-goal-run.test.ts server/host/one-on-one-goals.test.ts server/browser-calls.test.ts server/browser-runtime.test.ts server/browser-live.test.ts server/browser/session-control.test.ts server/browser/service.test.ts server/browser/engines.test.ts src/lib/browser-control.test.ts server/long-running-chief.e2e.test.ts --maxWorkers=2",
     "test:electron": "node --test \"electron/*.node-test.mjs\"",
     "bench:observation": "node --experimental-strip-types scripts/bench-observation.ts",
     "bench:persistence": "node --experimental-strip-types scripts/bench-persistence.ts",

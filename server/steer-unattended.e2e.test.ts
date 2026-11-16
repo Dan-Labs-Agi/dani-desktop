@@ -1,12 +1,15 @@
 // The fake Claude CLI in `slow` mode holds the turn behind a gate; the test drives the broker directly, as the permission proxy does. POSIX-gated.
 import { spawn, type ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { connect, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
@@ -33,27 +36,47 @@ const getBot = async (id: string) => (await api("GET", "/api/bots?messages=0")).
 const threadMessages = async (threadId: string): Promise<Array<{ kind: string; card?: { requestId?: string; answered?: string } }>> =>
   (await api("GET", `/api/threads/${threadId}/messages`)).body.messages ?? [];
 
-/** Duplicated, not imported: DATA_DIR there is fixed at import time from this process's HOME. Keep in lockstep with claude.ts. */
-function brokerCandidates(threadId: string, botId: string): string[] {
-  const dataDir = join(home, ".danibot");
-  const prefix = threadId.replace(/[^\w-]/g, "").slice(0, 4);
-  const digest = createHash("sha256").update(`${botId}\0${threadId}`).digest("hex").slice(0, 4);
-  const scope = createHash("sha256").update(`${dataDir}\0${child.pid}\0${botId}\0${threadId}`).digest("hex").slice(0, 16);
-  return [join(dataDir, `perm-${prefix}${digest}.sock`), join(tmpdir(), `omb-perm-${scope}.sock`)];
-}
-
-async function connectBroker(threadId: string, botId: string): Promise<Socket> {
-  await expect.poll(() => brokerCandidates(threadId, botId).some((path) => existsSync(path)), { timeout: 20_000 }).toBe(true);
-  for (const path of brokerCandidates(threadId, botId)) {
-    if (!existsSync(path)) continue;
-    const socket = await new Promise<Socket | null>((resolve) => {
-      const conn = connect(path);
-      conn.once("connect", () => resolve(conn));
-      conn.once("error", () => resolve(null));
-    });
-    if (socket) return socket;
+async function connectBroker(botId: string, threadId: string): Promise<Socket> {
+  const dumpPath = join(home, "claude-turn.json");
+  let socketPath = "";
+  let lastCause = "no capture observed";
+  try {
+    await expect.poll(() => {
+      try {
+        const dump = z.object({
+          mcpConfig: z.object({ mcpServers: z.object({ ogb: z.object({ args: z.array(z.string()) }) }) }),
+        }).parse(JSON.parse(readFileSync(dumpPath, "utf8")));
+        socketPath = dump.mcpConfig.mcpServers.ogb.args[1] ?? "";
+        const exists = Boolean(socketPath && existsSync(socketPath));
+        lastCause = exists ? "captured socket exists" : `captured socket is absent: ${socketPath}`;
+        return exists;
+      } catch (error) {
+        lastCause = error instanceof Error ? error.message : String(error);
+        return false;
+      }
+    }, { timeout: 20_000 }).toBe(true);
+  } catch (error) {
+    const state = await api("GET", "/api/bots?messages=40");
+    const bot = state.body.bots.find((candidate: { id: string }) => candidate.id === botId);
+    const transcript = await api("GET", `/api/threads/${threadId}/messages`);
+    const events = await api("GET", `/api/threads/${threadId}/events?limit=30`);
+    const engines = await api("GET", "/api/instances");
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}`
+      + `\ndump exists: ${existsSync(dumpPath)}; last discovery cause: ${lastCause}`
+      + `\nbot: ${JSON.stringify(bot)}`
+      + `\nthread: ${JSON.stringify(transcript.body)}`
+      + `\nevents: ${JSON.stringify(events.body)}`
+      + `\ninstances: ${JSON.stringify(engines.body)}`
+      + `\nserver stderr: ${stderr}`,
+      { cause: error },
+    );
   }
-  throw new Error(`no broker socket among ${brokerCandidates(threadId, botId).join(", ")}`);
+  const { promise, resolve, reject } = Promise.withResolvers<Socket>();
+  const conn = connect(socketPath);
+  conn.once("connect", () => resolve(conn));
+  conn.once("error", reject);
+  return promise;
 }
 
 function ask(conn: Socket, id: string, command: string): { answered: () => boolean } {
@@ -81,9 +104,18 @@ posixOnly("a steered message does not lift the unattended mark on its own", () =
     finishGate = join(home, "finish.gate");
     writeFileSync(join(data, "config.json"), JSON.stringify({
       instances: {
+        ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+          id, { driver: "not-a-real-driver", enabled: false },
+        ])),
         claude: {
           driver: "claudeAgent",
-          environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: finishGate },
+          environment: {
+            FAKE_CLAUDE_MODE: "slow",
+            FAKE_CLAUDE_SLOW_FINISH_GATE: finishGate,
+            FAKE_CLAUDE_DUMP: join(home, "claude-turn.json"),
+            // generateText captures have mcpConfig:null; they must not overwrite the live turn's endpoint.
+            FAKE_CLAUDE_TEXT_DUMP: join(home, "claude-text.json"),
+          },
           // acceptEdits: permission asks reach the broker, where a real tool call's ask would arrive.
           config: { cli: FAKE_CLAUDE, permissionMode: "acceptEdits" },
         },
@@ -94,13 +126,8 @@ posixOnly("a steered message does not lift the unattended mark on its own", () =
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
-        HOME: home,
-        USERPROFILE: home,
-        OMB_PORT: String(port),
-        OMB_WEBHOOK_PORT: String(port + 1),
-        // Under a deep HOME the broker falls back to os.tmpdir(); the child has to agree with this process about where that is.
-        TMPDIR: tmpdir(),
+        ...verificationServerEnvironment({}, home, port),
+        OMB_DATA_DIR: data,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -156,7 +183,7 @@ posixOnly("a steered message does not lift the unattended mark on its own", () =
       timeout: 20_000,
     }).toBe(true);
 
-    const conn = await connectBroker(runThreadId, bot.id);
+    const conn = await connectBroker(bot.id, runThreadId);
     try {
       const steer = await api("POST", `/api/bots/${bot.id}/messages`, { text: "continue", threadId: runThreadId });
       expect(steer.status).toBe(202);

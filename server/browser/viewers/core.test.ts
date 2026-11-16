@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import { removeTempDir } from "../../testing/cleanup.ts";
 import { BrowserService } from "../service.ts";
@@ -10,6 +10,7 @@ import { FakeBackend, FakeChrome, type FakeDocument } from "../testing/fake-chro
 import { personUrl } from "../dispatch.ts";
 import { ACK_PACE_MS, SETTLE_MS, type ViewerOutput } from "./core.ts";
 import { fillPage, MIN_WINDOW_WIDTH, requestedSize, UNATTACHED_VIEWPORT, viewportFor } from "./viewport.ts";
+import { BROWSER_HAND_BACK_MS, createBrowserControl, type ControlTransport } from "../../../src/lib/browser-control.ts";
 
 const folders: string[] = [];
 const services: BrowserService[] = [];
@@ -390,6 +391,46 @@ describe("one person's hold, across their views", () => {
     await until(() => service.heldBy(target.session), (owner) => owner === null);
   });
 
+  it.each(["idle", "leave"] as const)("refreshes a carried hold across physical-profile aliases for %s cleanup", async (cleanup) => {
+    const { service, target, watch, call } = await setup();
+    let current = (await watch()).viewer;
+    const transport: ControlTransport = {
+      send: (input) => { void current.input(input); },
+      drain: async () => {}, settle: async () => {}, size: () => 0, stopped: () => false,
+      reservation: () => current.controlState().attempt,
+      take: (attempt) => current.input({ type: "takeControl", attempt }),
+      release: (attempt) => current.input({ type: "releaseControl", ...(attempt ? { attempt } : {}) }),
+    };
+    const control = createBrowserControl({
+      transport, owned: () => !current.closed && current.controlState().controlling,
+      mine: () => !current.closed && current.controlState().owned,
+      onTakeStatus: () => {}, onError: () => {}, onHalted: () => {},
+    });
+    vi.useFakeTimers();
+    try {
+      control.takeControl();
+      await vi.advanceTimersByTimeAsync(0);
+      const before = current.controlState().attempt;
+      expect(before).toEqual(expect.any(String));
+      await current.close({ dropped: true });
+      control.observe();
+      current = await service.attachViewer({ session: "alias-of-bot-a", key: target.key }, { owner: "local-owner", canOperate: true, maxWidth: 3200, maxHeight: 2000 }, () => {});
+      const carried = current.controlState();
+      expect(carried).toMatchObject({ controlling: true, attempt: expect.any(String) });
+      expect(carried.attempt).not.toBe(before);
+      await current.input({ type: "releaseControl", attempt: before });
+      expect(service.heldBy(target.session)).toBe("local-owner");
+      control.observe();
+      if (cleanup === "idle") await vi.advanceTimersByTimeAsync(BROWSER_HAND_BACK_MS);
+      else { control.leave(); await vi.advanceTimersByTimeAsync(0); }
+      expect(service.heldBy(target.session)).toBeNull();
+      expect((await call("agent_browser_tabs", { action: "list" })).isError).toBeUndefined();
+    } finally {
+      control.close();
+      vi.useRealTimers();
+    }
+  });
+
   it("lets another view of theirs take it over or hand it back, and refuses another person both", async () => {
     const { service, target, watch } = await setup();
     const phone = await watch();
@@ -405,6 +446,60 @@ describe("one person's hold, across their views", () => {
     expect(laptop.viewer.controlState()).toMatchObject({ controller: "you", controlling: true });
     expect(phone.viewer.controlState()).toMatchObject({ controller: "agent", owned: true, controlling: false });
     await phone.viewer.input({ type: "releaseControl" });
+    expect(service.heldBy(target.session)).toBeNull();
+  });
+
+  it.each([false, true])("binds a failed view's quiet cleanup to its reservation, replacement=%s", async (replacement) => {
+    const { service, target, watch, chrome, call } = await setup();
+    const failed = await watch();
+    const active = await service.attachViewer({ session: "alias-of-bot-a", key: target.key }, { owner: "local-owner", canOperate: true, maxWidth: 3200, maxHeight: 2000 }, () => {});
+    chrome().delay = (method) => method === "Accessibility.getFullAXTree" ? 100 : 0;
+    const snapshot = call("agent_browser_snapshot").catch((error: unknown) => {
+      expect(error instanceof Error ? error.message : String(error)).toContain("paused while a person controls");
+    });
+    await until(() => service.profiles()[0]!.control.agents, (agents) => agents > 0);
+    const transport: ControlTransport = {
+      send: () => {}, drain: async () => {}, settle: async () => {}, size: () => 0, stopped: () => false,
+      reservation: () => failed.viewer.controlState().attempt,
+      take: (attempt) => {
+        const taking = failed.viewer.input({ type: "takeControl", attempt });
+        return Promise.race([taking, sleep(10).then(() => { throw new Error("Take timed out"); })]);
+      },
+      release: (attempt) => failed.viewer.input({ type: "releaseControl", ...(attempt ? { attempt } : {}) }),
+    };
+    const control = createBrowserControl({
+      transport, owned: () => failed.viewer.controlState().controlling, mine: () => failed.viewer.controlState().owned,
+      onTakeStatus: () => {}, onError: () => {}, onHalted: () => {},
+    });
+    vi.useFakeTimers();
+    try {
+      control.takeControl();
+      await vi.advanceTimersByTimeAsync(20);
+      await snapshot;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(failed.viewer.controlState().controlling).toBe(true);
+      if (replacement) await active.input({ type: "takeControl", attempt: "active-kept-take" });
+      control.observe();
+      await vi.advanceTimersByTimeAsync(BROWSER_HAND_BACK_MS);
+      expect(service.profiles()[0]!.control.owner).toBe(replacement ? "local-owner" : null);
+      expect(active.controlState().controlling).toBe(replacement);
+    } finally {
+      control.close();
+      vi.useRealTimers();
+    }
+    if (replacement) await expect(call("agent_browser_tabs", { action: "list" })).rejects.toThrow("paused while a person controls");
+    else expect((await call("agent_browser_tabs", { action: "list" })).isError).toBeUndefined();
+  });
+
+  it("ignores an old conditional hand-back after a newer take in the same view", async () => {
+    const { service, target, watch } = await setup();
+    const { viewer } = await watch();
+    await viewer.input({ type: "takeControl", attempt: "old-take" });
+    await viewer.input({ type: "takeControl", attempt: "new-take" });
+    await viewer.input({ type: "releaseControl", attempt: "old-take" });
+    expect(service.heldBy(target.session)).toBe("local-owner");
+    expect(viewer.controlState().controlling).toBe(true);
+    await viewer.input({ type: "releaseControl", attempt: "new-take" });
     expect(service.heldBy(target.session)).toBeNull();
   });
 

@@ -37,7 +37,7 @@ export function DaniModelNotice({ option }: { option: ModelOption }) {
   const [open, setOpen] = useState(false);
   if (!option.privacyNotice?.trim()) return null;
   return <details data-dani-model-notice open={open} className="min-w-0 px-2 pb-1 text-[11px] leading-4 text-ink-secondary">
-    <summary data-menu-row tabIndex={-1} aria-label={t("daniSetup.privacyTermsFor", { model: daniModelLabel(option) })}
+    <summary data-menu-row tabIndex={-1} aria-label={t("daniSetup.privacyTermsFor", { model: option.label })}
       className="cursor-pointer rounded px-1 py-0.5 hover:bg-ink/[0.06] focus:bg-ink/[0.06]"
       onClick={(event) => { event.preventDefault(); setOpen(!open); }}>
       {t("daniSetup.privacyTerms")}
@@ -59,7 +59,7 @@ export function ModelRow({ option, current, defaultId, botModel = false, daniFre
   const unavailable = option.availability !== undefined && option.availability !== "available";
   const blocked = option.orgBlocked === true || unavailable;
   const label = daniFree ? daniModelLabel(option) : option.label;
-  const reason = option.orgBlocked ? t("model.orgBlocked") : unavailable ? t(daniFree ? "daniSetup.unavailableHint" : "model.simple.unavailable") : undefined;
+  const reason = option.orgBlocked ? t("model.orgBlocked") : unavailable ? option.unavailableReason ?? t(daniFree ? "daniSetup.unavailableHint" : "model.simple.unavailable") : undefined;
   const details = daniFree ? daniModelDetails(option).join(" · ") : undefined;
   const meta = !daniFree && !reason ? [option.provider, option.id === defaultId ? t("model.effort.default") : undefined].filter(Boolean).join(" · ") : undefined;
   return (

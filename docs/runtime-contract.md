@@ -21,6 +21,8 @@ This replaces the two delegation systems, the six wake lanes, the dozen clocks a
 | `executions`, `restarts`, `restart` | Turns started; restart bookkeeping (section 5). |
 | `goalRunId` | On a root that is one step of a room goal run: the run's id. The run routes its steps (section 2), so such a root neither parks nor continues in place, and is not run again after a restart (the run ended with it). |
 | `result`, `evidence` | What the assignee said, and what the harness observed of the turn. |
+| `requester.messageId`, `acceptedAnswerIds` | Server-bound original person row and the ordered clarification answers the server actually accepted for it. Transcript annotations alone are not ownership proof. |
+| `needsVerification`, `verificationFailure`, `supervisionOf`, `supervisionReceipt` | A still-unverified original goal and its authorized Chief review. An explicit native unfinished-failure marker distinguishes reviewable failure from blocked/unknown effects; the review preserves the original failed or unverified execution receipt. Transport success is not a verified goal receipt. |
 
 Storage: SQLite (`node:sqlite`, like `messages.db`) in `DATA_DIR/runtime.db`: `assignments` (one row per record), `assignment_events` (append-only audit trail, every transition), `inbox` (the wake lane). `:memory:` for tests. Every state change is one transaction that writes the row and its event before the runtime acts on it, so a crash keeps the accept and loses nothing it had acknowledged.
 
@@ -47,6 +49,7 @@ queued ──admit──> running ──turn ends──> completed | failed | ca
 - **Cancel** cascades down the tree, aborts running turns, and is itself a terminal outcome (`stopped`) that is reported.
 - **Stop awaiting** (the person stops the requester's conversation, a bot's thread or a room thread): children that never started are cancelled; running children keep their process and still report; the requester's node is cancelled and nothing resumes it. Stop in a room is this for the room thread, then the room's remaining rows are cancelled.
 - **A goal run routes its own steps.** A room goal step's node (`goalRunId`) ends plainly however its turn ended: the run reassigns around a member that could not get its seat, and a step that left a card open ends; the runtime never runs a step a second time, and after a restart a step's rerun is refused (the run ended with the restart), silently.
+- **Explicit remaining work survives missing supervision.** Native structured pending/in-progress plans emit typed remaining-work status independently of visible plan chips or Chief availability. An owned direct goal with that status parks unverified when no authorized Chief is available, preserving any native failure outcome and evidence. A later authorized Chief adopts it once under the same root without replaying the worker or replenishing its budgets. Incidental tool counts and assistant prose do not establish this missing-Chief eligibility; plain Q&A and ordinary lookups remain ordinary completions.
 
 ## 3. One level rule
 
@@ -81,6 +84,19 @@ Downtime is nobody's budget: every window restarts at boot. At open, before anyt
 | `waiting`, `resume` | Unchanged; the resume goes ahead. |
 
 A requester waiting on a cut turn hears what the restart did in its next turn (`restart: "teammates"`). Every reconciliation writes an event.
+
+Native cancellation is unsuccessful and becomes a trusted `interrupted` blocker,
+not a transient provider failure that a goal loop retries. Permission denial and
+known uncertain effects take precedence. Once shutdown has closed the runtime,
+an interrupted teardown result leaves its running node for the restart policy
+above; it does not create a new human question. Denial, known uncertainty, cards
+and ordinary questions retain their durable parking behavior.
+
+Person-request ownership, including a Chief's resumed root, is rehydrated only from a still-pending original row bound by `requester.messageId`. Later user rows must be the exact ordered `acceptedAnswerIds` chain the server recorded when answering a live or parked question, and must still bind to that original source. Stop, a newer unrelated request, unproven annotations and terminal roots cannot establish ownership. A successful final resume keeps the original request attribution, clears its pending flag and emits its completion notification once.
+
+Direct-worker adoption additionally requires an actual persisted authorized review tree or pending-verification state. Failed adopted roots retain their failure outcome and do not need to masquerade as successful unverified turns. Blocked or uncertain effects, cards and lost access never authorize adoption; original approval ceilings still apply.
+
+When a native live question's accepted answer was not stored as the runtime node's parked answer, its recovery rerun receives the server-proven clarification rows as bounded, redacted harness quotes. It does not need to ask the same answered question again, and no synthetic user row is written.
 
 What a cut turn did outward is the host's knowledge, read through the optional port `outward(a)` (§8): the labels of the outward actions the turn completed since it began (`"GMAIL_SEND_EMAIL"`, `"git push"`), from the thread's own activity rows, never from model text. The runtime asks once, at open, only for a running node with no children since its turn began. Absent, empty, or throwing ("not now") means nothing known, and the turn reruns once.
 

@@ -49,6 +49,8 @@ export type RuntimeEvent = RuntimeEventBase &
     | { type: "session.model-variants"; model: string; variants: ModelVariantState }
     | { type: "session.exited"; reason?: string }
     | { type: "turn.started" }
+    /** A native structured plan's disposition, never inferred from assistant prose or incidental tool counts. */
+    | { type: "turn.work-status"; status: "remaining" | "complete" }
     | {
         type: "turn.retrying";
         /** 1-based: the retry about to be launched (1 = first relaunch). */
@@ -192,7 +194,9 @@ export type RuntimeEvent = RuntimeEventBase &
     // `limit`: a usage limit refused this turn: the account's on this engine ("engine"), one model's own window
     // ("model"), or that model's extra usage credits ("credits"); the engine's other models still work for the last two.
     | { type: "runtime.error"; message: string; setup?: boolean; terminal?: boolean; claudeUpdate?: boolean; trialCredit?: "used_up" | "ended" | "paused" | "too_low";
-        stalled?: boolean; limitResetsAt?: number; limit?: "engine" | "model" | "credits" }
+        stalled?: boolean; limitResetsAt?: number; limit?: "engine" | "model" | "credits";
+        /** Trusted execution disposition: inspect known failures, retry observations, block unknown execution. */
+        recovery?: "observation" | "inspect" | "blocked" }
     /** Something the person should know that did not fail the turn — for
      * example, a saved model the engine no longer offers was replaced. */
     | { type: "runtime.notice"; message: string }

@@ -27,6 +27,11 @@ export function createDoneNotice(deps: DoneNoticeDeps) {
       if (turn.review) return owed.delete(turn.threadId) && turn.ok ? "notify" : "quiet";
       return deps.queuedFollowUp(turn.botId, turn.threadId) ? "hold" : "notify";
     },
+    /** An app-owned root completed verification; its provider phases did not finish the goal individually. */
+    goalCompleted(turn: { botId: string; threadId: string }): DoneVerdict {
+      owed.delete(turn.threadId);
+      return deps.queuedFollowUp(turn.botId, turn.threadId) ? "hold" : "notify";
+    },
     /** A new person turn replaces whatever the last job owed: a hand-off that was stopped never pings later. */
     personTurnStarted(threadId: string): void {
       owed.delete(threadId);

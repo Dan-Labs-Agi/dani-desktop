@@ -1278,12 +1278,24 @@ describe("saving OpenCode provider keys", () => {
     });
   });
 
-  it("is a patch the config route accepts, and changing it reloads the engines", () => {
+  it("accepts provider-key patches and reloads only the consuming engines", () => {
     expect(parseConfigPatch({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v", GROQ_API_KEY: "" } } }))
       .toEqual({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v", GROQ_API_KEY: "" } } });
     expect(() => parseConfigPatch({ opencodeGo: { providerKeys: { VENICE_API_KEY: 42 } } })).toThrow("opencodeGo.providerKeys");
-    expect(reloaded({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v" } } })).toEqual(["dani-client", "opencodeGo"]);
+expect(reloaded({ opencodeGo: { providerKeys: { VENICE_API_KEY: "v" } } })).toEqual(["dani-client", "opencodeGo"]);
     expect(reloaded({ opencodeGo: { providerKeys: {} } })).toEqual([]);
+    const fleet: AppConfig = { instances: {
+      primary: { driver: "opencodeGo" },
+      secondary: { driver: "opencodeGo" },
+      unrelated: { driver: "claudeAgent" },
+    } };
+    const withKey: AppConfig = { ...fleet, opencodeGo: { providerKeys: { VENICE_API_KEY: "v" } } };
+    expect(reloaded({ opencodeGo: withKey.opencodeGo }, fleet).sort()).toEqual(["primary", "secondary"]);
+    expect(reloaded({ opencodeGo: { providerKeys: { VENICE_API_KEY: "replacement" } } }, withKey).sort())
+      .toEqual(["primary", "secondary"]);
+    expect(reloaded({ opencodeGo: { providerKeys: {} } }, withKey).sort()).toEqual(["primary", "secondary"]);
+    expect(reloaded({ opencodeGo: withKey.opencodeGo }, withKey)).toEqual([]);
+    expect(reloaded({ opencodeGo: { providerKeys: {} } }, fleet)).toEqual([]);
   });
 });
 

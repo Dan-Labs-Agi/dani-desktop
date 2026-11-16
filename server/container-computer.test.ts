@@ -471,9 +471,16 @@ describe("containerComputerStatus", () => {
 
     const status = await containerComputerStatus(fake.run, "linux", target);
 
-    expect(status.managed).toBe(false);
-    expect(status.ready).toBe(false);
-    expect(status.problem).toContain("not created by DaniBot");
+    expect(status).toMatchObject({
+      image: true,
+      imageMatches: true,
+      managed: false,
+      ready: false,
+      resumable: false,
+    });
+    expect(autoLocalVmAttachable(status)).toBe(false);
+    await expect(containerComputerAction("remove", fake.run, "linux", target)).rejects.toMatchObject({ status: 409 });
+    expect(fake.calls).not.toContain(`docker rm -f ${target.containerName}`);
   });
 
   it("prefers a running runtime over an earlier installed but stopped one", async () => {
@@ -929,9 +936,7 @@ describe("containerComputerAction", () => {
       }),
     });
 
-    await expect(containerComputerAction("remove", fake.run, "linux")).rejects.toThrow(
-      /not created by DaniBot.*remove it manually/i,
-    );
+    await expect(containerComputerAction("remove", fake.run, "linux")).rejects.toMatchObject({ status: 409 });
     expect(fake.calls).not.toContain(`docker rm -f ${CONTAINER}`);
   });
 

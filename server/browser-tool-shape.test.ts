@@ -85,7 +85,7 @@ describe("browser tool shaping", () => {
   });
 
   it("names only tools the pinned engine advertises", () => {
-    // `agent-browser mcp --tools core` on the pinned 0.37.0 plus OMB's own tools: guidance naming a tool the engine does not list costs a failed call.
+    // agent-browser 0.41.2 core plus OMB's tools; guidance must not advertise unavailable operations.
     const advertised = new Set([
       "agent_browser_tools_profiles", "agent_browser_open", "agent_browser_read", "agent_browser_snapshot", "agent_browser_click",
       "agent_browser_fill", "agent_browser_type", "agent_browser_press", "agent_browser_check", "agent_browser_uncheck",

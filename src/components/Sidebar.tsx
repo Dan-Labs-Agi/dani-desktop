@@ -1,12 +1,11 @@
 import { OrganizationIdentity } from "./OrganizationIdentity";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Activity, Archive, Bot as BotIcon, Check, ChevronRight, ClipboardCopy, Crown, FolderPlus, Library, Loader2, MessageSquarePlus, MoreHorizontal, Pencil, Phone, Pin, PinOff, Plus, Search, TextQuote, Trash2, Users, X } from "lucide-react";
-import { api, useStore, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Action, type AppState, type Bot, type BotProject, type Group, type InstanceInfo, type Message } from "@/state/store";
+import { api, useStore, formatTime, visibleMessages, currentTaskBot, botOpensTo, openBot, openThread, type Bot, type BotProject, type Group } from "@/state/store";
 import { approvalModeFor } from "../../shared/approval-mode";
 import { liveActivityLabel } from "@/lib/live-activity";
 import { SidebarWorkingStep } from "./SidebarWorkingStep";
-import { llmThreadTitlesEnabled } from "@/lib/feature-flags";
 
 import { BotAvatar } from "./Avatar";
 import { BotEngineMark, BotModelBadge, botTooltip } from "./BotModelBadge"; import { SidebarBotRole } from "./BotRole";
@@ -16,7 +15,7 @@ import { searchMatchesThreads, useSearchDisclosure } from "@/lib/search-disclosu
 import { useHeldMenuMotion, useMenuMotion } from "./MenuMotion";
 import { lastNonReceipt } from "@/lib/receipts";
 import { botPreview, groupPreview } from "./sidebar-preview";
-import { activeLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
 import { copyText } from "@/lib/copy-text";
 import type { LocaleKey } from "@/locales";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -57,12 +56,12 @@ import {
   userSectionName,
   withPrimaryTile,
 } from "@/lib/sidebar-layout";
-import { stepKey, type BotDropPlace } from "@/lib/sidebar-bot-drop";
-import { BotDropLine, botRowDropClass, useSidebarBotDrag, type BotRowDrag } from "./SidebarBotDrag";
+import { stepKey } from "@/lib/sidebar-bot-drop";
+import { BotDropLine, botRowDropClass, useSidebarBotDrag } from "./SidebarBotDrag";
 import { useSidebarSections } from "./SidebarSections";
 import { departmentNames, moveBotsToSection } from "./bot-sections";
 import { sidebarSectionAttention } from "@/lib/sidebar-attention";
-import { botListItemPointerIntent } from "@/lib/sidebar-selection";
+import { botListItemPointerIntent, botRowProps, openBotContextMenu, useVisibleMessages, type BotRowProps, type MenuState } from "@/lib/sidebar-selection";
 import { SidebarFooter } from "./SidebarFooter";
 import { SidebarPhoneBar } from "./SidebarPhoneBar";
 import { PhoneHero } from "./SidebarPhoneHero";
@@ -100,7 +99,7 @@ import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { myDefaultBot, useViewerEmail, useWelcomingBot } from "@/lib/default-bot";
 import { PinnedBotRoster, PinnedCircleThreadSection } from "./PinnedCircleThreads";
-import { archiveBotWithNotice, onArchiveNotice } from "./bot-archive";
+import { archiveBotWithNotice, currentArchivableBot, onArchiveNotice } from "./bot-archive";
 import { ArchivedBotsPanel, botConfirmProps, type BotConfirmKind } from "./ArchivedBotsPanel"; import { MovedBotRows } from "./MoveToTeam";
 import { NewRoomPanel } from "./SidebarNewRoomPanel";
 import { SectionPicker } from "./SidebarSectionPicker";
@@ -124,16 +123,6 @@ function sectionLabel(id: string): string {
   return key ? t(key) : sidebarSectionLabel(id);
 }
 
-export interface MenuState {
-  botId: string;
-  x: number;
-  y: number;
-}
-
-export function openBotContextMenu(onMenu: (menu: MenuState) => void, botId: string, event: React.MouseEvent) {
-  event.preventDefault();
-  onMenu({ botId, x: event.clientX, y: event.clientY });
-}
 
 export function GroupListItem({
   group,
@@ -439,12 +428,6 @@ function RoomContextMenu({
   );
 }
 
-/** A confirmation may span live fleet updates; never authorize from its snapshot. */
-export function currentArchivableBot(bots: readonly Bot[], id: string): Bot | undefined {
-  const active = bots.filter((candidate) => !candidate.hidden);
-  if (active.length <= 1) return undefined;
-  return active.find((candidate) => candidate.id === id && !candidate.chiefOfStaff && !candidate.defaultBot);
-}
 
 const NO_FOLDERS: BotProject[] = [];
 
@@ -642,55 +625,6 @@ export function BotThreadList({ bot, selected, query, pendingQueued, reveal, loc
   );
 }
 
-export interface BotRowProps {
-  bot: Bot;
-  selected: boolean;
-  deleting: boolean;
-  mascotMotion: AppState["mascotMotion"];
-  reveal: AppState["revealThread"];
-  pendingQueued: AppState["pendingQueued"];
-  instances: InstanceInfo[];
-  liveCall: AppState["liveCall"];
-  locale: string;
-  generatedTitles: boolean;
-  density: SidebarDensity;
-  query: string;
-  dispatch: Dispatch<Action>;
-  onMenu: (menu: MenuState) => void;
-  renameRequest?: number;
-  botDrag?: BotRowDrag;
-  botDrop?: BotDropPlace | null;
-  botDragging?: boolean;
-}
-
-export function botRowProps(
-  state: AppState,
-  dispatch: Dispatch<Action>,
-  bot: Bot,
-  layout: Pick<BotRowProps, "density" | "query" | "onMenu" | "renameRequest" | "botDrag" | "botDrop" | "botDragging">,
-): BotRowProps {
-  const selected = state.activeView === "chat" && state.selectedId === bot.id;
-  const reveal = state.revealThread;
-  return {
-    ...layout,
-    bot,
-    selected,
-    deleting: state.deletingBots[bot.id] === true,
-    mascotMotion: selected && state.mascotMotion?.botId === bot.id ? state.mascotMotion : null,
-    reveal: reveal && (bot.threadId === reveal.threadId || bot.tasks?.some((task) => task.threadId === reveal.threadId)) ? reveal : null,
-    pendingQueued: state.pendingQueued,
-    instances: state.instances,
-    liveCall: state.liveCall,
-    locale: activeLocale(),
-    generatedTitles: llmThreadTitlesEnabled(state.config),
-    dispatch,
-  };
-}
-
-export function useVisibleMessages(bot: Bot): Message[] {
-  const { messages, activeLeafId } = bot;
-  return useMemo(() => visibleMessages({ messages, activeLeafId }), [messages, activeLeafId]);
-}
 
 export const BotListItem = memo(function BotListItem(props: BotRowProps) {
   const advanced = useAdvancedMode();

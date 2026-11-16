@@ -11,7 +11,7 @@ vi.mock("@/lib/interface-mode", async (original) => ({
 }));
 vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({}) }));
 
-import { botRowProps } from "./Sidebar";
+import { botRowProps } from "@/lib/sidebar-selection";
 import { SidebarBotTile, SidebarTileGrid } from "./SidebarTiles";
 
 const bot = (extra: Partial<Bot> = {}): Bot => ({

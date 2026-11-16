@@ -29,6 +29,7 @@ export async function withSecureStorageDeadline(operation, timeoutMs = SECURE_ST
 }
 
 export async function readSecureCredentials({
+  disabled = false,
   exists,
   isAvailable,
   readFile,
@@ -37,6 +38,7 @@ export async function readSecureCredentials({
   delays = CREDENTIAL_READ_DELAYS_MS,
   timeoutMs = SECURE_STORAGE_TIMEOUT_MS,
 }) {
+  if (disabled) return { status: "unavailable", credentials: {}, error: "Operating-system credentials are disabled for this launch" };
   if (!exists()) return { status: "empty", credentials: {} };
   const deadline = Date.now() + timeoutMs;
 

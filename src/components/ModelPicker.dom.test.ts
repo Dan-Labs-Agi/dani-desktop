@@ -99,22 +99,72 @@ afterEach(() => {
 });
 
 describe("choosing a model with the keyboard", () => {
-  it("picks a free family model using its own native route without exposing upstream branding", async () => {
-    fixture.instances = [
-      { instanceId: "dani", driverKind: "daniFree", displayName: "Dani", snapshot: { state: "available", authenticated: true },
-        models: { default: "gateway/one", options: [{ id: "gateway/one", label: "Helpful One", provider: "KiloCode" }] } },
-      { instanceId: "dani-client", driverKind: "opencodeGo", displayName: "Dani", snapshot: { state: "available", authenticated: true },
-        models: { default: "client/two", options: [{ id: "client/two", label: "Helpful Two", provider: "OpenCode" }] } },
+  it.each<[boolean, string]>([
+    [false, "hermes-default"], [true, "hermes-default"], [false, "codex/native-sol"], [true, "codex/native-sol"],
+  ])("keeps provider choices on the root harness in advanced=%s source=%s", async (advanced, source) => {
+    fixture.advanced = advanced;
+    const options: Option[] = [
+      { id: "codex/native-sol", label: "GPT-5.6 Sol", provider: "Codex", custom: true, availability: "available" },
+      { id: "codex/native-mini", label: "GPT Mini", provider: "Codex", tools: true, custom: true, availability: "available" },
+      ...Array.from({ length: 5 }, (_, index): Option => ({
+        id: `codex/archive-${index}`, label: `GPT Archive ${index}`, provider: "Codex", custom: true, availability: "available",
+      })),
+      { id: "opencode/native", label: "Open Model", provider: "OpenCode", custom: true, availability: "available" },
+      { id: "kilo/native", label: "Kilo Model", provider: "Kilo Code", custom: true, availability: "unavailable", unavailableReason: "Sign in to Kilo Code" },
+      { id: "dani/native", label: "Free Model", provider: "Dani Free", custom: true, availability: "available" },
+      { id: "claude/native", label: "Sonnet", provider: "Claude", custom: true, availability: "unavailable", unavailableReason: "Claude authentication required" },
+      { id: "xai/native", label: "Grok", provider: "xAI", custom: true, availability: "preparing", unavailableReason: "Provider is preparing" },
+      { id: "ollama/native", label: "Qwen Local", provider: "Ollama", custom: true, availability: "available" },
     ];
-    render({ ...scout(), modelSelection: { instanceId: "dani", model: "gateway/one" } });
+    fixture.instances = [{
+      instanceId: "root", driverKind: "hermesAgent", displayName: "Hermes", access: "custom",
+      snapshot: { state: "available", authenticated: true }, models: { default: "codex/native-sol", options },
+    }];
+    const selected = { ...scout(), modelSelection: { instanceId: "root", model: source } };
+    render(selected);
     await openWith("click");
-    expect(menu()?.textContent).toContain("Dani free models");
-    expect(menu()?.innerHTML).not.toMatch(/OpenCode|KiloCode|gateway\/one|client\/two/);
-    const choice = [...menu()!.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.startsWith("Helpful Two"))!;
+    const surface = menu()!;
+    expect([...surface.querySelectorAll('[role="group"][data-simple-provider]')].map((group) => group.getAttribute("aria-labelledby"))
+      .map((id) => document.getElementById(id!)?.textContent)).toEqual(expect.arrayContaining(["Codex", "OpenCode", "Kilo Code", "Dani Free", "Claude", "xAI", "Ollama"]));
+    expect(`${chip().title} ${chip().textContent} ${surface.textContent}`).not.toMatch(/Hermes|hermes-default/i);
+    expect(chip().title).toContain("Codex");
+    expect(chip().title).toContain("GPT-5.6 Sol");
+    expect(surface.querySelector('[data-current-model]')?.textContent).toContain("GPT-5.6 Sol");
+    const checked = [...surface.querySelectorAll<HTMLButtonElement>('[data-simple-provider] button[aria-pressed="true"]')];
+    expect(checked).toHaveLength(1);
+    expect(checked[0]!.textContent).toContain("GPT-5.6 Sol");
+    expect(selected.modelSelection.model).toBe(source);
+    const all = surface.querySelector<HTMLButtonElement>("[data-simple-show-all]")!;
+    expect(all).not.toBeNull();
+    expect(surface.textContent).not.toContain("GPT Archive 4");
+    flushSync(() => all.click());
+    await settle();
+    expect(surface.textContent).toContain("GPT Archive 4");
+    expect(all.getAttribute("aria-expanded")).toBe("true");
+    const unavailable = [...surface.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.startsWith("Kilo Model"))!;
+    expect(unavailable.disabled).toBe(true);
+    expect(unavailable.title).toContain("Sign in to Kilo Code");
+    flushSync(() => unavailable.click());
+    expect(fixture.dispatch).not.toHaveBeenCalled();
+    fixture.instances = fixture.instances.map((instance) => ({ ...instance, models: { ...instance.models, default: "codex/native-mini" } }));
+    render(selected);
+    await settle();
+    expect(chip().title).toContain(source === "hermes-default" ? "GPT Mini" : "GPT-5.6 Sol");
+    expect(selected.modelSelection.model).toBe(source);
+    expect(fixture.dispatch).not.toHaveBeenCalled();
+    type(surface.querySelector<HTMLInputElement>("[data-menu-search]")!, "GPT Mini");
+    await settle();
+    expect(menu()!.querySelectorAll('[role="group"][data-simple-provider]')).toHaveLength(1);
+    const choice = [...surface.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.startsWith("GPT Mini"))!;
+    expect(choice.disabled).toBe(false);
+    expect(choice.textContent).toContain("Available to select. Tool compatibility is checked on first use.");
+    expect(choice.textContent).toContain("Tools listed by provider");
+    expect(choice.textContent).not.toContain("Tools supported");
+    expect(unavailable.textContent).not.toContain("Available to select");
     flushSync(() => choice.click());
     await settle();
     expect(fixture.dispatch).toHaveBeenCalledWith(expect.objectContaining({
-      type: "setModel", selection: { instanceId: "dani-client", model: "client/two" },
+      type: "setModel", selection: { instanceId: "root", model: "codex/native-mini" },
     }));
   });
 

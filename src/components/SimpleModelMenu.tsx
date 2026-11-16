@@ -4,12 +4,13 @@ import type { Bot, InstanceInfo } from "@/state/store";
 import type { EffortLevel } from "../../shared/wire";
 import type { MenuGroup, MenuModelRow, SimpleMenu } from "@/lib/simple-model-menu";
 import { isDaniFreeInstance } from "../../shared/dani-free";
+import { isHermesHarness } from "../../shared/hermes-harness";
 import { daniModelDetails } from "@/lib/model-choices";
 import { modelBlurb } from "@/lib/model-friendly";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import { BotAvatar } from "./Avatar";
-import { InstanceProviderMark } from "./ProviderIcons";
+import { ModelProviderMark } from "./ProviderIcons";
 import { MENU_GUTTER, MENU_ICON, MENU_LABEL, MENU_LINE, MENU_NOTE, MENU_ROW, MENU_SEPARATOR, MENU_STROKE, MENU_TRAILING, SIMPLE_MENU_META, SIMPLE_MENU_ROW } from "./menu-recipe";
 import { effortLabel } from "./ModelPicker";
 import { DaniModelNotice } from "./ModelPickerFull";
@@ -23,7 +24,7 @@ export interface SimpleMenuActions {
   onPick: (instance: InstanceInfo, model: string, variant?: string) => void;
   onPickCurrent: () => void;
   onFollowBot: () => void;
-  onToggle: (instance: InstanceInfo) => void;
+  onToggle: (instance: InstanceInfo, provider?: string) => void;
   onSetUp: (instance: InstanceInfo, keyboard: boolean) => void;
   onCheckAgain: (instance: InstanceInfo) => void;
   onManage: () => void;
@@ -55,10 +56,16 @@ function RowLines({ label, children }: { label: ReactNode; children?: ReactNode 
 function MenuModel({ instance, row, onPick }: { instance: InstanceInfo; row: MenuModelRow; onPick: SimpleMenuActions["onPick"] }) {
   const { option } = row;
   const free = isDaniFreeInstance(instance);
-  const details = free ? daniModelDetails(option).join(" · ") : undefined;
+  const native = isHermesHarness(instance);
+  const facts = free || (native && (option.tools !== undefined || option.imageInput !== undefined || option.mayTrainOnYourPrompts !== undefined))
+    ? daniModelDetails(option) : [];
+  if (native && option.tools === true) facts[0] = t("model.catalogTools");
+  if (native && !row.unavailable && !row.blocked && !instance.policy) facts.push(t("model.qualifyOnFirstUse"));
+  const details = facts.join(" · ") || undefined;
   const policyReason = instance.policy ? [t("policy.managedBy", { organization: instance.policy.organizationName }), instance.policy.reason]
-    .filter(Boolean).join(" · ").replace(/\b(?:OpenCode(?:\s+Zen)?|Kilo(?:Code)?)\b/gi, t("daniSetup.freeService")) : undefined;
-  const reason = policyReason ?? (row.blocked ? t("model.orgBlocked") : row.unavailable ? t("daniSetup.unavailableHint") : undefined);
+    .filter(Boolean).join(" · ") : undefined;
+  const reason = policyReason ?? (row.blocked ? t("model.orgBlocked") : row.unavailable
+    ? option.unavailableReason ?? t(free ? "daniSetup.unavailableHint" : "model.simple.unavailable") : undefined);
   return (
     <><button
       type="button"
@@ -80,7 +87,7 @@ function MenuModel({ instance, row, onPick }: { instance: InstanceInfo; row: Men
       </RowLines>
       {row.current && <Check size={14} className="shrink-0 text-accent" aria-hidden="true" />}
     </button>
-    {free && <DaniModelNotice option={option} />}</>
+    <DaniModelNotice option={option} /></>
   );
 }
 
@@ -153,7 +160,7 @@ function GroupBody({ group, props }: { group: MenuGroup; props: SimpleModelMenuP
           {body.toggle && (
             <div className={cn(body.toggle === "less" && "sticky bottom-0 z-[1] -mx-1.5 bg-linear-to-b from-transparent to-menu to-[12px] px-1.5 pt-3")}>
               <button type="button" data-menu-row data-simple-show-all tabIndex={-1} aria-expanded={body.toggle === "less"}
-                onClick={() => props.onToggle(instance)} className={cn(MENU_ROW, "text-ink-secondary hover:text-ink focus:text-ink")}>
+                onClick={() => props.onToggle(instance, isHermesHarness(instance) ? group.provider : undefined)} className={cn(MENU_ROW, "text-ink-secondary hover:text-ink focus:text-ink")}>
                 <Gutter />
                 <span className="min-w-0 flex-1 truncate">{body.toggle === "less" ? t("model.showSuggested") : t("model.showAll", { count: body.total })}</span>
                 {body.toggle === "less"
@@ -222,7 +229,7 @@ export function SimpleModelMenu(props: SimpleModelMenuProps) {
             value={query}
             onChange={(event) => props.onQuery(event.target.value)}
             placeholder={t("model.search")}
-            aria-label={menu.groups.every((group) => group.instance.access === "custom") ? t("model.searchLocal") : t("model.search")}
+            aria-label={menu.groups.every((group) => group.instance.access === "custom" && !isHermesHarness(group.instance)) ? t("model.searchLocal") : t("model.search")}
             className="min-w-0 flex-1 bg-transparent text-[13px] leading-[18px] text-ink outline-none placeholder:text-ink-tertiary"
           />
           {query && (
@@ -254,7 +261,7 @@ export function SimpleModelMenu(props: SimpleModelMenuProps) {
             >
               <Gutter>
                 {current.instance
-                  ? <InstanceProviderMark instance={current.instance} size={14} subtle />
+                  ? <ModelProviderMark instance={current.instance} provider={current.provider} size={14} subtle />
                   : <span className="size-3.5 rounded-full bg-ink/[0.08]" aria-hidden="true" />}
               </Gutter>
               <RowLines label={current.label}>
@@ -279,11 +286,11 @@ export function SimpleModelMenu(props: SimpleModelMenuProps) {
             const labelId = `${idPrefix}-group-${index}`;
             const expanded = group.body.kind === "models" && group.body.toggle === "less";
             return (
-              <div key={group.instance.instanceId} role="group" aria-labelledby={labelId} data-simple-provider={group.instance.instanceId}
+              <div key={`${group.instance.instanceId}/${group.provider}`} role="group" aria-labelledby={labelId} data-simple-provider={group.instance.instanceId}
                 className={cn("flex flex-col gap-0.5", index > 0 && "mt-1")}>
-                <div id={labelId} className={cn(MENU_LABEL, expanded && "sticky top-0 z-[1] -mx-1.5 bg-menu px-3.5")}>
-                  <Gutter><InstanceProviderMark instance={group.instance} size={14} subtle /></Gutter>
-                  <span className="min-w-0 truncate">{group.label}</span>
+                <div className={cn(MENU_LABEL, expanded && "sticky top-0 z-[1] -mx-1.5 bg-menu px-3.5")}>
+                  <span className={MENU_GUTTER} aria-hidden="true"><ModelProviderMark instance={group.instance} provider={group.provider} size={14} subtle /></span>
+                  <span id={labelId} className="min-w-0 truncate">{group.label}</span>
                 </div>
                 <GroupBody group={group} props={props} />
               </div>

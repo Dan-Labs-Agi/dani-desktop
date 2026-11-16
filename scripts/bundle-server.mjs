@@ -163,6 +163,14 @@ const catalogSnapshot = join(root, "dist-server", "model-catalog", "models-dev.s
 mkdirSync(dirname(catalogSnapshot), { recursive: true });
 copyFileSync(join(server, "model-catalog", "models-dev.snapshot.json"), catalogSnapshot);
 
+// App-owned native helpers execute inside the user's selected Python venv.
+// Never patch that venv or global site-packages.
+for (const file of ["hermes-bootstrap.py", "hermes-model-metadata.py"]) {
+  const destination = join(root, "dist-server", "drivers", "acp", file);
+  mkdirSync(dirname(destination), { recursive: true });
+  copyFileSync(join(server, "drivers", "acp", file), destination);
+}
+
 // Pi loads this through its own jiti and supplies TypeBox. Inline our local
 // policy module so the extension also works without the source checkout;
 // keep the Pi-owned dependency external and retain the .ts loading contract.

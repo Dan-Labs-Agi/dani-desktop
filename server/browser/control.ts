@@ -73,6 +73,14 @@ export class ProfileControl<T extends ControlledTab = ControlledTab> {
     }
   }
 
+  /** Pure admission metadata; this never grants control, probes a page or settles uncertainty. */
+  agentAvailable(): boolean {
+    if (this.owner !== null || this.releasing || this.closing || this.uncertain ||
+        this.lostCall !== null || this.call !== null || this.agents !== 0 || this.humans !== 0) return false;
+    for (const tab of this.#tabs()) if (!tab.control.agentAvailable(AGENT)) return false;
+    return true;
+  }
+
   canControl(owner: string): boolean {
     return Boolean(owner) && this.owner === owner && this.ready && !this.releasing && !this.closing;
   }

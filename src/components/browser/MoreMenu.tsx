@@ -4,7 +4,7 @@
 import { Check, EllipsisVertical, Minus, Plus, RotateCcw } from "lucide-react";
 import { useRef, type ReactNode } from "react";
 
-import type { PreviewViewportSetting } from "@/lib/browser-stream-client";
+import type { PreviewViewportSetting } from "../../../shared/browser-stream";
 import { t } from "@/lib/i18n";
 
 /** Chrome's own zoom levels. */

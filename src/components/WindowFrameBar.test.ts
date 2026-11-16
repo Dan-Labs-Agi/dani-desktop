@@ -26,7 +26,7 @@ vi.mock("./DesktopCapabilities", async (importOriginal) => ({
 }));
 
 import { setLocale } from "@/lib/i18n";
-import { tilesClearCorner } from "./SidebarTiles";
+import { tilesClearCorner } from "@/lib/sidebar-layout";
 import { UpdateIndicator } from "./UpdateIndicator";
 import { WindowFrameBar } from "./WindowFrameBar";
 

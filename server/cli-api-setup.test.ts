@@ -56,6 +56,68 @@ describe("API setup models", () => {
     });
   });
 
+  it("authenticates with one case-insensitive configured authorization header", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (_url, init) =>
+      new Headers(init?.headers).get("authorization") === "Bearer selected-header-key"
+        ? json({ data: [{ id: "permitted-model" }] }) : json({ error: "invalid credentials" }, 401)));
+    await expect(fetchSetupModels(base, key, { headers: { Authorization: "Bearer selected-header-key" } }))
+      .resolves.toEqual([{ id: "permitted-model", label: "permitted-model" }]);
+  });
+
+  it("paginates Anthropic catalogs on the same endpoint with encoded cursors and deduplicated models", async () => {
+    const cursor = "claude/first?other=value";
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json({ data: [{ id: "claude-first" }], has_more: true, last_id: cursor }))
+      .mockResolvedValueOnce(json({ data: [{ id: "claude-first" }, { id: "claude-second" }], has_more: false }));
+    vi.stubGlobal("fetch", fetch);
+    await expect(fetchSetupModels("https://api.anthropic.com", key, { apiMode: "anthropic_messages" })).resolves.toEqual([
+      { id: "claude-first", label: "claude-first" }, { id: "claude-second", label: "claude-second" },
+    ]);
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://api.anthropic.com/v1/models?limit=1000",
+      `https://api.anthropic.com/v1/models?limit=1000&after_id=${encodeURIComponent(cursor)}`,
+    ]);
+    expect(fetch.mock.calls.every(([, init]) => init?.method === "GET" && init.redirect === "error" && !init.body)).toBe(true);
+  });
+
+  it.each([undefined, "", "same-cursor"])("rejects missing or repeated Anthropic pagination cursors rather than returning a partial catalog: %s", async lastId => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json({ data: [{ id: "claude-first" }], has_more: true, last_id: "same-cursor" }))
+      .mockResolvedValueOnce(json({ data: [{ id: "claude-second" }], has_more: true, last_id: lastId }));
+    vi.stubGlobal("fetch", fetch);
+    await expect(fetchSetupModels(base, key, { apiMode: "anthropic_messages" })).rejects.toThrow(/pagination/u);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects an incomplete Anthropic catalog when a later page fails", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json({ data: [{ id: "claude-first" }], has_more: true, last_id: "claude-first" }))
+      .mockResolvedValueOnce(json({ error: key }, 401));
+    vi.stubGlobal("fetch", fetch);
+    await expect(fetchSetupModels(base, key, { apiMode: "anthropic_messages" })).rejects.toThrow(/API key/u);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("shares the original eight-second deadline across Anthropic catalog pages", async () => {
+    vi.useFakeTimers();
+    const firstPage = Promise.withResolvers<Response>();
+    const secondPage = Promise.withResolvers<Response>();
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockReturnValueOnce(firstPage.promise)
+      .mockReturnValueOnce(secondPage.promise);
+    vi.stubGlobal("fetch", fetch);
+    const failure = expect(fetchSetupModels(base, key, { apiMode: "anthropic_messages" })).rejects.toThrow(/timed out after 8 seconds/u);
+    await vi.advanceTimersByTimeAsync(6_000);
+    firstPage.resolve(json({ data: [{ id: "claude-first" }], has_more: true, last_id: "claude-first" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(2_000);
+    await failure;
+    expect(fetch.mock.calls[0][1]?.signal).toBe(fetch.mock.calls[1][1]?.signal);
+    expect(fetch.mock.calls[1][1]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it.each([{}, null, [], { models: ["wrong contract"] }, { data: [] }, { data: [{ id: "" }] }])("rejects unusable catalogs without persisting a fallback: case %#", async (body) => {
     mockFetch(json(body));
     await expect(fetchSetupModels(base, key)).rejects.toThrow(/no usable models.*manually/u);

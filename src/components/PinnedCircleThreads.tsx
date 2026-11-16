@@ -17,7 +17,8 @@ import { setPinnedCircleOrder, usePinnedCircleOrder, type SidebarDensity } from 
 import { PINNED_CIRCLE_DRAG_TYPE, pinnedCircleDropPlace, rankPinnedCircles, reorderPinnedCircles, type PinnedCircleDrop, type PinnedCircleDropPlace } from "@/lib/pinned-circle-order";
 import { sidebarSectionAttention } from "@/lib/sidebar-attention";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
-import { BotListItem, BotThreadList, type BotRowProps } from "./Sidebar";
+import { BotListItem, BotThreadList } from "./Sidebar";
+import type { BotRowProps } from "@/lib/sidebar-selection";
 import { useUnreadNotice } from "./unread-notice";
 
 function useVisibleMessages(bot: Bot): Message[] {

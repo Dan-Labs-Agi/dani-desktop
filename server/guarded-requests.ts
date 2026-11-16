@@ -15,7 +15,7 @@ export function assertRequestTarget(
 }
 
 /** Never infer ownership from timestamps or the latest assistant text. */
-export function guardedRequestPath(messages: Message[], activeLeafId: string | null, sendId: string): Message[] {
+export function guardedRequestPath(messages: Message[], activeLeafId: string | null, sendId: string, acceptedAnswers?: ReadonlySet<string>): Message[] {
   const sources = messages.filter(message => message.sendId === sendId);
   const source = sources[0];
   if (sources.length !== 1 || !source || source.role !== "user" || source.kind !== "text" || source.steered || source.peerAsk) {
@@ -35,7 +35,8 @@ export function guardedRequestPath(messages: Message[], activeLeafId: string | n
     if (path.length >= 500) throw Object.assign(new Error("Open this request in the workspace; its transcript exceeds the response limit"), { status: 413 });
     id = message.parentId ?? null;
   }
-  if (path[0]?.id !== source.id || path.slice(1).some(message => message.role === "user")) throw requestConflict();
+  if (path[0]?.id !== source.id || path.slice(1).some(message => message.role === "user" &&
+      (!acceptedAnswers?.has(message.id) || message.requestMessageId !== source.id))) throw requestConflict();
   // An abandoned sibling can hold a detached result or approval that must never answer the current branch.
   const ancestors = new Set(path.map(message => message.id));
   if (messages.some(message => message.parentId && ancestors.has(message.parentId) && !seen.has(message.id))) throw requestConflict();

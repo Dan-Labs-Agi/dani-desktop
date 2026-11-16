@@ -3,7 +3,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PreviewStreamControl, PreviewStreamEvents, PreviewStreamInput } from "@/lib/browser-stream-client";
+import type { PreviewStreamEvents } from "@/lib/browser-stream-client";
+import type { PreviewStreamControl, PreviewStreamInput } from "../../../shared/browser-stream";
 import { controlPill } from "./ChromeRow";
 import { letterbox, mapToPage, mapToSurface, StreamSurface } from "./StreamSurface";
 
@@ -73,6 +74,19 @@ const pointer = (canvas: HTMLCanvasElement, type: string, x: number, y: number) 
 const button = (label: string) => [...host.querySelectorAll("button")].find((candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === label)!;
 
 describe("the picture and the page", () => {
+  it("clears the recovery warning after recovery without dropping other safety notices", async () => {
+    const { events } = await mount();
+    await act(async () => {
+      events().onMessage?.({ type: "notice", message: "external-work-warning" });
+      events().onMessage?.({ type: "recovery", message: "restart-required-warning" });
+    });
+    expect(host.textContent).toContain("external-work-warning");
+    expect(host.textContent).toContain("restart-required-warning");
+    await act(async () => events().onConnectedChange(true));
+    expect(host.textContent).not.toContain("restart-required-warning");
+    expect(host.textContent).toContain("external-work-warning");
+  });
+
   it("maps a point through the letterbox both ways, and refuses one outside the picture", () => {
     expect(letterbox({ width: 1600, height: 1200 }, { width: 3200, height: 2000 })).toEqual({ width: 1600, height: 1000, left: 0, top: 100 });
     const rect = { left: 10, top: 20, width: 1600, height: 1200 };

@@ -3,7 +3,8 @@
 import type { ControlTransport } from "./browser-control";
 import { t } from "./i18n";
 import { withBrowserScope } from "./team-browser";
-import type { PreviewStreamClient, PreviewStreamControl, PreviewStreamEvents, PreviewStreamInput } from "./browser-stream-client";
+import type { PreviewStreamClient, PreviewStreamEvents } from "./browser-stream-client";
+import type { PreviewStreamControl, PreviewStreamInput } from "../../shared/browser-stream";
 
 type Body = Record<string, unknown>;
 export type LivePost = (body: Body, viewerId: string) => Promise<unknown>;
@@ -157,12 +158,12 @@ export function createLiveInputQueue(send: (body: Body) => Promise<unknown>, onE
 }
 
 /** v1's {held, owned, controlling, dialog} in v2's words. */
-export function liveControl(value: { held?: unknown; owned?: unknown; controlling?: unknown; dialog?: unknown }, generation: number): PreviewStreamControl {
+export function liveControl(value: { held?: unknown; owned?: unknown; controlling?: unknown; dialog?: unknown; attempt?: unknown }, generation: number): PreviewStreamControl {
   const controller = value.owned === true ? (value.controlling === true ? "you" : "agent") : value.held === true ? "another-viewer" : "unclaimed";
   const dialog = value.dialog as { type?: unknown; message?: unknown; defaultValue?: unknown } | null | undefined;
   const shown = dialog && typeof dialog.type === "string" && typeof dialog.message === "string" && typeof dialog.defaultValue === "string"
     ? { type: dialog.type, message: dialog.message, defaultValue: dialog.defaultValue } : null;
-  return { canOperate: true, controller, generation, dialog: shown, ...(value.owned === true ? { owned: true } : {}) };
+  return { canOperate: true, controller, generation, dialog: shown, ...(value.owned === true ? { owned: true } : {}), ...(typeof value.attempt === "string" ? { attempt: value.attempt } : {}) };
 }
 
 /**
@@ -179,6 +180,7 @@ export function createLiveStreamClient(botId: string, events: PreviewStreamEvent
   let closed = false;
   let source: EventSource | null = null;
   let viewerId = "";
+  let recoveryOnly = false;
   let heardAt = 0;
   let attempts = 0;
   let generation = 0;
@@ -197,6 +199,7 @@ export function createLiveStreamClient(botId: string, events: PreviewStreamEvent
     const wasConnected = viewerId !== "";
     if (wasConnected) resume.viewer = viewerId;
     viewerId = "";
+    recoveryOnly = false;
     control = null;
     queue.clear();
     if (wasConnected) events.onConnectedChange(false);
@@ -231,7 +234,7 @@ export function createLiveStreamClient(botId: string, events: PreviewStreamEvent
   const sendSize = () => {
     const wanted = size;
     const to = viewerId;
-    if (sizing || !wanted || !to) return;
+    if (recoveryOnly || sizing || !wanted || !to) return;
     sizing = wanted;
     void post({ type: "resize", width: Math.round(wanted.width), height: Math.round(wanted.height) }, to).catch(() => undefined).finally(() => {
       sizing = null;
@@ -261,9 +264,11 @@ export function createLiveStreamClient(botId: string, events: PreviewStreamEvent
     listen("ready", (data) => {
       if (typeof data.viewerId !== "string" || !data.viewerId) return;
       viewerId = data.viewerId;
+      recoveryOnly = data.recoveryOnly === true;
       inputBatch = Number.isSafeInteger(data.inputBatch) ? Math.max(1, Math.min(Number(data.inputBatch), 64)) : 1;
       resume.viewer = "";
       events.onConnectedChange(true);
+      if (recoveryOnly && typeof data.message === "string") events.onMessage?.({ type: "recovery", message: data.message });
       if (size !== opening) sendSize();
     });
     listen("heartbeat", () => { attempts = 0; });
@@ -293,7 +298,7 @@ export function createLiveStreamClient(botId: string, events: PreviewStreamEvent
     });
     listen("control", (data) => {
       const next = liveControl(data, generation);
-      if (control && next.controller === control.controller && next.owned === control.owned && JSON.stringify(next.dialog) === JSON.stringify(control.dialog)) return;
+      if (control && next.controller === control.controller && next.owned === control.owned && next.attempt === control.attempt && JSON.stringify(next.dialog) === JSON.stringify(control.dialog)) return;
       control = next.controller === control?.controller ? next : liveControl(data, ++generation);
       events.onControl?.(control);
     });
@@ -332,6 +337,7 @@ export function createLiveStreamClient(botId: string, events: PreviewStreamEvent
   if (page) document.addEventListener("visibilitychange", returned);
 
   const send = (input: PreviewStreamInput) => {
+    if (recoveryOnly && input.type !== "restart" && input.type !== "resize") return false;
     if (input.type === "resize") {
       size = { width: input.width, height: input.height };
       sendSize();
@@ -369,19 +375,21 @@ export function createLiveStreamClient(botId: string, events: PreviewStreamEvent
     },
     transport: {
       send: (input) => {
-        const action = viewerId ? liveAction(input) : null;
+        const action = viewerId && !recoveryOnly ? liveAction(input) : null;
         if (action) for (const body of Array.isArray(action) ? action : [action]) queue.enqueue(body);
       },
       drain: () => queue.drain(),
       settle: () => queue.settle(),
       size: () => queue.size(),
       stopped: () => queue.stopped(),
-      take: async () => {
+      reservation: () => control?.attempt,
+      take: async (attempt) => {
         if (!viewerId) throw new Error("The browser view is not connected. Reconnect it, then try again.");
-        const reply = await postTo({ type: "take" }, viewerId) as { waited?: unknown } | null;
+        if (recoveryOnly) throw new Error("Choose Restart browser… before continuing.");
+        const reply = await postTo({ type: "take", ...(attempt ? { attempt } : {}) }, viewerId) as { waited?: unknown } | null;
         return { waited: reply?.waited === true };
       },
-      release: async () => { if (viewerId) await postTo({ type: "release" }, viewerId); },
+      release: async (attempt) => { if (viewerId && !recoveryOnly) await postTo({ type: "release", ...(attempt ? { attempt } : {}) }, viewerId); },
     },
   };
 }

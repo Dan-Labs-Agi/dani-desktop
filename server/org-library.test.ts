@@ -178,7 +178,7 @@ describe("the catalog", () => {
     await library.settled();
     const readBlob = vi.spyOn(library, "readBlob");
     expect(library.list().packages[0]).toMatchObject({ blob: "unsupported", installed: null });
-    expect(library.add(TEAM_ID, app.importDeps)).toMatchObject({ ok: false, status: 409, code: "newer_app_required", error: "Update DaniBot to add this package." });
+    expect(library.add(TEAM_ID, app.importDeps)).toMatchObject({ ok: false, status: 409, code: "newer_app_required" });
     expect(readBlob).not.toHaveBeenCalled();
     expect(app.store.bots).toHaveLength(0);
   });
@@ -211,6 +211,28 @@ describe("release files", () => {
 
     app.writeBlob(team.bytes);
     expect(library.list().packages[0]!.blob).toBe("ready");
+  });
+
+  it("imports historical v2 routines while retaining the catalog's original release hash and bytes", async () => {
+    const app = await installation();
+    const library = app.open();
+    const historical = release("full-team.v2.json", (document) => {
+      for (const routine of document.package.routines) routine.runOn = "maus";
+    });
+    app.writeBlob(historical.bytes);
+    expect(library.applyRelay(relay(catalog([entry(TEAM_ID, historical)])))).toEqual({ ok: true });
+    await library.settled();
+    const outcome = library.add(TEAM_ID, app.importDeps);
+    if (!outcome.ok || outcome.value.alreadyAdded) throw new Error(JSON.stringify(outcome));
+    expect(outcome.value.result.routines).toHaveLength(2);
+    expect(outcome.value.result.routines.every((routine) => routine.runOn === "dani" && !routine.enabled)).toBe(true);
+    const installId = outcome.value.result.installId;
+    if (!installId) throw new Error("The imported release has no installation identity");
+    expect(app.readState().installs[installId].sha256).toBe(historical.sha256);
+    expect(library.readBlob(historical.sha256)?.toString("utf8")).toBe(historical.bytes);
+    expect(app.posted.at(-1).packages).toEqual([
+      { packageId: TEAM_ID, release: "1.3.0", sha256: historical.sha256, state: "installed" },
+    ]);
   });
 
   it("refuses a file its catalog entry does not describe", async () => {

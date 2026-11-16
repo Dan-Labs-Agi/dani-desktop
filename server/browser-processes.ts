@@ -94,7 +94,8 @@ async function processEnvironment(pid: number): Promise<Map<string, string> | nu
     // ps -E appends the environment to the arguments, space separated.
     const listing = await execText(PS, ["-E", "-ww", "-o", "command=", "-p", String(pid)]);
     if (listing === null) return null;
-    entries = listing.trim().split(/\s+/);
+    // Values such as HOME may contain spaces; do not split them into words.
+    entries = [...listing.trim().matchAll(/(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*?)(?=\s[A-Za-z_][A-Za-z0-9_]*=|$)/g)].map((match) => `${match[1]}=${match[2]}`);
   }
   return new Map(entries.flatMap((entry) => {
     const match = /^([A-Z_][A-Z0-9_]*)=(.*)$/.exec(entry);
@@ -107,21 +108,42 @@ async function imageOf(pid: number): Promise<string | null> {
   return row === null ? null : /^"([^"]*)"/.exec(row.trim())?.[1]?.toLowerCase() ?? "";
 }
 
+/** Daemon scope must be checked before any signal, including SIGSTOP. Chrome's
+ * HOME may be rewritten by its launcher, so only its inherited harness marker
+ * can replace that daemon identity. The marker is an ownership tag, not a secret. */
+function daemonScopeMatches(env: Map<string, string>, expected: NodeJS.ProcessEnv): boolean {
+  return Boolean(expected.HOME || expected.USERPROFILE || expected.XDG_RUNTIME_DIR || expected.AGENT_BROWSER_SOCKET_DIR) &&
+    ["HOME", "USERPROFILE", "XDG_RUNTIME_DIR", "AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_NAMESPACE"]
+      .every((key) => (env.get(key) ?? "") === (expected[key] ?? ""));
+}
+
 /** agent-browser starts a daemon through the binary's resolved path with AGENT_BROWSER_DAEMON=1 and the session's name, so a
  * pid now running another program, command or session is not it. Read before the close: afterwards Chrome is re-parented. */
-export async function browserProcessTree(binaryPath: string, daemon: number, session: string): Promise<BrowserProcessTree | null> {
+export async function browserProcessTree(binaryPath: string, daemon: number, session: string, freeze = false, expected?: NodeJS.ProcessEnv): Promise<BrowserProcessTree | null> {
   if (!Number.isInteger(daemon) || daemon <= 1 || daemon === process.pid || !processAlive(daemon)) return null;
   const paths = new Set([binaryPath]);
   try { paths.add(realpathSync(binaryPath)); } catch {}
   if (process.platform === "win32") {
+    // Image names cannot prove a session or distinguish PID reuse on Windows.
+    if (freeze || expected) return null;
     // Windows shows no environments, trees or start times: the image tells the daemon from a later program, and taskkill /T walks the tree.
     const image = await imageOf(daemon);
     return image && [...paths].some((path) => basename(path).toLowerCase() === image) ? { daemon, members: new Map([[daemon, ""]]), groups: [], image } : null;
   }
+  if (freeze && !expected) return null;
+  const identity = freeze ? (await processTable())?.get(daemon)?.started : undefined;
+  if (freeze && identity === undefined) return null;
   const command = await processArgs(daemon);
   if (!command || ![...paths].some((path) => command === path || command.startsWith(`${path} `))) return null;
   const env = await processEnvironment(daemon);
   if (env?.get("AGENT_BROWSER_DAEMON") !== "1" || env.get("AGENT_BROWSER_SESSION") !== session) return null;
+  if (expected && (!daemonScopeMatches(env, expected) || (env.get("OMB_BROWSER_PROCESS_SCOPE") ?? "") !== (expected.OMB_BROWSER_PROCESS_SCOPE ?? ""))) return null;
+  // Freeze the verified daemon before enumerating descendants: it cannot launch another
+  // detached Chrome after the snapshot. Cancellation never resumes this daemon.
+  if (freeze) {
+    if ((await processTable())?.get(daemon)?.started !== identity) return null;
+    try { process.kill(daemon, "SIGSTOP"); } catch { return null; }
+  }
   const table = await processTable();
   if (!table?.has(daemon)) return null;
   const children = new Map<number, number[]>();
@@ -140,6 +162,49 @@ export async function browserProcessTree(binaryPath: string, daemon: number, ses
     if (profile) profiles.push(profile);
   }
   return { daemon, members, groups, profiles };
+}
+
+/** Finds a launch before its pid file was written, or Chrome re-parented after daemon
+ * exit. Daemons require the complete expected scope; orphan Chrome requires the
+ * inherited marker because launchers rewrite HOME. Unmarked ambiguous Chrome
+ * returns null without being signalled. Windows cannot prove env-only identity. */
+export async function browserSessionProcessTrees(binaryPath: string, session: string, expected: NodeJS.ProcessEnv): Promise<BrowserProcessTree[] | null> {
+  if (!expected.HOME && !expected.USERPROFILE && !expected.XDG_RUNTIME_DIR && !expected.AGENT_BROWSER_SOCKET_DIR) return null;
+  const table = await processTable(true);
+  if (!table) return null;
+  const paths = new Set([binaryPath]);
+  try { paths.add(realpathSync(binaryPath)); } catch {}
+  const trees: BrowserProcessTree[] = [];
+  for (const [pid, entry] of table) {
+    if (entry.zombie || pid === process.pid) continue;
+    const args = entry.args ?? "";
+    const debugging = /(?:^|\s)--remote-debugging-[^=\s]*(?:=|\s|$)/.test(args);
+    const daemon = !debugging && [...paths].some((path) => args === path || args.startsWith(`${path} `));
+    const temporary = temporaryProfile(args);
+    const chrome = !expected.AGENT_BROWSER_CDP && !expected.AGENT_BROWSER_AUTO_CONNECT && entry.pgid === pid && debugging;
+    if (!daemon && !chrome) continue;
+    const env = await processEnvironment(pid);
+    if (!env) return null;
+    if (env.get("AGENT_BROWSER_DAEMON") !== "1" || env.get("AGENT_BROWSER_SESSION") !== session) continue;
+    if (daemon) {
+      if (!daemonScopeMatches(env, expected)) continue;
+      if (!env.get("OMB_BROWSER_PROCESS_SCOPE") && expected.OMB_BROWSER_PROCESS_SCOPE) return null;
+      if ((env.get("OMB_BROWSER_PROCESS_SCOPE") ?? "") !== (expected.OMB_BROWSER_PROCESS_SCOPE ?? "")) continue;
+      const tree = await browserProcessTree(binaryPath, pid, session, true, expected);
+      if (!tree) return null;
+      trees.push(tree);
+    } else {
+      const marker = env.get("OMB_BROWSER_PROCESS_SCOPE");
+      if (!marker) return null;
+      if (!expected.OMB_BROWSER_PROCESS_SCOPE) return null;
+      if (marker !== expected.OMB_BROWSER_PROCESS_SCOPE) continue;
+      // Only an owned Chrome group is named, never an attached person's browser.
+      if ((await processTable())?.get(pid)?.started !== entry.started) return null;
+      try { process.kill(pid, "SIGSTOP"); } catch { return null; }
+      trees.push({ daemon: pid, members: new Map([[pid, entry.started]]), groups: [pid], profiles: temporary ? [temporary] : [] });
+    }
+  }
+  return trees;
 }
 
 /** Whether a Chrome's arguments name a profile folder inside `root`; a path may hold spaces where `ps` joins arguments with them. */
@@ -236,7 +301,7 @@ async function windowsDaemonRuns(tree: BrowserProcessTree): Promise<boolean | nu
 export async function browserProcessesRunning(tree: BrowserProcessTree): Promise<boolean> {
   if (process.platform === "win32") return await windowsDaemonRuns(tree) ?? processAlive(tree.daemon);
   const table = await processTable();
-  if (!table) return [...tree.members.keys()].some(processAlive);
+  if (!table) return true;
   return survivors(tree, table).pids.length > 0;
 }
 
@@ -260,7 +325,7 @@ export async function stopBrowserProcesses(tree: BrowserProcessTree, graceMs = 1
     const table = await processTable();
     return table ? stillRuns(tree, table, tree.daemon) : processAlive(tree.daemon);
   };
-  if (await rootRuns()) {
+  if (graceMs > 0 && await rootRuns()) {
     send(tree.daemon, "SIGTERM");
     send(tree.daemon, "SIGCONT");
     await within(graceMs, async () => !await rootRuns());
@@ -269,7 +334,8 @@ export async function stopBrowserProcesses(tree: BrowserProcessTree, graceMs = 1
   for (let pass = 0; pass < 2 && !gone; pass++) {
     const table = await processTable();
     if (!table) {
-      for (const pid of tree.members.keys()) send(pid, "SIGKILL");
+      // No identity/start-time proof means no signalling, and no claim of termination.
+      return false;
     } else {
       const left = survivors(tree, table);
       if (!left.pids.length) { gone = true; break; }

@@ -17,6 +17,9 @@ const evidenceSchema = z.object({
   outward: z.array(z.string()).optional(),
 });
 
+const outcomeSchema = z.enum(["done", "needs_input", "cap_continued", "stalled", "interrupted", "budget", "provider_error", "denied",
+  "expired", "stopped", "refused", "duplicate"]);
+
 const assignmentSchema = z.object({
   id: z.string().min(1),
   rootId: z.string().min(1),
@@ -33,6 +36,7 @@ const assignmentSchema = z.object({
     kind: z.enum(["person", "bot_turn", "routine_run", "external_runtime"]),
     botId: z.string().optional(),
     threadId: z.string().optional(),
+    messageId: z.string().min(1).optional(),
     runId: z.string().optional(),
     chief: z.boolean().optional(),
   }),
@@ -50,8 +54,7 @@ const assignmentSchema = z.object({
   doneWhen: z.string().optional(),
   goalRunId: z.string().optional(),
   status: z.enum(["queued", "running", "needs_input", "waiting", "resume", "completed", "failed", "cancelled"]),
-  outcome: z.enum(["done", "needs_input", "cap_continued", "stalled", "interrupted", "budget", "provider_error", "denied",
-    "expired", "stopped", "refused", "duplicate"]).optional(),
+  outcome: outcomeSchema.optional(),
   outcomeDetail: z.string().optional(),
   level: z.enum(APPROVAL_MODES),
   levelSource: z.enum(["own", "chief", "engine_cap"]),
@@ -66,6 +69,15 @@ const assignmentSchema = z.object({
   evidence: evidenceSchema.optional(),
   reportedAt: z.number().optional(),
   rework: z.boolean(),
+  recoveryOf: z.string().min(1).optional(),
+  supervisionOf: z.string().min(1).optional(),
+  supervisionReceipt: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("failed"), outcome: outcomeSchema, text: z.string(), evidence: evidenceSchema.optional() }),
+    z.object({ kind: z.literal("unverified"), outcome: z.never().optional(), text: z.string(), evidence: evidenceSchema.optional() }),
+  ]).optional(),
+  needsVerification: z.boolean().optional(),
+  verificationFailure: z.enum(["stalled", "provider_error"]).optional(),
+  acceptedAnswerIds: z.array(z.string().min(1)).optional(),
   question: z.string().optional(),
   decide: z.object({ default: z.string().optional() }).optional(),
   answer: z.string().optional(),

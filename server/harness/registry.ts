@@ -117,15 +117,18 @@ export class ProviderRegistry {
   private readonly npmPresent: () => boolean;
   private readonly status: ReturnType<typeof engineStatusFile> | null;
   private readonly installStandalone: InstallStandalone;
+  private readonly executionGuard: ((instance: ProviderInstance) => ProviderInstance) | undefined;
 
   constructor(
     drivers: readonly AnyProviderDriver[],
-    options: { enginesBaseDir?: string; npmAvailable?: () => boolean; statusFile?: string; installStandalone?: InstallStandalone } = {},
+    options: { enginesBaseDir?: string; npmAvailable?: () => boolean; statusFile?: string; installStandalone?: InstallStandalone;
+      executionGuard?: (instance: ProviderInstance) => ProviderInstance } = {},
   ) {
     this.enginesBaseDir = options.enginesBaseDir;
     this.npmPresent = options.npmAvailable ?? npmAvailable;
     this.status = options.statusFile ? engineStatusFile(options.statusFile) : null;
     this.installStandalone = options.installStandalone ?? installStandaloneEngine;
+    this.executionGuard = options.executionGuard;
     this.driversByKind = new Map(drivers.map((d) => [d.driverKind, d]));
   }
 
@@ -181,7 +184,8 @@ export class ProviderRegistry {
         config,
       })))));
       this.shareSnapshot(live);
-      return { instanceId, live: decorate ? decorate(live) : live };
+      const decorated = decorate ? decorate(live) : live;
+      return { instanceId, live: this.executionGuard ? this.executionGuard(decorated) : decorated };
     } catch (e) {
       return {
         instanceId,

@@ -341,14 +341,16 @@ export class BrowserSteps {
     try { return { png: readFileSync(image.path).toString("base64"), format: "jpeg" }; } catch { return null; }
   }
 
-  /** Each read ≤ 1 s, all ≤ budgetMs; a timeout trips the breaker. agent-browser relaunches Chrome for any command outside its launch-free list. */
-  private reader(target: RelayTarget, port: number, budgetMs = PASS_MS): RelayRead {
+  /** Each read ≤ 1 s, all ≤ budgetMs; a timeout trips the breaker. agent-browser relaunches Chrome for any command outside its launch-free list.
+   * Call-owned reads discard late results and never dispatch after ownership ends; non-call sign-in reads retain their own lifetime. */
+  private reader(target: RelayTarget, port: number, budgetMs = PASS_MS, call?: StepCall): RelayRead {
     const deadline = this.now() + budgetMs;
     return async (command) => {
       const left = Math.min(PASS_MS, deadline - this.now());
-      if (left <= 0 || this.ports.isTripped(target.session)) return null;
+      if (left <= 0 || this.ports.isTripped(target.session) || (call && (call.stopped() || !call.alive()))) return null;
       try {
         const answer = await relay(port, command, { timeoutMs: left });
+        if (call && (call.stopped() || !call.alive())) return null;
         if (answer.launched) this.ports.noteStarted(target.session);
         return answer;
       } catch (error) {
@@ -369,22 +371,28 @@ export class BrowserSteps {
       aliveBefore: null, noDaemon: false, wasRunning: steps.running, late: null, geometry: null, box: null, target: null,
     };
     try {
-      if (call.stopped()) return state;
+      if (call.stopped() || !call.alive()) return state;
       const target = this.target(call);
-      const probe = await this.ports.probe(target);
+      const probe = await this.ports.probe(target, () => !call.stopped() && call.alive());
+      if (call.stopped() || !call.alive()) return state;
       state.aliveBefore = probe ? probe.connected : (this.ports.isTripped(call.session) ? null : false);
       state.noDaemon = !probe && state.aliveBefore === false;
       if (!probe?.connected || !state.action) return state;
-      const read = this.reader(target, probe.port);
-      state.late = await this.health.read(call.session, read, call.ctx?.threadId ?? null);
+      const read = this.reader(target, probe.port, PASS_MS, call);
+      const late = await this.health.read(call.session, read, call.ctx?.threadId ?? null);
+      if (call.stopped() || !call.alive()) return state;
+      state.late = late;
       await this.health.clear(call.session, read);
-      if (!state.recorded) return state;
-      state.geometry = parseGeometry((await read({ action: "evaluate", script: GEOMETRY_SCRIPT }))?.data?.result);
+      if (call.stopped() || !call.alive() || !state.recorded) return state;
+      const geometry = await read({ action: "evaluate", script: GEOMETRY_SCRIPT });
+      if (call.stopped() || !call.alive()) return state;
+      state.geometry = parseGeometry(geometry?.data?.result);
       const selector = typeof call.args.selector === "string" ? call.args.selector : "";
       if (selector) {
         const ref = steps.refs.get(selector);
         state.target = { selector: sanitizePageText(selector, 200), ...(ref ? { role: ref.role, name: sanitizePageText(ref.name, 120) } : {}), inFrame: ref?.inFrame ?? false };
         const box = (await read({ action: "boundingbox", selector }))?.data;
+        if (call.stopped() || !call.alive()) return state;
         const x = finite(box?.x), y = finite(box?.y), w = finite(box?.width), h = finite(box?.height);
         if (x !== null && y !== null && w !== null && h !== null) state.box = { x, y, w, h };
       } else if (call.tool === "agent_browser_press" && state.geometry?.focus && !state.geometry.focus.frame) {
@@ -417,13 +425,15 @@ export class BrowserSteps {
       }
       if (call.stopped() || !call.alive()) { await halted(); return out; }
       const target = this.target(call);
-      const probe = await this.ports.probe(target);
+      const probe = await this.ports.probe(target, () => !call.stopped() && call.alive());
+      if (call.stopped() || !call.alive()) { await halted(); return out; }
       const aliveAfter = probe ? probe.connected : null;
       const engineStarted = record(engineData(result)?.lifecycle)?.launched === true;
       const startedElsewhere = this.ports.takeStarted(call.session);
       if ((aliveAfter === true && state.aliveBefore === false) || engineStarted || startedElsewhere) {
         await this.started(call, steps, state.wasRunning || startedElsewhere, out);
       }
+      if (call.stopped() || !call.alive()) { await halted(); return out; }
       if (aliveAfter !== null) steps.running = aliveAfter;
       if (!probe?.connected) {
         if (state.recorded) await this.write(call, state, { ok, imageSkipped: aliveAfter === false ? "no-browser" : "page-not-responding", engineMs });
@@ -433,24 +443,29 @@ export class BrowserSteps {
       let pending: FailedRequest[] = [];
       let settleMs = 0;
       if (recording) {
-        const settled = await this.settle(target, probe.port, state.actionAt, () => call.stopped());
+        const settled = await this.settle(target, probe.port, state.actionAt, call);
         pending = settled.pending;
         settleMs = settled.ms;
-        if (!call.stopped()) await this.reader(target, probe.port, FRAME_WAIT_MS * 2)({ action: "evaluate", script: FRAME_SCRIPT });
-        if (call.stopped()) { await halted({ settleMs }); return out; }
+        if (call.stopped() || !call.alive()) { await halted({ settleMs }); return out; }
+        await this.reader(target, probe.port, FRAME_WAIT_MS * 2, call)({ action: "evaluate", script: FRAME_SCRIPT });
+        if (call.stopped() || !call.alive()) { await halted({ settleMs }); return out; }
       }
-      const read = this.reader(target, probe.port);
+      const read = this.reader(target, probe.port, PASS_MS, call);
       let geometry: Geometry | null = null;
       let failure: string | undefined;
       if (state.recorded) {
         const answer = await read({ action: "evaluate", script: GEOMETRY_SCRIPT });
+        if (call.stopped() || !call.alive()) { await halted({ settleMs }); return out; }
         geometry = parseGeometry(answer?.data?.result);
         failure = answer?.error;
       }
       const page = geometry ?? parseGeometry((await read({ action: "evaluate", script: PAGE_SCRIPT }))?.data?.result);
+      if (call.stopped() || !call.alive()) { await halted({ settleMs }); return out; }
       this.health.setPage(call.session, page?.url ?? null, page?.loadedAt ?? null);
       const delta = await this.health.read(call.session, read, call.ctx?.threadId ?? null, state.noDaemon);
+      if (call.stopped() || !call.alive()) { await halted({ settleMs }); return out; }
       if (this.ports.takeStarted(call.session)) await this.started(call, steps, true, out);
+      if (call.stopped() || !call.alive()) { await halted({ settleMs }); return out; }
       const pageHost = this.health.pageHost(call.session);
       const lines = [
         state.late ? healthLine(this.health.visible(call.session, state.late), [], "late", SETTLE_CAP_MS / 1000, pageHost) : null,
@@ -467,22 +482,23 @@ export class BrowserSteps {
   }
 
   private async started(call: StepCall, steps: SessionSteps, news: boolean, out: { parts: Array<{ type: "text"; text: string }>; launched: boolean }): Promise<void> {
-    if (out.launched) return;
+    if (out.launched || call.stopped() || !call.alive()) return;
     out.launched = true;
     steps.refs.clear();
     await call.resize();
     if (news) out.parts.push({ type: "text", text: RELAUNCHED });
   }
 
-  private async settle(target: RelayTarget, port: number, since: number, stopped: () => boolean): Promise<{ pending: FailedRequest[]; ms: number }> {
+  private async settle(target: RelayTarget, port: number, since: number, call: StepCall): Promise<{ pending: FailedRequest[]; ms: number }> {
     const started = this.now();
-    const read = this.reader(target, port, SETTLE_CAP_MS + PASS_MS);
+    const read = this.reader(target, port, SETTLE_CAP_MS + PASS_MS, call);
     const site = this.health.pageSite(target.session);
     let pending: FailedRequest[] = [];
-    for (let wait = 50; !stopped(); wait = 100) {
+    for (let wait = 50; !call.stopped() && call.alive(); wait = 100) {
       await this.sleep(wait);
-      if (stopped()) break;
+      if (call.stopped() || !call.alive()) break;
       const answer = await read({ action: "requests", type: "document,fetch,xhr" });
+      if (call.stopped() || !call.alive()) break;
       const list = Array.isArray(answer?.data?.requests) ? answer.data.requests : null;
       if (!list) break;
       pending = list.flatMap((raw) => {
@@ -522,8 +538,8 @@ export class BrowserSteps {
       if (!geometry || this.ports.isTripped(call.session)) imageSkipped = /dialog/iu.test(facts.failure ?? "") ? "dialog-open" : "page-not-responding";
       else if (geometry.unmasked > 0 || (steps.secretPage !== null && steps.secretPage === here)) imageSkipped = "secret-on-screen";
       else if (steps.codeUntil > this.now()) imageSkipped = "code-recently-typed";
-      else if (call.stopped()) imageSkipped = "person-took-control";
       else if (!call.alive()) imageSkipped = "turn-ended";
+      else if (call.stopped()) imageSkipped = "person-took-control";
     }
     let imagePath: string | null = null;
     let captureMs: number | undefined;
@@ -534,11 +550,14 @@ export class BrowserSteps {
         const captureStarted = this.now();
         let taken = false;
         try {
-          taken = (await relay(facts.captureFrom, { action: "screenshot", path: slot.path, format: "jpeg", quality: JPEG_QUALITY }, { timeoutMs: SCREENSHOT_MS, maxBytes: 65_536 })).success;
+          if (!call.alive()) imageSkipped = "turn-ended";
+          else if (call.stopped()) imageSkipped = "person-took-control";
+          else taken = (await relay(facts.captureFrom, { action: "screenshot", path: slot.path, format: "jpeg", quality: JPEG_QUALITY }, { timeoutMs: SCREENSHOT_MS, maxBytes: 65_536 })).success;
         } catch (error) { if (error instanceof RelayTimeout) this.ports.trip(call.session); }
         captureMs = this.now() - captureStarted;
-        // A person who took the browser while the picture was taken keeps it out.
-        if (call.stopped()) { imageSkipped = "person-took-control"; taken = false; }
+        // Ownership must still hold when the picture arrives, not only when capture was dispatched.
+        if (!call.alive()) { imageSkipped = "turn-ended"; taken = false; }
+        else if (call.stopped()) { imageSkipped = "person-took-control"; taken = false; }
         if (taken) imagePath = slot.path;
         else {
           try { unlinkSync(slot.path); } catch {}

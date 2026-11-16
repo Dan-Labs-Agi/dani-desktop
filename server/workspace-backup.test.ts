@@ -10,11 +10,12 @@ import { browserProfilesRoot } from "./browser-engine.ts";
 import { openRuntimeStore } from "./runtime/store.ts";
 import type { Assignment } from "./runtime/types.ts";
 import { SessionRegistry } from "./sessions.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   applyPendingWorkspaceRestore, commitPendingWorkspaceRestore, createWorkspaceBackup,
   readLastWorkspaceRestore, readPendingWorkspaceRestoreMetadata, readStagedWorkspaceBackup,
   omittedFromWorkspaceBackup, removeWorkspaceBackupJob, stageWorkspaceBackup,
+  type WorkspaceBackupPrivateMetadata,
 } from "./workspace-backup.ts";
 
 const PASSWORD = "correct horse battery staple";
@@ -510,19 +511,24 @@ describe("encrypted full workspace backups", () => {
     expect(existsSync(join(target, "hook-tokens"))).toBe(false);
   });
 
-  it("rejects authenticated credential metadata, saved auth paths, and connection-bearing config", async () => {
-    const source = directory();
-    const exported = await createWorkspaceBackup(source, { password: PASSWORD });
-    const staged = await stageWorkspaceBackup(source, exported.path, { password: PASSWORD });
-    const base = readJson(join(source, ".backups", staged.id, "staged", "manifest.json"));
-    for (const variant of [
-      { credentials: { xaiApiKey: "secret" } },
-      { summary: { ...base.summary, includesCredentials: false } },
-    ]) {
-      const path = encryptedPayload(source, Buffer.concat([tarEntry("manifest.json", "File", JSON.stringify({ ...base, ...variant })), tarEntry("data", "Directory"), Buffer.alloc(1024)]));
+  describe("authenticated credential archives", () => {
+    let base: WorkspaceBackupPrivateMetadata;
+    beforeAll(async () => {
+      const source = directory();
+      const exported = await createWorkspaceBackup(source, { password: PASSWORD });
+      const staged = await stageWorkspaceBackup(source, exported.path, { password: PASSWORD });
+      base = readJson(join(source, ".backups", staged.id, "staged", "manifest.json"));
+    });
+
+    it.each(["credentials", "includesCredentials"] as const)("rejects %s metadata", async (field) => {
+      const variant = field === "credentials"
+        ? { credentials: { xaiApiKey: "secret" } }
+        : { summary: { ...base.summary, includesCredentials: false } };
+      const path = encryptedPayload(directory(), Buffer.concat([tarEntry("manifest.json", "File", JSON.stringify({ ...base, ...variant })), tarEntry("data", "Directory"), Buffer.alloc(1024)]));
       await expect(stageWorkspaceBackup(directory(), path, { password: PASSWORD })).rejects.toThrow(/metadata/);
-    }
-    for (const [name, content] of [
+    });
+
+    it.each([
       ["team-computers.json", '{"computers":[{"id":"foreign-computer","section":"Design"}]}'],
       ["workspace-credentials.json", '{"xaiApiKey":"secret"}'],
       ["external-runtimes.json", '{"bot-id":"external-runtime-secret"}'],
@@ -541,13 +547,13 @@ describe("encrypted full workspace backups", () => {
       ["webhooks.json", '{"webhooks":[{"secretHash":"secret"}]}'],
       ["webhooks.json", '{"webhooks":[{"sealedSecret":"secret"}]}'],
       ["webhooks.json", '{"webhooks":[],"deleted":[{"at":1,"webhook":{"sealedSecret":"secret"}}]}'],
-    ]) {
+    ])("rejects saved auth paths and connection-bearing config: %s (%#)", async (name, content) => {
       const entry = { path: name, type: "file", size: Buffer.byteLength(content), mode: 0o600, sha256: createHash("sha256").update(content).digest("hex") };
       const parents = name.split("/").slice(0, -1).map((_part, index) => name.split("/").slice(0, index + 1).join("/"));
       const manifest = { ...base, entries: [...parents.map((path) => ({ path, type: "directory", size: 0, mode: 0o700 })), entry], summary: { ...base.summary, directories: parents.length, files: 1, bytes: entry.size } };
-      const path = encryptedPayload(source, Buffer.concat([tarEntry("manifest.json", "File", JSON.stringify(manifest)), tarEntry("data", "Directory"), ...parents.map((parent) => tarEntry(`data/${parent}`, "Directory")), tarEntry(`data/${name}`, "File", content), Buffer.alloc(1024)]));
+      const path = encryptedPayload(directory(), Buffer.concat([tarEntry("manifest.json", "File", JSON.stringify(manifest)), tarEntry("data", "Directory"), ...parents.map((parent) => tarEntry(`data/${parent}`, "Directory")), tarEntry(`data/${name}`, "File", content), Buffer.alloc(1024)]));
       await expect(stageWorkspaceBackup(directory(), path, { password: PASSWORD })).rejects.toThrow(/Unsafe|connection settings|webhook credentials/);
-    }
+    });
   });
 
   it("retains differently cased destination auth roots and refuses them in recovery journals", async () => {

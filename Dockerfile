@@ -71,7 +71,7 @@ RUN apt-get update \
 # The bots' browser (docs/plans/browser-engine.md): the pinned agent-browser
 # and a Chrome for Testing with its libraries, so a server bot can browse.
 # Pin here and in server/browser-engine-release.ts together.
-ARG AGENT_BROWSER_VERSION=0.37.0
+ARG AGENT_BROWSER_VERSION=0.41.2
 # `agent-browser install` fetches Chrome for Testing's last-known-good Stable;
 # the publish job passes that version so a Chrome release rebuilds this layer.
 ARG CHROME_CACHE_TAG=""

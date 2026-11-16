@@ -10,6 +10,7 @@ import { ToolResults, TOOL_RESULT_MAX_CHARS } from "./tool-results.ts";
 import { join } from "node:path";
 import { authorizeExternalRuntime, externalRuntimeIsActive, type ExternalRuntimeGrant } from "./external-runtime.ts";
 import { z } from "zod";
+import { isBrowserObservation } from "../shared/browser-tool-policy.ts";
 import { DANI_FREE_FLEET } from "./instance-fleets.ts";
 import { selectReplay, replayToolCalls, DEFAULT_REBUILD_BYTES, MAX_SUMMARY_BYTES } from "./context-rebuild.ts";
 import { draftSummary, foldPoint } from "./compaction-summary.ts";
@@ -185,7 +186,7 @@ import {
 import { serveStatic } from "./static-files.ts";
 import { startUpkeep } from "./host/start-upkeep.ts";
 import { ComputerControl } from "./computer-control.ts";
-import { resetPathCache } from "./env-path.ts";
+import { resetPathCache, sealedFixture } from "./env-path.ts";
 import { registerEnginesBinDir } from "./engine-install.ts";
 import { appendUsage, flushUsageLedger, queuedTurnTrigger, usageTriggerFor, type UsageRow, type UsageTrigger } from "./usage-ledger.ts"; import { createUsageAttribution } from "./usage-attribution.ts";
 import { createTraceRecorder } from "./usage-trace/recorder.ts";
@@ -223,11 +224,13 @@ import { attachCustomMcp } from "./mcp-result-budget.ts";
 import { MCP_OAUTH_CALLBACK_PATH, McpOAuthManager } from "./mcp-oauth.ts";
 import {
   GROUP_GOAL_WAIT_MAX_MS,
+  BROWSER_HAND_BACK_INSTRUCTION,
   groupGoalCompletionTurnId,
   parseGroupGoalDecision,
   runGoalRun,
   selectGroupGoalCoordinator,
   type GoalStepOutcome,
+  type GoalStepResult,
 } from "./group-goal-run.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import { createGoalTurns } from "./host/goal-turns.ts";
@@ -242,6 +245,7 @@ import { parseSince, parseUntil, recentWork, recentWorkPrompt, turnOutcomeLine }
 import { chiefEscalationsEnabled, NEEDS_INPUT_GATE, peerApprovalGate, RAISED_GATE } from "./escalations.ts";
 import { createChiefNotices } from "./host/chief-notices.ts";
 import { needsInputQuestion } from "./runtime-coordinator.ts";
+import { recoveryLevel } from "./runtime/level.ts";
 import { createHandoffTicks } from "./handoff-ticks.ts"; import { IDLE_HTTP_SERVER } from "./due-timer.ts";
 
 const SESSION_READ_MAX_CHARS = 8_000;
@@ -290,6 +294,9 @@ import { createCreditMoves } from "./cloud-credit-moves.ts"; import { createRout
 import { TRIAL_CREDIT_OWN_AI, TRIAL_KEY_HELD } from "./trial-credit.ts"; import { createHeldKeys } from "./cloud-held-keys.ts";
 import type { ProviderInstance } from "./contracts.ts";
 import { readyToRun, selectDefaultModelSelection, withInstanceConfig, withNewBotEffort, type SelectableInstance } from "./default-model-selection.ts"; import { configIdentity, createTestedAi } from "./tested-ai.ts"; import { instanceIcon } from "./provider-icon.ts";
+import { HERMES_HARNESS_DRIVER, HERMES_INSTANCE_ID, hermesModelSelection, isHermesHarness } from "../shared/hermes-harness.ts";
+import { HERMES_HARNESS_REQUIRED, withHermesHarness } from "./hermes-harness.ts";
+import { hermesBrowserOnlyScope } from "./drivers/acp/hermes.ts";
 import { threadModelFallback, type ThreadEngine } from "./thread-model.ts";
 import { computerEngineMoveText, removedComputerInstanceIds, writeComputerEngineMoveLines } from "./computer-engine-removal.ts";
 import { cancelPeerApprovalsFor, cancelPeerApprovalsForThread, dismissStalePeerCards, peerApprovalFailure, requestPeerApproval, resolvePeerComms, type ApprovalBus } from "./peer-approval.ts";
@@ -300,7 +307,7 @@ import { createWebhookRoomPost } from "./host/webhook-room-deps.ts";
 import { createRoomJobs, parallelRoomJobsEnabled, type RoomRoundLine } from "./host/room-jobs.ts";
 import { createDelegatedLevel } from "./host/delegated-level.ts";
 import { createLiveApprovalMode } from "./host/live-approval.ts";
-import { CONSENT_RULE, escapeNotes, OUTSIDE, peerLineText, peerProvenanceNote, reportNote, requestWorkOrigin, type WorkOrigin } from "./peer-provenance.ts";
+import { CONSENT_RULE, escapeNotes, OUTSIDE, peerLineText, peerProvenanceNote, quoteInNote, reportNote, requestWorkOrigin, type WorkOrigin } from "./peer-provenance.ts";
 import { decideRoomPost, emptyRoomPostBudget, type RoomPostAttempt, type RoomPostBudget } from "./room-post-budget.ts";
 import { pageMessage, pageSize, slimMessage } from "./host/message-pages.ts";
 import { createTeammatePrompts } from "./host/teammate-prompts.ts";
@@ -327,7 +334,7 @@ import { recordLiveCall, spokenLineFields, titleLiveCall } from "./live-call-rec
 import { narrateTool, toUtterances } from "./tts/speech-text.ts";
 import { createTtsRoutes } from "./routes/tts.ts";
 import { turnStartLogLine } from "./turn-log.ts";
-import { TurnStops, outwardActions, stoppedTurnOutcome, turnEvidence } from "./turn-outcome.ts";
+import { TurnStops, blockingTurnStop, outwardActions, stoppedTurnOutcome, turnEvidence } from "./turn-outcome.ts";
 import { buildRecoveryText, buildTurnContext, engineIsFresh, replaysNatively } from "./turn-context.ts";
 import { Handoffs, handedStateUsable, isContextMessage, recordHanded, renderUnseen, sessionStart, unseenMessages, withUnseenMessages, type ContextMessage } from "./delta-context.ts";
 import { extractReplayImages, extractTurnImages } from "./turn-images.ts";
@@ -436,6 +443,7 @@ import { ROUTINE_RESTARTED, RoutineManager, type RoutineRun, type RoutineRunOn, 
 import { CalendarCallManager, type CalendarCall } from "./calendar-calls.ts";
 import { BROWSER_UPLOAD_TOOL, browserRuntimeEnv } from "./browser-runtime.ts";
 import { BrowserUploadRefusal, uploadableFiles } from "./browser-upload.ts";
+import { BrowserCalls } from "./browser-calls.ts";
 import { listSignedInSites, signOutOfSites } from "./browser-sites.ts";
 import { HeldSecrets, LoginStore } from "./login-store.ts";
 import { OnePasswordLogins, onePasswordUnavailable, sdkOnePasswordClient, type OnePasswordSdk } from "./onepassword.ts";
@@ -775,12 +783,41 @@ let companionMutationToken: string | undefined = DESKTOP_MANAGED ? "" : undefine
 const FALLBACK_PUBLIC_URL = process.env.OMB_PUBLIC_URL?.trim().replace(/\/+$/, "") || null;
 const cfg = loadConfig();
 const hostedModels = hostedModelPolicy(DATA_DIR);
-const providerConfigs = () => hostedModels ? hostedModels.configs() : instanceConfigs(cfg);
+const fixtureHarness = sealedFixture() && process.env.OMB_TEST_HERMES_HARNESS !== "1";
+const providerConfigs = () => {
+  const configs = hostedModels ? hostedModels.configs() : instanceConfigs(cfg);
+  if (!fixtureHarness && !Object.values(configs).some((entry) => entry.driver === HERMES_HARNESS_DRIVER)) {
+    let id = HERMES_INSTANCE_ID;
+    for (let suffix = 2; Object.hasOwn(configs, id); suffix++) id = `${HERMES_INSTANCE_ID}-${suffix}`;
+    configs[id] = { driver: HERMES_HARNESS_DRIVER };
+  }
+  return fixtureHarness ? configs : Object.fromEntries(
+    Object.entries(configs).filter(([, entry]) => entry.driver === HERMES_HARNESS_DRIVER));
+};
+const normalizeBotModel = (selection: ModelSelection | undefined): ModelSelection =>
+  fixtureHarness ? selection ?? { instanceId: "", model: "" } : hermesModelSelection(selection, providerConfigs());
 const decorateHostedProvider = hostedModels ? (instance: ProviderInstance) => hostedModels.decorate(instance) : undefined;
 if (hostedModels) {
   const selection = hostedModels.select(cfg.defaultModelSelection);
   if (selection.instanceId && JSON.stringify(selection) !== JSON.stringify(cfg.defaultModelSelection)) saveConfig({ defaultModelSelection: selection });
   cfg.defaultModelSelection = selection;
+}
+if (!fixtureHarness) {
+  const patch: Partial<AppConfig> = {};
+  if (cfg.defaultModelSelection) patch.defaultModelSelection = normalizeBotModel(cfg.defaultModelSelection);
+  if (cfg.newBotDefaults?.profile.modelSelection) patch.newBotDefaults = {
+    ...cfg.newBotDefaults, profile: { ...cfg.newBotDefaults.profile, modelSelection: normalizeBotModel(cfg.newBotDefaults.profile.modelSelection) },
+  };
+  if (cfg.automaticRecovery?.backup) patch.automaticRecovery = {
+    ...cfg.automaticRecovery, backup: normalizeBotModel(cfg.automaticRecovery.backup),
+  };
+  if (cfg.helper?.instanceId) patch.helper = { ...cfg.helper,
+    instanceId: normalizeBotModel({ instanceId: cfg.helper.instanceId, model: cfg.helper.model ?? "" }).instanceId,
+  };
+  if (Object.entries(patch).some(([key, value]) => JSON.stringify(value) !== JSON.stringify(cfg[key as keyof AppConfig]))) {
+    saveConfig(patch);
+    Object.assign(cfg, patch);
+  }
 }
 bindThreadLogCapProvider(() => threadEventLogMaxBytes(cfg));
 bindDecisionRetention(() => decisionRetentionDays(cfg.decisions?.retentionDays));
@@ -804,7 +841,10 @@ function customDomainStatus() {
     serverIpv4: DESKTOP_MANAGED ? null : customDomainIpv4(),
   };
 }
-const registry = new ProviderRegistry(BUILT_IN_DRIVERS, { statusFile: join(DATA_DIR, "providers", "engine-status.json") });
+const registry = new ProviderRegistry(BUILT_IN_DRIVERS, {
+  statusFile: join(DATA_DIR, "providers", "engine-status.json"),
+  executionGuard: fixtureHarness ? undefined : withHermesHarness,
+});
 const supportsApprovalMode = createApprovalModeSupport(registry);
 registerEnginesBinDir();
 
@@ -1550,6 +1590,7 @@ const savedSteps = createSavedSteps({ enabled: () => savedStepsEnabled(cfg), bot
 const quickFallback = new QuickModelFallback({ file: join(DATA_DIR, "refused-quick-models.json"), publish: (event) => { if (!savedSteps.dispatch.take(event)) bus.publish(event); }, stopped: (threadId) => directRequestOwners.get(threadId)?.stopped === true });
 const bus = new EventBus(undefined, (event) => quickFallback.take(event) || savedSteps.dispatch.take(event));
 bus.attach(registry.instances()); bus.subscribe((event) => savedSteps.observe(event));
+const browserCalls = new BrowserCalls({ publish: (event) => bus.publish(event) });
 let companyRuntimeReady!: () => void;
 const companyRuntimeStarted = new Promise<void>(resolve => { companyRuntimeReady = resolve; });
 const managedPolicy = new ManagedDesktopPolicy({ onChange: () => {
@@ -1766,6 +1807,7 @@ function endForeignTurns(threadId: string, generation?: string): void {
 }
 
 function revokeInternalCapabilityGeneration(threadId: string, generation: string): void {
+  browserCalls.cancelTurn(threadId, generation);
   if (standInRoots.delete(generation)) coordinator.endTurn(generation, { ok: true, text: "" });
   endForeignTurns(threadId, generation);
   if (guestDrivenTurns.get(threadId) === generation) guestDrivenTurns.delete(threadId);
@@ -1797,6 +1839,7 @@ function revokeInternalCapabilitiesForThread(threadId: string): void {
 }
 
 function revokeAllInternalCapabilities(): void {
+  browserCalls.cancelAll();
   computerSelectionTurns.clear();
   internalCapabilities.clear();
   sessionCredentials.clear();
@@ -1960,13 +2003,26 @@ const directRequestOwners = new Map<string, {
   generation: string; messageId?: string; generations: Set<string>; turnId: string | null; stopped?: boolean;
   automation?: RoutineRunTrigger;
   origin?: WorkOrigin; personLine?: true; kind?: TurnKind;
+  acceptedAnswers?: Set<string>;
 }>();
 type DirectTurnOutcome = HostTurnResult;
 const directFollowupTurns = new ProviderTurnGenerationRegistry<DirectTurnOutcome>();
 const directFollowupSettlers = new Map<string, { threadId: string; settle?: () => void }>();
 const directCoordinationSettlers = new Map<string, { nodeId: string; settle: (outcome: DirectTurnOutcome) => void }>();
 const computerParks = new Map<string, string>();
-const parkedSeats = new Map<string, string>();
+const parkedResources = new Map<string, { kind: "computer"; key: string } | { kind: "browser"; key: string; session: string }>();
+const completionPhases = new Map<string, {
+  turnId: string; rootId: string; personVisible: boolean;
+  finish?: (verified: boolean, personVisible: boolean) => void;
+}>();
+const BrowserToolDispositionSchema = z.object({
+  isError: z.boolean().optional(),
+  structuredContent: z.object({ response: z.object({ code: z.string().optional() }).optional() }).optional(),
+});
+const browserWaits = new Set<{
+  session: string; resource: string; deadline: number;
+  cancelled: () => boolean; resolve: (ready: boolean) => void;
+}>();
 const COMPUTER_FREE_NOTE = "Dani Bot computer update: the computer this conversation waited for is free again. Continue the task that parked waiting for it.";
 const STEP_CAP_NOTE = "Your previous turn stopped at the step limit; continue from where it stopped.";
 const teamSetupDecisionText = (request: TeamSetupRequest): string =>
@@ -1982,6 +2038,154 @@ function turnRows(node: HandoffView): Message[] {
   if (!node.groupId) return rows;
   const dm = store.group(node.groupId)?.dm === true;
   return rows.filter((message) => message.from ? message.from.botId === node.botId : dm);
+}
+
+function flushGoalCompletions(): void {
+  for (const [threadId, phase] of completionPhases) {
+    if (!phase.finish) continue;
+    const root = coordinator.node(phase.rootId);
+    if (root && !ENDED.has(root.status)) continue;
+    completionPhases.delete(threadId);
+    phase.finish(root?.status === "completed", phase.personVisible);
+  }
+}
+
+function afterGoalCompletion(threadId: string, turnId: string | undefined, finish: (verified: boolean, personVisible: boolean) => void): void {
+  const phase = completionPhases.get(threadId);
+  if (!phase || phase.turnId !== turnId) { finish(true, false); return; }
+  phase.finish = finish;
+  flushGoalCompletions();
+}
+
+function browserAdmissionAvailable(session: string, resource: string): boolean {
+  return browserRuntime.agentAvailable(session) && turnResources.free(resource);
+}
+
+function waitForBrowser(session: string, cancelled: () => boolean): Promise<boolean> {
+  if (companyShutdown || cancelled()) return Promise.resolve(false);
+  const resource = `browser:${session}`;
+  if (browserAdmissionAvailable(session, resource)) return Promise.resolve(true);
+  return new Promise(resolve => {
+    browserWaits.add({ session, resource, cancelled, resolve, deadline: Date.now() + GROUP_GOAL_WAIT_MAX_MS });
+    handoffTicks.kick();
+  });
+}
+
+function settleBrowserWaits(stopping = false): void {
+  const now = Date.now();
+  for (const waiting of browserWaits) {
+    const cancelled = stopping || waiting.cancelled();
+    const ready = !cancelled && browserAdmissionAvailable(waiting.session, waiting.resource);
+    if (!cancelled && !ready && now < waiting.deadline) continue;
+    browserWaits.delete(waiting);
+    waiting.resolve(ready);
+  }
+}
+
+
+function restoreDirectRequestOwner(root: HandoffView): void {
+  if (directRequestOwners.has(root.threadId) || root.parentId || root.groupId || root.goalRunId ||
+      root.origin?.kind !== "user" || ENDED.has(root.status) || hasQueuedSteeredMessages(root.botId, root.threadId)) return;
+  const stored = coordinator.status(root.id)?.assignment;
+  if (!stored || stored.origin.kind !== "person" || stored.origin.source !== "chat" ||
+      stored.requester.kind !== "person" || stored.rootId !== stored.id ||
+      stored.mode !== "work" || stored.reply !== "resume" || !stored.requester.messageId) return;
+  const personRows = store.activePath(root.threadId).filter(line => line.role === "user" && line.kind === "text" && !line.peerAsk && !line.aside);
+  const sourceAt = personRows.findIndex(line => line.id === stored.requester.messageId);
+  const source = personRows[sourceAt];
+  if (!source || source.requestPending !== true || source.requestCancelled || source.relayed || source.via === "api" || source.steered) return;
+  const answerIds = stored.acceptedAnswerIds ?? [];
+  const answers = personRows.slice(sourceAt + 1);
+  if (answers.length !== answerIds.length || answers.some((line, index) =>
+    line.id !== answerIds[index] || line.requestMessageId !== source.id ||
+    line.requestCancelled || line.relayed || line.via === "api" || line.steered)) return;
+  directRequestOwners.set(root.threadId, {
+    generation: root.id, messageId: source.id, generations: new Set([root.id]),
+    turnId: null, origin: root.origin, personLine: true, kind: "person", acceptedAnswers: new Set(answerIds),
+  });
+}
+
+function directRequestWorker(root: HandoffView): BotRecord | null {
+  if (root.parentId || root.groupId || root.goalRunId || root.origin?.kind !== "user" || ENDED.has(root.status)) return null;
+  if (hasQueuedSteeredMessages(root.botId, root.threadId)) return null;
+  const bot = store.bot(root.botId);
+  if (!bot || chiefLevel(bot) || !store.taskByThread(bot.id, root.threadId)
+      || store.groupByThread(root.threadId) || proactive.fence.confines(root.threadId)) return null;
+  let owner = directRequestOwners.get(root.threadId);
+  if (!owner) {
+    const stored = coordinator.status(root.id)?.assignment;
+    if (!stored || stored.origin.kind !== "person" || stored.origin.source !== "chat" ||
+        stored.requester.kind !== "person" || stored.requester.chief || stored.rootId !== stored.id ||
+        stored.mode !== "work" || stored.reply !== "resume" || stored.cards?.length || !stored.requester.messageId ||
+        !["needs_input", "waiting", "resume", "queued", "running"].includes(stored.status)) return null;
+    const recoverableFailure = stored.outcome === "stalled" || stored.outcome === "provider_error";
+    const adopted = stored.status !== "needs_input" && coordinator.children(root.id).some(child => {
+      const review = coordinator.status(child.id)?.assignment;
+      return review?.parentId === stored.id && review.rootId === stored.id && review.supervisionOf === stored.id &&
+        review.mode === "work" && review.reply === "resume" && review.requester.kind === "bot_turn" &&
+        review.requester.botId === stored.assignee.botId &&
+        review.requester.threadId === stored.assignee.destination.threadId &&
+        (review.supervisionReceipt?.kind === "unverified" ? stored.needsVerification && !stored.outcome
+          : review.supervisionReceipt?.kind === "failed" && recoverableFailure && review.supervisionReceipt.outcome === stored.outcome);
+    });
+    const pendingVerification = stored.needsVerification && (!stored.outcome || stored.verificationFailure === stored.outcome);
+    if ((!pendingVerification && !adopted) || (stored.outcome && !recoverableFailure)) return null;
+    restoreDirectRequestOwner(root);
+    owner = directRequestOwners.get(root.threadId);
+  }
+  if (!owner?.personLine || owner.stopped || owner.automation || !owner.messageId || !owner.generations.has(root.id)) return null;
+  const latest = store.activePath(root.threadId).findLast(line => line.role === "user" && line.kind === "text" && !line.peerAsk && !line.aside);
+  if (!latest || latest.requestCancelled || (latest.id !== owner.messageId && !owner.acceptedAnswers?.has(latest.id))) return null;
+  return bot;
+}
+
+function bindAcceptedRequestAnswer(threadId: string, answer: Message, sourceMessageId: string | undefined): Message {
+  const owner = directRequestOwners.get(threadId);
+  if (!sourceMessageId || owner?.messageId !== sourceMessageId || !owner.personLine || owner.stopped || owner.automation ||
+      answer.role !== "user" || answer.kind !== "text" || answer.peerAsk || answer.relayed || answer.via === "api" ||
+      answer.aside || answer.steered || answer.requestCancelled) return answer;
+  const original = coordinator.active().find(node => !node.parentId && !node.groupId &&
+    node.threadId === threadId && owner.generations.has(node.id));
+  if (original?.origin?.kind !== "user") return answer;
+  const path = store.activePath(threadId);
+  const source = path.find(line => line.id === sourceMessageId);
+  const previous = path.findLast(line => line.id !== answer.id &&
+    line.role === "user" && line.kind === "text" && !line.peerAsk && !line.aside);
+  if (!source || source.requestCancelled || source.requestPending !== true ||
+      !previous || (previous.id !== sourceMessageId && !owner.acceptedAnswers?.has(previous.id))) return answer;
+  if (!coordinator.acceptRequestAnswer(original.id, sourceMessageId, answer.id)) return answer;
+  (owner.acceptedAnswers ??= new Set()).add(answer.id);
+  return store.patchMessage(threadId, answer.id, { requestMessageId: sourceMessageId }) ?? answer;
+}
+
+function directSupervisingChief(root: HandoffView): BotRecord | null {
+  return directRequestWorker(root) ? supervisingChief(root.botId, root.threadId) : null;
+}
+
+function supervisedWorkProblem(node: HandoffView, parent?: HandoffView): string | undefined {
+  const root = coordinator.node(node.rootId);
+  if (!root) return node.parentId || node.supervisionOf ? "The original task no longer exists" : undefined;
+  let chief: HandoffView | undefined;
+  let ancestor: HandoffView | undefined = node;
+  while (ancestor?.parentId) {
+    if (ancestor.supervisionOf === root.id) { chief = ancestor; break; }
+    ancestor = ancestor.id === node.id && parent ? parent : coordinator.node(ancestor.parentId);
+  }
+  if (!chief && node.id === root.id) chief = coordinator.children(root.id).find(child => child.supervisionOf === root.id);
+  if (!chief) return undefined;
+  const authorized = ENDED.has(node.status) ? supervisingChief(root.botId, root.threadId) : directSupervisingChief(root);
+  if (!authorized || authorized.id !== chief.botId || !store.taskByThread(chief.botId, chief.threadId)) {
+    return "The original request was stopped, changed, or is no longer accessible to its Chief";
+  }
+  return undefined;
+}
+
+function originalWorkerRecovery(source: HandoffView | undefined, target: Pick<HandoffView, "groupId" | "threadId" | "botId">, mode: HandoffView["mode"], rework: boolean): HandoffView | undefined {
+  if (!source?.supervisionOf || mode !== "work" || !rework) return undefined;
+  const root = coordinator.node(source.supervisionOf);
+  if (!root || source.parentId !== root.id || root.parentId || root.groupId || root.status !== "waiting"
+      || target.groupId || target.botId !== root.botId || target.threadId !== root.threadId) return undefined;
+  return supervisedWorkProblem(source, root) ? undefined : root;
 }
 
 const parkedNodesToReconcile = new Set<string>();
@@ -2035,20 +2239,38 @@ function hostTurnResult(node: HandoffView | undefined, generation: string, outco
   const seat = computerParks.get(generation);
   computerParks.delete(generation);
   if (!node) return outcome;
+  const stop = turnStops.read(node.threadId, directRequestOwners.get(node.threadId)?.turnId ?? undefined);
   const result: DirectTurnOutcome = { ...outcome, evidence: { ...outcome.evidence, ...turnEvidence(turnRows(node)) } };
+  const blocked = blockingTurnStop(stop);
+  if (blocked) result.blocked = blocked;
+  if (stop?.browserWait && !result.blocked) result.waitingOnBrowser = stop.browserWait;
   if (outcome.ok && !node.groupId) signInSettle.verified(node.botId, node.threadId, node.startedAt ?? node.createdAt);
   const cards = resumableCards(node.threadId, node.startedAt ?? node.createdAt, node.groupId ? node.botId : undefined);
-  if (result.stalled) stopCards(node.threadId, new Set(cards.map((card) => card.id)));
-  if (node.goalRunId) return result;
-  if (seat) {
-    parkedSeats.set(node.id, seat);
-    // A seat wait is not work: progress-unknown, never a no-progress strike.
+  if (result.stalled) stopCards(node.threadId, new Set(cards.map(card => card.id)));
+  if (node.goalRunId || result.blocked) return result;
+  const waiting = result.waitingOnBrowser;
+  if (seat || waiting) {
+    parkedResources.set(node.id, seat ? { kind: "computer", key: seat }
+      : { kind: "browser", key: `browser:${waiting}`, session: waiting! });
     const { okToolCalls: _unknown, ...evidence } = result.evidence ?? {};
-    return { ...result, evidence, cap: { note: COMPUTER_FREE_NOTE } };
+    return { ...result, evidence, cap: { note: seat ? COMPUTER_FREE_NOTE : BROWSER_HAND_BACK_INSTRUCTION } };
   }
-  if (result.cap || result.stalled || !cards.length) return result;
+  if (result.cap || result.stalled || !cards.length) {
+    if ((result.ok || stop?.workRemaining) && !node.parentId && !coordinator.children(node.id).some(child => child.supervisionOf === node.id)) {
+      const bot = directRequestWorker(node);
+      if (bot) {
+        const plan = turnSurfacePlan(bot, undefined, node.threadId, true);
+        const browserDirected = plan.pinned === "browser"
+          || (!plan.pinned && plan.computer === "off" && bot.computer === "browser")
+          || (!plan.pinned && plan.computer === undefined && plan.browser && hermesBrowserOnlyScope(bot.toolScope));
+        if (stop?.workRemaining || browserDirected || (((result.evidence?.toolCalls ?? 0) > 0 || stop?.browserWork)
+            && supervisingChief(bot.id, node.threadId))) result.needsVerification = true;
+      }
+    }
+    return result;
+  }
   parkedNodesToReconcile.add(node.id);
-  return { ...result, cards: { question: `Waiting on the person: ${cards.map((card) => card.waits).join("; ")}`, ids: cards.map((card) => card.id) } };
+  return { ...result, cards: { question: `Waiting on the person: ${cards.map(card => card.waits).join("; ")}`, ids: cards.map(card => card.id) } };
 }
 
 function settleDirectCoordination(generation: string | undefined, outcome: DirectTurnOutcome) {
@@ -2129,9 +2351,10 @@ const turnPlaces = new Map<string, { botId: string; place: Surface }>();
 const settlingResourceOwners = new Map<string, string>();
 
 function claimTurnResource(owner: TurnOwner, resource: string): boolean {
-  if (!turnResources.claim(resource, owner)) return false;
-  turnResourceOwners.set(owner.threadId, owner);
-  return true;
+  const authoritative = turnResourceOwners.get(owner.threadId);
+  if (!authoritative || authoritative.generation !== owner.generation ||
+      activeInternalGenerationByThread.get(owner.threadId) !== owner.generation) return false;
+  return turnResources.claim(resource, authoritative);
 }
 
 function releaseTurnResources(owner: TurnOwner | undefined): void {
@@ -2247,7 +2470,6 @@ async function bindTurnComputer(owner: TurnOwner, resource: string, exclusive = 
     // An owner left waiting at the front would block the grant for everyone behind it.
     turnResources.stopWaiting(resource, owner);
   }
-  turnResourceOwners.set(owner.threadId, owner);
   turnComputerResources.set(owner.threadId, { owner, resource });
 }
 
@@ -2554,12 +2776,14 @@ function controlIntegration(
 }
 
 function selectableInstances<T extends SelectableInstance>(instances: readonly T[]): T[] {
-  return withInstanceConfig(instances, providerConfigs());
+  const configured = withInstanceConfig(instances, providerConfigs());
+  return fixtureHarness ? configured : configured.filter(isHermesHarness);
 }
 
 async function defaultSelection(saved: ModelSelection | null = cfg.defaultModelSelection ?? null, instances?: readonly SelectableInstance[]) {
-  if (hostedModels) return hostedModels.select(saved ?? undefined);
-  return selectDefaultModelSelection(selectableInstances(instances ?? await registry.describe()), saved ?? undefined, selectionContext);
+  if (hostedModels && fixtureHarness) return hostedModels.select(saved ?? undefined);
+  return selectDefaultModelSelection(selectableInstances(instances ?? await registry.describe()),
+    saved ? normalizeBotModel(saved) : undefined, selectionContext);
 }
 const selectionContext = {
   company: (instanceId: string) => managedDesktop.owns(instanceId) || cloudCredit?.owns(instanceId) === true,
@@ -2674,6 +2898,9 @@ function checkedModelSelection(
     return { ok: false, status: 409, error: "the bot is working — stop it before changing models" };
   }
   const target = registry.get(selection.instanceId);
+  if (!fixtureHarness && (!target || !isHermesHarness(target))) {
+    return { ok: false, status: 400, error: HERMES_HARNESS_REQUIRED };
+  }
   if (providerInstancesChanging.has(selection.instanceId)) {
     return { ok: false, status: 409, error: "this provider account is being updated — try again shortly" };
   }
@@ -2682,9 +2909,11 @@ function checkedModelSelection(
     if (!target) {
       return { ok: false, status: 400, error: `model instance "${selection.instanceId}" is unavailable` };
     }
-    const offered =
-      selection.model === target.models.default ||
-      target.models.options.some((option) => option.id === selection.model);
+    const modelId = isHermesHarness(target) && selection.model === "hermes-default" ? target.models.default : selection.model;
+    const option = target.models.options.find((candidate) => candidate.id === modelId);
+    const offered = isHermesHarness(target)
+      ? option && !option.orgBlocked && option.availability !== "unavailable" && option.availability !== "preparing"
+      : modelId === target.models.default || option;
     if (!offered) {
       return {
         ok: false,
@@ -2751,6 +2980,7 @@ function threadEngine(instanceId: string): ThreadEngine | undefined {
 }
 
 function threadModelGivingWay(botId: string, threadId: string): ModelSelection | null {
+  if (!fixtureHarness) return null;
   const bot = store.bot(botId);
   const own = store.taskByThread(botId, threadId)?.modelSelection;
   if (!bot || !own) return null;
@@ -2859,7 +3089,9 @@ const store = new Store(
   (instanceId) => registry.cliTarget(instanceId)?.driverKind,
   () => appLanguage() ?? Intl.DateTimeFormat().resolvedOptions().locale,
   () => sharedMembership() ? undefined : cfg.profile?.name,
+  normalizeBotModel,
 );
+if (!fixtureHarness) store.migrateModelSelections(normalizeBotModel);
 const { cloudLendingTurn, cloudLendingRefusalNotice, cloudLendingRefusal, cloudThreadStarters, cloudLendingView, cloudReportFromOthers, roomTurnStarted, roomTurnEnded, roomRun } = createCloudLendingTurns({
   store, cloudHome: CLOUD_HOME !== null, directRequest: (threadId) => directRequestOwners.get(threadId), threadStarter: (threadId) => threadStarters.get(threadId),
   ownerPerson: cloudProvenOwnerPerson, cardAnswerer: cloudCardAnswerer, activeRoutineRun: activeRoutineRunForThread, ownerStartedRun: (runId) => ownerStartedRoutineRuns.has(runId),
@@ -3130,11 +3362,11 @@ async function botOverview(bot: BotRecord): Promise<BotOverview> {
 const approvalModeForTurn = (bot: BotRecord, peerInitiated = false, threadId = bot.threadId): ApprovalMode => {
   // Judged by the conversation the turn runs in, never whichever of the bot's conversations is active.
   if (cloudGuestDriven(threadId) || proactive.fence.confines(threadId)) return "ask";
-  const mode = approvalModeForOrigin(approvalModeFor(bot), { peerInitiated });
-  if (!supportsApprovalMode(bot.modelSelection, mode)) {
-    return "ask";
-  }
-  return mode;
+  const own = approvalModeForOrigin(approvalModeFor(bot), { peerInitiated });
+  const ceiling = turnResourceOwners.get(threadId)?.approvalCeiling;
+  const mode = ceiling === undefined ? own
+    : recoveryLevel(ceiling, own, registry.cliTarget(bot.modelSelection.instanceId)?.driverKind);
+  return supportsApprovalMode(bot.modelSelection, mode) ? mode : "ask";
 };
 
 function sourceApprovalMode(botId: string, threadId: string): ApprovalMode {
@@ -3623,6 +3855,7 @@ const goalTurns = createGoalTurns({ retireProviderTurn });
 const goalCards = createGoalCards({ store, routines: () => routines, notify, routineSourceOwner, routineSourceThread });
 const oneOnOneGoals = createOneOnOneGoals({
   store, cards: goalCards, turns: goalTurns, canStart: canAdmitDirectTurn, startTurn, isUnattended,
+  waitForBrowser,
 });
 
 function groupIsWorking(group: GroupRecord): boolean {
@@ -3898,7 +4131,7 @@ function runRoomRootTurn(node: HandoffView, group: GroupRecord, bot: BotRecord, 
   if (composed.turn === "rerun") {
     store.appendMessage(node.threadId, { role: "bot", kind: "activity", from: { botId: bot.id, name: bot.name, color: bot.color }, tool: { name: "Resuming after a restart", ok: true } });
   }
-  parkedSeats.delete(node.id);
+  parkedResources.delete(node.id);
   return runRoomNode(node, group, bot, signal, undefined, (operation, result, coordination) =>
     runGroupMemberTurn(group.id, node.threadId, bot.id, 0, new Set(), composed.text, error => { result.stopReason = error; }, () => operation.cancelled,
       () => groupProviderHandshakeStarted(operation), () => groupProviderHandshakeSettled(operation), undefined,
@@ -3907,7 +4140,7 @@ function runRoomRootTurn(node: HandoffView, group: GroupRecord, bot: BotRecord, 
 
 function runRootTurn(node: HandoffView, bot: BotRecord, signal: AbortSignal, composed: ComposedTurn): Promise<HostTurnResult> {
   if (composed.turn === "rerun") store.appendMessage(node.threadId, { role: "bot", kind: "activity", tool: { name: "Resuming after a restart", ok: true } });
-  parkedSeats.delete(node.id);
+  parkedResources.delete(node.id);
   const owner = directRequestOwners.get(node.threadId);
   const ownRequest = owner && !owner.stopped && owner.generations.has(node.id) ? owner : undefined;
   return new Promise<HostTurnResult>(resolve => {
@@ -3948,6 +4181,7 @@ function followupAtBoot(threadId: string): "dispatched" | "pending" | undefined 
 const followupEndedRoots = new Map<string, string | undefined>();
 
 const askCards = createAskCards({ store, node: (id) => coordinator.node(id), delegatorOf, notify, answerCard: respondToCard, answerNode: (id, text) => coordinator.answerNode(id, text),
+  bindAcceptedAnswer: bindAcceptedRequestAnswer,
   answeredIn: (threadId, requestId) => automationReports.answeredIn(teamMessages.inbox.answeredIn(threadId, requestId), requestId), live: (threadId, requestId) => askMessageByRequest.has(`${threadId}:${requestId}`),
   copiedInto: (inboxThreadId, botId, threadId) => Boolean(CLOUD_TEAM) && teamMessages.inbox.isHomeOf(inboxThreadId, teamOwners.routing.askedPerson(botId, threadId)) });
 const questionRouting = createQuestionRouting({ store, active: () => coordinator.active(), node: (id) => coordinator.node(id), parkedFor: (botId) => coordinator.parkedFor(botId), answerNode: (id, text, by) => coordinator.answerNode(id, text, by), live: (threadId, requestId) => askMessageByRequest.has(`${threadId}:${requestId}`),
@@ -3955,6 +4189,14 @@ const questionRouting = createQuestionRouting({ store, active: () => coordinator
   answerLive: async (threadId, requestId, text) => await answerRequest(threadId, botForThread(store.botByThread(threadId)?.id ?? "", threadId)?.modelSelection.instanceId ?? "", requestId, "answer", text) === "answered", settleSignIns: (node) => signInSettle.answeredElsewhere(node),
   keptPrivate: (node, requester) => keptPrivate({ child: teamHost.privateTo(node.threadId), parent: teamHost.privateTo(requester.threadId) }),
   steer: async (threadId, text) => canSteerThread(threadId) && (await steerThread(threadId, text)) !== "refused" });
+const { reportIncident, reportEscalation, incidentRefused, retryThread, supervisingChief } = createChiefNotices({
+  store, notify, threadBusy, botAtThreadCapacity, startTurn, quietThread: (_botId, threadId) => proactive.fence.confines(threadId), privateThread: (threadId) => teamHost.ownTurn(threadId), threadLanguage,
+  assignerOf: (threadId) => coordinator.assignerOf(threadId),
+  threadSettling: (threadId) => settlingTurns.has(threadId), threadQueued: (botId, threadId) => queuedThreadPosition(botId, threadId) !== null,
+  groupTurnActive: (botId) => Boolean(activeGroupTurnForBot(botId)),
+  escalationsEnabled: () => chiefEscalationsEnabled(cfg), ...(teamOwners.noticeRouting ? { routing: teamOwners.noticeRouting } : {}),
+  continueRequest: (botId, threadId, text) => startTurn(botId, text, { threadId, unattended: true, cardContinuation: true, requestMessageId: directRequestOwners.get(threadId)?.messageId }),
+});
 const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoordinator({
   dataDir: DATA_DIR,
   now: Date.now, wrote: handoffTicks.kick,
@@ -3964,19 +4206,23 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
     botOfThread: threadId => store.botByThread(threadId)?.id,
   },
   host: {
-    validate: (node, parent) => node.mode === "notify" && node.status !== "queued" ? undefined
-      : !node.parentId && node.groupId ? roomRootProblem(node)
-      : roomHandoffProblem(node, parent) ??
-      (parent && store.bot(parent.botId)?.approvePeerComms && !fullAccessForSource(parent.botId, parent.threadId) && !node.approvalGranted ? "Sender now requires peer approval; submit a new approved request" : undefined),
+    validate: (node, parent) => supervisedWorkProblem(node, parent) ??
+      (node.mode === "notify" && node.status !== "queued" ? undefined
+        : !node.parentId && node.groupId ? roomRootProblem(node)
+        : roomHandoffProblem(node, parent) ??
+        (parent && store.bot(parent.botId)?.approvePeerComms && !fullAccessForSource(parent.botId, parent.threadId) && !node.approvalGranted ? "Sender now requires peer approval; submit a new approved request" : undefined)),
     busy: n => {
-      const seat = parkedSeats.get(n.id);
-      if (seat && !turnResources.free(seat)) return true;
+      const resource = parkedResources.get(n.id);
+      if (resource && (resource.kind === "browser"
+        ? !browserAdmissionAvailable(resource.session, resource.key)
+        : !turnResources.free(resource.key))) return true;
       if (n.groupId) return Boolean(store.bot(n.botId)?.busy || groupThreadIsWorking(n.groupId, n.threadId));
       if (canAdmitDirectTurn(n.botId, n.threadId)) return false;
       noteQueuedBehindPerson(n);
       return true;
     },
     changed: (groupIds, directThreadIds) => {
+      flushGoalCompletions();
       for (const id of groupIds) {
         const group = store.group(id);
         if (group) broadcast({ kind: "group", group: publicGroupState(group) });
@@ -3992,7 +4238,7 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
     report: (child, parent) => {
       askCards.closed(child);
       if (!parent) {
-        parkedSeats.delete(child.id);
+        parkedResources.delete(child.id);
         const followupEnded = followupEndedRoots.has(child.id);
         const followupLine = followupEndedRoots.get(child.id);
         followupEndedRoots.delete(child.id);
@@ -4053,18 +4299,31 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
     run: async (node, resumed, signal, composed: ComposedTurn) => {
       const group = node.groupId ? store.group(node.groupId) : undefined;
       const bot = store.bot(node.botId)!; if (node.answeredBy) askCards.decided(node, (node.answeredBy.kind === "bot" ? store.bot(node.answeredBy.botId)?.name : undefined) ?? bot.name);
+      if (!node.parentId && !group) restoreDirectRequestOwner(node);
       if (!node.parentId && !group && !resumed) return runRootTurn(node, bot, signal, composed);
       if (!node.parentId && group && !resumed) return runRoomRootTurn(node, group, bot, signal, composed);
       const parent = node.parentId ? coordinator.node(node.parentId) : undefined;
       const sender = parent ? store.bot(parent.botId) : undefined;
-      const brief = composed.text;
-      const liveRoster = resumed ? undefined : coordinationLiveRosterBlock(bot);
-      const turnText = liveRoster ? `${brief}\n\n${liveRoster}` : brief;
       const systemInstructions = node.parentId ? coordinationSystemInstructions() : "";
       const request = coordinator.sharedRequest(node);
+      const assignment = coordinator.status(node.id)?.assignment;
+      const originalRequest = !group && originalWorkerRecovery(parent, node, node.mode, assignment?.rework === true);
+      const requestMessageId = originalRequest && directRequestWorker(originalRequest)
+        ? directRequestOwners.get(node.threadId)?.messageId : undefined;
+      let brief = composed.text;
+      if (node.restart === "rerun" && originalRequest && requestMessageId && !assignment?.answer) {
+        const acceptedIds = coordinator.status(originalRequest.id)?.assignment.acceptedAnswerIds;
+        if (acceptedIds?.length) {
+          const answers = store.activePath(node.threadId).filter(line => acceptedIds.includes(line.id));
+          brief += `\n\n${answers.map(line => `The person answered: ${JSON.stringify(quoteInNote(line.text ?? "", 400))}.`).join("\n")}`;
+        }
+      }
+      const liveRoster = resumed ? undefined : coordinationLiveRosterBlock(bot);
+      const turnText = liveRoster ? `${brief}\n\n${liveRoster}` : brief;
       if (!resumed && !store.messagesFor(node.threadId).some(m => m.roomRequest?.id === request.id && m.roomRequest.phase === "request")) {
         store.appendMessage(node.threadId, { role: "bot", kind: "text",
           roomRequest: { id: request.id, phase: "request" },
+          ...(requestMessageId ? { requestMessageId } : {}),
           from: sender ? { botId: sender.id, name: sender.name, color: sender.color } : undefined,
           text: `${request.botIds.map(id => `@${store.bot(id)?.name ?? "Teammate"}`).join(" ")} ${node.text}`,
         });
@@ -4140,6 +4399,20 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
     park: (node, question, restored) => askCards.park(node, question, restored),
     levelOf: (target, source) => delegatedLevel.levelOf(target, source),
     chiefOf: address => chiefLevel(store.bot(address.botId)),
+    supervisor: node => {
+      const chief = directSupervisingChief(node);
+      if (!chief || chief.id === node.botId) return undefined;
+      const worker = store.bot(node.botId);
+      if (!worker) return undefined;
+      const task = store.createTask(chief.id, `Supervise ${worker.name}`, false, undefined,
+        { botId: worker.id, name: worker.name, threadId: node.threadId, at: Date.now(), kind: "work" });
+      if (!task) return undefined;
+      const person = teamOwners.noticeRouting?.askedPerson(worker.id, node.threadId);
+      if (person) teamOwners.noticeRouting?.open(task.threadId, person);
+      const address = { botId: chief.id, threadId: task.threadId };
+      const { level, driverKind } = delegatedLevel.levelOf(address, node);
+      return { address, level, ...(driverKind ? { driverKind } : {}) };
+    },
     // A person's cut root never reruns after a follow-up in its thread: that would hand the person's words to a model again, or redo an older request.
     outward: node => {
       const followup = node.parentId || node.groupId ? undefined : followupAtBoot(node.threadId);
@@ -4645,9 +4918,9 @@ function messagePage(threadId: string, limit: number | undefined, before?: strin
 function guardedRequestSnapshot(botId: string, threadId: string, sendId: string) {
   if (!store.taskByThread(botId, threadId)) throw requestConflict("No such conversation for this bot");
   const activeLeafId = store.activeLeaf(threadId);
-  const messages = guardedRequestPath(store.messagesFor(threadId), activeLeafId, sendId);
-  const messageId = messages[0].id;
   const owner = directRequestOwners.get(threadId);
+  const messages = guardedRequestPath(store.messagesFor(threadId), activeLeafId, sendId, owner?.acceptedAnswers);
+  const messageId = messages[0].id;
   const busy = threadBusy(botId, threadId);
   const waiting = messages.some(requestNeedsInput) || directRootPending(threadId);
   const latestTerminal = messages.findLast(message => message.role === "bot" && message.kind === "text" && message.turnTerminal);
@@ -4681,7 +4954,7 @@ function settleTrackedRequest(threadId: string, incoming: ReadonlySet<string> = 
     .sort((a, b) => a.createdAt - b.createdAt).at(-1);
   if (newest && newest.status !== "completed") return;
   const path = store.activePath(threadId).filter(message => !incoming.has(message.id));
-  const source = path.findLast(message => message.role === "user");
+  const source = path.findLast(message => message.role === "user" && !owner.acceptedAnswers?.has(message.id));
   if (source?.id !== owner.messageId || source.requestCancelled || source.requestPending !== true) return;
   const messages = path.slice(path.indexOf(source) + 1);
   const terminal = messages.findLast(message => message.turnTerminal && message.role === "bot" && message.kind === "text");
@@ -4882,6 +5155,7 @@ async function answerRequest(
   decidedFor?: { id: string; name: string },
   always?: boolean,
   rememberCommand?: boolean,
+  onAnswered?: () => void,
 ): Promise<RequestOutcome> {
   // Snapshot the card BEFORE delivering: delivery synchronously consumes the askMessageByRequest entry.
   const thread = store.messagesFor(threadId);
@@ -4893,8 +5167,8 @@ async function answerRequest(
   const remembered = rememberCommand ? pendingCommandRules.get(`${threadId}:${requestId}`) : undefined;
   // The live turn owns this question, as it owns Stop and steer.
   const instance = runningTurnEngines.get(threadId) ?? registry.get(instanceId);
-  let outcome: RequestOutcome = "unavailable";
-  if (instance) {
+  let outcome: RequestOutcome = browserCalls.answer(threadId, requestId, behavior);
+  if (outcome === "unavailable" && instance) {
     try {
       // Only a card that offered "Always allow this session" can keep one: never a guest's turn, a sandbox widening or the person's own computer.
       outcome = await instance.adapter.respondToRequest(threadId, requestId, { behavior, message, always: always && behavior === "allow" && card?.allowSession === true });
@@ -4902,6 +5176,7 @@ async function answerRequest(
       outcome = "unavailable";
     }
   }
+  if (outcome === "answered" && behavior === "answer") onAnswered?.();
   if (remembered && outcome === "allowed-once" && behavior === "allow" && store.bot(remembered.botId)) {
     // Persist only after the provider accepted this exact live request.
     try {
@@ -4961,6 +5236,7 @@ async function respondToCard(input: {
   message?: string;
   callId?: string;
   via?: DecisionVia;
+  onAnswered?: () => void;
 }): Promise<CardRespondResult> {
   const { auth, requestId, behavior, message, callId, via } = input, threadId = automationReports.answeredIn(teamMessages.inbox.answeredIn(input.threadId, requestId), requestId);
   // A call outlives the request that started it: the session must still be valid.
@@ -4980,7 +5256,7 @@ async function respondToCard(input: {
     if (card && resolvePeerComms(approvalBus, requestId, behavior)) return;
     const outcome = await answerRequest(
       threadId, botForThread(bot.id, threadId)?.modelSelection.instanceId ?? "", requestId, behavior, message,
-      { id: bot.id, name: bot.name },
+      { id: bot.id, name: bot.name }, undefined, undefined, input.onAnswered,
     );
     if (outcome === "unavailable" && isPersistentQuestionCard(card) && behavior === "answer" && cardMessage) {
       const answer = message?.trim() ?? "";
@@ -5094,10 +5370,10 @@ const watchdog = new TurnWatchdog({
       kind: "activity",
       tool: failedTurnTool(cause),
     });
-    if (bot && routineRun?.target !== "bot") {
+    settleDirectFollowup(stalledGeneration, { ok: false, text: stalled, stalled: true });
+    if (bot && routineRun?.target !== "bot" && !runtimeWorkPending(turn.threadId)) {
       reportIncident({ kind: "stalled", bot, threadId: turn.threadId, detail: cause });
     }
-    settleDirectFollowup(stalledGeneration, { ok: false, text: stalled, stalled: true });
     turnUsage.delete(turn.threadId);
     turnContext.delete(turn.threadId);
     roomStallCompletions.stall(turn.threadId, cause);
@@ -5159,11 +5435,18 @@ bus.subscribe((event: RuntimeEvent) => {
         message.role === "bot" && message.kind === "text" && message.turnId === event.turnId)?.text : undefined;
       const text = event.ok ? reply || event.stopReason || "The bot finished without a text reply"
         : stoppedTurnText(event.threadId, event.turnId, undefined, event.stopReason);
-      const handoffPath = event.ok ? undefined : turnStops.read(event.threadId, event.turnId)?.handoffPath;
+      const stop = turnStops.read(event.threadId, event.turnId);
+      const handoffPath = event.ok ? undefined : stop?.handoffPath;
+      const blocked = blockingTurnStop(stop);
       const outcome: DirectTurnOutcome = { ok: event.ok, text: unansweredApprovals.annotate(event.threadId, event.turnId, text.slice(0, 12_000), event.ok),
-        ...(handoffPath ? { cap: { note: STEP_CAP_NOTE, handoffPath } } : {}) };
+        ...(handoffPath ? { cap: { note: STEP_CAP_NOTE, handoffPath } } : {}),
+        ...(blocked ? { blocked } : stop?.browserWait ? { waitingOnBrowser: stop.browserWait } : {}) };
       const owner = directFollowupTurns.complete(event.threadId, event.turnId, outcome);
       if (owner) {
+        const node = coordinator.node(directCoordinationSettlers.get(owner.generation)?.nodeId ?? owner.generation);
+        const root = node && coordinator.node(node.rootId);
+        if (node && root) completionPhases.set(event.threadId, { turnId: event.turnId, rootId: root.id,
+          personVisible: root.threadId === event.threadId && root.origin?.kind === "user" && !root.goalRunId });
         settleDirectCoordination(owner.generation, outcome);
         settleDirectFollowup(owner.generation);
       }
@@ -6782,6 +7065,7 @@ bus.subscribe((event: RuntimeEvent) => {
       const internal = isInternalTurn(event.threadId);
       clearInternalTurn(event.threadId);
       const reviewAnswer = reviewAnswerThreads.delete(event.threadId);
+      const explicitGoal = oneOnOneGoals.has(event.threadId);
       const generatedKey = turnAttachmentKey(event.threadId, event.turnId);
       const generated = turnAttachmentsByTurn.get(generatedKey) ?? [];
       turnAttachmentsByTurn.delete(generatedKey);
@@ -6829,8 +7113,8 @@ bus.subscribe((event: RuntimeEvent) => {
         const terminal = store.markTerminalAssistantMessage(event.threadId, completedTurnId);
         if (terminal) store.patchMessage(event.threadId, terminal.id, { turnSucceeded: event.ok });
         if (bot && event.ok) store.suggestTaskLink(bot.id, event.threadId, store.activePath(event.threadId)
-          .filter((message) => message.role === "bot" && message.kind === "text" && message.turnId === completedTurnId)
-          .map((message) => message.text ?? "").join("\n"));
+          .filter(message => message.role === "bot" && message.kind === "text" && message.turnId === completedTurnId)
+          .map(message => message.text ?? "").join("\n"));
       }
       const reply = lastReply.get(event.threadId) ?? "";
       if (personStops.stopped(event.threadId, completedTurnId)) pushStoppedTurn(completedTurnId);
@@ -6854,7 +7138,7 @@ bus.subscribe((event: RuntimeEvent) => {
       // Filed once the thread has settled, so the Chief's retry finds it free. A turn the person stopped is cancelled, whatever its engine said.
       const facts = { ...turnStops.read(event.threadId, event.turnId)?.flags, stopReason: directRequestOwners.get(event.threadId)?.stopped ? "cancelled" : event.stopReason };
       const held = facts.limit ?? (signedOutStop(facts.stopReason, failureDetail) ? "signed-out" as const : undefined); // a limit or a sign-out: one incident a stretch, the person told by its own notice
-      const fileIncident = () => { if (broken && (!held || limitTakeover.firstIncident(broken.id, broken.modelSelection, held, facts.limitResetsAt))) reportIncident({ kind: "failed", bot: broken, threadId: event.threadId, detail: failureDetail, facts, notified: Boolean(held) }); };
+      const fileIncident = () => { if (broken && !runtimeWorkPending(event.threadId) && (!held || limitTakeover.firstIncident(broken.id, broken.modelSelection, held, facts.limitResetsAt))) reportIncident({ kind: "failed", bot: broken, threadId: event.threadId, detail: failureDetail, facts, notified: Boolean(held) }); };
       if (failed && bot) void quotaSwitch.turnFailed(bot, event, internal);
       else if (bot && event.ok) quotaSwitch.turnSucceeded(bot, event.threadId);
       const question = bot && event.ok && !stopped && completedTurnId && !routineRun && chiefEscalationsEnabled(cfg) ? needsInputQuestion(store.activePath(event.threadId)
@@ -6945,10 +7229,22 @@ bus.subscribe((event: RuntimeEvent) => {
         liveTurnByThread.delete(event.threadId);
         const routineReportThread = routineRun ? routineSourceThread(routineRun) : null;
         if (!routineReportThread && (!internal || reviewAnswer)) store.patchTask(bot.id, event.threadId, { unread: true });
-        if (routineRun && routineReportThread !== event.threadId) automationReports.runSettled(routineRun, completedTurnId);
-        else if ((!routineRun || routineRun.status === "completed") && (!internal || reviewAnswer) && !computerSelectionTurns.get(event.threadId)?.selected && doneNotice.atTurnEnd({ botId: bot.id, threadId: event.threadId, review: reviewAnswer, ok: event.ok, routine: Boolean(routineRun) }) === "notify") {
-          notify(buildNotification("done", bot, event.threadId, routineRun ? reply || routineRun.output || routineRun.routineName : reply, { avatarUrl: bot.avatarUrl }), routineRun ? { routine: true } : undefined);
-        }
+        const reportedRoutine = routineRun && routineReportThread !== event.threadId;
+        if (reportedRoutine) automationReports.runSettled(routineRun, completedTurnId);
+        const completion = completionPhases.get(event.threadId);
+        afterGoalCompletion(event.threadId, completedTurnId, (verified, personVisible) => {
+          if (!store.taskByThread(bot.id, event.threadId)) return;
+          const owner = directRequestOwners.get(event.threadId);
+          if (!verified || !event.ok || owner?.stopped || hasQueuedSteeredMessages(bot.id, event.threadId)
+              || (personVisible && (!completion || !owner?.generations.has(completion.rootId)))) return;
+          if (!explicitGoal && !reportedRoutine && (!routineRun || routineRun.status === "completed")
+              && (!internal || reviewAnswer || personVisible) && !computerSelectionTurns.get(event.threadId)?.selected) {
+            const verdict = completion && coordinator.node(completion.rootId)?.threadId === event.threadId
+              ? doneNotice.goalCompleted({ botId: bot.id, threadId: event.threadId })
+              : doneNotice.atTurnEnd({ botId: bot.id, threadId: event.threadId, review: reviewAnswer, ok: true, routine: Boolean(routineRun) });
+            if (verdict === "notify") notify(buildNotification("done", bot, event.threadId, routineRun ? reply || routineRun.output || routineRun.routineName : reply, { avatarUrl: bot.avatarUrl }), routineRun ? { routine: true } : undefined);
+          }
+        });
         if (screenPollers.has(event.threadId)) {
           // Keep the thread busy until the final END-state capture: an accepted follow-up must not take the desktop first.
           const settleLeafId = store.activePath(event.threadId).at(-1)?.id;
@@ -7071,19 +7367,11 @@ function handoffOpener(capability: Pick<InternalCapability, "botId" | "threadId"
 function runtimeWorkPending(threadId: string): boolean {
   if (coordinator.outstandingFor(threadId).length > 0) return true;
   return coordinator.active().some(root => !root.parentId && !root.groupId && root.threadId === threadId
-    && (root.status === "waiting" || root.status === "resume"
+    && (root.status === "queued" || root.status === "waiting" || root.status === "resume"
       || ((root.status === "source" || root.status === "running")
         && coordinator.children(root.id).some(child => child.reply !== "none" && child.createdAt >= (root.startedAt ?? 0)))));
 }
 
-const { reportIncident, reportEscalation, incidentRefused, retryThread } = createChiefNotices({
-  store, notify, threadBusy, botAtThreadCapacity, startTurn, quietThread: (_botId, threadId) => proactive.fence.confines(threadId), privateThread: (threadId) => teamHost.ownTurn(threadId), threadLanguage,
-  assignerOf: (threadId) => coordinator.assignerOf(threadId),
-  threadSettling: (threadId) => settlingTurns.has(threadId), threadQueued: (botId, threadId) => queuedThreadPosition(botId, threadId) !== null,
-  groupTurnActive: (botId) => Boolean(activeGroupTurnForBot(botId)),
-  escalationsEnabled: () => chiefEscalationsEnabled(cfg), ...(teamOwners.noticeRouting ? { routing: teamOwners.noticeRouting } : {}),
-  continueRequest: (botId, threadId, text) => startTurn(botId, text, { threadId, unattended: true, cardContinuation: true, requestMessageId: directRequestOwners.get(threadId)?.messageId }),
-});
 
 function turnAnswers(threadId: string, opts?: {
   cardContinuation?: boolean; requestMessageId?: string; coordination?: { id: string };
@@ -7830,6 +8118,7 @@ async function beginTurn(
   const personLine = !opts?.coordination && !opts?.cardContinuation && !opts?.automationSource && !opts?.compactOnly
     && !opts?.computerSelectionContinuation && !opts?.editedMessageId && !commsDepth && !opts?.peerAsk && !userMessage.peerAsk;
   if (personLine && (coordinator.answer(threadId, text) || signInSettle.answerInChat(bot.id, threadId, text))) {
+    userMessage = bindAcceptedRequestAnswer(threadId, userMessage, directRequestOwners.get(threadId)?.messageId);
     askCards.answeredInWords(threadId, text);
     store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: serverLine(threadLanguage(threadId), "server.teammates.answerPassed"), ok: true } });
     opts?.onTurnSettled?.();
@@ -7856,6 +8145,10 @@ async function beginTurn(
   const dispatchClaimId = randomUUID();
   if (guestConfined) guestDrivenTurns.set(threadId, dispatchClaimId);
   const resourceOwner: TurnOwner = { threadId, generation: dispatchClaimId };
+  const coordinated = opts?.coordination && coordinator.node(opts.coordination.id);
+  if (coordinated?.parentId && originalWorkerRecovery(coordinator.node(coordinated.parentId), coordinated, coordinated.mode, true)) {
+    resourceOwner.approvalCeiling = coordinator.status(coordinated.id)?.assignment.level ?? "ask";
+  }
   turnResourceOwners.set(threadId, resourceOwner);
   directTurnGenerationByThread.set(threadId, dispatchClaimId);
   let requestMessageId = opts?.cardContinuation ? opts.requestMessageId : userMessage.id;
@@ -7876,6 +8169,7 @@ async function beginTurn(
     line: !continuation && requestMessageId === userMessage.id ? userMessage : undefined });
   directRequestOwners.set(threadId, { generation: dispatchClaimId, messageId: requestMessageId,
     generations: requestGenerations, turnId: null, ...(opts?.automationSource ? { automation: opts.automationSource } : {}), origin: requestOrigin, ...(personLine || (continued && previousRequest?.personLine) ? { personLine: true as const } : {}),
+    ...(continued && previousRequest?.acceptedAnswers ? { acceptedAnswers: previousRequest.acceptedAnswers } : {}),
     kind: directTurnKind({ ...opts, peerAsk: opts?.peerAsk ?? userMessage.peerAsk }) });
   const notesRefused = CLOUD_PERSONAL && cloudHomeLendingRefusal(cloudLendingTurn({ botId, threadId, generation: dispatchClaimId })) !== null;
   if (notesRefused) noteForeignTurn(botId, threadId, dispatchClaimId);
@@ -7891,7 +8185,8 @@ async function beginTurn(
   if (!opts?.coordination && !opts?.compactOnly && !opts?.cardContinuation) {
     const opener = handoffOpener({ botId: bot.id, threadId }, threadId);
     coordinator.beginTurn({ id: dispatchClaimId, address: { botId: bot.id, threadId }, brief: resolvedImages.text,
-      level: approvalModeForTurn(bot, commsDepth > 0, threadId), ...(opener ? { opener } : {}), origin: requestOrigin });
+      level: approvalModeForTurn(bot, commsDepth > 0, threadId), ...(opener ? { opener } : {}), origin: requestOrigin,
+      ...(personLine && requestOrigin.kind === "user" && requestMessageId ? { sourceMessageId: requestMessageId } : {}) });
   }
   if (!opts?.computerSelectionContinuation && !opts?.cardContinuation && !opts?.automationSource && !opts?.unattended &&
       !opts?.commsDepth && !opts?.coordination && !inheritedTeamComputer(bot) && bot.computer !== "off" && agentsMounted) {
@@ -8573,6 +8868,7 @@ async function beginTurn(
         images: dispatchContext.images,
         approvalMode: approvalModeForTurn(bot, commsDepth > 0, threadId),
         approvalModeNow: () => liveApprovalMode(bot, threadId, commsDepth > 0),
+        continuationAllowed: (recovery) => !companyShutdown && activeInternalGenerationByThread.get(threadId) === dispatchClaimId && !directRequestOwners.get(threadId)?.stopped && turnStops.mayContinue(threadId, undefined, recovery),
         toolScope,
         ...(guestConfined ? { guestConfined: true, confinedWhy: confinedWhy(threadId) } : {}),
         model,
@@ -9677,10 +9973,11 @@ ROUTES.push(createWebhookRoutes({ webhooks, ingress: webhookIngressStatus, visib
 
 const RUNTIME_KEEP_MS = 30 * 24 * 60 * 60_000;
 let runtimePrunedAt = 0;
-handoffTicks.start({ pace: () => enginesRead || parkedNodesToReconcile.size > 0 ? "busy" : coordinator.pace(), tick: () => {
+handoffTicks.start({ pace: () => enginesRead || parkedNodesToReconcile.size > 0 || browserWaits.size > 0 ? "busy" : coordinator.pace(), tick: () => {
   // Recovered reports must see the engine's resume capability before deciding to keep its stored session.
   if (enginesRead) return;
   try {
+    settleBrowserWaits();
     if (Date.now() - runtimePrunedAt >= 24 * 60 * 60_000) {
       // The first tick is the boot: answer roots whose cards were acted on while down, before anything dispatches.
       if (runtimePrunedAt === 0) reconcileParkedRoots();
@@ -9713,7 +10010,7 @@ type GroupTurnOrchestration = {
   turnNote?: string;
   turnRestartNote?: string;
   followMentions: boolean;
-  result: { replyText?: string; outcome?: GroupMemberTurnOutcome; stopReason?: string | null };
+  result: Partial<GoalStepResult>;
   onClaimed?: () => void;
   onTurnStarted?: (turnId: string) => void;
   coordination?: { id: string; settle: (outcome: HostTurnResult) => void };
@@ -10429,6 +10726,12 @@ async function runClaimedGroupMemberTurn(
       if (e.type === "item.completed" && e.itemType === "assistant_text") turnTexts.push(e.text);
       else if (e.type === "turn.completed") {
         turnCompletedOk = e.ok;
+        if (orchestration) {
+          const stop = turnStops.read(threadId, e.turnId);
+          const blocked = blockingTurnStop(stop);
+          orchestration.result.blocked = blocked;
+          if (!blocked && stop?.browserWait) orchestration.result.waitingOnBrowser = stop.browserWait;
+        }
         const end = roomTurnEnd(e, Boolean(orchestration), roomClaimFailure);
         if (orchestration && end.stopReason !== undefined) {
           orchestration.result.stopReason = roomClaimFailure ? end.stopReason : stoppedTurnText(threadId, e.turnId, undefined, end.stopReason);
@@ -10483,6 +10786,7 @@ async function runClaimedGroupMemberTurn(
         ...(roomRecalled ? { recalled: roomRecalled } : {}),
         images: turnImages,
         approvalMode: turnApprovalMode,
+        continuationAllowed: (recovery) => !companyShutdown && !abandoned && roomSetupIsCurrent() && turnStops.mayContinue(threadId, providerTurnId, recovery),
         toolScope: roomToolScope,
         ...(roomGuestConfined ? { guestConfined: true, confinedWhy: confinedWhy(threadId) } : {}),
         system: roomSystem.text,
@@ -10765,7 +11069,7 @@ async function runGroupGoalStep(args: {
   skillAuthoringClaim: { claimed: boolean };
   coordinator: boolean;
   instructions: string;
-}): Promise<{ ran: boolean; replyText: string; outcome?: GroupMemberTurnOutcome; stopReason?: string | null }> {
+}): Promise<GoalStepResult> {
   const run = args.operation.goalRun;
   if (!run || args.operation.cancelled || run.turnCount >= run.maxTurns) {
     return { ran: false, replyText: "" };
@@ -10832,6 +11136,8 @@ async function runGroupGoalStep(args: {
         replyText: result.replyText ?? "",
         outcome: result.outcome,
         stopReason: result.stopReason,
+        waitingOnBrowser: result.waitingOnBrowser,
+        blocked: result.blocked,
       };
     } finally {
         // An idle waiter must never redirect the bot's Stop button away from unrelated direct work.
@@ -10857,6 +11163,7 @@ async function runGroupGoalOperation(args: {
     members: args.members,
     cancelled: () => args.operation.cancelled,
     current: (botId) => store.bot(botId) ?? undefined,
+    waitForBrowser,
     step: (bot, coordinator, instructions) => runGroupGoalStep({ ...args, bot, skillAuthoringClaim, coordinator, instructions }),
     finish: (status, detail) => finishGroupGoalRun(args.groupId, args.operation, status, detail),
     progress: (detail) => updateGroupGoalRunProgress(args.operation, detail),
@@ -13169,9 +13476,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
       const readInternalBody = async () => {
         const body = await readBody(req);
         // Authorization at header time is not a lease: if the owning turn settled meanwhile, die before any side effect.
-        if (!internalCapabilityIsActive(internalCapability)) {
-          throw Object.assign(new Error("the internal turn capability has expired"), { status: 401 });
-        }
+        requireActiveInternalCapability();
         if (body && typeof body === "object" && !Array.isArray(body)) {
           for (const key of ["fromBotId", "botId"] as const) {
             if (body[key] !== undefined && String(body[key]) !== internalSender.id) {
@@ -13190,7 +13495,11 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (!internalCapabilityIsActive(internalCapability)) {
           throw Object.assign(new Error("the internal turn capability has expired"), { status: 401 });
         }
+        const node = coordinator.node(internalCapability.roomHandoffId ?? internalCapability.generation);
+        const problem = node && supervisedWorkProblem(node, node.parentId ? coordinator.node(node.parentId) : undefined);
+        if (problem) throw Object.assign(new Error(problem), { status: 409 });
       };
+      requireActiveInternalCapability();
       const botFolders = async () => ({ roots: messageFileRootsForThread(internalSender.id, internalCapability.threadId).filter((root) => root !== ATTACHMENTS_DIR), vmWorkspace: (await attachmentVmForTurn(internalCapability))?.workspaceDir ?? null }); if (await internalToolRoutes({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody, folders: botFolders }) !== PASS || await waitRoutes({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody, ...waitTurnChecks(internalCapability, internalSender) }) !== PASS || await teamMessages.internal({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody }) !== PASS || await devsReports.internal({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody }) !== PASS || (computerAsks && await computerAsks.internal({ method, path, res, json, turn: internalCapability, readBody: readInternalBody }) !== PASS)) return; const pagesCall = new AbortController(); res.once("close", () => { if (!res.writableEnded) pagesCall.abort(); }); if (await publishedPages.internal({ method, path, res, json, botId: internalSender.id, threadId: internalCapability.threadId, readBody: readInternalBody, requireActive: requireActiveInternalCapability, signal: pagesCall.signal, folders: botFolders, post: (text, publishedPage, bundle) => { const source = connectorThread(internalSender.id, internalCapability.threadId); return !source ? null : (!source.group && bundle && publishedPages.show({ threadId: internalCapability.threadId, card: publishedPage, bundle })) || store.appendMessage(internalCapability.threadId, { role: "bot", kind: "text", text, publishedPage, ...(source.group ? { from: { botId: internalSender.id, name: internalSender.name, color: internalSender.color } } : {}) }).id; } }) !== PASS) return;
       const delegatedThisTurn = (taskId: string) => {
         (internalCapability.delegatedThisTurn ??= new Set()).add(taskId);
@@ -13310,15 +13619,12 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (body?.method !== "tools/list" && body?.method !== "tools/call") {
           return json(res, 400, { error: "unsupported browser method" });
         }
-        let params = body.params;
-        if (body.method === "tools/call" && params?.name === BROWSER_UPLOAD_TOOL) {
-          const upload = uploadableFiles(params.arguments?.files, messageFileRootsForThread(bot.id, internalCapability.threadId));
-          if ("error" in upload) return json(res, 200, { result: { isError: true, content: [{ type: "text", text: upload.error }] } });
-          try {
-            params = { ...params, arguments: { ...params.arguments, files: await uploadPaths(upload.files.map((file, i) => ({ file, name: attachmentNameInThread(internalCapability.threadId, params.arguments.files[i]) })), browser.session, browser.spec) } };
-          } catch (error) { requireActiveInternalCapability(); if (!(error instanceof BrowserUploadRefusal)) throw error; return json(res, 200, { result: { isError: true, content: [{ type: "text", text: error.message }] } }); }
-        }
-        const result = await browserRuntime.agentRpc(browser.session, browser.spec, body.method, params, () => {
+        const abort = new AbortController();
+        const disconnected = () => { if (!res.writableEnded) abort.abort(); };
+        res.once("close", disconnected);
+        if (res.destroyed) abort.abort();
+        const assertBrowserAccess = () => {
+          abort.signal.throwIfAborted();
           requireActiveInternalCapability();
           const current = store.bot(bot.id);
           if (!current || current.browser === false || current.computer === "off" || !builtInBrowserEnabled(cfg) ||
@@ -13328,9 +13634,58 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           if (body.method === "tools/call" && !claimTurnResource(internalCapability, `browser:${browser.session}`)) {
             throw Object.assign(new Error("another thread is using this browser — pause browser work until that thread finishes"), { status: 409 });
           }
-        }, stepContext(bot, internalCapability, () => liveTurnByThread.get(internalCapability.threadId) ?? null));
-        requireActiveInternalCapability();
-        return json(res, 200, { result });
+        };
+        const engine = runningTurnEngines.get(internalCapability.threadId);
+        const instanceId = engine?.instanceId ?? botForThread(bot.id, internalCapability.threadId)?.modelSelection.instanceId ?? bot.modelSelection.instanceId;
+        const providerTurnId = liveTurnByThread.get(internalCapability.threadId);
+        const sameBrowserTurn = () => providerTurnId !== undefined && internalCapabilityIsActive(internalCapability)
+          && liveTurnByThread.get(internalCapability.threadId) === providerTurnId;
+        const observation = isBrowserObservation(body.params?.name, body.params?.arguments);
+        const browserFailed = (unknown = false) => {
+          if (body.method !== "tools/call" || !sameBrowserTurn() || !providerTurnId) return;
+          const held = browserRuntime.heldBy(browser.session);
+          if (held) turnStops.waitForBrowser(internalCapability.threadId, providerTurnId, browser.session);
+          if (!observation && (unknown || (!held && browserRuntime.interrupted(browser.session)))) {
+            turnStops.unknownBrowserEffect(internalCapability.threadId, providerTurnId);
+          }
+        };
+        if (body.method === "tools/call" && sameBrowserTurn() && providerTurnId) turnStops.usedBrowser(internalCapability.threadId, providerTurnId);
+        try {
+          const result = await browserCalls.run({
+            botId: bot.id, threadId: internalCapability.threadId, generation: internalCapability.generation, session: browser.session,
+            provider: engine?.adapter.provider ?? registry.cliTarget(instanceId)?.driverKind ?? "browser",
+            providerInstanceId: instanceId, turnId: providerTurnId,
+            method: body.method, params: body.params, signal: abort.signal, assertActive: assertBrowserAccess,
+            outcomeUnknown: () => browserRuntime.interrupted(browser.session),
+            fullAccessNow: () => {
+              const current = botForThread(bot.id, internalCapability.threadId);
+              if (!current || cloudGuestDriven(internalCapability.threadId)) return false;
+              const level = () => liveApprovalMode(current, internalCapability.threadId, isInternalTurn(internalCapability.threadId));
+              return (groupSpeakers.get(internalCapability.threadId)?.botId === bot.id
+                ? roomTurnLevels.forRequest(internalCapability.threadId, bot.id, level) : level()) === "full";
+            },
+          }, async (signal) => {
+            let params = body.params;
+            if (body.method === "tools/call" && params?.name === BROWSER_UPLOAD_TOOL) {
+              const upload = uploadableFiles(params.arguments?.files, messageFileRootsForThread(bot.id, internalCapability.threadId));
+              if ("error" in upload) return { isError: true, content: [{ type: "text", text: upload.error }] };
+              try {
+                params = { ...params, arguments: { ...params.arguments, files: await uploadPaths(upload.files.map((file, i) => ({ file, name: attachmentNameInThread(internalCapability.threadId, params.arguments.files[i]) })), browser.session, browser.spec) } };
+              } catch (error) { assertBrowserAccess(); if (!(error instanceof BrowserUploadRefusal)) throw error; return { isError: true, content: [{ type: "text", text: error.message }] }; }
+            }
+            signal.throwIfAborted();
+            return browserRuntime.agentRpc(browser.session, browser.spec, body.method, params, assertBrowserAccess,
+              stepContext(bot, internalCapability, () => liveTurnByThread.get(internalCapability.threadId) ?? null), signal);
+          });
+          requireActiveInternalCapability();
+          const disposition = BrowserToolDispositionSchema.safeParse(result);
+          if (disposition.success && disposition.data.isError) browserFailed(disposition.data.structuredContent?.response?.code === "outcome_unknown");
+          else if (disposition.success && body.method === "tools/call" && sameBrowserTurn() && providerTurnId) {
+            turnStops.browserContinued(internalCapability.threadId, providerTurnId, browser.session);
+          }
+          return json(res, 200, { result });
+        } catch (error) { browserFailed(); throw error; }
+        finally { res.off("close", disconnected); }
       }
       // The turn's capability names its Boat; the Boat credential stays here.
       if (await dispatchRoutes([savedSteps.journalRoutes({ capability: internalCapability, readBody: readInternalBody })], { req, res, url, path, method, auth, json, readBody })) return; if (method === "POST" && path === "/api/internal/computer/mcp") {
@@ -13921,7 +14276,14 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (new Set(botIds).size !== botIds.length) return refuse(400, "bot_ids name the same teammate twice — send each teammate once");
         const addressedRoom = destination && { id: destination.id, name: destination.name, here: destination.id === source?.id };
         const roomThreadId = destination && (addressedRoom?.here ? address.threadId : destination.threadId);
-        const targets = botIds.map(botId => roomHandoffTarget({ groupId: destination?.id, threadId: roomThreadId ?? store.bot(botId)?.threadId ?? "", botId }, address));
+        const senderNode = coordinator.node(internalCapability.roomHandoffId ?? internalCapability.generation);
+        const recoveryMode = call.consult ? "consult" : call.reply === "none" ? "notify" : "work";
+        const targets = botIds.map(botId => {
+          const target = roomHandoffTarget({ groupId: destination?.id, threadId: roomThreadId ?? store.bot(botId)?.threadId ?? "", botId }, address);
+          const recovery = originalWorkerRecovery(senderNode, { ...target, threadId: call.thread }, recoveryMode, call.rework);
+          if (recovery) target.threadId = recovery.threadId;
+          return target;
+        });
         const direct = targets.some(target => !target.groupId), fresh = direct && call.thread === "new";
         const folder = inMyFolderCwd(call.inMyFolder, direct, store.taskByThread(internalSender.id, address.threadId)?.cwd, DATA_DIR);
         if (folder.error) return refuse(400, folder.error);
@@ -13972,14 +14334,16 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
             requireActiveInternalCapability();
             const recipient = store.bot(target.botId);
             if (!recipient) throw new Error("The recipient no longer exists");
+            const recovery = originalWorkerRecovery(senderNode, target, mode, call.rework);
             // Work a person's request hands on opens in the receiving bot's chat with them when it may use their own apps.
             const opener = (room ? null : handOnFor) ?? openerFrom(address.threadId);
             // A Chief answers, for the person, the question a teammate it manages waits on in a thread the Chief did not open.
-            const forPerson = EXTERNAL || room || fresh || call.answers || mode !== "work" || call.thread === "standing" || !teammatePrompts.actsForPerson(internalSender, internalCapability.threadId) || !canManage(internalSender, recipient) || !threadReadableFrom(internalCapability.threadId)(call.thread) ? undefined : await questionRouting.answerForPerson({ sender: internalSender, senderThreadId: address.threadId, target: recipient, threadId: call.thread, message: call.message });
+            const forPerson = recovery || EXTERNAL || room || fresh || call.answers || mode !== "work" || call.thread === "standing" || !teammatePrompts.actsForPerson(internalSender, internalCapability.threadId) || !canManage(internalSender, recipient) || !threadReadableFrom(internalCapability.threadId)(call.thread) ? undefined : await questionRouting.answerForPerson({ sender: internalSender, senderThreadId: address.threadId, target: recipient, threadId: call.thread, message: call.message });
             if (forPerson) { if (forPerson.outcome === "failed") refused.push(forPerson.detail); receipts.push(forPerson); continue; }
-            const continued = room || fresh ? undefined : workThreadFor(store, { botId: target.botId, botName: recipient.name, fromBotId: internalSender.id, fromThreadId: address.threadId, thread: call.thread, notice: mode === "notify",
-              answering: coordinator.answersTo(internalCapability.roomHandoffId ?? generation), also: (task) => !CLOUD_TEAM || threadStarters.get(task.threadId) === opener });
-            const relayed = EXTERNAL || (!call.answers && (room || fresh || mode === "consult")) ? undefined : await questionRouting.relay({ sender: internalSender, senderThreadId: address.threadId,
+            const continued = recovery ? store.taskByThread(recovery.botId, recovery.threadId)
+              : room || fresh ? undefined : workThreadFor(store, { botId: target.botId, botName: recipient.name, fromBotId: internalSender.id, fromThreadId: address.threadId, thread: call.thread, notice: mode === "notify",
+                answering: coordinator.answersTo(internalCapability.roomHandoffId ?? generation), also: task => !CLOUD_TEAM || threadStarters.get(task.threadId) === opener });
+            const relayed = recovery || EXTERNAL || (!call.answers && (room || fresh || mode === "consult")) ? undefined : await questionRouting.relay({ sender: internalSender, senderThreadId: address.threadId,
               senderNode: coordinator.node(internalCapability.roomHandoffId ?? generation), target: recipient, message: call.message, ...(call.answers ? { answers: call.answers } : {}), ...(continued ? { threadId: continued.threadId } : {}),
               ...(internalCapability.delegatedThisTurn ? { sentThisTurn: internalCapability.delegatedThisTurn } : {}) });
             if (relayed) { if (relayed.outcome === "failed") refused.push(relayed.detail); receipts.push(relayed); continue; }
@@ -13995,7 +14359,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
               if (!task) throw new Error("The recipient no longer exists");
               target.threadId = task.threadId;
               if (!continued) createdThread = task.threadId;
-              delegatedLevel.apply(internalSender, internalCapability.threadId, internalCapability.roomHandoffId ?? generation, recipient, target.threadId);
+              if (!recovery) delegatedLevel.apply(internalSender, internalCapability.threadId, internalCapability.roomHandoffId ?? generation, recipient, target.threadId);
             }
             const routed = lane ? { botId: target.botId, threadId: lane.threadId } : target;
             const { node, duplicate } = coordinator.enqueue(address, generation, internalCapability.roomHandoffId, routed, call.message, {
@@ -15736,6 +16100,7 @@ const gracefulShutdown = createGracefulShutdown({
     () => {
       followupsReady = false;
       companyShutdown = true;
+      settleBrowserWaits(true);
       // Before any provider is torn down, so what the teardown fails stays cut for the next start.
       coordinator.close();
       noteTurnsCutByShutdown();

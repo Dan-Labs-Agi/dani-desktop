@@ -8,6 +8,7 @@ import type { ProviderIconPreset } from "../../shared/provider-icon";
 import { FADED_PROVIDER_MARK, providerMarkTone } from "./provider-mark-fade";
 import { DANI_FREE_INSTANCE_IDS } from "../../shared/dani-free";
 import { RobotAvatar } from "./robot/RobotAvatar";
+import { isHermesHarness } from "../../shared/hermes-harness";
 
 export { HermesMark, CursorMark, GrokBotMark };
 
@@ -214,6 +215,22 @@ export function PresetProviderMark({ preset, size = 16, className }: IconProps &
       return <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true"><path fill="#94A3B8" d="M16.778 1.844v1.919q-.569-.026-1.138-.032-.708-.008-1.415.037c-1.93.126-4.023.728-6.149 2.237-2.911 2.066-2.731 1.95-4.14 2.75-.792.447-2.497.904-3.936 1.131v4.229c1.31.184 2.908.627 3.795 1.132 1.41.798 1.228.683 4.14 2.75 2.126 1.509 4.22 2.11 6.148 2.236.88.058 1.716.041 2.555.005v1.918L24 15.038l-7.222-4.17v2.176c-.86.038-1.611.065-2.278.021-1.364-.09-2.417-.357-3.979-1.465-2.244-1.593-2.866-2.027-3.68-2.508.889-.518 1.449-.906 3.822-2.59 1.56-1.109 2.614-1.377 3.978-1.466.667-.044 1.418-.017 2.278.02v2.176L24 6.014Z" /></svg>;
     case "deepseek":
       return <DeepSeekMark size={size} className={className} />;
+  }
+}
+
+export function ModelProviderMark({ instance, provider, ...props }: IconProps & {
+  instance: Pick<InstanceInfo, "driverKind" | "icon"> & { instanceId?: string };
+  provider?: string;
+  subtle?: boolean;
+}) {
+  if (!isHermesHarness(instance)) return <InstanceProviderMark instance={instance} {...props} />;
+  switch (provider?.toLocaleLowerCase()) {
+    case "claude": case "anthropic": return <ClaudeMark {...props} />;
+    case "codex": case "openai": return <CodexMark {...props} />;
+    case "xai": return <GrokMark {...props} />;
+    case "opencode": return <OpenCodeMark {...props} />;
+    default: return <span aria-hidden="true" className={cn("inline-flex shrink-0 items-center justify-center text-[10px] font-semibold text-ink-secondary", props.className)}
+      style={{ width: props.size ?? 16, height: props.size ?? 16 }}>{provider?.slice(0, 1) ?? ""}</span>;
   }
 }
 

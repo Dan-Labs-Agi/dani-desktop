@@ -147,6 +147,38 @@ describe("CdpConnection", () => {
     await expect(event).rejects.toMatchObject({ code: "closed" });
     expect(connection.closed).toBe(true);
   });
+
+  it("limits cancelled-call stream restoration to screencast control and keeps action dispatch fenced afterward", async () => {
+    const browser = fakeBrowser();
+    const connection = new CdpConnection(browser.transport);
+    browser.reply({ method: "Target.attachedToTarget", params: { sessionId: "S1", targetInfo: { targetId: "T1", type: "page" } } });
+    const session = connection.session("S1")!;
+    const tracked: Promise<unknown>[] = [];
+    const cancelled = new Error("call cancelled");
+    await connection.withDispatchScope({
+      beforeSend() { throw cancelled; },
+      track(work) { tracked.push(work); },
+    }, async () => {
+      await connection.withScreencastScope(async () => {
+        await Promise.resolve();
+        for (const method of ["Page.stopScreencast", "Page.startScreencast", "Page.screencastFrameAck"]) {
+          const pending = session.send(method);
+          browser.reply({ id: browser.sent.at(-1)!.id, result: {} });
+          await pending;
+        }
+        const sent = browser.sent.length;
+        for (const method of ["Page.navigate", "Page.reload", "Input.dispatchMouseEvent", "Runtime.evaluate", "Page.captureScreenshot", "Target.createTarget"]) {
+          await expect(session.send(method)).rejects.toMatchObject({ code: "forbidden-method" });
+        }
+        await expect(session.send("Page.startScreencast", {}, { effect: true })).rejects.toMatchObject({ code: "forbidden-method" });
+        expect(browser.sent).toHaveLength(sent);
+      });
+      await expect(session.send("Page.navigate", { url: "https://example.com/" })).rejects.toBe(cancelled);
+    });
+    expect(browser.sent.map((command) => command.method)).toEqual(["Page.stopScreencast", "Page.startScreencast", "Page.screencastFrameAck"]);
+    expect(tracked).toHaveLength(3);
+    connection.close();
+  });
 });
 
 describe("transports", () => {

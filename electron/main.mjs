@@ -133,6 +133,7 @@ const { MIN_BOUNDS, normalizeUnreadCount, resolveWindowState } = require("./wind
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // vite binds IPv4; a bare "localhost" can resolve to ::1.
 const DEV_URL = process.env.ELECTRON_START_URL ?? "http://127.0.0.1:5199";
+const desktopSmoke = process.env.OMB_SMOKE_TEST === "1" || process.env.OMB_SMOKE_TEST === "interactive";
 let SERVER_PORT = 8799;
 const APP_ICON = path.join(__dirname, "resources/app-icon.png");
 let desktopViewerWindow = null;
@@ -367,6 +368,7 @@ let credentialStoreUnavailable = false;
 
 async function loadSecureCredentials() {
   const result = await readSecureCredentials({
+    disabled: process.env.DANI_DISABLE_OS_CREDENTIALS === "1",
     exists: () => fs.existsSync(CREDENTIALS_FILE),
     isAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
     readFile: () => fs.readFileSync(CREDENTIALS_FILE),
@@ -825,7 +827,7 @@ function ensureCloudAccount() {
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Cloud sign-in requires the local desktop app.");
   cloudAccount = createCloudAccountClient({
     store: createCloudAccountStore({ file: path.join(app.getPath("userData"), cloudTarget(process.env).file), encryption: {
-      available: async () => (await withSecureStorageDeadline(() => safeStorage.isAsyncEncryptionAvailable())) &&
+      available: async () => !credentialStoreUnavailable && (await withSecureStorageDeadline(() => safeStorage.isAsyncEncryptionAvailable())) &&
         (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
       encrypt: value => withSecureStorageDeadline(() => safeStorage.encryptStringAsync(value)), decrypt: value => withSecureStorageDeadline(() => safeStorage.decryptStringAsync(value)),
     } }),
@@ -908,7 +910,7 @@ function ensureManagedDesktop() {
   if (managedDesktop) return managedDesktop;
   if (!app.isPackaged || desktopRemoteAccess) throw new Error("Organization sign-in requires the installed desktop app running on this computer.");
   const encryption = {
-    available: async () => (await withSecureStorageDeadline(() => safeStorage.isAsyncEncryptionAvailable())) &&
+    available: async () => !credentialStoreUnavailable && (await withSecureStorageDeadline(() => safeStorage.isAsyncEncryptionAvailable())) &&
       (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text"),
     encrypt: value => withSecureStorageDeadline(() => safeStorage.encryptStringAsync(value)),
     decrypt: value => withSecureStorageDeadline(() => safeStorage.decryptStringAsync(value)),
@@ -2818,7 +2820,7 @@ async function saveWorkspaceCredential(name, value) {
   if (!patchFor || typeof value !== "string") {
     throw new Error("Unsupported credential");
   }
-  if (app.isPackaged && !(await safeStorage.isAsyncEncryptionAvailable())) {
+  if (app.isPackaged && (credentialStoreUnavailable || !(await safeStorage.isAsyncEncryptionAvailable()))) {
     throw new Error("The operating-system credential store is unavailable");
   }
   const secret = value.trim();
@@ -2957,8 +2959,7 @@ app.whenReady().then(async () => {
   }
   installServerSessions({ app, defaultSession: session.defaultSession, serverPort: () => SERVER_PORT,
     ownerToken: () => (app.isPackaged && serverReady ? desktopMutationToken : null) });
-  if (app.isPackaged) app.setAsDefaultProtocolClient("danibot");
-  if (app.isPackaged) app.setAsDefaultProtocolClient("danibot");
+  if (app.isPackaged && !desktopSmoke) app.setAsDefaultProtocolClient("danibot");
   if (process.platform === "darwin") app.dock.setIcon(APP_ICON);
   secureCredentials = await loadSecureCredentials();
   // An orphaned third-party key with no clear handler left: drop it rather than keep it at rest.
@@ -3161,7 +3162,7 @@ app.whenReady().then(async () => {
       return credentials;
     }).finally(syncManagedComposioCredentials);
   }
-  startUpdater(quietSignals({ powerMonitor, window: () => mainWindow, lastInput: oneHome.lastInput, local: localServerRequest, place: () => homeWindow.placeOrigin(), cloudFetch: (...args) => session.defaultSession.fetch(...args), asleep: origin => homeWindow.asleepAt(origin), busy: () => ((oneHome.oneHome.busy() || ownHome?.busy()) && "move") || (computerSharing?.busy() && "lending") || (talk.busy() && "talk") || (companyBackupController || companyRestoreCommitting ? "backup" : null) }));
+  if (process.env.OMB_SMOKE_TEST !== "interactive") startUpdater(quietSignals({ powerMonitor, window: () => mainWindow, lastInput: oneHome.lastInput, local: localServerRequest, place: () => homeWindow.placeOrigin(), cloudFetch: (...args) => session.defaultSession.fetch(...args), asleep: origin => homeWindow.asleepAt(origin), busy: () => ((oneHome.oneHome.busy() || ownHome?.busy()) && "move") || (computerSharing?.busy() && "lending") || (talk.busy() && "talk") || (companyBackupController || companyRestoreCommitting ? "backup" : null) }));
   refreshApplicationMenu();
   openWindowForLink = () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow({ deferNavigation: homeWindow.current().kind !== "computer" });

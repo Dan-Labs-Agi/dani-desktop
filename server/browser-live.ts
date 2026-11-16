@@ -25,6 +25,7 @@ const BUSY_LIMIT_MS = 10 * 60_000;
 // agent-browser's native press resolver supplies the virtual key codes and Enter/Tab text its raw input_keyboard relay omits.
 const DISCRETE_KEYS = new Set(["Backspace", "Enter", "Tab", "Escape", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);
 const RESTART_NEEDED = "A browser action was interrupted. Choose Restart browser… in the browser menu before continuing.";
+const ATTACHED_RESET_NOTICE = "The connection to your Chrome was reset. Chrome was not stopped, and page effects already sent there cannot be globally stopped. Check the page before repeating any interrupted action.";
 const restartedNote = (keepsSignIns: boolean) => `The page stopped responding, so the browser was restarted. ${keepsSignIns ? "Your sign-ins are kept; open" : "It is a temporary browser, so its sign-ins are gone; open"} the page again.`;
 const INPUT_RELAY = { timeoutMs: 30_000, maxBytes: 65_536 };
 /** Frames a view may have on its way without acknowledging them: over a slow link one acknowledgement round trip per frame
@@ -107,11 +108,15 @@ function displayUrl(value: unknown): string {
   } catch { return ""; }
 }
 
-/** The engine's JSON answer says the command failed, so it ran to the end; a timeout, abort or crash stays an interrupted action. */
-function engineAnsweredFailure(error: unknown): boolean {
+/** agent-browser 0.41.2 reports an unknown outcome after dispatch with success:false, not a settled refusal. */
+function engineFailureOutcome(error: unknown): "settled" | "unknown" | null {
   const stdout = (error as { stdout?: unknown } | null)?.stdout;
-  if (typeof stdout !== "string" || !stdout.trim()) return false;
-  try { return object(JSON.parse(stdout))?.success === false; } catch { return false; }
+  if (typeof stdout !== "string" || !stdout.trim()) return null;
+  try {
+    const result = object(JSON.parse(stdout));
+    if (result?.success !== false) return null;
+    return result.code === "outcome_unknown" ? "unknown" : "settled";
+  } catch { return null; }
 }
 
 function browserLaunchFailure(error: unknown): boolean {
@@ -170,7 +175,7 @@ export function browserRestartRefusal(interrupted: boolean, busyBots: ReadonlyAr
   return !interrupted && busyBots.some((bot) => !bot.waitingOnBrowser) ? "Stop every bot using this profile before restarting its browser." : null;
 }
 
-type Action = { type: "take" | "release" | "restart" } | { type: "ack"; seq: number }
+type Action = { type: "take" | "release"; attempt?: string } | { type: "restart" } | { type: "ack"; seq: number }
   | { type: "command"; args: string[] } | { type: "input"; message: ObjectValue } | { type: "inputs"; messages: ObjectValue[] }
   | { type: "dialog"; accept: boolean; promptText?: string }
   /** The panel's size in CSS pixels, which the page fills; null for a collapsed panel, which leaves the page as it is. */
@@ -189,7 +194,11 @@ export function parseBrowserLiveAction(value: unknown): Action {
   const body = object(value);
   const invalid = () => new BrowserLiveError("Invalid browser action.");
   if (!body) throw invalid();
-  if (body.type === "take" || body.type === "release" || body.type === "restart") return { type: body.type };
+  if (body.type === "take" || body.type === "release") {
+    if (body.attempt !== undefined && (!text(body.attempt, 128) || !body.attempt)) throw invalid();
+    return { type: body.type, ...(typeof body.attempt === "string" ? { attempt: body.attempt } : {}) };
+  }
+  if (body.type === "restart") return { type: "restart" };
   if (body.type === "ack" && integer(body.seq, 1, Number.MAX_SAFE_INTEGER)) return { type: "ack", seq: body.seq };
   if (body.type === "resize") {
     if (!number(body.width, 0, 100_000) || !number(body.height, 0, 100_000)) throw invalid();
@@ -284,6 +293,7 @@ interface Viewer extends OpenOptions {
   port?: number;
   restarting: boolean;
   waiting: boolean;
+  recoveryOnly: boolean;
   abort: AbortController;
   unwatch: () => void;
   /** Set once its stream dropped: runs when its last in-flight action has finished. */
@@ -312,6 +322,7 @@ export class BrowserLive {
   private readonly viewers = new Map<string, Viewer>();
   /** By browser session: the person's view their hold is used from. Their other views watch it; any may take it over. */
   private readonly drivers = new Map<string, string>();
+  private readonly reservations = new Map<string, { viewerId: string; attempt?: string }>();
   private readonly left = new Map<string, Left>();
   private readonly clocks = new Map<string, HoldClock>();
   private readonly holdLimits: HoldLimits;
@@ -373,7 +384,8 @@ export class BrowserLive {
       }
       // Like its frames, the page's question is withheld from views while another person holds the browser.
       const dialog = hidden ? null : this.dialogs.get(session)?.watch.dialog ?? null;
-      this.send(viewer, { type: "control", held: holder !== null, owned: holder !== null && !hidden, controlling: this.controlling(viewer), ...(dialog ? { dialog } : {}) });
+      const reservation = this.reservations.get(session);
+      this.send(viewer, { type: "control", held: holder !== null, owned: holder !== null && !hidden, controlling: !viewer.recoveryOnly && this.controlling(viewer), ...(reservation?.viewerId === viewer.id && !hidden && reservation.attempt ? { attempt: reservation.attempt } : {}), ...(dialog && !viewer.recoveryOnly ? { dialog } : {}) });
       if (!hidden && viewer.hiddenFrame) {
         const frame = viewer.hiddenFrame; viewer.hiddenFrame = undefined;
         this.frame(viewer, frame);
@@ -506,10 +518,10 @@ export class BrowserLive {
   }
 
   /** The person's hold ends as a hand-back does, once what their view that dropped pressed is let go. */
-  private end(session: string, person: string): void {
+  private end(session: string, person: string, reservation?: { viewerId: string; attempt?: string }): void {
     const left = this.left.get(session);
     const finish = () => {
-      if (this.runtime.heldBy(session) !== person) return;
+      if (this.runtime.heldBy(session) !== person || (reservation && this.reservations.get(session) !== reservation)) return;
       for (const viewer of this.viewsOf(session, person)) this.abandonPressedInput(viewer);
       this.runtime.release(session, person);
       this.control(session);
@@ -520,6 +532,7 @@ export class BrowserLive {
   private forgetHold(session: string): void {
     this.drivers.delete(session);
     this.left.delete(session);
+    this.reservations.delete(session);
     this.clocks.get(session)?.stop();
   }
 
@@ -532,6 +545,7 @@ export class BrowserLive {
     await this.left.get(session)?.settled;
     if (!this.current(viewer) || !free()) return;
     this.drivers.set(session, viewer.id);
+    this.reservations.set(session, { viewerId: viewer.id, attempt: randomUUID() });
     this.left.delete(session);
   }
 
@@ -580,12 +594,16 @@ export class BrowserLive {
     } catch (error) {
       if (timedOut(error)) throw new BrowserBusyError();
       console.warn("browser-live:", error);
+      const outcome = engineFailureOutcome(error);
+      if (outcome === "unknown") {
+        throw new BrowserLiveError("The browser did not confirm this action. It may already have taken effect. Choose Restart browser… in the browser menu before continuing, then check the page before repeating it.", 503);
+      }
       if (browserLaunchFailure(error)) {
         // A daemon holding a launch config Chrome cannot satisfy here (headed, no display) fails every command until killed, so discard the session once.
         this.resetSession(viewer, "a failed browser launch");
         throw new BrowserLiveError("The browser could not start on this server. Reconnect to retry with a fresh browser session.", 503);
       }
-      if (person && engineAnsweredFailure(error)) throw new BrowserActionFailedError(args);
+      if (person && outcome === "settled") throw new BrowserActionFailedError(args);
       throw new BrowserLiveError("The browser could not complete this action. Check that the browser engine is installed, then reconnect.", 503);
     }
   }
@@ -603,11 +621,13 @@ export class BrowserLive {
     void reset.finally(() => { if (this.sessionResets.get(viewer.session) === reset) this.sessionResets.delete(viewer.session); });
   }
 
-  private async connect(viewer: Viewer): Promise<number> {
+  private async connect(viewer: Viewer): Promise<number | null> {
     // Wait out a reset or idle close in progress, so the probe meets a fresh daemon; checked on every attempt.
     const resetting = this.sessionResets.get(viewer.session);
     if (resetting) await resetting;
+    if (this.runtime.recoveryOnly(viewer.session)) return null;
     await this.runtime.settled(viewer.session);
+    if (this.runtime.recoveryOnly(viewer.session)) return null;
     await this.runtime.launchReady(viewer.spec).catch((error: unknown) => {
       throw new BrowserLiveError(error instanceof Error ? error.message : "The browser is not ready yet.", 503);
     });
@@ -633,13 +653,14 @@ export class BrowserLive {
     return port;
   }
 
-  private async connectWhenFree(viewer: Viewer): Promise<number> {
+  private async connectWhenFree(viewer: Viewer): Promise<number | null> {
     const deadline = Date.now() + BUSY_LIMIT_MS;
     for (let attempt = 0; ; attempt++) {
       try { return await this.connect(viewer); }
       catch (error) {
+        if (this.runtime.recoveryOnly(viewer.session)) return null;
         if (!(error instanceof BrowserBusyError) || !this.current(viewer)) throw error;
-        if (Date.now() >= deadline) throw new BrowserBusyError("The bot is still using this browser. Reconnect when it has finished.");
+        if (Date.now() >= deadline) throw new BrowserBusyError("The bot is still using this browser. The live view will reconnect when it is free.");
       }
       viewer.waiting = true;
       this.startEvents(viewer);
@@ -658,6 +679,16 @@ export class BrowserLive {
     if (viewer.res.headersSent) return;
     viewer.res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", "X-Accel-Buffering": "no", Connection: "keep-alive" });
     viewer.res.flushHeaders();
+  }
+
+  private heartbeat(viewer: Viewer): void {
+    viewer.heartbeat = setInterval(() => {
+      const oldest = viewer.unacked.values().next().value;
+      if (!this.current(viewer) || (oldest !== undefined && Date.now() - oldest > 2 * HEARTBEAT_MS)) { this.close(viewer, true, true); return; }
+      this.control(viewer.session);
+      this.send(viewer, { type: "heartbeat" });
+    }, HEARTBEAT_MS);
+    viewer.heartbeat.unref();
   }
 
   private async input(viewer: Viewer, message: ObjectValue): Promise<void> {
@@ -751,7 +782,7 @@ export class BrowserLive {
 
   /** The person's browser stopped answering an input: restarted for them, on the same profile, and every view reconnects. */
   private async restartUnresponsive(viewer: Viewer): Promise<boolean> {
-    if (viewer.restarting) return false;
+    if (viewer.restarting || attachesToChrome(viewer.spec.env ?? {})) return false;
     viewer.restarting = true;
     try {
       await this.runtime.restart(viewer.session, viewer.person, async () => {
@@ -778,10 +809,8 @@ export class BrowserLive {
     if (this.viewers.size >= 8 || [...this.viewers.values()].filter((v) => v.session === options.session).length >= 2) {
       throw new BrowserLiveError("Too many browser views are open. Close another browser panel first.", 429);
     }
-    const viewer: Viewer = { ...options, id: randomUUID(), person: options.person ?? options.owner, closed: false, blocked: false, pendingActions: 0, restarting: false, pressedKeys: new Map(), pressedButtons: new Set(), pointer: { x: 0, y: 0 }, unacked: new Map(), waiting: false, abort: new AbortController(), unwatch: () => {} };
+    const viewer: Viewer = { ...options, id: randomUUID(), person: options.person ?? options.owner, closed: false, blocked: false, pendingActions: 0, restarting: false, recoveryOnly: false, pressedKeys: new Map(), pressedButtons: new Set(), pointer: { x: 0, y: 0 }, unacked: new Map(), waiting: false, abort: new AbortController(), unwatch: () => {} };
     if (!this.current(viewer)) throw new BrowserLiveError("This browser view is no longer available.", 409);
-    // A view that opens while another holds the browser leaves the holder's page as it is.
-    if (options.size && !this.runtime.heldBy(options.session)) viewer.requested = { ...options.size, order: ++this.order };
     viewer.unwatch = this.runtime.watch(viewer.session, viewer.spec);
     this.viewers.set(viewer.id, viewer);
     if (this.ownedBy(viewer)) this.clock(viewer.session).watched(true);
@@ -790,6 +819,16 @@ export class BrowserLive {
     try {
       const port = await this.connectWhenFree(viewer);
       if (!this.current(viewer)) throw new BrowserLiveError("This browser view is no longer available.", 409);
+      if (port === null) {
+        viewer.recoveryOnly = true;
+        viewer.waiting = false;
+        this.startEvents(viewer);
+        this.send(viewer, { type: "ready", viewerId: viewer.id, recoveryOnly: true, message: RESTART_NEEDED });
+        this.control(viewer.session);
+        this.heartbeat(viewer);
+        return;
+      }
+      if (options.size && !this.runtime.heldBy(options.session)) viewer.requested = { ...options.size, order: ++this.order };
       // Before its frames flow: the person's next view carries on with their hold, after a dropped stream or a reopened app.
       await this.carryOn(viewer);
       if (!this.current(viewer)) throw new BrowserLiveError("This browser view is no longer available.", 409);
@@ -826,20 +865,13 @@ export class BrowserLive {
         socket.addEventListener("open", () => { clearTimeout(timer); socket.removeEventListener("error", failed); socket.removeEventListener("close", failed); resolve(); }, { once: true });
       });
       if (!this.current(viewer)) { this.close(viewer); return; }
-      viewer.heartbeat = setInterval(() => {
-        const oldest = viewer.unacked.values().next().value;
-        if (!this.current(viewer) || (oldest !== undefined && Date.now() - oldest > 2 * HEARTBEAT_MS)) { this.close(viewer, true, true); return; }
-        this.control(viewer.session);
-        this.send(viewer, { type: "heartbeat" });
-      }, HEARTBEAT_MS);
-      viewer.heartbeat.unref();
+      this.heartbeat(viewer);
     } catch (error) {
       console.warn("browser-live:", error);
       if (error instanceof BrowserUnresponsiveError) this.startEvents(viewer);
       if (options.res.headersSent) {
-        const busy = error instanceof BrowserBusyError;
-        const explained = busy || error instanceof BrowserUnresponsiveError;
-        this.send(viewer, { type: "error", retryable: !busy, message: explained ? error.message : "The browser stream could not start." });
+        const explained = error instanceof BrowserBusyError || error instanceof BrowserUnresponsiveError;
+        this.send(viewer, { type: "error", retryable: true, message: explained ? error.message : "The browser stream could not start." });
         this.close(viewer); return;
       }
       this.close(viewer, options.res.headersSent);
@@ -854,7 +886,11 @@ export class BrowserLive {
       // A hand-back sent as its own stream dropped still hands back.
       const left = [...this.left.values()].find((entry) => entry.viewer.id === viewerId);
       if (left && left.viewer.botId === botId && left.viewer.owner === owner && object(body)?.type === "release") {
-        this.end(left.viewer.session, left.viewer.person);
+        const action = parseBrowserLiveAction(body);
+        const reservation = this.reservations.get(left.viewer.session);
+        if (action.type === "release" && (action.attempt === undefined || (reservation?.viewerId === viewerId && reservation.attempt === action.attempt))) {
+          this.end(left.viewer.session, left.viewer.person, action.attempt === undefined ? undefined : reservation);
+        }
         return { ok: true };
       }
       throw new BrowserLiveError("This browser view is no longer available. Reopen the browser panel.", 404);
@@ -869,12 +905,20 @@ export class BrowserLive {
           const env = browserRuntimeEnv({ ...viewer.spec.env, AGENT_BROWSER_SESSION: viewer.session });
           if (!await closeBrowserSession(viewer.spec.command, env)) throw new Error("browser close failed");
         });
+        if (this.ownedBy(viewer)) {
+          this.clock(viewer.session).used();
+          this.clock(viewer.session).watched(true);
+        }
         this.control(viewer.session);
         await restarting;
         this.closeForSession(viewer.session);
-        return { ok: true };
+        return { ok: true, ...(attachesToChrome(viewer.spec.env ?? {}) ? { notice: ATTACHED_RESET_NOTICE } : {}) };
       } catch { throw new BrowserLiveError("The browser could not restart. Wait for active work to finish and try again.", 409); }
       finally { viewer.restarting = false; if (viewer.closed) this.runtime.release(viewer.session, viewer.person); this.control(viewer.session); }
+    }
+    if (viewer.recoveryOnly) {
+      if (action.type === "resize" || action.type === "ack") return { ok: true };
+      throw new BrowserLiveError(RESTART_NEEDED, 409);
     }
     if (action.type === "ack") {
       this.rendered(viewer, action.seq);
@@ -890,21 +934,32 @@ export class BrowserLive {
     }
     // Any view of the person hands their hold back, whichever of their views it is used from.
     if (action.type === "release") {
-      this.end(viewer.session, viewer.person);
+      const reservation = this.reservations.get(viewer.session);
+      if (action.attempt === undefined || (reservation?.viewerId === viewer.id && reservation.attempt === action.attempt)) {
+        this.end(viewer.session, viewer.person, action.attempt === undefined ? undefined : reservation);
+      }
       return { ok: true };
     }
     if (action.type === "take") {
       try {
         const taking = this.runtime.take(viewer.session, viewer.person);
+        const reservation = { viewerId: viewer.id, ...(action.attempt ? { attempt: action.attempt } : {}) };
+        if (this.ownedBy(viewer)) this.reservations.set(viewer.session, reservation);
+        if (this.ownedBy(viewer)) {
+          this.clock(viewer.session).used();
+          this.clock(viewer.session).watched(true);
+        }
         this.control(viewer.session);
         // The bot's own action finished first, so input aimed before the grant may no longer fit the page.
         const waited = await taking;
+        if (this.reservations.get(viewer.session) !== reservation) return { ok: true, waited: waited === true };
         // Taken over from another view of theirs: what that view pressed is let go first, and never replayed here.
         const before = this.viewers.get(this.drivers.get(viewer.session) ?? "");
         if (before && before !== viewer) await this.releaseHeld(before);
+        if (this.reservations.get(viewer.session) !== reservation) return { ok: true, waited: waited === true };
         await this.left.get(viewer.session)?.settled;
         if (!this.current(viewer)) { this.close(viewer, true, true); throw new BrowserLiveError("This browser view closed.", 409); }
-        if (this.ownedBy(viewer)) {
+        if (this.ownedBy(viewer) && this.reservations.get(viewer.session) === reservation) {
           this.drivers.set(viewer.session, viewer.id);
           this.left.delete(viewer.session);
           this.clock(viewer.session).used();

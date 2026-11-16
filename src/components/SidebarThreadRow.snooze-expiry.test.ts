@@ -12,7 +12,8 @@ vi.mock("react", async (original) => ({ ...await original<typeof import("react")
   useEffect: (effect: EffectCallback) => { fixture.effects.push(effect); },
 }));
 import { useSnoozeExpiry, visibleSidebarThreads } from "./SidebarThreadRow";
-import { BotThreadList, botRowProps } from "./Sidebar";
+import { BotThreadList } from "./Sidebar";
+import { botRowProps } from "@/lib/sidebar-selection";
 import { initialState, type Bot } from "@/state/store";
 vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({}) }));
 

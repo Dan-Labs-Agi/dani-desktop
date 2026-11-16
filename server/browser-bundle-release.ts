@@ -1,5 +1,5 @@
-// Reviewed vendor assets hashed on 2026-09-16: update all pins together and run each platform's packaged offline browser
-// smoke test. Chromium's headless shell, not full Chrome (which includes Widevine).
+// Chromium assets hashed on 2026-09-16; engine pins come from the shared release resolver.
+// Qualify each native packaged browser. This is headless shell, not full Chrome with Widevine.
 import { join } from "node:path";
 import {
   agentBrowserReleaseUrl,

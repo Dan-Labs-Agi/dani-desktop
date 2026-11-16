@@ -6,6 +6,30 @@ import { requestTooLargeMessage } from "../../shared/request-too-large";
 
 describe("plainErrorLine", () => {
   it.each([
+    "No API key configured. Run `hermes setup` to configure a provider.",
+    "Authentication failed. Please run 'hermes setup'.",
+  ])("replaces runtime setup commands with a provider-settings action: %s", raw => {
+    expect(plainErrorLine(raw)).toBe("Check the selected provider's sign-in or API key in Settings → Model providers, then try again.");
+  });
+
+  it.each([
+    "The selected model could not complete native tool qualification. No task instructions or browser actions were sent.",
+    "The selected model has no qualified native API runtime.",
+    "This model did not execute and consume the native qualification tool result. The task remains unstarted; no alternate model was used.",
+  ])("explains a first-task qualification refusal without claiming task execution: %s", raw => {
+    const line = plainErrorLine(raw);
+    expect(line).toContain("Your task has not started");
+    expect(line).toContain("no other model was used");
+    expect(line).toContain("Settings → Model providers");
+    expect(line).toContain("choose another model");
+    expect(line).not.toMatch(/hermes|native|qualification/i);
+  });
+
+  it("does not rewrite a legitimate model name", () => {
+    expect(plainErrorLine("Hermes-4-405B is temporarily unavailable. Try again later.")).toBeUndefined();
+  });
+
+  it.each([
     ["Failed to fetch", "Couldn't reach Dani Bot. Check that it's running, then try again."],
     ["NetworkError when attempting to fetch resource.", "Couldn't reach Dani Bot. Check that it's running, then try again."],
     ["The operation was aborted due to timeout", "That took too long. Try again."],

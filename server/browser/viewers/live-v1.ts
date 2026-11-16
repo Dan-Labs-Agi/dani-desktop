@@ -113,7 +113,7 @@ export class LiveV1 {
   #control(viewer: V1Viewer): void {
     const state = viewer.core?.controlState();
     if (!state) return;
-    this.#send(viewer, { type: "control", held: state.held, owned: state.owned, controlling: state.controlling });
+    this.#send(viewer, { type: "control", held: state.held, owned: state.owned, controlling: state.controlling, ...(state.attempt ? { attempt: state.attempt } : {}) });
   }
 
   #controlAll(session: string): void {
@@ -296,7 +296,7 @@ export class LiveV1 {
       }
     }
     if (action.type === "release") {
-      await core.input({ type: "releaseControl" });
+      await core.input({ type: "releaseControl", ...(action.attempt ? { attempt: action.attempt } : {}) });
       this.#controlAll(viewer.session);
       return { ok: true };
     }
@@ -304,7 +304,7 @@ export class LiveV1 {
       const before = this.#service.heldBy(viewer.session);
       if (before !== null && before !== viewer.person) throw this.#refusal(viewer, "Another browser view or bot action is using this browser. Try again shortly.");
       const busy = this.#service.profiles().find((profile) => profile.session === viewer.session)?.control.agents ?? 0;
-      await core.input({ type: "takeControl" });
+      await core.input({ type: "takeControl", ...(action.attempt ? { attempt: action.attempt } : {}) });
       this.#controlAll(viewer.session);
       if (!core.controlState().controlling) throw this.#refusal(viewer, "Another browser view or bot action is using this browser. Try again shortly.");
       if (!this.#current(viewer)) { this.#close(viewer); throw new BrowserLiveError("This browser view closed.", 409); }

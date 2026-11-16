@@ -4,8 +4,9 @@ import { t } from "./i18n";
 import { filterCustomModels, partitionCustomModels, suggestedModels } from "./custom-models";
 import { isCustomOnly, SIGN_IN_FAMILY_LABEL, signInFamily, splitEngineRail } from "./engine-rail";
 import { displayModelLabel, shortModelLabel } from "./model-friendly";
-import { choiceIsSelected, daniModelLabel, modelChoices, takesTypedModels, type ModelChoice } from "./model-choices";
+import { choiceIsSelected, daniModelLabel, modelChoices, modelOptionForId, takesTypedModels, type ModelChoice } from "./model-choices";
 import { DANI_FREE_INSTANCE_IDS, isDaniFreeInstance } from "../../shared/dani-free";
+import { isHermesHarness } from "../../shared/hermes-harness";
 
 export type ModelOption = InstanceInfo["models"]["options"][number];
 
@@ -51,6 +52,7 @@ export interface MenuGroup {
 
 export interface MenuCurrent {
   instance?: InstanceInfo;
+  provider?: string;
   label: string;
   title: string;
   meta?: string;
@@ -84,7 +86,8 @@ export interface SimpleMenuInput {
 }
 
 export function providerName(instance: InstanceInfo): string {
-  if (isDaniFreeInstance(instance)) return "Dani";
+  if (isHermesHarness(instance)) return t("model.choose");
+  if (isDaniFreeInstance(instance)) return instance.driverKind === "opencodeGo" ? "OpenCode" : "Dani Free";
   const family = signInFamily(instance);
   if (family) return SIGN_IN_FAMILY_LABEL[family];
   if (instance.access !== "api") return instance.displayName;
@@ -92,7 +95,9 @@ export function providerName(instance: InstanceInfo): string {
 }
 
 export function modelName(instance: InstanceInfo | undefined, model: string): string {
-  const option = instance?.models.options.find((candidate) => candidate.id === model);
+  if (model === "hermes-default" && !instance) return t("model.simple.unavailable");
+  const option = modelOptionForId(instance, model);
+  if (instance && isHermesHarness(instance)) return option?.label ?? (model === "hermes-default" ? t("model.simple.unavailable") : model);
   if (instance && isDaniFreeInstance(instance)) return option ? daniModelLabel(option) : t("daniSetup.unavailableModel");
   if (!instance || !option) return model;
   return displayModelLabel(option.label, providerName(instance), option.custom);
@@ -130,13 +135,15 @@ function heading(instance: InstanceInfo, listed: readonly InstanceInfo[]): Pick<
 function currentRow(input: SimpleMenuInput): MenuCurrent {
   const { instances, selection, bot, loading } = input;
   const active = instances.find((instance) => instance.instanceId === selection.instanceId);
-  const option = active?.models.options.find((candidate) => candidate.id === selection.model);
+  const option = modelOptionForId(active, selection.model);
   const free = active ? isDaniFreeInstance(active) : DANI_FREE_INSTANCE_IDS[selection.instanceId] === true;
-  const name = free ? (option ? daniModelLabel(option) : t("daniSetup.unavailableModel")) : option?.label ?? selection.model;
-  const row = { instance: active, label: free ? name : modelName(active, selection.model), title: active ? `${free ? "Dani" : active.displayName} · ${name}` : name, warning: false, pending: false };
+  const name = free ? (option ? daniModelLabel(option) : t("daniSetup.unavailableModel")) : option?.label ?? (selection.model === "hermes-default" ? t("model.simple.unavailable") : selection.model);
+  const provider = active && isHermesHarness(active) ? option?.provider ?? providerName(active) : active ? free ? providerName(active) : active.displayName : undefined;
+  const row = { instance: active, provider, label: free ? name : modelName(active, selection.model), title: provider ? `${provider} · ${name}` : name, warning: false, pending: false };
   if (!active) return loading ? { ...row, pending: true } : { ...row, meta: t("model.simple.unavailable"), warning: true };
   if (!option && input.refreshing === active.instanceId) return { ...row, pending: true };
-  if (free && (!option || (option.availability !== undefined && option.availability !== "available"))) return { ...row, meta: t("model.simple.unavailable"), warning: true };
+  if (option?.availability !== undefined && option.availability !== "available") return { ...row, meta: option.unavailableReason ?? t("model.simple.unavailable"), warning: true, blocked: true };
+  if (free && !option) return { ...row, meta: t("model.simple.unavailable"), warning: true };
   if (option?.orgBlocked) return { ...row, meta: t("model.orgBlocked"), warning: true, blocked: true };
   if (active.policy) return { ...row, meta: t("policy.managedBy", { organization: active.policy.organizationName }), warning: true };
   if (needsCli(active)) return { ...row, meta: t("model.setupRequired"), warning: true };
@@ -154,7 +161,7 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
   const models = new Map(listed.map((instance) => [instance.instanceId, listedModels(instance)]));
   const total = listed.filter((instance) => !instance.policy && !needsCli(instance))
     .reduce((sum, instance) => sum + models.get(instance.instanceId)!.all.length, 0);
-  const search = total > SIMPLE_SEARCH_AFTER || listed.some((instance) => takesTypedModels(instance) && !instance.policy && !needsCli(instance));
+  const search = listed.some(isHermesHarness) || total > SIMPLE_SEARCH_AFTER || listed.some((instance) => takesTypedModels(instance) && !instance.policy && !needsCli(instance));
   const query = search ? input.query.trim() : "";
   const { subscription, api, custom } = splitEngineRail(listed);
   const ordered = [...subscription, ...api, ...custom];
@@ -199,31 +206,48 @@ export function simpleModelMenu(input: SimpleMenuInput): SimpleMenu {
     };
   }
 
-  const groups = (current ? [current, ...ordered.filter((instance) => instance !== current)] : ordered).filter((instance) => !isDaniFreeInstance(instance)).flatMap((instance): MenuGroup[] => {
+  function providerGroups(instance: InstanceInfo): MenuGroup[] {
+    const displaySelection = isHermesHarness(instance) && selection.model === "hermes-default" ? { ...selection, model: instance.models.default } : selection;
+    const providers = new Map<string, ModelChoice[]>();
+    for (const option of modelChoices(instance, instance.models.options)) {
+      if (isHermesHarness(instance) && option.id === "hermes-default") continue;
+      const provider = option.provider || providerName(instance);
+      const options = providers.get(provider) ?? [];
+      options.push(option);
+      providers.set(provider, options);
+    }
+    return [...providers].flatMap(([provider, options]): MenuGroup[] => {
+      if (instance.policy && isHermesHarness(instance)) return query ? [] : [{ instance, label: provider, provider,
+        body: { kind: "policy", organization: instance.policy.organizationName, ...(instance.policy.team ? { team: true } : {}) } }];
+      const filtered = query && !provider.toLocaleLowerCase().includes(query.toLocaleLowerCase()) ? filterCustomModels(options, query) : options;
+      const currentId = instance.instanceId === selection.instanceId ? options.find((option) => choiceIsSelected(option, displaySelection))?.id : undefined;
+      const suggested = suggestedModels(options, instance.models.default, currentId, GROUP_SUGGESTIONS);
+      const rest = options.filter((option) => !suggested.includes(option));
+      const expandedProvider = expanded.has(`${instance.instanceId}/${provider}`);
+      const shown = query ? filtered : !isHermesHarness(instance) || expandedProvider || rest.length <= 1 ? options : suggested;
+      const rows = shown.map((option): MenuModelRow => ({
+        instance, option, label: isDaniFreeInstance(instance) ? daniModelLabel(option) : option.label,
+        ...(option.nativeModel ? { model: option.nativeModel } : {}),
+        ...(option.variant ? { variant: option.variant } : {}),
+        current: instance.instanceId === selection.instanceId && choiceIsSelected(option, displaySelection),
+        blocked: Boolean(instance.policy) || option.orgBlocked === true,
+        unavailable: needsCli(instance) || needsSignIn(instance) || (option.availability !== undefined && option.availability !== "available"),
+      }));
+      return rows.length ? [{ instance, label: provider, provider,
+        body: { kind: "models", rows, total: options.length,
+          toggle: !query && isHermesHarness(instance) && rest.length > 1 ? expandedProvider ? "less" : "more" : null,
+          localFrom: null, signInForOwn: false, probing: false,
+          ...(!isHermesHarness(instance) && !instance.policy && rows.some((row) => row.unavailable) ? { unavailableRoutes: [instance] } : {}) } }] : [];
+    });
+  }
+
+  const groups = (current ? [current, ...ordered.filter((instance) => instance !== current)] : ordered).flatMap((instance): MenuGroup[] => {
+    if (isHermesHarness(instance) || isDaniFreeInstance(instance)) return providerGroups(instance);
     const named = heading(instance, listed);
     const body = groupBody(instance, named.provider);
     return body ? [{ instance, ...named, body }] : [];
   });
 
-  const free = listed.filter(isDaniFreeInstance);
-  if (free.length) {
-    const unavailableRoutes = free.filter((instance) => !instance.policy && (needsCli(instance) || needsSignIn(instance) || instance.models.options.some((option) => option.availability !== undefined && option.availability !== "available")));
-    const rows: MenuModelRow[] = free.flatMap((instance) => instance.models.options
-      .filter((option) => !query || daniModelLabel(option).toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-      .map((option) => ({
-        instance, option, label: daniModelLabel(option),
-        current: instance.instanceId === selection.instanceId && choiceIsSelected(option, selection),
-        blocked: Boolean(instance.policy) || option.orgBlocked === true,
-        unavailable: needsCli(instance) || needsSignIn(instance) || (option.availability !== undefined && option.availability !== "available"),
-      })));
-    if (!query || rows.length) groups.unshift({
-      instance: free[0]!, label: t("daniSetup.group"), provider: "Dani",
-      body: rows.length ? { kind: "models", rows, total: rows.length, toggle: null, localFrom: null, signInForOwn: false, probing: false,
-        ...(unavailableRoutes.length ? { unavailableRoutes } : {}) }
-        : free.every((instance) => instance.policy) ? { kind: "policy", organization: free[0]!.policy!.organizationName }
-        : unavailableRoutes.length ? { kind: "setUp" } : { kind: "empty", loading: free.some((instance) => input.refreshing === instance.instanceId) },
-    });
-  }
 
   return {
     current: query ? null : currentRow(input),

@@ -29,6 +29,7 @@ import { plainFailureMessage } from "./engine-errors.ts"; import { toolFailureMe
 import { refusesRequestSize, RequestTooLargeError, sizeChange, smallerResend } from "./chat-size-limit.ts";
 import { requestTooLargeMessage } from "../../shared/request-too-large.ts";
 import { toolSchemaProfileFor } from "../tool-schema-profile.ts";
+import { announcesAction, CONTINUE_UNFINISHED_ACTION, TASK_ROUND_LIMIT, TASK_TOOL_CALL_LIMIT, TaskContinuation } from "./task-continuation.ts";
 import { classifyContinuable, writeTurnHandoff } from "../turn-continuation.ts";
 import { KEY_REJECTED_REASON, keyRejected, noteKeyAccepted, noteKeyRejected, rejectsKey } from "../key-rejections.ts";
 import type { Agent } from "undici";
@@ -141,9 +142,6 @@ const completionUsage = (json: CompletionJson) => json.usage ?? json.x_groq?.usa
 const asError = (value: unknown): Error =>
   value instanceof Error ? value : new Error(String(value));
 
-const MAX_CHAT_ROUNDS = 64;
-const MAX_TURN_TOOL_CALLS = 200;
-const MAX_ANNOUNCEMENT_NUDGES = 3;
 const stoppedAfter = (count: string) =>
   `Stopped after ${count} without a final answer. The steps so far already ran, so ask only for what's left.`;
 
@@ -192,19 +190,6 @@ function replayDelivered(
 }
 
 const CORRECTIVE_ROUND = "[Dani Bot: a tool call in this turn failed (its result is marked ok:false). Re-run the failed operations with corrected inputs where possible, check the results, then give your final answer. Do not report results you did not get.]";
-const NUDGE_ANNOUNCED_ACTION = "You said what you would do next but called no tool. Use your tools for only the remaining work, or reply with verified results if nothing is left to do. Never repeat an operation that succeeded, was denied, or may already have taken effect; inspect its state instead. Do not retry a destructive operation.";
-
-export function announcesAction(text: string): boolean {
-  const reply = text.trim();
-  if (!reply || reply.length > 4_000 || reply.includes("?")) return false;
-  if (reply.length > 400) {
-    const tail = reply.split(/\n\s*\n/).at(-1)!.trim();
-    return tail.length <= 400 && /^(?:let me|i['\u2019]ll|i will|i(?:['\u2019]m| am) going to)\s+(?:now\s+)?(?:execute|send|type|press|launch|open|check|inspect|read|fetch|run|create|write|verify)\b/i.test(tail);
-  }
-  return /(?:[:\u2014\u2013]|\.\.\.|\u2026)$/.test(reply) ||
-    /^(?:checking|let me(?! know\b)|i'll|i will|i'm going to|i am going to|opening|pulling|looking|searching|navigating|reading|fetching|loading|now (?:i'll|let me|opening|checking|pulling|reading))\b/i.test(reply) ||
-    /^i(?:['\u2019]m| am)\b[^.!?\n]*\band (?:i )?will\s+(?:launch|open|check|pull|look|search|navigate|read|fetch|load|run|inspect)\b/i.test(reply);
-}
 
 const UNREADABLE_CALL = "[Dani Bot: your last tool call could not be read, so nothing ran. Call the tool again using only the tools you were given, with valid JSON arguments.]";
 const LOCAL_CORRECTIVE_ROUNDS = 2;
@@ -604,9 +589,8 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
       let correctiveRounds = 0;
       const denials: string[] = [], failedCalls: string[] = [];
       const seenCalls = new Set<string>();
-      let nudges = 0;
+      let continuation: TaskContinuation | undefined;
       let unread: string[] = [];
-      let callsAtNudge = -1;
       const repeats = options.localModel ? new ChatRepeatGuard() : undefined;
       let unreadable = false, askedAgain = false;
       try {
@@ -623,12 +607,12 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
         if (questionAllowed && !tools.definitions.some((definition) => definition.function.name === ASK_USER_TOOL)) {
           tools.definitions.push(ASK_USER_TOOL_DEFINITION);
         }
-        for (let round = 0; round < MAX_CHAT_ROUNDS; round++) {
+        for (let round = 0; round < TASK_ROUND_LIMIT; round++) {
           abort.signal.throwIfAborted();
             // Between rounds, never inside a tool batch.
           unread = turnEntry.asides.splice(0);
           if (unread.length) messages.push({ role: "user", content: unread.join("\n\n") });
-          turnEntry.ending = round === MAX_CHAT_ROUNDS - 1;
+          turnEntry.ending = round === TASK_ROUND_LIMIT - 1;
           native("out", options.nativeLog.outgoing(turn, messages, model, tools.definitions));
           let attempt = 0;
           let resized = false;
@@ -748,7 +732,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             }
             if (toolFailed) {
               // A person's "no" is never answered with another attempt; a failure may first get the configured corrective rounds.
-              if (!denials.length && !turnEntry.ending && correctiveRounds < Math.max(turn.toolErrorCorrectiveRounds ?? 0, options.localModel ? LOCAL_CORRECTIVE_ROUNDS : 0)) {
+              if (!denials.length && turn.continuationAllowed?.() !== false && !turnEntry.ending && correctiveRounds < Math.max(turn.toolErrorCorrectiveRounds ?? 0, options.localModel ? LOCAL_CORRECTIVE_ROUNDS : 0)) {
                 correctiveRounds += 1;
                 messages.push({ role: "user", content: CORRECTIVE_ROUND });
                 continue;
@@ -757,17 +741,18 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
               throw new ChatProtocolError(toolFailureMessage(failedCalls, denials.filter((name) => name !== ASK_USER_TOOL)));
             }
             if (options.nudgeAnnouncedAction && tools.definitions.length && announcesAction(completion.text)) {
-              if (nudges >= MAX_ANNOUNCEMENT_NUDGES || turnEntry.ending) {
+              if (turn.continuationAllowed?.() === false) {
                 stopReason = "incomplete_action";
-                throw new ChatProtocolError(`Stopped after ${turnEntry.ending ? `${MAX_CHAT_ROUNDS} steps` : `${MAX_ANNOUNCEMENT_NUDGES} announcement nudges`} without a verified final answer. Earlier operations may have taken effect; inspect their state and continue only the remaining work.`);
+                throw new ChatProtocolError("Automatic continuation is blocked by a refused or failed operation, or changed turn ownership. The task is incomplete; inspect earlier outcomes before continuing.");
               }
-              if (callsAtNudge === seenCalls.size) {
+              const decision = (continuation ??= new TaskContinuation()).next(seenCalls.size, round);
+              if (decision !== "continue") {
                 stopReason = "incomplete_action";
-                throw new ChatProtocolError("The model announced another action without tool progress after a nudge. The task is incomplete; earlier operations may have taken effect. Inspect their state before continuing.");
+                throw new ChatProtocolError(decision === "limit"
+                  ? `Stopped at the task continuation budget (${TASK_ROUND_LIMIT} rounds or ${TASK_TOOL_CALL_LIMIT} tool calls) without a verified final answer. Earlier operations may have taken effect; inspect their state and continue only the remaining work.`
+                  : "The model announced another action without tool progress after a continuation. The task is incomplete; earlier operations may have taken effect. Inspect their state before continuing.");
               }
-              nudges += 1;
-              callsAtNudge = seenCalls.size;
-              messages.push(assistantReply(model, completion, completion.text), { role: "user", content: NUDGE_ANNOUNCED_ACTION });
+              messages.push(assistantReply(model, completion, completion.text), { role: "user", content: CONTINUE_UNFINISHED_ACTION });
               continue;
             }
             if (turnEntry.asides.length) {
@@ -783,7 +768,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             if (seenCalls.has(call.id)) throw new ChatProtocolError("provider reused a tool-call ID; refusing to repeat an operation");
             seenCalls.add(call.id);
           }
-          if (seenCalls.size > MAX_TURN_TOOL_CALLS) throw new ChatProtocolError(stoppedAfter(`${MAX_TURN_TOOL_CALLS} tool calls`));
+          if (seenCalls.size > TASK_TOOL_CALL_LIMIT) throw new ChatProtocolError(stoppedAfter(`${TASK_TOOL_CALL_LIMIT} tool calls`));
           messages.push(assistantReply(model, completion, completion.text || null, completion.toolCalls));
           // After a corrective round, the failure stays pending only until the bot runs tools again. A local model that
           // went on to use more tools has already reacted: a wrong guess, a search, then the right call is not a failed turn.
@@ -876,7 +861,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
           }
           if (screenshotParts.length) messages.push({ role: "user", content: screenshotParts });
         }
-        if (!ok) throw new ChatProtocolError(stoppedAfter(`${MAX_CHAT_ROUNDS} steps`));
+        if (!ok) throw new ChatProtocolError(stoppedAfter(`${TASK_ROUND_LIMIT} steps`));
       } catch (value) {
         stopReason = abort.signal.aborted ? "interrupted" : stopReason ?? "error";
         failure = safeText(asError(value).message).slice(0, 2_000);
@@ -898,7 +883,7 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
           const message = options.httpErrorLabel === "upstream" ? failure : plainFailureMessage(options.httpErrorLabel, failure);
           emit({ ...base(turn.threadId, turnId), type: "runtime.error", message, terminal: !abort.signal.aborted });
         }
-        if (!ok && !abort.signal.aborted) {
+        if (!ok && !abort.signal.aborted && !toolFailed && turn.continuationAllowed?.() !== false) {
           const continuable = classifyContinuable(stopReason, failure);
           if (continuable) {
             const handoffPath = writeTurnHandoff({

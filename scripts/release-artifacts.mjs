@@ -6,12 +6,13 @@ import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { parse } from "yaml";
-import { validateReleaseVersion } from "./release-version.mjs";
+import { validateBuildVersion, validateReleaseVersion } from "./release-version.mjs";
 
 const run = promisify(execFile);
 
-export async function validateReleaseArtifacts(directory, version) {
-  validateReleaseVersion(version);
+export async function validateReleaseArtifacts(directory, version, { buildVersion = false } = {}) {
+  if (buildVersion) validateBuildVersion(version);
+  else validateReleaseVersion(version);
   const root = resolve(directory);
   const inventory = new Map();
   async function collect(folder) {
@@ -35,7 +36,11 @@ export async function validateReleaseArtifacts(directory, version) {
     ...Object.values(packages).flatMap((spec) => spec.required),
     `DaniBot-${version}-win-x64.zip`, `DaniBot-${version}-amd64.deb`,
   ];
-  for (const name of installers) {
+  const blockmaps = [
+    `DaniBot-${version}-setup.exe.blockmap`,
+    ...packages["latest-mac.yml"].required.map((name) => `${name}.blockmap`),
+  ];
+  for (const name of [...installers, ...blockmaps]) {
     if (!inventory.get(name)?.size) throw new Error(`Missing or empty release asset: ${name}`);
   }
   const hashes = new Map();
@@ -96,11 +101,31 @@ export async function validateReleaseArtifacts(directory, version) {
       child.once("close", (code) => code === 0 ? resolve() : reject(new Error(`${name}: archive integrity check failed (${code}): ${detail.trim()}`)));
     });
   }
+  const aliases = {
+    "DaniBot-setup.exe": `DaniBot-${version}-setup.exe`,
+    "DaniBot-Windows-Portable.zip": `DaniBot-${version}-win-x64.zip`,
+    "DaniBot-Silicon.dmg": `DaniBot-${version}-arm64.dmg`,
+    "DaniBot-Silicon-Portable.zip": `DaniBot-${version}-arm64.zip`,
+    "DaniBot-Intel.dmg": `DaniBot-${version}-x64.dmg`,
+    "DaniBot-Intel-Portable.zip": `DaniBot-${version}-x64.zip`,
+    "DaniBot.AppImage": `DaniBot-${version}-x86_64.AppImage`,
+    "danibot-amd64.deb": `DaniBot-${version}-amd64.deb`,
+  };
+  for (const [alias, source] of Object.entries(aliases)) {
+    const target = inventory.get(alias);
+    if (!target?.size) throw new Error(`Missing or empty stable download alias: ${alias}`);
+    if (target.size !== inventory.get(source).size || await digest(alias) !== await digest(source)) {
+      throw new Error(`Stable download alias does not match ${source}: ${alias}`);
+    }
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const [directory, version] = process.argv.slice(2);
-  if (!directory || !version) throw new Error("Expected artifact directory and stable version");
-  await validateReleaseArtifacts(directory, version);
+  const [directory, version, ...flags] = process.argv.slice(2);
+  if (!directory || !version) throw new Error("Expected artifact directory and version [--build-version]");
+  if (flags.length > 1 || (flags.length === 1 && flags[0] !== "--build-version")) {
+    throw new Error(`Unknown artifact verification option: ${flags.join(" ")}`);
+  }
+  await validateReleaseArtifacts(directory, version, { buildVersion: flags[0] === "--build-version" });
   console.log(`Validated ${version} installers, ZIP platforms, update-feed sizes and SHA512 checksums`);
 }

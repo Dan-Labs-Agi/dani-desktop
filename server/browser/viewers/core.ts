@@ -55,7 +55,7 @@ export type Controller = "agent" | "you" | "another-viewer" | "unclaimed";
 export type ViewerOutput =
   | { type: "frame"; data: Buffer; metadata: FrameMetadata; still: boolean; ack: () => void }
   | { type: "viewport"; width: number; height: number; setting: ViewportSetting; zoom: number }
-  | { type: "control"; canOperate: boolean; controller: Controller; held: boolean; owned: boolean; controlling: boolean; stale: boolean; generation: number; dialog: { type: string; message: string; defaultValue: string } | null }
+  | { type: "control"; canOperate: boolean; controller: Controller; held: boolean; owned: boolean; controlling: boolean; stale: boolean; generation: number; dialog: { type: string; message: string; defaultValue: string } | null; attempt?: string }
   | { type: "tabs"; tabs: Array<{ tabId: string; title: string; url: string; active: boolean }> }
   | { type: "url"; url: string }
   | { type: "nav"; tabId: string; url: string; loading: boolean; canGoBack: boolean; canGoForward: boolean }
@@ -110,7 +110,7 @@ export interface HubHost {
   used(): void;
   /** The largest page the browser's windows may show on its screen; null when nothing limits it. */
   pageLimit(): { width: number; height: number } | null;
-  take(owner: string): Promise<TakeResult>;
+  take(owner: string, current: () => boolean): Promise<TakeResult>;
   release(owner: string, releaseInput: (tab: Tab) => Promise<boolean>): Promise<void>;
   openTab(url: string | null, owner: string): Promise<Tab>;
   closeTab(tab: Tab): Promise<void>;
@@ -576,6 +576,7 @@ export class ViewerHub {
     const controlling = this.#hold.controls(viewer);
     // Security: a dialog's text can be a code meant for the person holding the browser.
     const dialog = owner === null || owned ? this.host.active()?.page.dialogs.pending ?? null : null;
+    const attempt = this.#hold.attempt(viewer);
     return {
       type: "control",
       canOperate: viewer.options.canOperate,
@@ -584,6 +585,7 @@ export class ViewerHub {
       held: owner !== null,
       owned,
       controlling,
+      ...(attempt ? { attempt } : {}),
       stale: control.stale,
       generation: this.host.active()?.control.generation ?? 0,
       dialog: dialog ? { type: dialog.type, message: dialog.message, defaultValue: dialog.defaultPrompt } : null,
@@ -771,7 +773,7 @@ export class ViewerHub {
       return await work();
     } finally {
       this.#capturing.set(tab, (this.#capturing.get(tab) ?? 1) - 1);
-      await Promise.all(watching.map((viewer) => viewer.resume()));
+      await tab.page.session.connection.withScreencastScope(() => Promise.all(watching.map((viewer) => viewer.resume())));
     }
   }
 
@@ -783,13 +785,17 @@ export class ViewerHub {
         await this.host.running().catch(() => viewer.push({ type: "asleep" }));
         return;
       case "takeControl": {
-        const taking = this.host.take(viewer.options.person);
+        if (message.attempt !== undefined && (typeof message.attempt !== "string" || !message.attempt || message.attempt.length > 128)) return;
+        const reservation = this.#hold.reserve(viewer, typeof message.attempt === "string" ? message.attempt : undefined);
+        if (!reservation) return;
+        const taking = this.host.take(viewer.options.person, () => this.#hold.current(reservation));
         this.broadcastControl();
-        await taking.then(() => this.#hold.took(viewer)).finally(() => this.broadcastControl());
+        await taking.then(() => this.#hold.took(viewer, reservation)).finally(() => this.broadcastControl());
         return;
       }
       case "releaseControl": {
-        const releasing = this.#hold.release(viewer);
+        if (message.attempt !== undefined && (typeof message.attempt !== "string" || !message.attempt || message.attempt.length > 128)) return;
+        const releasing = this.#hold.release(viewer, typeof message.attempt === "string" ? message.attempt : undefined);
         this.broadcastControl();
         await releasing.finally(() => this.broadcastControl());
         return;

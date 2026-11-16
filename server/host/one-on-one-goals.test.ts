@@ -9,7 +9,8 @@ import { GROUP_GOAL_CONTROL_CLOSE, GROUP_GOAL_CONTROL_OPEN, GROUP_GOAL_MAX_TURNS
 import type { BotRecord, Message, TaskRecord } from "../store.ts";
 import type { LiveGoalRun } from "./goal-cards.ts";
 import { createGoalTurns, type GoalLeadTurn } from "./goal-turns.ts";
-import { createOneOnOneGoals } from "./one-on-one-goals.ts";
+import { createOneOnOneGoals, type OneOnOneGoalDeps } from "./one-on-one-goals.ts";
+import { blockingTurnStop, TurnStops } from "../turn-outcome.ts";
 
 // A one-second cap: the real half hour is thousands of retries, each a timer round of its own.
 vi.mock("../group-goal-run.ts", async (importOriginal) => ({
@@ -21,7 +22,7 @@ const DONE = `${GROUP_GOAL_CONTROL_OPEN}{"status":"completed","detail":"Done."}$
 const refused = (code: string) => Object.assign(new Error("this thread is already working"), { code });
 
 /** A goal in a chat whose startTurn is scripted; the real goal-turns hold the lead, so a reply can be filled in. */
-function goalChat(startTurn: (call: number, lead: GoalLeadTurn, settle: (outcome: HostTurnResult) => void) => Promise<unknown>, canStart: () => boolean = () => true) {
+function goalChat(startTurn: (call: number, lead: GoalLeadTurn, settle: (outcome: HostTurnResult) => void) => Promise<unknown>, canStart: () => boolean = () => true, waitForBrowser?: (session: string, cancelled: () => boolean) => Promise<boolean>) {
   const run: LiveGoalRun = {
     runId: "r",
     cardMessageId: "card",
@@ -36,10 +37,11 @@ function goalChat(startTurn: (call: number, lead: GoalLeadTurn, settle: (outcome
   const finished: Array<{ status: GoalRunEnd; detail: string }> = [];
   const ends: Array<string | undefined> = [];
   const turns = createGoalTurns({ retireProviderTurn() {} });
+  const instructions: string[] = [];
   let lead!: GoalLeadTurn;
   let starts = 0;
   let botChanged: ((change: { type: "bot"; botId: string }) => void) | undefined;
-  createOneOnOneGoals({
+  const goals = createOneOnOneGoals({
     store: {
       bot: () => ({ id: "b", name: "Solo" } as BotRecord),
       taskByThread: () => ({} as TaskRecord),
@@ -67,10 +69,15 @@ function goalChat(startTurn: (call: number, lead: GoalLeadTurn, settle: (outcome
     },
     canStart,
     isUnattended: () => false,
-    startTurn: (_botId, _text, opts) => startTurn(++starts, lead, opts.onSettled),
-  }).start("b", "t", "Fix the build");
+    waitForBrowser,
+    startTurn: (_botId, text, opts) => {
+      instructions.push(text);
+      return startTurn(++starts, lead, opts.onSettled);
+    },
+  } satisfies OneOnOneGoalDeps);
+  goals.start("b", "t", "Fix the build");
   // The store's change event for the bot, as the real store fires it when the bot's turn ends.
-  return { run, finished, ends, starts: () => starts, botChanged: () => botChanged?.({ type: "bot", botId: "b" }) };
+  return { run, finished, ends, instructions, starts: () => starts, stop: () => goals.stop("t"), botChanged: () => botChanged?.({ type: "bot", botId: "b" }) };
 }
 
 describe("a one-on-one goal whose turn keeps losing its slot", () => {
@@ -132,5 +139,87 @@ describe("a one-on-one goal whose turn keeps losing its slot", () => {
     expect(chat.starts()).toBe(2);
     expect(chat.run.turnCount).toBe(1);
     expect(chat.finished).toEqual([{ status: "completed", detail: "Done." }]);
+  });
+});
+
+describe("one-on-one goal browser hand-back", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("preserves the goal and committed work until browser hand-back resumes inspection", async () => {
+    vi.useFakeTimers();
+    const { promise: readiness, resolve: handBack } = Promise.withResolvers<boolean>();
+    const sessions: string[] = [];
+    const effects: string[] = [];
+    const chat = goalChat(async (call, lead, settle) => {
+      if (call === 1) {
+        effects.push("draft committed");
+        settle({ ok: false, text: "Browser held", waitingOnBrowser: "solo-browser" });
+        return;
+      }
+      effects.push("receipt verified");
+      lead.assistantItems.push(DONE);
+      settle({ ok: true, text: "" });
+    }, () => true, async (session) => { sessions.push(session); return readiness; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sessions).toEqual(["solo-browser"]);
+    expect(chat.starts()).toBe(1);
+    expect(chat.finished).toEqual([]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(chat.starts()).toBe(1);
+    expect(effects).toEqual(["draft committed"]);
+    handBack(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(chat.starts()).toBe(2);
+    expect(chat.instructions[1]).toContain(chat.instructions[0]);
+    expect(chat.instructions[1]).toMatch(/inspect.*current/i);
+    expect(effects).toEqual(["draft committed", "receipt verified"]);
+    expect(chat.finished).toEqual([{ status: "completed", detail: "Done." }]);
+  });
+
+  it("does not resume a stopped solo goal when browser readiness arrives later", async () => {
+    vi.useFakeTimers();
+    const { promise: readiness, resolve: handBack } = Promise.withResolvers<boolean>();
+    let cancelled: (() => boolean) | undefined;
+    const chat = goalChat(async (_call, _lead, settle) => {
+      settle({ ok: false, text: "Browser held", waitingOnBrowser: "solo-browser" });
+    }, () => true, (_session, isCancelled) => { cancelled = isCancelled; return readiness; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(chat.starts()).toBe(1);
+    expect(cancelled?.()).toBe(false);
+    expect(chat.stop()).toBe(true);
+    expect(cancelled?.()).toBe(true);
+    handBack(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(chat.starts()).toBe(1);
+    expect(chat.finished.map((end) => end.status)).toEqual(["stopped"]);
+  });
+
+  it("does not redispatch native cancellation after an unfinished tool", async () => {
+    vi.useFakeTimers();
+    const stops = new TurnStops();
+    const base = { eventId: "native-cancel", provider: "hermesAgent", threadId: "t", turnId: "turn", createdAt: "" };
+    const chat = goalChat(async (_call, _lead, settle) => {
+      stops.note({ ...base, type: "turn.started" });
+      stops.note({ ...base, type: "item.started", itemType: "tool", itemId: "pending-write" });
+      stops.note({ ...base, type: "turn.completed", ok: false, stopReason: "cancelled" });
+      settle({ ok: false, text: "Native cancellation", blocked: blockingTurnStop(stops.read("t", "turn")) });
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(chat.starts()).toBe(1);
+    expect(chat.run.turnCount).toBe(1);
+    expect(chat.finished.map(end => end.status)).toEqual(["blocked"]);
+    expect(stops.mayContinue("t", "turn", "observation")).toBe(false);
+  });
+
+  it.each(["denied", "provider_error"] as const)("preserves a trusted %s blocker instead of retrying a solo step", async (outcome) => {
+    vi.useFakeTimers();
+    const reason = outcome === "denied" ? "The person denied the action." : "The external effect may already have committed.";
+    const chat = goalChat(async (_call, lead, settle) => {
+      lead.assistantItems.push(DONE);
+      settle({ ok: false, text: "Turn did not finish", blocked: { outcome, reason } });
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(chat.starts()).toBe(1);
+    expect(chat.finished).toEqual([{ status: "blocked", detail: reason }]);
   });
 });

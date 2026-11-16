@@ -216,7 +216,7 @@ same rules hold on the desktop, a server and Cloud:
 once their parent exits, and Chrome needs shared memory. Both Docker compose
 files and the Podman one set `init: true` and `shm_size: 512m`, as
 Dani Desktop's desktop containers do (`--shm-size 512m`); a plain
-`docker run` wants `--init --shm-size=512m`. agent-browser 0.37.0 itself
+`docker run` wants `--init --shm-size=512m`. agent-browser itself
 adds `--no-sandbox` and `--disable-dev-shm-usage` when it sees
 `/.dockerenv` or `/run/.containerenv`, runs as root or under CI, or finds
 docker, kubepods or lxc in `/proc/1/cgroup`. A runtime that shows none of
@@ -228,7 +228,7 @@ own init runs as PID 1.
 
 ## Video recording
 
-The macOS and Linux engine is pinned to agent-browser 0.37.0. Its
+All platforms use the official agent-browser 0.41.2 release. Its
 [`record start` and `record restart`](https://agent-browser.dev/recording)
 commands record the active page at 30 fps by default; `--fps 60` selects 60 fps
 (valid range: 1–60). This saves a video file; it does not enable a live view.
@@ -283,32 +283,32 @@ pins, run preparation/tests and the native package gates, and ship promptly
 when browser security updates are needed. There is no independent automatic
 browser updater in the desktop bundle.
 
-### Temporary Windows engine backport
+### Windows engine qualification
 
-Windows uses an explicitly identified Dani Desktop build of agent-browser
-0.36.0, with the handle-inheritance fix from
-[upstream PR #1781](https://github.com/vercel-labs/agent-browser/pull/1781).
-The official 0.37.0 release does not contain this fix, so Windows stays on the
-native-verified `0.36.0-omb.1` revision and does not yet get the new recording
-options. Do not replace it with the unpatched 0.37.0 Windows binary.
-The original binary can hang when a newly started background browser holds
-the tool call's output connection open. The backport changes that Windows
-startup behavior; it does not include the PR's broader output-reader rewrite
-or unrelated changes from upstream main.
+Windows uses the same official agent-browser 0.41.2 release as macOS and Linux.
+It includes upstream's Windows handle-inheritance and bounded MCP-output
+draining fixes, replacing the runtime's old platform-specific 0.36 vendor
+revision. The official executable's exact size and SHA-256 are pinned in the
+shared release resolver and inherited by desktop bundle manifests.
 
-The artifact-only **Windows browser vendor build** workflow builds the pinned
-source and checked-in patch, retains the licenses and build provenance, and
-tests cold start plus close/reopen through the same MCP connection on Windows.
-Its candidate must be reviewed and its exact size and SHA-256 pinned before
-the normal application packaging workflow consumes it. Candidate testing does
-not replace the packaged-app tests. Published vendor bytes must not be
-overwritten; a changed build needs a new revision and reviewed pins.
+Before publication, the native Windows runner must qualify cold startup,
+close/reopen through the same MCP connection, console-free normal browsing,
+and the complete packaged-app smoke. Source changes and cross-target
+`--check-only` do not prove these behaviors. Stop's hard-interruption proof
+remains a separate platform limit documented in
+[browser safety verification](verification/browser-steps.md#browser-action-approvals-and-stop).
 
-The Windows revision has a separate managed installation directory so an old
-0.36.0 download is not mistaken for the patched engine. Desktop packages use
-their bundled engine. Explicit executable overrides remain user-managed.
-Remove the backport when an official release includes the fix and passes the
-same native cold-start and restart tests.
+The artifact-only **Windows browser vendor build** workflow and its checked-in
+patch remain separate maintainer tooling; normal packaging does not consume
+those candidates. A future backport still requires reviewed provenance,
+native tests and a new immutable revision. Auxiliary browser releases must
+not become the desktop application's latest release.
+
+Managed downloads are versioned, so an old 0.36 vendor install cannot be
+mistaken for 0.41.2. Explicit executable overrides remain user-managed and
+must be qualified separately. The no-replay-after-dispatch transport regression
+and the versioned source rationale are recorded in the
+[browser reliability audit](audit/browser-reliability-research.md).
 
 Complete upstream notices and provenance are in
 [`third_party/browser`](../third_party/browser/README.md). The full Google

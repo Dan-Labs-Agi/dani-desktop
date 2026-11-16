@@ -12,7 +12,6 @@ import { recordEvents, type EventRecorder } from "../testing/events.ts";
 import { BACKGROUND_CALL_TIMEOUT_MS, BACKGROUND_SETTINGS, backgroundCallArgs } from "./claude-background.ts";
 import {
   autoCompactWindow,
-  brokerSocketCandidates,
   claudeCliSupports,
   claudeCliUpdate,
   claudeHookSettings,
@@ -297,19 +296,6 @@ describe("ClaudeDriver.decodeConfig", () => {
     }
   }, 60_000);
 
-  it("keeps the deterministic path as the first broker candidate", () => {
-    const candidates = brokerSocketCandidates("t-candidates");
-    expect(candidates[0]).toBe(permissionSocketPath("t-candidates"));
-    if (process.platform === "win32") {
-      expect(candidates.length).toBeGreaterThan(1);
-      expect(new Set(candidates).size).toBe(candidates.length);
-    } else {
-      expect(candidates).toHaveLength(2);
-      expect(candidates[1]).toMatch(/omb-perm-[0-9a-f]{16}\.sock$/);
-      expect(candidates[1]).not.toBe(candidates[0]);
-    }
-  });
-
   // Windows cannot listen on filesystem socket paths (EACCES); the fake-CLI e2e covers its pipe fallback.
   it.skipIf(process.platform === "win32")(
     "binds the next candidate when the first is unbindable, and asks round-trip on it",
@@ -326,8 +312,9 @@ describe("ClaudeDriver.decodeConfig", () => {
         onResolve: () => {},
       });
       try {
-        expect(broker.socketPath).toBe(free);
-        const conn = connect(free);
+        expect(broker.socketPath).not.toBe(held);
+        expect(statSync(held).isDirectory()).toBe(true);
+        const conn = connect(broker.socketPath);
         await new Promise<void>((resolve, reject) => {
           conn.on("connect", resolve);
           conn.on("error", reject);
@@ -353,6 +340,67 @@ describe("ClaudeDriver.decodeConfig", () => {
   );
 
   it.skipIf(process.platform === "win32")(
+    "round-trips permissions when both data and temporary socket directories are too deep",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "omb-deep-broker-"));
+      const dataDir = join(root, "data-".repeat(30));
+      const tempDir = join(root, "temp-".repeat(30));
+      mkdirSync(dataDir, { recursive: true });
+      mkdirSync(tempDir, { recursive: true });
+      const marker = join(tempDir, "keep.txt");
+      writeFileSync(marker, "not broker-owned");
+      vi.stubEnv("TMPDIR", tempDir);
+      const brokers: Array<{ close(): void }> = [];
+      const connections: Socket[] = [];
+      const ownedDirectories: string[] = [];
+      try {
+        for (let index = 0; index < 2; index += 1) {
+          let active = true;
+          const asks: string[] = [];
+          const broker = await createPermissionBroker({
+            socketPaths: [join(dataDir, "permission.sock"), join(tmpdir(), "permission-fallback.sock")],
+            isActive: () => active,
+            onAsk: (ask) => asks.push(ask.id),
+            onResolve: () => {},
+          });
+          brokers.push(broker);
+          ownedDirectories.push(dirname(broker.socketPath));
+          const connection = await connectSocket(broker.socketPath);
+          connections.push(connection);
+          const nextAnswer = answerQueue(connection);
+          const askId = `deep-ask-${index}`;
+          const allowed = nextAnswer();
+          connection.write(JSON.stringify({ t: "ask", id: askId, tool: "Bash", input: { command: "echo fixture" } }) + "\n");
+          await expect.poll(() => asks).toEqual([askId]);
+          expect(broker.answer(askId, "allow")).toBe(true);
+          expect(await allowed).toMatchObject({ t: "answer", id: askId, behavior: "allow", source: "user" });
+          expect(statSync(dirname(broker.socketPath)).mode & 0o077).toBe(0);
+          expect(statSync(dirname(broker.socketPath)).uid).toBe(process.getuid!());
+          expect(statSync(broker.socketPath).mode & 0o777).toBe(0o600);
+          active = false;
+          const denied = nextAnswer();
+          connection.write(JSON.stringify({ t: "ask", id: `late-${index}`, tool: "Bash", input: {} }) + "\n");
+          expect(await denied).toMatchObject({ behavior: "deny" });
+          expect(asks).toEqual([askId]);
+          broker.close();
+          const afterClose = nextAnswer();
+          connection.write(JSON.stringify({ t: "ask", id: `closed-${index}`, tool: "Bash", input: {} }) + "\n");
+          expect(await afterClose).toMatchObject({ behavior: "deny" });
+          expect(existsSync(broker.socketPath)).toBe(false);
+          expect(existsSync(dirname(broker.socketPath))).toBe(false);
+        }
+        expect(ownedDirectories[0]).not.toBe(ownedDirectories[1]);
+        expect(readFileSync(marker, "utf8")).toBe("not broker-owned");
+      } finally {
+        for (const connection of connections) connection.destroy();
+        for (const broker of brokers) broker.close();
+        vi.unstubAllEnvs();
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
     "keeps a large non-ASCII ask whole across socket reads",
     async () => {
       const dir = mkdtempSync(join(tmpdir(), "omb-broker-utf8-"));
@@ -366,7 +414,7 @@ describe("ClaudeDriver.decodeConfig", () => {
       try {
         // One line spans many reads, and most read boundaries fall inside a three-byte character.
         const content = "中文ok€".repeat(150_000);
-        const conn = connect(socketPath);
+        const conn = connect(broker.socketPath);
         await new Promise<void>((resolve, reject) => {
           conn.on("connect", resolve);
           conn.on("error", reject);
@@ -2546,7 +2594,7 @@ describe("ClaudeDriver turns (fake CLI)", () => {
       await expect(pendingAnswer).resolves.toMatchObject({ id: "before-stop", behavior: "deny" });
       const lateAnswer = nextAnswer();
       conn.write(JSON.stringify({ t: "ask", id: "after-stop", tool: "Bash", input: { command: "echo too late" } }) + "\n");
-      await expect(lateAnswer).resolves.toMatchObject({ id: "after-stop", behavior: "deny", message: "DaniBot: the turn ended" });
+      await expect(lateAnswer).resolves.toMatchObject({ id: "after-stop", behavior: "deny" });
       expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(openedBefore);
       await expect(instance.adapter.respondToRequest(threadId, "after-stop", { behavior: "allow" })).resolves.toBe("unavailable");
     } finally {
@@ -3137,7 +3185,6 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     await expect(answer).resolves.toMatchObject({
       id: "ask-between",
       behavior: "deny",
-      message: "DaniBot: the turn ended",
     });
     expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(opensBefore);
     await expect(
@@ -3634,7 +3681,6 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(await nextAnswer()).toMatchObject({
       id: "dup-1",
       behavior: "deny",
-      message: "DaniBot: duplicate ask id — skipping this request.",
     });
     expect(recorder.events.filter((e) => e.type === "request.opened" && e.requestId === "dup-1")).toHaveLength(1);
 
@@ -3663,7 +3709,6 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(await conn2Answer).toMatchObject({
       id: "dup-2",
       behavior: "deny",
-      message: "DaniBot: duplicate ask id — skipping this request.",
     });
     expect(recorder.events.filter((e) => e.type === "request.opened" && e.requestId === "dup-2")).toHaveLength(1);
 
@@ -3716,7 +3761,6 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(await nextAnswer()).toMatchObject({
       id: "dup-4",
       behavior: "deny",
-      message: "DaniBot: duplicate ask id — skipping this request.",
     });
     expect(recorder.events.filter((e) => e.type === "request.opened" && e.requestId === "dup-4")).toHaveLength(1);
 
@@ -3753,7 +3797,6 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(await reply).toMatchObject({
       id: "ask-late",
       behavior: "deny",
-      message: "DaniBot: the turn ended",
     });
     expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(opensBefore);
     await expect(instance.adapter.respondToRequest("t-perm-late", "ask-late", { behavior: "allow" })).resolves.toBe(
@@ -3786,7 +3829,6 @@ describe("ClaudeDriver turns (fake CLI)", () => {
     expect(await reply).toMatchObject({
       id: "q-late",
       behavior: "answer",
-      message: "DaniBot: the turn is ending — wrap up.",
     });
     expect(recorder.events.filter((e) => e.type === "request.opened")).toHaveLength(opensBefore);
     await expect(

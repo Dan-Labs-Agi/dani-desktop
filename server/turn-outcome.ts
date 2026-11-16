@@ -3,7 +3,7 @@ import { isOutboundTool } from "../shared/outbound.ts";
 import type { RuntimeEvent } from "./contracts.ts";
 import { buildTurnDigest, digestTools } from "./digest.ts";
 import { stopCause } from "./drivers/engine-errors.ts";
-import type { TurnEvidence } from "./runtime/types.ts";
+import type { BlockedTurn, TurnEvidence } from "./runtime/types.ts";
 import type { Message } from "./store.ts";
 
 const REASON_CHARS = 600;
@@ -14,9 +14,13 @@ export interface TurnStop {
   turnId?: string;
   cause?: string;
   error?: string;
-  /** The engine's own flags on that error (a setup or credit refusal, a stall, a usage limit and its reset). */
-  flags?: Pick<RuntimeError, "setup" | "stalled" | "trialCredit" | "limitResetsAt" | "limit">;
+  flags?: Pick<RuntimeError, "setup" | "stalled" | "trialCredit" | "limitResetsAt" | "limit" | "recovery"> & { toolError?: true; permissionDenied?: true };
   handoffPath?: string;
+  browserWait?: string;
+  unknownEffect?: true;
+  browserWork?: true;
+  workRemaining?: true;
+  cancelled?: true;
 }
 
 export class TurnStops {
@@ -27,6 +31,22 @@ export class TurnStops {
       this.#byThread.delete(event.threadId);
       return;
     }
+    if (event.type === "turn.completed" && event.stopReason === "cancelled") {
+      this.#turn(event.threadId, event.turnId).cancelled = true;
+      return;
+    }
+    if (event.type === "turn.work-status") {
+      const stop = this.#turn(event.threadId, event.turnId);
+      if (event.status === "remaining") stop.workRemaining = true;
+      else delete stop.workRemaining;
+      return;
+    }
+    if ((event.type === "request.resolved" && event.behavior === "deny") ||
+        (event.type === "item.completed" && event.itemType === "tool" && event.ok === false)) {
+      const stop = this.#turn(event.threadId, event.turnId);
+      stop.flags = { ...stop.flags, toolError: true, ...(event.type === "request.resolved" ? { permissionDenied: true as const } : {}) };
+      return;
+    }
     const error = event.type === "runtime.error" ? event.message
       : event.type === "item.completed" && event.itemType === "assistant_text" && event.synthetic ? event.text : undefined;
     if (event.type !== "cap.exhausted" && (error === undefined || errorTranscript(error).kind !== "error")) return;
@@ -35,8 +55,34 @@ export class TurnStops {
     else stop.error = error;
     if (event.type === "runtime.error") {
       const { setup, stalled, trialCredit, limitResetsAt, limit } = event;
-      if (setup || stalled || trialCredit || limitResetsAt || limit) stop.flags = { setup, stalled, trialCredit, limitResetsAt, limit };
+      const recovery = stop.flags?.recovery === "blocked" ? "blocked" : event.recovery;
+      if (setup || stalled || trialCredit || limitResetsAt || limit || recovery) stop.flags = { ...stop.flags, setup, stalled, trialCredit, limitResetsAt, limit, recovery };
     }
+  }
+
+  mayContinue(threadId: string, turnId?: string, recovery?: "observation"): boolean {
+    const stop = this.read(threadId, turnId);
+    return !stop?.cancelled && !stop?.flags?.permissionDenied && !stop?.unknownEffect && !stop?.browserWait
+      && stop?.flags?.recovery !== "blocked" && (!stop?.flags?.toolError || recovery === "observation");
+  }
+
+  usedBrowser(threadId: string, turnId: string): void {
+    this.#turn(threadId, turnId).browserWork = true;
+  }
+
+  waitForBrowser(threadId: string, turnId: string, session: string): void {
+    this.#turn(threadId, turnId).browserWait = session;
+  }
+
+  browserContinued(threadId: string, turnId: string, session: string): void {
+    const stop = this.#byThread.get(threadId);
+    if (stop?.turnId === turnId && stop.browserWait === session) delete stop.browserWait;
+  }
+
+  unknownBrowserEffect(threadId: string, turnId: string): void {
+    const stop = this.#turn(threadId, turnId);
+    stop.unknownEffect = true;
+    stop.flags = { ...stop.flags, toolError: true, recovery: "blocked" };
   }
 
   stopping(threadId: string, turnId: string | undefined, cause: string): void {
@@ -64,6 +110,16 @@ export class TurnStops {
   forget(threadId: string): void {
     this.#byThread.delete(threadId);
   }
+}
+
+export function blockingTurnStop(stop: TurnStop | undefined): BlockedTurn | undefined {
+  if (stop?.flags?.permissionDenied) return { outcome: "denied", reason: "The person denied permission. This goal cannot authorize a retry or substitute action." };
+  if (stop?.unknownEffect || stop?.flags?.recovery === "blocked") return { outcome: "provider_error", reason: stop.error ?? "An accepted action has an uncertain result. Inspect or resolve that result before resuming." };
+  if (stop?.cancelled) return { outcome: "interrupted", reason: "The native turn was cancelled before completion. Inspect any in-flight effects before resuming; the cancelled step will not be retried automatically." };
+  if (stop?.flags?.setup || stop?.flags?.trialCredit || stop?.flags?.limit || stop?.flags?.limitResetsAt) {
+    return { outcome: "provider_error", reason: stop.error ?? "The engine requires authentication, setup, or available quota before this task can continue." };
+  }
+  return undefined;
 }
 
 /** Cause first (a chip shows only the start), then the last message quoted as data, so a teammate's words never pass for the harness's. */

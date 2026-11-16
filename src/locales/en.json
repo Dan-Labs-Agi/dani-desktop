@@ -1,4 +1,8 @@
 {
+  "model.catalogTools": "Tools listed by provider",
+  "model.qualifyOnFirstUse": "Available to select. Tool compatibility is checked on first use.",
+  "error.plain.providerSetup": "Check the selected provider's sign-in or API key in Settings → Model providers, then try again.",
+  "error.plain.modelToolCheck": "This model could not pass its tool check. Your task has not started and no other model was used. Check the selected provider in Settings → Model providers, then try again or choose another model.",
   "daniSetup.action": "Set up Dani",
   "daniSetup.group": "Dani free models",
   "daniSetup.disclosure": "Free models run on third-party services. Some services retain prompts or use them to train models. Avoid sensitive information. Availability and usage limits can change.",

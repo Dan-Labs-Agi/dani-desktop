@@ -121,6 +121,14 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
     return routing ? routing.askedPerson(bot.id, threadId) === routing.personOf(chief) : deps.privateThread?.(threadId) !== true;
   }
 
+  /** Pure discovery for the runtime's direct-work adoption: exactly the notices lane's Chief and person boundary. */
+  function supervisingChief(botId: string, threadId: string): BotRecord | null {
+    const bot = store.bot(botId);
+    if (!bot || !store.taskByThread(botId, threadId) || store.groupByThread(threadId) || deps.quietThread?.(botId, threadId)) return null;
+    const chief = chiefForBot(store.bots, bot);
+    return chief && reachesChief(chief, bot, threadId) ? chief : null;
+  }
+
   function incidentRefused(chief: BotRecord, incidentsThreadId: string, asks: ReadonlyArray<Message["peerAsk"]>, why: string): void {
     const refused = `the incident could not reach ${chief.name} — ${why}`;
     store.appendMessage(incidentsThreadId, { role: "bot", kind: "activity", tool: failedTurnTool(refused) });
@@ -261,5 +269,5 @@ export function createChiefNotices(deps: ChiefNoticeDeps) {
     }
   }
 
-  return { reportIncident, reportEscalation, incidentRefused, retryRefusal, retryThread };
+  return { reportIncident, reportEscalation, incidentRefused, retryRefusal, retryThread, supervisingChief };
 }

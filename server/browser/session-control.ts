@@ -21,6 +21,8 @@ export class SessionControl {
   private readonly onGenerationChange: () => void;
   private tail: Promise<unknown> = Promise.resolve();
   private pending: Promise<void> = Promise.resolve();
+  private queued = 0;
+  private tracked = 0;
   private owner: string | null = null;
   private epoch = 0;
   private closed = false;
@@ -39,19 +41,21 @@ export class SessionControl {
   }
 
   private enqueue<A>(run: () => Promise<A>): Promise<A> {
+    this.queued++;
     const result = this.tail.then(run);
     this.tail = result.then(
-      () => this.pending,
-      () => this.pending,
+      () => { this.queued--; return this.pending; },
+      () => { this.queued--; return this.pending; },
     );
     return result;
   }
 
   /** An action can respond before its navigation commits, while later actions still wait. */
   track(work: Promise<unknown>) {
+    this.tracked++;
     const settled = work.then(
-      () => undefined,
-      () => undefined,
+      () => { this.tracked--; },
+      () => { this.tracked--; },
     );
     this.pending = Promise.all([this.pending, settled]).then(() => undefined);
   }
@@ -101,6 +105,11 @@ export class SessionControl {
   /** Whether this agent's action would run now rather than be refused. */
   agentCanActNow(agentId: string) {
     return this.agentMayAct(agentId) && this.owner === null;
+  }
+
+  /** Pure admission metadata: ownership alone cannot prove queued input or tracked navigation finished. */
+  agentAvailable(agentId: string): boolean {
+    return !this.closed && this.queued === 0 && this.tracked === 0 && this.agentCanActNow(agentId);
   }
 
   /**

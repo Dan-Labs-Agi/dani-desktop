@@ -6,6 +6,21 @@ tools in `scripts/mcp-server.ts`, so verification uses the same URL
 validation, task pinning, bounded transcripts, wait states, and redaction as
 external MCP clients and scripts.
 
+## Focused agent development loop
+
+```sh
+pnpm test:agent-fast
+```
+
+This runs the existing continuation, supervision, goal-state, browser ownership
+and cancellation regressions with two workers. It is a development feedback
+path, not a model-speed setting or a substitute for full CI, typechecking,
+production builds, native packaging or an actual browser-task smoke.
+
+Use [the isolated current-source local app](local-hermes.md) for authorized
+real-provider qualification. Once a person begins real work in that workspace,
+it becomes live data: use a separate fixture for further mutation tests.
+
 ## Launch
 
 Start a fixture in one terminal:
@@ -194,8 +209,11 @@ an explicitly selected native engine and Chrome in a disposable home, covering
 watching, takeover, input, and profile switching.
 
 The [page health and recorded browser steps check](browser-steps.md) drives the
-real engine against a fixture page with failing requests and page errors, and
-reads the recorded steps back through the server.
+real engine against fixture pages, reads recorded steps through the server,
+and covers action approval, request cancellation and the owned-browser Stop
+barrier, including its Windows and attached-Chrome limitations.
+The same recipe checks same-session agent continuation through ten browser
+stages, direct/room denial, no-progress termination and cumulative usage.
 
 The [Local VM resume fixture](local-vm-resume.md) checks idle stop, restart
 recovery, guarded resume and the stopped-to-ready Computer panel flow.

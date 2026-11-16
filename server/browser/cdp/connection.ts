@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { CdpProtocolError, DriverError } from "./errors.ts";
 import { methodRefusal, type SendFlags, type SessionKind } from "./policy.ts";
 import type { CdpTransport } from "./transport.ts";
@@ -8,6 +10,13 @@ export type EventListener = (params: Params) => void;
 export interface SendOptions extends SendFlags {
   /** 0 waits forever; the default is the connection's. */
   timeoutMs?: number;
+  /** This evaluation can change the page rather than only inspect it. */
+  effect?: boolean;
+}
+
+export interface DispatchScope {
+  beforeSend(method: string, options: SendOptions): void;
+  track(work: Promise<unknown>): void;
 }
 
 interface Pending {
@@ -42,6 +51,7 @@ export class CdpConnection {
   readonly #pending = new Map<number, Pending>();
   readonly #sessions = new Map<string, CdpSession>();
   readonly #closeListeners = new Set<(reason: string) => void>();
+  readonly #dispatchScope = new AsyncLocalStorage<DispatchScope>();
   #nextId = 0;
   #closeReason: string | null = null;
 
@@ -50,8 +60,8 @@ export class CdpConnection {
     this.#defaultTimeoutMs = defaultTimeoutMs;
     this.#nextId = firstId;
     this.root = new CdpSession(this, null, "browser");
-    transport.onMessage((text) => this.#receive(text));
-    transport.onClose((reason) => this.#closed(reason));
+    transport.onMessage((text) => this.#dispatchScope.exit(() => this.#receive(text)));
+    transport.onClose((reason) => this.#dispatchScope.exit(() => this.#closed(reason)));
   }
 
   get closed(): boolean {
@@ -80,16 +90,35 @@ export class CdpConnection {
     this.#closed("closed by the driver");
   }
 
+  withDispatchScope<T>(scope: DispatchScope, run: () => Promise<T>): Promise<T> {
+    return this.#dispatchScope.run(scope, run);
+  }
+
+  /** Cancelled captures still restore viewers, but this scope cannot send page actions or fresh observations. */
+  withScreencastScope<T>(run: () => Promise<T>): Promise<T> {
+    const parent = this.#dispatchScope.getStore();
+    return this.#dispatchScope.run({
+      beforeSend(method, options) {
+        if (options.effect || (method !== "Page.stopScreencast" && method !== "Page.startScreencast" && method !== "Page.screencastFrameAck")) {
+          throw new DriverError("forbidden-method", "Only screencast stream control is allowed while restoring viewers.", { method });
+        }
+      },
+      track(work) { parent?.track(work); },
+    }, run);
+  }
+
   /** Sessions only send through here. */
   dispatch(session: CdpSession, method: string, params: Params, options: SendOptions): Promise<Params> {
     const refusal = methodRefusal(session.kind, method, params, options);
     if (refusal) return Promise.reject(new DriverError("forbidden-method", refusal, { method }));
     if (this.#closeReason !== null) return Promise.reject(new DriverError("closed", `The browser connection is closed (${this.#closeReason}).`));
     if (session.detached) return Promise.reject(new DriverError("closed", `The ${session.kind} that ${method} was sent to is gone.`));
+    const scope = this.#dispatchScope.getStore();
+    try { scope?.beforeSend(method, options); } catch (error) { return Promise.reject(error); }
     const id = ++this.#nextId;
     const message = session.id === null ? { id, method, params } : { id, method, params, sessionId: session.id };
     const timeoutMs = options.timeoutMs ?? this.#defaultTimeoutMs;
-    return new Promise<Params>((resolve, reject) => {
+    const work = new Promise<Params>((resolve, reject) => {
       const timer = timeoutMs > 0
         ? setTimeout(() => {
           this.#pending.delete(id);
@@ -99,6 +128,8 @@ export class CdpConnection {
       this.#pending.set(id, { method, session, resolve, reject, timer });
       this.#transport.send(JSON.stringify(message));
     });
+    scope?.track(work);
+    return work;
   }
 
   #receive(text: string): void {

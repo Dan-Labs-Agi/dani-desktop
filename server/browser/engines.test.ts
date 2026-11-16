@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BrowserLive } from "../browser-live.ts";
-import { attachesToChrome, type BrowserRuntime } from "../browser-runtime.ts";
+import { attachesToChrome, BrowserRuntime } from "../browser-runtime.ts";
 import type { ListenerOwnership } from "./egress/ownership.ts";
 import type { EgressHost } from "./egress/policy.ts";
 import { REDDIT_REFUSAL } from "./egress/reddit.ts";
@@ -25,6 +25,7 @@ function engines(options: RuntimeRouterOptions = {}) {
     heldBy: vi.fn(() => "person"),
     interrupted: vi.fn(() => false),
     interruptedCount: vi.fn(() => 1),
+    agentAvailable: vi.fn(() => false),
     closeIfIdle: vi.fn(async () => true),
     close: vi.fn(async () => undefined),
     closeAll: vi.fn(async () => undefined),
@@ -38,6 +39,7 @@ function engines(options: RuntimeRouterOptions = {}) {
       heldBy: vi.fn((): string | null => null),
       interrupted: vi.fn(() => true),
       interruptedCount: vi.fn(() => 2),
+      agentAvailable: vi.fn(() => false),
       close: vi.fn(async () => undefined),
       fileChooserOffered: vi.fn(() => true),
       answerFileChooser: vi.fn(async () => true),
@@ -45,6 +47,7 @@ function engines(options: RuntimeRouterOptions = {}) {
     },
     live: { open: vi.fn(async () => undefined), action: vi.fn(async () => "chrome"), has: vi.fn((viewerId: string) => viewerId === "v-chrome"), handBack: vi.fn(), closeForSession: vi.fn(), closeForOwner: vi.fn(), closeForBot: vi.fn(), closeAll: vi.fn() },
     stream: { open: vi.fn(), closeForSession: vi.fn(), closeForOwner: vi.fn(), closeForBot: vi.fn(), closeAll: vi.fn(), recheck: vi.fn() },
+    agentAvailable: vi.fn(() => false),
     close: vi.fn(async () => undefined),
   };
   const runtime = new RuntimeRouter(old as unknown as BrowserRuntime, chrome as unknown as ChromeEngine, options);
@@ -71,10 +74,27 @@ describe("the runtime router", () => {
   it("sends a new-engine session's calls to the browser service and every other to agent-browser", async () => {
     const { old, chrome, runtime } = engines();
     await expect(runtime.agentRpc("s", CHROME, "tools/call", { name: "agent_browser_open" })).resolves.toBe("chrome");
-    expect(chrome.service.agentRpc).toHaveBeenCalledWith({ session: "s", key: "bot:a" }, "tools/call", { name: "agent_browser_open" }, undefined);
+    expect(chrome.service.agentRpc).toHaveBeenCalledWith({ session: "s", key: "bot:a" }, "tools/call", { name: "agent_browser_open" }, undefined, undefined);
     await expect(runtime.agentRpc("s", AGENT_BROWSER, "tools/list", {})).resolves.toBe("agent-browser");
     expect(old.agentRpc).toHaveBeenCalledOnce();
     expect(chrome.service.agentRpc).toHaveBeenCalledOnce();
+  });
+
+
+  it("rejects pre-aborted requests before either engine or authorization claims are called", async () => {
+    const refusal = vi.fn(() => null);
+    const { old, chrome, runtime } = engines({ refusal });
+    const controller = new AbortController();
+    controller.abort("secret caller payload");
+    const claim = vi.fn();
+    for (const spec of [AGENT_BROWSER, CHROME]) {
+      await expect(runtime.agentRpc("s", spec, "tools/call", { name: "agent_browser_click" }, claim, undefined, controller.signal))
+        .rejects.toThrow(/cancelled before dispatch/);
+    }
+    expect(claim).not.toHaveBeenCalled();
+    expect(refusal).not.toHaveBeenCalled();
+    expect(old.agentRpc).not.toHaveBeenCalled();
+    expect(chrome.service.agentRpc).not.toHaveBeenCalled();
   });
 
   it("takes a preview frame from the engine the spec names", async () => {
@@ -180,6 +200,58 @@ describe("the runtime router", () => {
     expect(runtime.heldBy("s")).toBe("viewer-1");
     expect(runtime.interrupted("s")).toBe(true);
     expect(runtime.interruptedCount()).toBe(3);
+  });
+
+  it("reports agent availability from both real engine controls without launching or probing either browser", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "omb-browser-availability-"));
+    const old = new BrowserRuntime();
+    const chrome = new ChromeEngine({ dataDir, host: "container", env: {}, platform: "linux", egressPort: async () => 0, idleMs: () => 180_000, egressNotice: () => null });
+    const router = new RuntimeRouter(old, chrome);
+    chrome.spec("native", "shared:availability");
+    chrome.spec("native-alias", "shared:availability");
+    const profile = chrome.service.profile(chrome.target("native")!);
+    chrome.service.profile(chrome.target("native-alias")!);
+    const running = vi.spyOn(chrome.service, "running").mockRejectedValue(new Error("availability must not open a browser"));
+    const prepare = vi.spyOn(chrome.launcher, "prepare").mockRejectedValue(new Error("availability must not prepare a browser"));
+    const finish = Promise.withResolvers<void>();
+    try {
+      expect(router.agentAvailable("unused")).toBe(true);
+      expect(router.agentAvailable("native")).toBe(true);
+      await old.take("legacy", "person");
+      expect(router.agentAvailable("legacy")).toBe(false);
+      old.release("legacy", "person");
+      expect(router.agentAvailable("legacy")).toBe(true);
+      const work = profile.control.agent(null, () => finish.promise);
+      expect(router.agentAvailable("native")).toBe(false);
+      expect(router.agentAvailable("native-alias")).toBe(false);
+      finish.resolve();
+      await work;
+      await profile.control.take("person");
+      expect(router.agentAvailable("native")).toBe(false);
+      expect(profile.control.owner).toBe("person");
+      chrome.spec("native-alias", "bot:replacement");
+      chrome.service.profile(chrome.target("native-alias")!);
+      expect(router.agentAvailable("native-alias")).toBe(false);
+      await profile.control.release("person", async () => true);
+      expect(router.agentAvailable("native-alias")).toBe(true);
+      profile.control.latch("agent_browser_click");
+      expect(router.agentAvailable("native")).toBe(false);
+      expect(router.agentAvailable("native-alias")).toBe(false);
+      expect(profile.control.uncertain).toBe(true);
+      await chrome.service.restart("native", "person");
+      expect(router.agentAvailable("native")).toBe(true);
+      expect(router.agentAvailable("native-alias")).toBe(true);
+      await old.take("native", "person");
+      expect(router.agentAvailable("native")).toBe(false);
+      old.release("native", "person");
+      expect(router.agentAvailable("native")).toBe(true);
+      expect(running).not.toHaveBeenCalled();
+      expect(prepare).not.toHaveBeenCalled();
+    } finally {
+      finish.resolve();
+      await router.closeAll();
+      await removeTempDir(dataDir);
+    }
   });
 });
 

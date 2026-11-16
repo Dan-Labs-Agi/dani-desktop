@@ -15,7 +15,7 @@ import type { AcpConfig } from "./core.ts";
 import { CustomAcpDriver } from "./custom.ts";
 import { DroidAgentDriver } from "./droid.ts";
 import { GeminiAgentDriver } from "./gemini.ts";
-import { HermesAgentDriver } from "./hermes.ts";
+import { HermesAgentDriver, HERMES_CONFIG_MODEL_ID } from "./hermes.ts";
 import { KimiAgentDriver } from "./kimi.ts";
 import { createOpenCodeDriver, openCodeOwnedDirectories } from "./opencode-go.ts";
 import { QwenAgentDriver } from "./qwen.ts";
@@ -31,17 +31,18 @@ describe("remaining ACP approval mappings", () => {
   const cases: {
     driver: ProviderDriver<AcpConfig>;
     argv: string[];
+    model?: string;
     native?: Partial<Record<ApprovalMode, string[]>>;
   }[] = [
     { driver: OpenCodeDriver, argv: ["acp"] },
     { driver: GeminiAgentDriver, argv: ["--acp"], native: { full: ["--yolo"] } },
     { driver: QwenAgentDriver, argv: ["--acp"], native: { full: ["--yolo"], auto: ["--approval-mode", "auto"] } },
     { driver: KimiAgentDriver, argv: ["acp"] },
-    { driver: HermesAgentDriver, argv: ["acp"] },
+    { driver: HermesAgentDriver, argv: ["acp"], model: HERMES_CONFIG_MODEL_ID },
     { driver: DroidAgentDriver, argv: ["exec", "-o", "acp"] },
     { driver: CustomAcpDriver, argv: [] },
   ];
-  it.each(cases)("$driver.driverKind preserves residual requests across Full → Auto → Ask", async ({ driver, argv, native }) => {
+  it.each(cases)("$driver.driverKind preserves residual requests across Full → Auto → Ask", async ({ driver, argv, native, model }) => {
     ensureDirs();
     const scratch = mkdtempSync(join(tmpdir(), "omb-approval-matrix-"));
     const dump = join(scratch, "spawn.json");
@@ -73,6 +74,7 @@ describe("remaining ACP approval mappings", () => {
         const { turnId } = await instance.adapter.sendTurn({
           threadId: "approval-matrix-thread",
           text: "Exercise one provider permission request.",
+          model,
           cwd: scratch,
           approvalMode,
           ...(approvalMode === "full" ? {} : { resumeCursor: "fake-acp-session" }),

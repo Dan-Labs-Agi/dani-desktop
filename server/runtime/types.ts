@@ -25,6 +25,8 @@ export interface Requester {
   botId?: string;
   /** The conversation the result returns to (absent for an external runtime). */
   threadId?: string;
+  /** Host-bound original person message, never inferred from text or timestamps; revalidated before restart recovery. */
+  messageId?: string;
   /** The routine run or the external runtime's own reference. */
   runId?: string;
   /** The requester is a Chief of Staff conversation: its level may flow down. */
@@ -122,6 +124,20 @@ export interface Assignment {
   /** The same brief to the same assignee under one parent is one request;
    * a repeat lands on it unless rework is set. */
   rework: boolean;
+  /** An explicit remaining-work handoff replacing this failed sibling; the failed record and evidence stay intact. */
+  recoveryOf?: string;
+  /** A host-authorized Chief supervision child for this original direct-worker root. Never supplied by model text. */
+  supervisionOf?: string;
+  /** Immutable execution receipt captured at adoption; unverified success is never recorded as a fabricated failure. */
+  supervisionReceipt?:
+    | { kind: "failed"; outcome: Outcome; text: string; evidence?: TurnEvidence }
+    | { kind: "unverified"; outcome?: never; text: string; evidence?: TurnEvidence };
+  /** An owned goal is still awaiting an authorized goal-verification receipt. */
+  needsVerification?: boolean;
+  /** Native unfinished failure eligible for later review, not an unresolved/unknown execution effect. */
+  verificationFailure?: "stalled" | "provider_error";
+  /** Host-accepted clarification rows, in order, bound to requester.messageId. Never reconstructed from user annotations. */
+  acceptedAnswerIds?: string[];
   /** While parked: the exact question for the person. */
   question?: string;
   /** While parked under Full access ("Just do it"): the question is its requester's to answer, never the person's.
@@ -215,6 +231,8 @@ export interface EnqueueRequest {
   driverKind?: string;
   approved?: boolean;
   batchKey?: string;
+  /** Runtime-created adoption only: the direct root whose actual Chief the host authorized. */
+  supervisionOf?: string;
 }
 
 export type EnqueueResult =
@@ -244,10 +262,22 @@ export interface RunInput {
   mode: Mode;
 }
 
+/** Trusted host prerequisite/authority state, never inferred from assistant or page wording. */
+export interface BlockedTurn {
+  outcome: "denied" | "provider_error" | "interrupted" | "stalled" | "budget";
+  reason: string;
+}
+
+export interface SupervisionTarget {
+  assignee: Assignee;
+  level: Level;
+  driverKind?: string;
+}
+
 export type RunResult =
-  | { kind: "completed"; text: string; evidence?: TurnEvidence }
-  | { kind: "failed"; outcome: Exclude<Outcome, "done" | "needs_input">; text: string; evidence?: TurnEvidence }
-  | { kind: "needs_input"; question: string; cards?: string[]; decide?: { default?: string }; evidence?: TurnEvidence }
+  | { kind: "completed"; text: string; evidence?: TurnEvidence; supervisor?: SupervisionTarget }
+  | { kind: "failed"; outcome: Exclude<Outcome, "done" | "needs_input">; text: string; evidence?: TurnEvidence; supervisor?: SupervisionTarget }
+  | { kind: "needs_input"; question: string; text?: string; cards?: string[]; decide?: { default?: string }; blocked?: BlockedTurn; needsVerification?: true; verificationFailure?: "stalled" | "provider_error"; evidence?: TurnEvidence }
   /** The turn stopped short (a step cap, a seat it could not get) and the
    * same node continues in place with its next execution. */
   | { kind: "continue"; text: string; note: string; handoffPath?: string; evidence?: TurnEvidence };
@@ -258,11 +288,13 @@ export interface EndResult {
   text: string;
   evidence?: TurnEvidence;
   /** The turn left the person something to act on: it parks until they do. */
-  needsInput?: { question: string; cards?: string[] };
+  needsInput?: { question: string; cards?: string[]; blocked?: BlockedTurn; needsVerification?: true; verificationFailure?: "stalled" | "provider_error" };
   /** The turn stopped short and continues in place. */
   continue?: { note: string; handoffPath?: string };
   /** The host's stall watchdog stopped the turn. */
   stalled?: boolean;
+  /** The host authorized this Chief to review an incomplete ordinary direct request, under its original root. */
+  supervisor?: SupervisionTarget;
 }
 
 export interface Owner {

@@ -70,6 +70,34 @@ export const isTerminal = (a: Assignment): boolean => terminal(a.status);
 
 export const awaited = (children: readonly Assignment[]): Assignment[] => children.filter(c => c.reply !== "none");
 
+/** Person-owned Chief work and host-authorized direct-task reviewers share the same bounded supervision policy. */
+export const supervised = (a: Assignment): boolean =>
+  a.origin.kind === "person" && a.reply === "resume" && !a.goalRunId &&
+  (a.supervisionOf !== undefined || (!a.parentId && a.requester.kind === "person" && a.requester.chief === true));
+
+/** The only ancestry exception: an adopted direct task's Chief sends explicit remaining work to its original conversation. */
+export const directRecovery = (parent: Assignment | undefined, root: Assignment | undefined,
+  target: { botId: string; threadId: string; groupId?: string }, mode: Mode, rework: boolean): boolean =>
+  Boolean(parent?.supervisionOf && root && parent.supervisionOf === root.id && parent.parentId === root.id &&
+    root.status === "waiting" && root.origin.kind === "person" && mode === "work" && rework &&
+    target.botId === root.assignee.botId && target.threadId === root.assignee.destination.threadId &&
+    target.groupId === root.assignee.destination.groupId);
+
+/** Recovery follows explicit links, independent of similar words, clock changes or child ordering. */
+export function unresolvedWork(children: readonly Assignment[], original?: Assignment): Assignment[] {
+  const recovered = new Set<string>();
+  const previous = new Map<string, string>();
+  for (const child of children) if (child.recoveryOf) previous.set(child.id, child.recoveryOf);
+  for (const child of children) {
+    if (child.status !== "completed") continue;
+    for (let id = child.recoveryOf; id && !recovered.has(id); id = previous.get(id)) recovered.add(id);
+  }
+  const unresolved = children.filter(child => child.mode === "work" && child.reply !== "none" && isTerminal(child) &&
+    child.status !== "completed" && !recovered.has(child.id));
+  if (original && (original.needsVerification || (original.outcome && original.outcome !== "done")) && !recovered.has(original.id)) unresolved.push(original);
+  return unresolved;
+}
+
 /** Parked on something its requester hears of at once: a question answered in words, or, at Full access, a card too, so
  * the rest of the work moves on while the person acts on it. Another card park waits on its card. */
 export const asking = (a: Assignment): boolean => a.status === "needs_input" && (!(a.cards && a.cards.length > 0) || a.level === "full");
@@ -105,6 +133,18 @@ export function lastStartedId(store: RuntimeStore, id: string): number {
     }
   }
   return 0;
+}
+
+/** Child settlements do not renew recovery attempts. Only a person's explicit answer renews this execution window. */
+export function supervisionExecutions(store: RuntimeStore, id: string): number {
+  const events = store.events(id);
+  let count = 0;
+  for (let at = events.length - 1; at >= 0; at -= 1) {
+    const event = events[at]!;
+    if (event.kind === "answered" && event.detail === "queued: answered") break;
+    if (event.kind === "started") count += 1;
+  }
+  return count;
 }
 
 export function continuations(store: RuntimeStore, id: string): number {

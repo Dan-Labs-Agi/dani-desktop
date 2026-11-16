@@ -305,6 +305,7 @@ export class Store {
   private threads = new ThreadCache(() => this.busyThreadIds());
   private defaultSelection: () => ModelSelection;
   private completeNewBotSelection: (selection: ModelSelection) => ModelSelection;
+  private normalizeModelSelection: (selection: ModelSelection) => ModelSelection;
   private driverKindOf: (instanceId: string) => string | undefined;
   private initialLanguage: string | (() => string);
   private personName: () => string | undefined;
@@ -323,9 +324,11 @@ export class Store {
     /** The person a new bot's greeting names, read as each bot is created; undefined where no one person owns the
      * server. */
     personName: () => string | undefined = () => undefined,
+    normalizeModelSelection: (selection: ModelSelection) => ModelSelection = (selection) => selection,
   ) {
     this.defaultSelection = defaultSelection;
     this.completeNewBotSelection = completeNewBotSelection;
+    this.normalizeModelSelection = normalizeModelSelection;
     this.driverKindOf = driverKindOf;
     this.initialLanguage = initialLanguage;
     this.personName = personName;
@@ -1318,7 +1321,7 @@ export class Store {
   }
 
   private newBotSelection(requested?: ModelSelection): ModelSelection {
-    return this.completeNewBotSelection(requested ?? this.defaultSelection());
+    return this.completeNewBotSelection(this.normalizeModelSelection(requested ?? this.defaultSelection()));
   }
 
   createBot(
@@ -1421,7 +1424,10 @@ export class Store {
         if (at < 0) throw new Error("A setup target no longer exists");
         const previous = nextBots[at];
         next = { ...previous, ...operation.fields };
-        if (operation.fields.modelSelection) next.tasks = this.withDefaultModel(previous, operation.fields.modelSelection);
+        if (operation.fields.modelSelection) {
+          next.modelSelection = this.normalizeModelSelection(operation.fields.modelSelection);
+          next.tasks = this.withDefaultModel(previous, next.modelSelection);
+        }
         nextBots[at] = next;
       }
       if (operation.fields.chiefOfStaff === false) delete next.managedSections;
@@ -1469,6 +1475,7 @@ export class Store {
   }
 
   applyModelDefault(id: string, modelSelection: ModelSelection): BotRecord | null {
+    modelSelection = this.normalizeModelSelection(modelSelection);
     const previous = this.bot(id);
     if (!previous) return null;
     const next: BotRecord = { ...previous, modelSelection: structuredClone(modelSelection), tasks: this.withDefaultModel(previous, modelSelection) };
@@ -1476,6 +1483,36 @@ export class Store {
     this.bots = this.bots.map((candidate) => candidate.id === id ? next : candidate);
     this.emit({ type: "bot", botId: id });
     return next;
+  }
+
+  migrateModelSelections(normalize: (selection: ModelSelection | undefined) => ModelSelection): number {
+    const changes = new Map<BotRecord, BotRecord>();
+    for (const bot of this.bots) {
+      const modelSelection = normalize(bot.modelSelection);
+      const fallback = bot.fallback?.map(normalize);
+      let changed = !sameModelSelection(bot.modelSelection, modelSelection) || !isDeepStrictEqual(bot.fallback, fallback);
+      const resetBot = bot.modelSelection && modelSwitchNeedsAsk(approvalModeFor(bot),
+        this.driverKindOf(bot.modelSelection.instanceId), this.driverKindOf(modelSelection.instanceId));
+      const tasks = bot.tasks?.map((task) => {
+        const before = task.modelSelection ?? bot.modelSelection;
+        const selected = task.modelSelection === undefined ? undefined : normalize(task.modelSelection);
+        const after = selected ?? modelSelection;
+        const reset = before && before.instanceId !== after.instanceId && modelSwitchNeedsAsk(
+          approvalModeFor(this.projectBotForTask(bot.id, task.threadId)!),
+          this.driverKindOf(before.instanceId), this.driverKindOf(after.instanceId));
+        if (!sameModelSelection(task.modelSelection, selected) || reset) changed = true;
+        return { ...task, modelSelection: selected, ...(reset ? structuredClone(ASK_NOW) : {}) };
+      });
+      if (changed) changes.set(bot, { ...bot, modelSelection, fallback, tasks,
+        ...(resetBot ? structuredClone(ASK_NOW) : {}) });
+    }
+    if (!changes.size) return 0;
+    this.saveBots(this.bots.map((bot) => changes.get(bot) ?? bot));
+    for (const [bot, next] of changes) {
+      Object.assign(bot, next);
+      this.emit({ type: "bot", botId: bot.id });
+    }
+    return changes.size;
   }
 
   deleteBot(id: string, setupRequest?: TeamSetupRequest): boolean {
@@ -1525,6 +1562,12 @@ export class Store {
   }
 
   patchBot(id: string, patch: Partial<BotRecord>): BotRecord | null {
+    if (patch.modelSelection || patch.fallback) patch = { ...patch,
+      ...(patch.modelSelection ? { modelSelection: this.normalizeModelSelection(patch.modelSelection) } : {}),
+      ...(patch.fallback ? { fallback: patch.fallback.map((selection) => this.normalizeModelSelection(selection)) } : {}),
+    };
+    if (patch.tasks) patch = { ...patch, tasks: patch.tasks.map((task) => task.modelSelection
+      ? { ...task, modelSelection: this.normalizeModelSelection(task.modelSelection) } : task) };
     const bot = this.bot(id);
     if (!bot) return null;
     if (patch.connectorTools !== undefined) {
@@ -2070,6 +2113,7 @@ export class Store {
   }
 
   patchTask(botId: string, threadId: string, patch: TaskPatch): TaskRecord | null {
+    if (patch.modelSelection) patch = { ...patch, modelSelection: this.normalizeModelSelection(patch.modelSelection) };
     const bot = this.bot(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
@@ -2116,6 +2160,7 @@ export class Store {
   /** One write: never publish a new provider before its approval downgrade. */
   switchTaskModel(botId: string, threadId: string, selection: ModelSelection,
     updateBotDefault: boolean, resetApprovalToAsk: boolean, taskPatch: TaskPatch = {}): TaskRecord | null {
+    selection = this.normalizeModelSelection(selection);
     const bot = this.bot(botId);
     const task = this.taskByThread(botId, threadId);
     if (!bot || !task) return null;
@@ -2203,6 +2248,7 @@ export class Store {
 
   private buildTask(bot: BotRecord, title?: string, projectId?: string, openedBy?: TaskOpenedBy, approvalMode?: "ask" | "full",
     modelSelection?: ModelSelection, cwd?: string): TaskRecord {
+    if (modelSelection) modelSelection = this.normalizeModelSelection(modelSelection);
     const createdAt = Date.now();
     return {
       threadId: newId(),

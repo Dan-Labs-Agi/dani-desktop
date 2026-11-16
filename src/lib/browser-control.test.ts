@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BROWSER_HAND_BACK_MS, BROWSER_TAKE_NOTICE_MS, createBrowserControl, streamTransport } from "./browser-control";
-import type { PreviewStreamControl, PreviewStreamInput } from "./browser-stream-client";
+import type { PreviewStreamControl, PreviewStreamInput } from "../../shared/browser-stream";
 
 const deferred = () => {
   let resolve!: () => void;
@@ -19,19 +19,21 @@ const refused = "Another browser view or bot action is using this browser. Try a
 
 function harness() {
   const sent: PreviewStreamInput[] = [];
-  const server = { owned: false };
+  const server: { owned: boolean; mine: boolean; reservation?: string } = { owned: false, mine: false };
   const transport = {
     send: vi.fn((input: PreviewStreamInput) => { sent.push(input); }),
     drain: vi.fn(async () => {}),
     settle: vi.fn(async () => {}),
     size: vi.fn(() => 0),
     stopped: vi.fn(() => false),
+    reservation: () => server.reservation,
     take: vi.fn(async (): Promise<{ waited: boolean } | void> => ({ waited: false })),
     release: vi.fn(async (): Promise<void> => {}),
   };
   const options = {
     transport,
     owned: () => server.owned,
+    mine: () => server.mine,
     onTakeStatus: vi.fn(),
     onError: vi.fn(),
     onHalted: vi.fn(),
@@ -279,7 +281,7 @@ describe("handing browser control back", () => {
     const timedOut = () => new Promise<void>((_, reject) => { setTimeout(() => reject(new Error(refused)), 15_000); });
     const kept = harness();
     kept.transport.take.mockImplementationOnce(timedOut);
-    kept.server.owned = true;
+    kept.server.mine = true;
     kept.interact(press); await settle();
     vi.advanceTimersByTime(15_000); await settle();
     expect(kept.options.onError).toHaveBeenLastCalledWith(refused);
@@ -291,6 +293,32 @@ describe("handing browser control back", () => {
     other.interact(press); await settle();
     vi.advanceTimersByTime(15_000 + BROWSER_HAND_BACK_MS); await settle();
     expect(other.transport.release).not.toHaveBeenCalled();
+  });
+
+  it("does not implicitly release another same-person view without a failed take in this view", async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.server.mine = true;
+    h.control.observe();
+    vi.advanceTimersByTime(BROWSER_HAND_BACK_MS); await settle();
+    expect(h.transport.release).not.toHaveBeenCalled();
+  });
+
+  it.each(["idle", "leave"] as const)("adopts a reconnect reservation for %s without another take", async (cleanup) => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.interact(press, lift); await settle();
+    h.server.owned = true;
+    h.control.observe();
+    h.server.owned = false;
+    h.control.observe();
+    h.server.owned = true;
+    h.server.reservation = "reconnected-view";
+    h.control.observe();
+    if (cleanup === "idle") { vi.advanceTimersByTime(BROWSER_HAND_BACK_MS); await settle(); }
+    else h.control.leave();
+    expect(h.transport.take).toHaveBeenCalledOnce();
+    expect(h.transport.release).toHaveBeenCalledExactlyOnceWith("reconnected-view");
   });
 
   it("hands back an unused hold the server reports, without postponing an armed hand-back", async () => {
@@ -513,6 +541,20 @@ describe("the v2 stream as a control transport", () => {
     const failed = expect(taking).rejects.toThrow("Could not take control");
     vi.advanceTimersByTime(20_000);
     await failed;
+  });
+
+  it("does not accept a late grant from an older takeover attempt", async () => {
+    const h = stream(control("agent"));
+    const taking = h.transport.take("new-attempt");
+    let granted = false;
+    void taking.then(() => { granted = true; });
+    h.set({ ...control("you"), attempt: "old-attempt" });
+    await settle();
+    expect(granted).toBe(false);
+    h.set({ ...control("you"), attempt: "new-attempt" });
+    await expect(taking).resolves.toEqual({ waited: true });
+    await h.transport.release("new-attempt");
+    expect(h.client.send).toHaveBeenLastCalledWith({ type: "releaseControl", attempt: "new-attempt" });
   });
 
   it("sends input at once and lets go with a release", async () => {

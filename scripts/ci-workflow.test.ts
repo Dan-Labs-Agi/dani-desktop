@@ -1,6 +1,9 @@
 // This repository retained its portable CI rather than adopting upstream's
 // ci-scope/Boat/nightly graph. See docs/current-ci-contract.md for provenance.
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
@@ -101,6 +104,49 @@ describe("adopted portable CI contract", () => {
       expect(step.with?.["package-manager-cache"]).not.toBe(true);
       expect(step.run ?? "").not.toMatch(/gh release|npm publish|--publish always|--no-sandbox/);
       expect(step["continue-on-error"]).toBeUndefined();
+    }
+  });
+  it("uses the packaged updater's canonical public feed for Ubuntu update proofs and ships its metadata", () => {
+    const linux = load("package-linux.yml").jobs.package as Job;
+    expect(linux.steps.some(step => step.uses?.startsWith("actions/upload-artifact") && String(step.with?.path).includes("release/latest-linux.yml"))).toBe(true);
+  });
+  it.skipIf(process.platform === "win32").each([
+    ["complete desktop", 200, { tag_name: "v0.1.141", draft: false, prerelease: false, assets: [{ name: "latest-linux.yml" }] }, 0, "has-release=true"],
+    ["no stable release yet", 404, {}, 0, "has-release=false"],
+    ["auxiliary latest release", 200, { tag_name: "browser-engine-v0.36.0-omb.2", draft: false, prerelease: false, assets: [] }, 1, ""],
+    ["desktop missing its feed", 200, { tag_name: "v0.1.141", draft: false, prerelease: false, assets: [] }, 1, ""],
+    ["unauthorized lookup", 403, {}, 1, ""],
+  ])("Ubuntu public updater probe handles %s without contacting GitHub", (_, status, body, exit, output) => {
+    const directory = mkdtempSync(join(tmpdir(), "dani-release-feed-"));
+    try {
+      const response = join(directory, "response.json");
+      const request = join(directory, "request.txt");
+      const resultFile = join(directory, "outputs.txt");
+      writeFileSync(response, JSON.stringify(body));
+      writeFileSync(resultFile, "");
+      writeFileSync(join(directory, "curl"), `#!/bin/sh
+printf '%s\\n' "$*" > "$DANI_TEST_REQUEST"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then shift; destination=$1; fi
+  shift
+done
+cp "$DANI_TEST_RESPONSE" "$destination"
+printf '%s' "$DANI_TEST_STATUS"
+`, { mode: 0o700 });
+      const linux = load("package-linux.yml").jobs.package as Job;
+      const probe = linux.steps.find(step => step.run?.includes("/releases/latest"))!;
+      const result = spawnSync("bash", ["-c", probe.run!], {
+        encoding: "utf8",
+        timeout: 10_000,
+        env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, RUNNER_TEMP: directory, GITHUB_OUTPUT: resultFile,
+          DANI_TEST_REQUEST: request, DANI_TEST_RESPONSE: response, DANI_TEST_STATUS: String(status) },
+      });
+      expect(result.status, result.stderr).toBe(exit);
+      expect(readFileSync(resultFile, "utf8").trim()).toBe(output);
+      const publisher = parse(readFileSync(new URL("../electron-builder.yml", import.meta.url), "utf8")).publish[0];
+      expect(readFileSync(request, "utf8")).toContain(`https://api.github.com/repos/${publisher.owner}/${publisher.repo}/releases/latest`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
   it("checks delegated approval modes on the receipt's work thread, not the selected sibling", () => {

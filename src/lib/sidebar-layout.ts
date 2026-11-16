@@ -254,3 +254,13 @@ export function mergeSectionOrder(
 export function sameSectionOrder(a: SidebarSectionId[], b: SidebarSectionId[]): boolean {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
+/** How much of the grid's right end Search and New take in a framed window's corner (Sidebar's corner row). */
+const CORNER_CLEAR = 60;
+
+/** Whether the tiles' first row, as laid out, ends before the corner's buttons: the sidebar's width and the number of
+ * tiles decide it. */
+export function tilesClearCorner(tiles: { top: number; right: number }[], gridRight: number): boolean {
+  if (!tiles.length) return false;
+  const top = tiles[0]!.top;
+  return Math.max(...tiles.filter((tile) => Math.abs(tile.top - top) < 1).map((tile) => tile.right)) <= gridRight - CORNER_CLEAR;
+}

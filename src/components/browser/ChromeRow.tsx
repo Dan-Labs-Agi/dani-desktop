@@ -4,7 +4,7 @@
 import { ArrowLeft, ArrowRight, Expand, Globe, Hand, Loader2, Maximize2, Minimize2, Plus, RotateCw, Shrink, UserRound, X } from "lucide-react";
 import { forwardRef, useState, type ReactNode } from "react";
 
-import type { PreviewStreamControl } from "@/lib/browser-stream-client";
+import type { PreviewStreamControl } from "../../../shared/browser-stream";
 import type { BrowserTakeStatus } from "@/lib/browser-control";
 import { t } from "@/lib/i18n";
 

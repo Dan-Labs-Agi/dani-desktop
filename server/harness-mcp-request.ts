@@ -25,6 +25,8 @@ export function parseHarnessMcpKind(value: unknown): HarnessMcpKind | null {
   return value === "browser" || value === "computer" || value === "data" || value === "highlevel" || value === "device" ? value : null;
 }
 
+class HarnessMcpError extends Error {}
+
 /** Node's fetch (undici) rejects with the socket error as its `cause`: refused before anything was sent, reset or closed after. */
 function unansweredText(error: unknown, name: string, timeoutMs: number): string {
   const code = (error as { cause?: { code?: unknown } } | null)?.cause?.code;
@@ -34,7 +36,7 @@ function unansweredText(error: unknown, name: string, timeoutMs: number): string
   if ((error as { name?: unknown } | null)?.name === "TimeoutError") {
     return `Dani Bot did not answer ${call} within ${timeoutMs / 1_000} seconds. It may still be running, or it may already have taken effect. Do not repeat it until its result is checked.`;
   }
-  return error instanceof Error && !/fetch failed|abort|timeout|terminated/i.test(error.message)
+  return error instanceof HarnessMcpError
     ? error.message : `${name} connection was interrupted. Do not repeat the action until its state is checked.`;
 }
 
@@ -45,7 +47,7 @@ export function failure(id: RpcId, method: unknown, message: string, code = -326
 }
 
 async function boundedJson(response: Response, name: string): Promise<unknown> {
-  if (!response.body) throw new Error(`${name} server returned an empty response.`);
+  if (!response.body) throw new HarnessMcpError(`${name} server returned an empty response.`);
   const reader = response.body.getReader();
   const chunks: Buffer[] = [];
   let size = 0;
@@ -54,7 +56,7 @@ async function boundedJson(response: Response, name: string): Promise<unknown> {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_OUTPUT_BYTES) throw new Error(`${name} response exceeded the size limit.`);
+      if (size > MAX_OUTPUT_BYTES) throw new HarnessMcpError(`${name} response exceeded the size limit.`);
       chunks.push(Buffer.from(value));
     }
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -64,6 +66,7 @@ async function boundedJson(response: Response, name: string): Promise<unknown> {
 export async function harnessMcpRequest(
   frame: unknown,
   connection: { url: string; token: string; kind: HarnessMcpKind; toolLimit?: number },
+  signal?: AbortSignal,
 ): Promise<unknown | undefined> {
   if (!frame || typeof frame !== "object" || Array.isArray(frame)) return failure(null, null, "Invalid request.", -32600);
   const message = frame as { id?: RpcId; jsonrpc?: unknown; method?: unknown; params?: unknown };
@@ -81,26 +84,31 @@ export async function harnessMcpRequest(
   if (message.method === "ping") return { jsonrpc: "2.0", id, result: {} };
   if (message.method !== "tools/list" && message.method !== "tools/call") return failure(id, message.method, "Method not found.", -32601);
   try {
+    signal?.throwIfAborted();
     const url = new URL(connection.url);
     if (!connection.token || url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
-      throw new Error(`${name} connection is not configured. Start a new bot turn from Dani Bot.`);
+      throw new HarnessMcpError(`${name} connection is not configured. Start a new bot turn from Dani Bot.`);
     }
     const body = JSON.stringify({ method: message.method, params: message.params ?? {} });
-    if (Buffer.byteLength(body) > MAX_INPUT_BYTES) throw new Error(`${name} request exceeded the size limit.`);
+    if (Buffer.byteLength(body) > MAX_INPUT_BYTES) throw new HarnessMcpError(`${name} request exceeded the size limit.`);
+    const timeout = AbortSignal.timeout(HARNESS_PROXY_TIMEOUTS_MS[connection.kind] ?? HARNESS_PROXY_TIMEOUT_MS);
     const response = await fetch(new URL(`/api/internal/${connection.kind}/mcp`, url), {
       method: "POST", redirect: "error",
       headers: { "content-type": "application/json", authorization: `Bearer ${connection.token}` },
-      body, signal: AbortSignal.timeout(HARNESS_PROXY_TIMEOUTS_MS[connection.kind] ?? HARNESS_PROXY_TIMEOUT_MS),
+      body, signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
     const payload = await boundedJson(response, name) as { result?: unknown; error?: unknown };
     if (!response.ok || !payload || typeof payload !== "object" || !Object.hasOwn(payload, "result")) {
-      throw new Error(typeof payload?.error === "string" ? payload.error.slice(0, 2_000) : `${name} server is unavailable. Start a new bot turn or try again.`);
+      throw new HarnessMcpError(typeof payload?.error === "string" ? payload.error.slice(0, 2_000) : `${name} server is unavailable. Start a new bot turn or try again.`);
     }
     const result = message.method === "tools/list"
       ? capToolListResult(payload.result, connection.toolLimit, (line) => console.warn(`[${connection.kind}] ${line}`)) : payload.result;
     return { jsonrpc: "2.0", id, result };
   } catch (error) {
-    return failure(id, message.method, unansweredText(error, name, HARNESS_PROXY_TIMEOUTS_MS[connection.kind] ?? HARNESS_PROXY_TIMEOUT_MS) + RECOVERY[connection.kind]);
+    const text = signal?.aborted
+      ? `${name} call was cancelled. It may already have taken effect. Check its state before repeating the action.`
+      : unansweredText(error, name, HARNESS_PROXY_TIMEOUTS_MS[connection.kind] ?? HARNESS_PROXY_TIMEOUT_MS);
+    return failure(id, message.method, text + RECOVERY[connection.kind]);
   }
 }
 

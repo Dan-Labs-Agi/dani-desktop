@@ -2,35 +2,24 @@
 
 The desktop application ships two separate components:
 
-- **agent-browser 0.37.0** on macOS and Linux, official Vercel release executables from
-  <https://github.com/vercel-labs/agent-browser/releases/tag/v0.37.0>.
+- **agent-browser 0.41.2** on macOS, Linux and Windows, official Vercel release executables from
+  <https://github.com/vercel-labs/agent-browser/releases/tag/v0.41.2>.
   Its Apache-2.0 license is included as `agent-browser-LICENSE.txt`.
   The bundled axe-core code's upstream license and third-party notices are
   included as `LICENSE-axe-core.txt` and `LICENSE-axe-core-THIRD-PARTY.txt`.
-  These files match the `v0.37.0` source tag (unchanged from `v0.36.0`); there
-  is no root-level NOTICE in that tag. All six official macOS/Linux binaries
-  were downloaded and their SHA-256 digests checked against GitHub's release
-  metadata on 2026-09-08.
-- **Windows exception: agent-browser 0.36.0-omb.1** is an DaniBot vendor
-  build, not an official or unmodified Vercel executable. It starts from exact
-  v0.36.0 commit `eb05921bad874cd2a1b4fa5d1149f1ed26576cae` and carries
-  the Windows handle-inheritance fix contributed by `holny` in upstream
-  [PR1781](https://github.com/vercel-labs/agent-browser/pull/1781), commit
-  `81a98c349d04195396ffae6898bd375ad64280de`, plus DaniBot's Windows-only
-  `CREATE_NO_WINDOW` flag for Chrome children and a native console regression test
-  in candidate revision `0.36.0-omb.2`. The release resolver retains `0.36.0-omb.1`
-  until the candidate passes native checks and its published digest is reviewed.
-  The separate MCP output-reader
-  rewrite is deliberately excluded. `agent-browser-windows-stdio.patch`
-  includes the exact changes and modification notices, plus package-version
-  metadata; dependency versions remain locked. The original Apache and axe
-  notices remain unchanged. `scripts/build-windows-browser-vendor.mjs` pins
-  the source archive, patch, Rust 1.97.1, pnpm 11.1.3 and Windows GNU target,
-  builds the real upstream dashboard, and emits executable and build-input
-  digests in `provenance.json`. Native Windows cold-start and close/reopen
-  checks are required before those executable bytes are published and pinned.
-  Upstream 0.37.0 does not include that fix; keep this tested Windows build
-  until an updated official or backported release passes those native checks.
+  All three notice files match the `v0.41.2` source tag byte-for-byte; no
+  root-level NOTICE is present. All seven official release executables were
+  downloaded and their sizes and SHA-256 digests matched against GitHub's
+  release metadata on 2026-11-12. Native execution qualification is separate.
+  The upgrade includes upstream's no-replay-after-write correction
+  ([PR #2085](https://github.com/vercel-labs/agent-browser/pull/2085)),
+  MCP argument restrictions, and Windows handle-inheritance/output-drain fixes.
+  The runtime resolver no longer selects a platform-specific Windows vendor
+  revision. `scripts/build-windows-browser-vendor.mjs` and its patch remain
+  separate maintainer tooling, not an alternate runtime fallback; their
+  historical source, toolchain and provenance do not qualify the new official
+  executable. Native Windows cold-start, close/reopen and packaged-app checks
+  remain required before release.
 - **Chromium Headless Shell 153.0.8010.47**, Google's official
   `chrome-headless-shell` assets published through Chrome for Testing:
   <https://googlechromelabs.github.io/chrome-for-testing/153.0.8010.47.json>.

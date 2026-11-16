@@ -1,5 +1,5 @@
-// agent-browser 0.37.0's core profile advertises 29 tools at ~12.5k tokens, mostly fifteen launch/session parameters
-// repeated on every tool, and every result arrives twice (text plus a 3-5x larger structuredContent that Codex keeps in history).
+// The core catalog repeats harness-owned launch/session parameters. MCP results also
+// duplicate page output in structuredContent, which native clients keep in history.
 import { trimResultText } from "./mcp-trim.ts";
 
 /** A model must never set these: `session` reaches another bot's browser, `extraArgs`/`caCert`/`headed`/`webgpu`/`webmcp`
@@ -66,7 +66,7 @@ export function withoutLifecycle(text: string): string {
 
 export interface PageState { url: string; title: string; text: string }
 
-/** agent-browser renumbers every @eN ref on each snapshot, so the page is read with eval and a model's refs stay valid. */
+/** Page-change reads must not replace the model's ref snapshot. */
 export const OBSERVE_PAGE_SCRIPT =
   "JSON.stringify({ url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 200000) })";
 

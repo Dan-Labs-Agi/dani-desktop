@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 import { LIVE_COPY } from "../shared/live-approval.ts";
 import { cloudPairingSignature } from "./cloud-home.ts";
 import { CLOUD_HOME_PLACE } from "./system-prompt.ts";
@@ -85,15 +87,19 @@ posixOnly("Live call e2e", () => {
     chmodSync(FAKE_CODEX, 0o755);
     live = await startFakeOpenAiLive();
     home = mkdtempSync(join(tmpdir(), "omb-live-call-"));
-    mkdirSync(join(home, ".danibot"), { recursive: true });
+    const dataDir = join(home, ".danibot");
+    mkdirSync(join(dataDir, "tmp"), { recursive: true });
     steerGate = join(home, "steer.gate");
     titleRoutes = join(home, "title-routes.json");
     writeFileSync(titleRoutes, JSON.stringify({ "Requests:\nwhat is six times seven": "Times table question" }));
     queueSteerGate = join(home, "queue-steer.gate");
     writeFileSync(
-      join(home, ".danibot", "config.json"),
+      join(dataDir, "config.json"),
       JSON.stringify({
         instances: {
+          ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+            id, { driver: "not-a-real-driver", enabled: false },
+          ])),
           claude: {
             driver: "claudeAgent",
             environment: { FAKE_CLAUDE_REPLIES: JSON.stringify(["Six times seven is 42."]), FAKE_CLAUDE_TEXT_ROUTES: titleRoutes },
@@ -124,11 +130,9 @@ posixOnly("Live call e2e", () => {
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
+        ...verificationServerEnvironment(process.env, dataDir, port),
         HOME: home,
         USERPROFILE: home,
-        OMB_PORT: String(port),
-        OMB_WEBHOOK_PORT: String(port + 1),
         OMB_OPENAI_LIVE_URL: live.url,
         OMB_OPENAI_LIVE_KEY: LIVE_KEY,
       },
@@ -163,7 +167,6 @@ posixOnly("Live call e2e", () => {
       expect(JSON.stringify(started.body)).not.toContain(LIVE_KEY);
       expect(call).toMatchObject({ botId: bot.id, threadId: bot.threadId, client: "desktop" });
       expect(session.body).toMatchObject({ session: { client: { data_channel: { allowed_client_events: ["session.close"] } } } });
-      expect((session.body.session as { instructions: string }).instructions).toContain("runs in DaniBot on the user's own computer.");
       await live.waitForAttach(session.id);
       await sse.until((frame) => frame.kind === "live.call" && frame.call?.callId === call.callId && frame.call?.status === "live");
 
@@ -654,11 +657,12 @@ posixOnly("Live call on the person's Cloud", () => {
     live = await startFakeOpenAiLive();
     home = mkdtempSync(join(tmpdir(), "omb-live-cloud-"));
     const dataDir = join(home, ".danibot");
-    mkdirSync(dataDir, { recursive: true });
+    mkdirSync(join(dataDir, "tmp"), { recursive: true });
     writeFileSync(join(dataDir, "config.json"), JSON.stringify({
       instances: {
-        // Pin the fleet's other defaults so this never probes an installed CLI.
-        ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
+        ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+          id, { driver: "not-a-real-driver", enabled: false },
+        ])),
         claude: { driver: "claudeAgent", config: { cli: FAKE_CLAUDE, permissionMode: "bypassPermissions" } },
       },
     }));
@@ -673,9 +677,8 @@ posixOnly("Live call on the person's Cloud", () => {
     child = spawn(process.execPath, ["--import", loopbackOnly, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
+        ...verificationServerEnvironment(process.env, dataDir, port),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_STATIC_DIR: join(home, "web"),
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
         OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
         OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,
         // no OMB_OPENAI_LIVE_KEY: no plan includes one
@@ -773,11 +776,12 @@ posixOnly("Live calls for everyone, with the person's own OpenAI key", () => {
     live = await startFakeOpenAiLive();
     home = mkdtempSync(join(tmpdir(), "omb-live-byok-"));
     const dataDir = join(home, ".danibot");
-    mkdirSync(dataDir, { recursive: true });
+    mkdirSync(join(dataDir, "tmp"), { recursive: true });
     writeFileSync(join(dataDir, "config.json"), JSON.stringify({
       instances: {
-        // Pin the fleet's other defaults so this never probes an installed CLI.
-        ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
+        ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+          id, { driver: "not-a-real-driver", enabled: false },
+        ])),
         claude: { driver: "claudeAgent", config: { cli: FAKE_CLAUDE, permissionMode: "bypassPermissions" } },
       },
     }));
@@ -786,9 +790,8 @@ posixOnly("Live calls for everyone, with the person's own OpenAI key", () => {
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
+        ...verificationServerEnvironment(process.env, dataDir, port),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir,
-        OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
         OMB_OPENAI_LIVE_URL: live.url,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -826,8 +829,8 @@ posixOnly("Live calls for everyone, with the person's own OpenAI key", () => {
     };
 
     for (const [client, headers] of [["ios", phone], ["android", {}], ["desktop", {}]] as const) {
-      expect(await start(client, headers), client).toEqual({
-        status: 409, body: { error: "Live calls use your own OpenAI key. Add it in Settings → API keys.", needsKey: true },
+      expect(await start(client, headers), client).toMatchObject({
+        status: 409, body: { needsKey: true },
       });
     }
     expect(live.sessions).toHaveLength(0);

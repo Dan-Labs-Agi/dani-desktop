@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t } from "@/lib/i18n";
 import type { Bot } from "@/state/store";
 import { BROWSER_HELD_ELSEWHERE } from "../../shared/browser-held";
+import { BROWSER_HAND_BACK_MS } from "@/lib/browser-control";
 
 const fixture = vi.hoisted(() => ({
   api: vi.fn(),
@@ -34,7 +35,10 @@ class FakeSocket extends EventTarget {
   close() { this.readyState = 3; }
   open() { this.readyState = 1; this.dispatchEvent(new Event("open")); }
   message(data: unknown) { this.dispatchEvent(new MessageEvent("message", { data: typeof data === "string" || data instanceof ArrayBuffer ? data : JSON.stringify(data) })); }
-  control(controller: string, more: Record<string, unknown> = {}) { this.message({ type: "control", canOperate: true, controller, generation: 1, dialog: null, ...more }); }
+  control(controller: string, more: Record<string, unknown> = {}) {
+    const attempt = [...this.sent].reverse().find((message) => message.type === "takeControl")?.attempt;
+    this.message({ type: "control", canOperate: true, controller, generation: 1, dialog: null, ...(typeof attempt === "string" ? { attempt } : {}), ...more });
+  }
   refuse() { this.dispatchEvent(Object.assign(new Event("close"), { code: 1006, reason: "" })); }
 }
 
@@ -263,7 +267,7 @@ describe("who holds the browser", () => {
     expect(pill().textContent).toContain("Pepper has control");
     await act(async () => pill().click());
     await flush();
-    expect(socket.sent).toContainEqual({ type: "takeControl" });
+    expect(socket.sent).toContainEqual({ type: "takeControl", attempt: expect.any(String) });
     expect(pill().dataset.pill).toBe("taking");
     await act(async () => socket.control("you"));
     await flush();
@@ -304,11 +308,53 @@ describe("who holds the browser", () => {
       canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 400, clientY: 250, button: 0, buttons: 0, pointerId: 1, pointerType: "mouse", bubbles: true }));
     });
     await flush();
-    expect(socket.sent).toEqual([{ type: "takeControl" }]);
+    expect(socket.sent).toEqual([{ type: "takeControl", attempt: expect.any(String) }]);
     await act(async () => socket.control("you"));
     await flush();
     const mouse = socket.sent.filter((message) => message.type === "mouse");
     expect(mouse.map((message) => [message.action, message.x, message.y])).toEqual([["down", 400, 250], ["up", 400, 250]]);
+  });
+
+  it.each(["idle", "leave"] as const)("hands a reconnected hold back on %s without a fresh take", async (cleanup) => {
+    const before = await streaming("unclaimed");
+    vi.useFakeTimers();
+    const canvas = host.querySelector("canvas")!;
+    await act(async () => {
+      canvas.dispatchEvent(new PointerEvent("pointerdown", { clientX: 400, clientY: 250, button: 0, buttons: 1, pointerId: 1, pointerType: "mouse", bubbles: true }));
+      canvas.dispatchEvent(new PointerEvent("pointerup", { clientX: 400, clientY: 250, button: 0, buttons: 0, pointerId: 1, pointerType: "mouse", bubbles: true }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      before.control("you", { owned: true });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(before.sent.filter((message) => message.type === "takeControl")).toHaveLength(1);
+    await act(async () => {
+      before.refuse();
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    const reopened = FakeSocket.instances.at(-1)!;
+    expect(reopened).not.toBe(before);
+    await act(async () => {
+      reopened.open();
+      reopened.control("you", { owned: true, attempt: "carried-panel-reservation" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      if (cleanup === "idle") await vi.advanceTimersByTimeAsync(BROWSER_HAND_BACK_MS);
+      else root.render(null);
+    });
+    expect(reopened.sent.some((message) => message.type === "takeControl")).toBe(false);
+    expect(reopened.sent).toContainEqual({ type: "releaseControl", attempt: "carried-panel-reservation" });
+  });
+
+  it("keeps reconnect grace when replacing the transport instead of leaving the panel", async () => {
+    const before = await streaming("you");
+    await act(async () => before.control("you", { owned: true, attempt: "still-held-reservation" }));
+    await act(async () => button("Reconnect view").click());
+    await flush();
+    expect(FakeSocket.instances.at(-1)).not.toBe(before);
+    expect(before.sent.some((message) => message.type === "releaseControl")).toBe(false);
   });
 
   it("keeps the browser for the person holding it when the panel grows past its frame cap, as full screen does", async () => {
@@ -354,7 +400,7 @@ describe("what the person does in the panel", () => {
     });
     await act(async () => { address.form!.requestSubmit(); });
     await flush();
-    expect(socket.sent).toEqual([{ type: "takeControl" }]);
+    expect(socket.sent).toEqual([{ type: "takeControl", attempt: expect.any(String) }]);
     await act(async () => socket.control("you"));
     await flush();
     expect(socket.sent.at(-1)).toEqual({ type: "navigate", url: "https://example.org/docs" });
@@ -367,6 +413,10 @@ describe("what the person does in the panel", () => {
     const field = host.querySelector<HTMLInputElement>('input[name="pageText"]')!;
     field.value = "hello there";
     await act(async () => { field.form!.requestSubmit(); });
+    await flush();
+    expect(socket.sent).toContainEqual({ type: "takeControl", attempt: expect.any(String) });
+    expect(socket.sent.some((message) => message.type === "text")).toBe(false);
+    await act(async () => socket.control("you"));
     await flush();
     expect(socket.sent).toContainEqual({ type: "text", text: "hello there" });
     expect(field.value).toBe("");
@@ -391,7 +441,7 @@ describe("what the person does in the panel", () => {
       socket.control("unclaimed");
     });
     await flush();
-    expect(socket.sent).toEqual([{ type: "takeControl" }]);
+    expect(socket.sent).toEqual([{ type: "takeControl", attempt: expect.any(String) }]);
     await act(async () => socket.control("you"));
     await flush();
     expect(socket.sent.at(-1)).toEqual({ type: "navigate", url: "https://accounts.example.com/login" });
@@ -406,7 +456,7 @@ describe("a published page's Open", () => {
     const socket = await streaming("agent");
     await show({ url: PAGE, nonce: 1 });
     await flush();
-    expect(socket.sent).toEqual([{ type: "takeControl" }]);
+    expect(socket.sent).toEqual([{ type: "takeControl", attempt: expect.any(String) }]);
     await act(async () => socket.control("you"));
     await flush();
     expect(socket.sent.at(-1)).toEqual({ type: "tabNew", url: PAGE });
@@ -427,7 +477,7 @@ describe("a published page's Open", () => {
     expect(socket.sent).toEqual([{ type: "wake" }]);
     await act(async () => socket.message({ type: "awake" }));
     await flush();
-    expect(socket.sent).toEqual([{ type: "wake" }, { type: "takeControl" }]);
+    expect(socket.sent).toEqual([{ type: "wake" }, { type: "takeControl", attempt: expect.any(String) }]);
     await act(async () => socket.control("you"));
     await flush();
     expect(socket.sent.at(-1)).toEqual({ type: "tabNew", url: PAGE });

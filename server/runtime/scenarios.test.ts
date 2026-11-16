@@ -454,7 +454,8 @@ describe("§2 lifecycle", () => {
     expect(kinds(w, child.id)).not.toContain("answered");
     expect(w.runner.runs(child.id)).toHaveLength(1);
     expect(w.runner.reports(child.id)).toHaveLength(1);
-    expect(w.runner.parked.size).toBe(0);
+    expect(w.runner.parked.has(child.id)).toBe(false);
+    expect(w.runner.parked.has(root.id)).toBe(true);
     expect(w.rt.answer(child.id, "too late")).toBe(false);
 
     const rootRuns = w.runner.runs(root.id);
@@ -462,7 +463,7 @@ describe("§2 lifecycle", () => {
     expect(rootRuns[0].input!.asked?.map((a) => a.id)).toEqual([child.id]);
     expect(rootRuns[1].input!.settled?.map((a) => [a.id, a.status, a.outcome])).toEqual([[child.id, "failed", "expired"]]);
     expect(w.store.inbox(chiefOwner, false).filter((i) => i.kind === "settled")).toHaveLength(1);
-    expect(get(w, root.id).status).toBe("completed");
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "interrupted" });
     invariants(w);
   });
 });
@@ -516,7 +517,7 @@ describe("§5 restart", () => {
     expect(rootRuns[0].input!.settled?.map((a) => [a.id, a.outcome])).toEqual([[child.id, "interrupted"]]);
     expect(rootRuns[0].a!.restart).toBe("teammates");
     expect(rootRuns[0].input!.restartNote.length).toBeGreaterThan(0);
-    expect(get(w, root.id).status).toBe("completed");
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "interrupted" });
     expect(get(w, root.id).restart).toBeUndefined();
     expect(w.store.inbox(chiefOwner, true)).toHaveLength(0);
     invariants(w);
@@ -637,7 +638,7 @@ describe("§6 budgets and clocks", () => {
 
   it("S12 the owed resume turn runs even when executions are exhausted", async () => {
     const w = world({ executions: 0 });
-    const root = beginChief(w);
+    const root = beginChief(w, { requester: { kind: "person", threadId: CHIEF_THREAD } });
     const child = ok(enqueueFrom(w, root, workFor("dev", "Build")));
     w.rt.end(root.id, { ok: true, text: "" });
     expect(get(w, root.id).status).toBe("waiting");
@@ -651,6 +652,34 @@ describe("§6 budgets and clocks", () => {
     expect(rootRuns).toHaveLength(1);
     expect(rootRuns[0].input!.settled?.map((a) => a.id)).toEqual([child.id]);
     expect(get(w, root.id).status).toBe("completed");
+    invariants(w);
+  });
+
+  it("S12b an admitted Chief review still runs after worker executions exhaust the window, without admitting more recovery work", async () => {
+    const w = world({ executions: 2 });
+    const root = beginChief(w);
+    const child = ok(enqueueFrom(w, root, workFor("dev", "Build")));
+    w.runner.script("dev", hang());
+    w.runner.script("chief", custom(({ handOut }) => {
+      expect(handOut(workFor("dev", "Reconcile the remaining work", { rework: true })))
+        .toMatchObject({ ok: false, outcome: "budget" });
+      return { kind: "completed", text: "I will tell the person it is done" };
+    }));
+    w.rt.end(root.id, { ok: true, text: "Waiting for the worker" });
+    await drain(w);
+    expect(w.runner.runs(child.id)).toHaveLength(1);
+    w.runner.release(child.id, fail("provider_error", "The build is unfinished"));
+    await drain(w);
+
+    const reviews = w.runner.runs(root.id);
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].input!.turn).toBe("resume");
+    expect(reviews[0].input!.settled?.map(a => [a.id, a.status, a.outcome]))
+      .toEqual([[child.id, "failed", "provider_error"]]);
+    expect(get(w, child.id)).toMatchObject({ status: "failed", outcome: "provider_error", executions: 1 });
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "budget", executions: 2 });
+    expect(w.store.children(root.id)).toHaveLength(1);
+    expect(w.runner.reports(child.id)).toHaveLength(1);
     invariants(w);
   });
 
@@ -681,7 +710,7 @@ describe("§6 budgets and clocks", () => {
     const rootRuns = w.runner.runs(root.id);
     expect(rootRuns).toHaveLength(1);
     expect(rootRuns[0].input!.settled?.map((a) => [a.id, a.outcome])).toEqual([[child.id, "expired"]]);
-    expect(get(w, root.id).status).toBe("completed");
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "interrupted" });
     invariants(w);
   });
 
@@ -787,9 +816,10 @@ describe("§6 budgets and clocks", () => {
     expect(w.runner.running.size).toBe(0);
 
     const rootRuns = w.runner.runs(root.id);
-    expect(rootRuns).toHaveLength(1);
+    expect(rootRuns).toHaveLength(2);
+    expect(rootRuns[1].input!.turn).toBe("continued");
     expect(rootRuns[0].input!.settled?.map((x) => x.id).sort()).toEqual([a.id, b.id].sort());
-    expect(get(w, root.id).status).toBe("completed");
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "stalled" });
     invariants(w);
   });
 });
@@ -1042,7 +1072,7 @@ describe("§7 invariants", () => {
 
     expect(w.rt.answer(grand.id, "firefox")).toBe(true);
     await drain(w);
-    expect(get(w, root.id).status).toBe("completed");
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "denied" });
     expect(get(w, refusedAtDispatch.id)).toMatchObject({ status: "failed", outcome: "refused" });
     expect(get(w, failing.id)).toMatchObject({ status: "failed", outcome: "provider_error" });
 
@@ -1080,9 +1110,10 @@ describe("§8 ports", () => {
     expect(kinds(w, broken.id)).toContain("settled");
     expect(w.runner.reports(broken.id)).toHaveLength(1);
     expect(get(w, fine.id)).toMatchObject({ status: "completed", result: "tested" });
-    expect(w.runner.runs(root.id)).toHaveLength(1);
+    expect(w.runner.runs(root.id)).toHaveLength(2);
+    expect(w.runner.runs(root.id)[1].input!.turn).toBe("continued");
     expect(w.runner.runs(root.id)[0].input!.settled?.map((x) => x.id).sort()).toEqual([broken.id, fine.id].sort());
-    expect(get(w, root.id).status).toBe("completed");
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "stalled" });
     expect(w.logs.length).toBeGreaterThan(0);
     invariants(w);
   });
@@ -1099,8 +1130,8 @@ describe("§8 ports", () => {
     expect(kinds(w, child.id)).toContain("settled");
     expect(w.runner.runs(child.id)).toHaveLength(1);
     expect(w.runner.reports(child.id)).toHaveLength(1);
-    expect(w.runner.runs(root.id)).toHaveLength(1);
-    expect(get(w, root.id).status).toBe("completed");
+    expect(w.runner.runs(root.id)).toHaveLength(2);
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "stalled" });
     invariants(w);
   });
 
@@ -1134,7 +1165,7 @@ describe("§8 ports", () => {
     expect(w.runner.runs(child.id)).toHaveLength(0);
     expect(w.runner.reports(child.id)).toHaveLength(1);
     expect(w.runner.runs(root.id)).toHaveLength(1);
-    expect(get(w, root.id).status).toBe("completed");
+    expect(get(w, root.id)).toMatchObject({ status: "needs_input", outcome: "denied" });
     invariants(w);
   });
 });
@@ -1576,7 +1607,7 @@ describe("§2/§5 every turn a root", () => {
     expect(runs).toHaveLength(1);
     expect(runs[0].input!.turn).toBe("rerun");
     expect(runs[0].input!.resumed).toBe(true);
-    expect(runs[0].input!.restartNote).toMatch(/^DaniBot restarted while your previous turn here was running and cut it off;/);
+    expect(runs[0].input!.restartNote).toContain("check what that turn already did");
     expect(runs[0].input!.restartNote).toContain("so nothing is done twice");
     expect(runs[0].a!.restart).toBe("rerun");
     expect(get(v, cut.id)).toMatchObject({ status: "running", executions: 2, restarts: 1 });
@@ -1642,7 +1673,7 @@ describe("§2/§5 every turn a root", () => {
     expect(run).toHaveLength(1);
     expect(run[0].input!.turn).toBe("answered");
     expect(run[0].input!.settled?.map((a) => [a.id, a.outcome])).toEqual([[child.id, "expired"]]);
-    expect(get(w, running.id)).toMatchObject({ status: "completed", result: "late but done" });
+    expect(get(w, running.id)).toMatchObject({ status: "needs_input", outcome: "interrupted", result: "late but done" });
     invariants(w);
   });
 
@@ -1797,7 +1828,7 @@ describe("§5 outward / §2 loop guard", () => {
     const runs = w.runner.runs(child.id);
     expect(runs).toHaveLength(2);
     expect(runs[1].input!.turn).toBe("rerun");
-    expect(runs[1].input!.restartNote).toMatch(/^DaniBot restarted while your previous turn here was running/);
+    expect(runs[1].input!.restartNote).toContain("check what that turn already did");
     expect(get(w, child.id)).toMatchObject({ status: "completed", result: "built", restarts: 1 });
     expect(w.runner.runs(root.id)[0].input!.restartNote).toContain("Dev (resumed once in place and told to check what it had already done)");
     expect(get(w, root.id).status).toBe("completed");
@@ -1813,7 +1844,6 @@ describe("§5 outward / §2 loop guard", () => {
     expect(ended).toMatchObject({ status: "failed", outcome: "interrupted", restarts: 0, executions: 1 });
     expect(ended.restart).toBeUndefined();
     expect(ended.outcomeDetail).toBe(`${INTERRUPTED_OUTWARD} sent an email (GMAIL_SEND_EMAIL), pushed (git push); not resumed, so nothing is done twice.`);
-    expect(ended.outcomeDetail!.startsWith("Interrupted by an DaniBot restart after it already")).toBe(true);
     expect(ended.result).toBe(ended.outcomeDetail);
     expect(kinds(w, root.id)).toEqual(["enqueued", "started", "restart_reconciled", "settled", "reported"]);
     expect(w.store.events(root.id).map((e) => e.detail)).toEqual(["queued: root", "running: turn 1 (host), level auto", "failed: outward action done",
@@ -1855,7 +1885,8 @@ describe("§5 outward / §2 loop guard", () => {
     expect(resume[0].input!.turn).toBe("resume");
     expect(resume[0].input!.settled?.map((a) => [a.id, a.outcome, a.outcomeDetail])).toEqual([[child.id, "interrupted", cut.outcomeDetail]]);
     expect(resume[0].input!.restartNote).toBe("A restart cut these teammates' turns: Dev (cut after an outward action, not resumed: see its result). Check their results as usual.\n");
-    expect(get(v, vroot.id)).toMatchObject({ status: "completed", result: "reviewed" });
+    expect(get(v, vroot.id)).toMatchObject({ status: "needs_input", outcome: "interrupted", result: "reviewed" });
+    expect(v.runner.runs(child.id)).toHaveLength(1);
     invariants(v);
 
     const u = world();
@@ -1874,7 +1905,7 @@ describe("§5 outward / §2 loop guard", () => {
     expect(get(u, twice.id).result).not.toBe(CUT_TWICE);
     await drain(u);
     expect(u.runner.runs(uroot.id)[0].input!.restartNote).toContain("Dev (cut after an outward action, not resumed: see its result)");
-    expect(get(u, uroot.id).status).toBe("completed");
+    expect(get(u, uroot.id)).toMatchObject({ status: "needs_input", outcome: "interrupted" });
     invariants(u);
   });
 
@@ -1953,7 +1984,9 @@ describe("§5 outward / §2 loop guard", () => {
     expect(v.runner.reports(child.id)).toHaveLength(1);
     expect(v.store.inbox(chiefOwner, false).map((i) => i.kind)).toEqual(["stalled"]);
     expect(v.runner.runs(vroot.id)[0].input!.settled?.map((a) => [a.id, a.outcome])).toEqual([[child.id, "stalled"]]);
-    expect(get(v, vroot.id)).toMatchObject({ status: "completed", result: "gave up" });
+    expect(get(v, vroot.id)).toMatchObject({ status: "needs_input", outcome: "stalled" });
+    expect(v.runner.runs(vroot.id)).toHaveLength(2);
+    expect(v.runner.runs(child.id)).toHaveLength(2);
     invariants(v);
   });
 

@@ -5,8 +5,9 @@
 // starts the page at 1280x577, so the size checks are real.
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { connect, createServer as createSocketServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BrowserEvidence, type StepRecord } from "../../server/browser-evidence.ts";
 import { agentBrowserIntegration, closeBrowserSession, prepareBrowserSessionState, resolveAgentBrowserBinary, setBrowserViewport } from "../../server/browser-engine.ts";
 import { relay, RelayPorts, relayTarget } from "../../server/browser-relay.ts";
+import { HARNESS_OWNED_BROWSER_PARAMS } from "../../server/browser-tool-shape.ts";
 import { BrowserRuntime, browserRuntimeEnv, type BrowserSpawnSpec, type BrowserTiming } from "../../server/browser-runtime.ts";
 import { BrowserSteps, type StepContext } from "../../server/browser-steps.ts";
 import { openGate, type EgressGate } from "../../server/browser/egress/gate.ts";
@@ -37,6 +39,7 @@ const PAGE = `<!doctype html><title>Signup fixture</title><body style="margin:0;
 <label>Email <input id="email" type="email"></label>
 <label>Password <input id="pw" type="password" autocomplete="current-password"></label>
 <button id="signup" onclick="fetch('/api/signup',{method:'POST',body:JSON.stringify({password:'fake-hunter2-secret'})}).then(()=>setTimeout(()=>{ null.f() },0))">Sign up</button>
+<button id="replay" onclick="fetch('/api/replay',{method:'POST'})">Save draft</button>
 <button id="dead" onclick="fetch('http://127.0.0.1:9/nothing',{method:'POST',body:'x'}).catch(()=>{})">Dead fetch</button>
 <button id="flood" onclick="for (let i = 0; i < 1100; i++) setTimeout(() => { throw new Error('flood ' + i) }, 0)">Flood</button>
 <button id="one-more" onclick="setTimeout(() => { throw new RangeError('the new one') }, 0)">One more</button>
@@ -71,6 +74,8 @@ describe("page health and browser steps on the real engine", () => {
   let evidence: BrowserEvidence;
   let chrome = "";
   let gate: EgressGate | undefined;
+  let submissions = 0;
+  const acceptanceReceipts: Array<{ draft: string; receipt: string }> = [];
   const timings: BrowserTiming[] = [];
   const session = `omb-ev-${randomBytes(3).toString("hex")}`;
 
@@ -79,6 +84,44 @@ describe("page health and browser steps on the real engine", () => {
     const browser = await ensureUiBrowser(process.env, () => {}, UI_TOOLS_DIR);
     chrome = browser.chrome ?? "";
     server = createServer((req, res) => {
+      if (req.url === "/acceptance-login" && req.method === "POST") {
+        let body = "";
+        req.on("data", (chunk) => { body += chunk; });
+        req.on("end", () => {
+          if (body !== "code=fixture-code") { res.writeHead(401); res.end("Sign in needed"); return; }
+          res.writeHead(303, { "set-cookie": "fixture-login=yes; HttpOnly; SameSite=Strict; Path=/", location: "/acceptance-work" });
+          res.end();
+        });
+        return;
+      }
+      if (req.url?.startsWith("/acceptance-save") && req.method === "POST") {
+        if (!req.headers.cookie?.split("; ").includes("fixture-login=yes")) {
+          res.writeHead(401); res.end("Sign in needed"); return;
+        }
+        const draft = new URL(req.url, "http://fixture.invalid").searchParams.get("draft") ?? "Ada";
+        const receipt = `fixture-acceptance-${acceptanceReceipts.length + 1}`;
+        acceptanceReceipts.push({ draft, receipt });
+        res.setHeader("content-type", "text/html");
+        res.end(`<!doctype html><title>Saved</title><h1>Draft saved</h1><p>Receipt ${receipt} for ${draft}.</p>`);
+        return;
+      }
+      if (req.url === "/acceptance-work") {
+        res.setHeader("content-type", "text/html");
+        res.end(req.headers.cookie?.split("; ").includes("fixture-login=yes")
+          ? '<!doctype html><title>Workboard</title><form method="post" action="/acceptance-save"><button>Save draft</button></form>'
+          : '<!doctype html><title>Sign in needed</title><h1>Sign in needed</h1><form method="post" action="/acceptance-login"><label>Fixture code<input name="code" id="fixture-code"></label><button id="fixture-login">Sign in</button></form>');
+        return;
+      }
+      if (req.url === "/api/replay" && req.method === "POST") {
+        submissions++;
+        res.end("saved");
+        return;
+      }
+      if (req.url === "/status-only") {
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        res.end("<!doctype html><title>Receipt</title><main><h1>Draft saved</h1><p>Receipt fixture-482 is ready.</p></main>");
+        return;
+      }
       if (req.url === "/api/signup") { setTimeout(() => { res.writeHead(500, { "content-type": "application/json" }); res.end('{"error":"boom"}'); }, 300); return; }
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
       res.end(PAGE);
@@ -131,6 +174,156 @@ describe("page health and browser steps on the real engine", () => {
   const last = () => steps().at(-1)!;
   const picture = (step: StepRecord) => readFileSync(evidence.imageFile("thread-e2e", step.generation, step.image!)!);
 
+  run("advertises only the qualified core browser schema through the real MCP binary", async () => {
+    const listed = await runtime.agentRpc(session, spec, "tools/list", {}) as {
+      tools: Array<{ name: string; inputSchema: { properties?: Record<string, unknown> } }>;
+    };
+    const expected = [
+      "tools_profiles", "open", "read", "snapshot", "back", "forward", "reload", "click",
+      "fill", "type", "press", "check", "uncheck", "select", "scroll", "wait_ms",
+      "wait_for_selector", "wait_for_text", "wait_for_load", "screenshot", "get_text",
+      "get_url", "get_title", "tab_new", "tab_list", "tab_switch", "tab_close", "eval",
+      "close", "hover", "upload",
+    ].map((name) => `agent_browser_${name}`).concat("restart_browser").sort();
+    expect(listed.tools.map((tool) => tool.name).sort()).toEqual(expected);
+    for (const tool of listed.tools) {
+      for (const field of HARNESS_OWNED_BROWSER_PARAMS) {
+        expect(tool.inputSchema.properties, `${tool.name}.${field}`).not.toHaveProperty(field);
+      }
+      if (tool.name === "agent_browser_read") expect(tool.inputSchema.properties).not.toHaveProperty("url");
+    }
+    const snapshot = listed.tools.find((tool) => tool.name === "agent_browser_snapshot")!;
+    expect(snapshot.inputSchema.properties).toMatchObject({
+      interactive: { type: "boolean" }, compact: { type: "boolean" }, selector: { type: "string" },
+    });
+    console.log(`browser MCP qualified catalog: ${JSON.stringify({ names: expected, snapshot: snapshot.inputSchema })}`);
+  }, 120_000);
+
+  run("includes noninteractive receipt text in the automatic post-navigation observation", async () => {
+    const result = await runtime.agentRpc(session, spec, "tools/call", {
+      name: "agent_browser_open", arguments: { url: `${base}/status-only` },
+    }, undefined, ctx(false)) as { isError?: boolean; content: Array<{ text?: string }> };
+    expect(result.isError).not.toBe(true);
+    const observation = result.content.map((part) => part.text ?? "").join("\n");
+    expect(observation).toContain("Draft saved");
+    expect(observation).toContain("Receipt fixture-482 is ready.");
+  }, 120_000);
+  run("requires real local authentication and human handback before an agent can save once", async () => {
+    await call("open", { url: `${base}/acceptance-work` }, false);
+    expect((await call("snapshot", { interactive: false }, false)).join("\n")).toContain("Sign in needed");
+    expect(acceptanceReceipts).toEqual([]);
+    // The target, not a model reply or browser success flag, enforces the prerequisite.
+    const denied = await fetch(`${base}/acceptance-save`, { method: "POST", signal: AbortSignal.timeout(5_000) });
+    expect(denied.status).toBe(401);
+    expect(await denied.text()).toBe("Sign in needed");
+    await runtime.take(session, "fixture-person");
+    try {
+      await expect(call("click", { selector: "button" }, false)).rejects.toThrow(/paused|person|control/i);
+      expect(acceptanceReceipts).toEqual([]);
+      const port = (await new RelayPorts().port(target()))!;
+      for (const command of [
+        { action: "fill", selector: "#fixture-code", value: "fixture-code" },
+        { action: "click", selector: "#fixture-login" },
+      ]) {
+        const result = await runtime.withHumanAction(session, "fixture-person", () => relay(port, command, { timeoutMs: 15_000 }));
+        expect(result.success, JSON.stringify(result)).toBe(true);
+      }
+      expect(runtime.canControl(session, "fixture-person")).toBe(true);
+      expect(acceptanceReceipts).toEqual([]);
+    } finally { runtime.release(session, "fixture-person"); }
+    expect(runtime.heldBy(session)).toBeNull();
+    expect((await call("snapshot", {}, false)).join("\n")).toContain("Save draft");
+    await call("click", { selector: "button" }, false);
+    expect(acceptanceReceipts).toEqual([{ draft: "Ada", receipt: "fixture-acceptance-1" }]);
+    expect((await call("snapshot", { interactive: false }, false)).join("\n")).toContain("Receipt fixture-acceptance-1 for Ada.");
+    console.log(`browser authentication and handback receipts: ${JSON.stringify(acceptanceReceipts)}`);
+  }, 120_000);
+
+  run("rejects a removed reference and saves only the freshly observed draft", async () => {
+    // This case authenticates its own disposable browser; it does not depend on test order.
+    await call("open", { url: `${base}/acceptance-work` }, false);
+    await call("eval", { script: "fetch('/acceptance-login', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'code=fixture-code' }).then(() => 'fixture signed in')" }, false);
+    await call("open", { url: `${base}/acceptance-work` }, false);
+    const oldSnapshot = (await call("snapshot", {}, false)).join("\n");
+    const oldRef = /button "Save draft" \[ref=(e\d+)\]/u.exec(oldSnapshot)?.[1];
+    expect(oldRef, oldSnapshot).toBeTruthy();
+    const before = acceptanceReceipts.length;
+    await call("eval", { script: `document.body.innerHTML = '<form method="post" action="/acceptance-save?draft=Ada"><button>Save Ada</button></form><form method="post" action="/acceptance-save?draft=Grace"><button>Save Grace</button></form>'` }, false);
+    const stale = await runtime.agentRpc(session, spec, "tools/call", {
+      name: "agent_browser_click", arguments: { selector: `@${oldRef}` },
+    }, undefined, ctx(false)) as { isError?: boolean };
+    expect(stale.isError, JSON.stringify(stale)).toBe(true);
+    expect(acceptanceReceipts).toHaveLength(before);
+    const freshSnapshot = (await call("snapshot", {}, false)).join("\n");
+    const freshRef = /button "Save Ada" \[ref=(e\d+)\]/u.exec(freshSnapshot)?.[1];
+    expect(freshRef, freshSnapshot).toBeTruthy();
+    await call("click", { selector: `@${freshRef}` }, false);
+    expect(acceptanceReceipts.slice(before)).toEqual([{ draft: "Ada", receipt: `fixture-acceptance-${before + 1}` }]);
+    expect((await call("snapshot", { interactive: false }, false)).join("\n")).toContain(`Receipt fixture-acceptance-${before + 1} for Ada.`);
+    console.log(`browser stale-reference receipts: ${JSON.stringify({ oldRef, freshRef, receipts: acceptanceReceipts.slice(before) })}`);
+  }, 120_000);
+
+  runPosix("does not replay a submitted click when its daemon acknowledgement is lost", async () => {
+    await call("open", { url: `${base}/` }, false);
+    const before = submissions;
+    const socketPath = join(sockets, `${session}.sock`);
+    const upstreamPath = join(sockets, `${session}-upstream.sock`);
+    const connections = new Set<Socket>();
+    let acceptedClicks = 0;
+    renameSync(socketPath, upstreamPath);
+    const proxy = createSocketServer((client) => {
+      const upstream = connect(upstreamPath);
+      for (const socket of [client, upstream]) {
+        connections.add(socket);
+        socket.on("close", () => connections.delete(socket));
+      }
+      let request = "";
+      let drop = false;
+      client.on("data", (chunk: Buffer) => {
+        request += chunk.toString("utf8");
+        if (!request.includes("\n")) return;
+        const command = JSON.parse(request.slice(0, request.indexOf("\n"))) as { action?: string; selector?: string };
+        drop = command.action === "click" && command.selector === "#replay";
+        if (drop) acceptedClicks++;
+      });
+      client.pipe(upstream);
+      upstream.on("data", (chunk: Buffer) => {
+        if (drop) { client.end(); upstream.destroy(); }
+        else client.write(chunk);
+      });
+      upstream.on("end", () => client.end());
+      client.on("close", () => upstream.destroy());
+      upstream.on("error", () => client.destroy());
+      client.on("error", () => upstream.destroy());
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        proxy.once("error", reject);
+        proxy.listen(socketPath, resolve);
+      });
+      const result = await runtime.agentRpc(session, spec, "tools/call", {
+        name: "agent_browser_click", arguments: { selector: "#replay" },
+      }, undefined, ctx(false)) as { isError?: boolean };
+      await expect.poll(() => submissions - before, { timeout: 5_000 }).toBeGreaterThan(0);
+      expect(result.isError).toBe(true);
+      expect(acceptedClicks).toBe(1);
+      expect(submissions - before).toBe(1);
+      expect(runtime.interrupted(session)).toBe(true);
+      const recovered = await runtime.agentRpc(session, spec, "tools/call", {
+        name: "agent_browser_click", arguments: { selector: "#replay" },
+      }, undefined, ctx(false));
+      expect(texts(recovered).join("\n")).toContain("This call did not run");
+      expect(runtime.interrupted(session)).toBe(false);
+      expect(acceptedClicks).toBe(1);
+      expect(submissions - before).toBe(1);
+      console.log(`browser lost-acknowledgement receipts: ${JSON.stringify({ acceptedClicks, committedWrites: submissions - before, blockedReplay: texts(recovered) })}`);
+    } finally {
+      for (const connection of connections) connection.destroy();
+      await new Promise<void>((resolve) => proxy.close(() => resolve()));
+      renameSync(upstreamPath, socketPath);
+    }
+  }, 120_000);
+
   run("tells the bot what the page reported and records each step with its picture, box and page", async () => {
     const opened = await call("open", { url: `${base}/` });
     expect(opened.join("\n")).toContain('1 console error: "Boom on load: x is undefined"');
@@ -177,7 +370,8 @@ describe("page health and browser steps on the real engine", () => {
     expect(last()).toMatchObject({ kind: "click", imageSkipped: null, image: expect.stringMatching(/^step-\d+\.jpg$/u) });
     expect(JSON.stringify(steps())).not.toContain("fake-shadow-pass");
 
-    await call("click", { selector: "#far" });
+    const changed = await call("click", { selector: "#far" });
+    expect(changed.join("\n")).toContain('The title is now "far".');
     expect(last()).toMatchObject({ marker: { approx: true }, page: { scrollAfter: { y: expect.any(Number) } } });
     expect((last().page as { scrollAfter: { y: number } }).scrollAfter.y).toBeGreaterThan(0);
   }, 180_000);

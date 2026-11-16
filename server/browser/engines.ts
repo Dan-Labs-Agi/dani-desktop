@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import type { BrowserLive } from "../browser-live.ts";
 import type { BrowserRuntime, BrowserSpawnSpec } from "../browser-runtime.ts";
+import { BrowserAbortError } from "../browser-runtime.ts";
 import type { StepContext } from "../browser-steps.ts";
 import type { FillLoginDeps } from "../login-fill.ts";
 import { LocalBackend } from "./backends.ts";
@@ -114,6 +115,11 @@ export class ChromeEngine {
     return key ? { session, key } : null;
   }
 
+  /** Pure admission metadata including aliases retained by the service after a profile switch. */
+  agentAvailable(session: string): boolean {
+    return this.service.agentAvailable(session, this.#targets.get(session));
+  }
+
   /**
    * In use, it prepares Chrome before a bot needs it. In use, or while a Chrome it started still runs, it closes idle
    * browsers and stray processes every minute. Otherwise it only clears, once, what an earlier run of the engine left
@@ -213,19 +219,22 @@ export class RuntimeRouter {
     this.#afterCall = options.afterCall;
   }
 
-  async agentRpc(session: string, spec: BrowserSpawnSpec, method: "tools/list" | "tools/call", params: unknown, beforeDispatch?: () => void, ctx?: StepContext): Promise<unknown> {
+  async agentRpc(session: string, spec: BrowserSpawnSpec, method: "tools/list" | "tools/call", params: unknown, beforeDispatch?: () => void, ctx?: StepContext, signal?: AbortSignal): Promise<unknown> {
+    if (signal?.aborted) throw new BrowserAbortError();
     const refusal = method === "tools/call" ? this.#refusal?.(session, spec, params) : null;
     if (refusal) return { isError: true, content: [{ type: "text", text: refusal }] };
     const afterClaim = method === "tools/call" ? this.#afterClaim : undefined;
-    const dispatch = afterClaim ? () => {
+    const dispatch = signal || afterClaim ? () => {
+      if (signal?.aborted) throw new BrowserAbortError();
       beforeDispatch?.();
-      const text = afterClaim(session, spec);
+      if (signal?.aborted) throw new BrowserAbortError();
+      const text = afterClaim?.(session, spec);
       if (text) throw new ClaimRefused(text);
     } : beforeDispatch;
     const target = chromeTarget(session, spec);
     let result: unknown;
     try {
-      result = await (target ? this.#chrome.service.agentRpc(target, method, params, dispatch) : this.#old.agentRpc(session, spec, method, params, dispatch, ctx));
+      result = await (target ? this.#chrome.service.agentRpc(target, method, params, dispatch, signal) : this.#old.agentRpc(session, spec, method, params, dispatch, ctx, signal));
     } catch (error) {
       if (error instanceof ClaimRefused) return { isError: true, content: [{ type: "text", text: error.message }] };
       throw error;
@@ -250,6 +259,11 @@ export class RuntimeRouter {
 
   interrupted(session: string): boolean {
     return this.#chrome.service.interrupted(session) || this.#old.interrupted(session);
+  }
+
+  /** Pure admission metadata from both engines; missing new-engine state never clears an old uncertainty barrier. */
+  agentAvailable(session: string): boolean {
+    return this.#old.agentAvailable(session) && this.#chrome.agentAvailable(session);
   }
 
   interruptedCount(): number {

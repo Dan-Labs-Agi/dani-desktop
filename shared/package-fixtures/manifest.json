@@ -3,7 +3,7 @@
   "about": "Expected results of parsePackageDocument(fixture, { trust: \"file\" }). sha256 is over canonicalJson of the parsed document. Regenerate only with a deliberate format change; Admin tests read this file from the pinned runtime.",
   "fixtures": {
     "full-team.v2.json": {
-      "sha256": "d80e4e49382b88ae41b09ef7c49a699c6b07cf198f76ab1cf10c5b15e5f4981a",
+      "sha256": "ae069ecffa0b5ca531b71d418da0a5b4c3d34bfd4f7e7038ee61efa537e91c6e",
       "keys": [
         "agents:lead",
         "agents:scout",
@@ -107,7 +107,7 @@
       }
     },
     "legacy-team.v1.json": {
-      "sha256": "7a4de2ba915592a1a98fc87c196d83f75011a33dead7b8f076a44d8d1bd5e791",
+      "sha256": "68e16002651598cfc5fbc3e42e8c9804a91360d0a1fa6b9e02658efcdd92ce3d",
       "keys": [
         "agents:scout",
         "agents:editor",
@@ -148,7 +148,7 @@
       }
     },
     "legacy-botmrr.v1.md": {
-      "sha256": "7a4de2ba915592a1a98fc87c196d83f75011a33dead7b8f076a44d8d1bd5e791",
+      "sha256": "68e16002651598cfc5fbc3e42e8c9804a91360d0a1fa6b9e02658efcdd92ce3d",
       "keys": [
         "agents:scout",
         "agents:editor",

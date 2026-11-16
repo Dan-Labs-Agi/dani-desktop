@@ -1,13 +1,13 @@
 // The store is the only state: tick() is the only place work is admitted or dispatched, and no timer lives here.
 import { randomUUID } from "node:crypto";
 
-import { composeEnvelope } from "./envelope.ts";
-import { assignmentLevel } from "./level.ts";
+import { composeEnvelope, composeReport, composeSupervision, SUPERVISION_NOTE } from "./envelope.ts";
+import { assignmentLevel, recoveryLevel } from "./level.ts";
 import type { RuntimeStore } from "./store.ts";
-import { answersSender, asking, awaited, childrenSince, clip, continuations, CUT_TWICE, duration, isTerminal, loopStop, nextGuard, outwardDetail, ownsConversation, path, restartNote, wakeOwner } from "./tree.ts";
+import { answersSender, asking, awaited, childrenSince, clip, continuations, CUT_TWICE, directRecovery, duration, isTerminal, loopStop, nextGuard, outwardDetail, ownsConversation, path, restartNote, supervised, supervisionExecutions, unresolvedWork, wakeOwner } from "./tree.ts";
 import { DEFAULT_LIMITS, type Answerer, type Assignment, type Assignee, type Clock, type EndResult, type EnqueueRequest, type EnqueueResult, type EnvelopeNames,
   type EventKind, type InboxItem, type InboxKind, type Level, type Limits, type LiveEdge, type Origin, type Outcome, type Owner,
-  type Reply, type Requester, type RunInput, type RunResult, type StatusView, type TurnRunner } from "./types.ts";
+  type Reply, type Requester, type RunInput, type RunResult, type StatusView, type SupervisionTarget, type TurnRunner } from "./types.ts";
 
 export interface RuntimeOptions {
   /** Default: Date.now and performance.now. */
@@ -146,18 +146,24 @@ export class Runtime {
   end(rootId: string, result: EndResult): void {
     const n = this.store.get(rootId);
     if (!n || n.parentId !== undefined || n.status !== "running") { this.log(`end(${rootId}): not a running root`); return; }
-    if (!result.ok && !result.needsInput && !result.continue && this.closing) return;
+    if (this.closing && ((!result.ok && !result.needsInput && !result.continue) ||
+        result.needsInput?.blocked?.outcome === "interrupted")) return;
     const live = this.turns.get(rootId);
     // Dropping the handle without an abort makes turnEnded ignore the run() result that follows.
     this.turns.delete(rootId);
     const evidence = result.evidence ? { evidence: result.evidence } : {};
     const outcome: RunResult = result.needsInput
-      ? { kind: "needs_input", question: result.needsInput.question, ...(result.needsInput.cards ? { cards: result.needsInput.cards } : {}), ...evidence }
+      ? { kind: "needs_input", text: result.text, question: result.needsInput.question,
+        ...(result.needsInput.blocked ? { blocked: result.needsInput.blocked } : {}),
+        ...(result.needsInput.needsVerification ? { needsVerification: true } : {}),
+        ...(result.needsInput.verificationFailure ? { verificationFailure: result.needsInput.verificationFailure } : {}),
+        ...(result.needsInput.cards ? { cards: result.needsInput.cards } : {}), ...evidence }
       : result.continue
         ? { kind: "continue", text: result.text, note: result.continue.note, ...(result.continue.handoffPath ? { handoffPath: result.continue.handoffPath } : {}), ...evidence }
         : result.ok
-          ? { kind: "completed", text: result.text, ...evidence }
-          : { kind: "failed", outcome: result.stalled ? "stalled" : "provider_error", text: result.text, ...evidence };
+          ? { kind: "completed", text: result.text, ...(result.supervisor ? { supervisor: result.supervisor } : {}), ...evidence }
+          : { kind: "failed", outcome: result.stalled ? "stalled" : "provider_error", text: result.text,
+            ...(result.supervisor ? { supervisor: result.supervisor } : {}), ...evidence };
     try {
       this.withBatch(() => this.finishTurn(n, outcome, live));
     } catch (error) {
@@ -168,6 +174,42 @@ export class Runtime {
   /** Remove terminal trees that finished before `before`. Returns rows removed. */
   prune(before: number): number {
     return this.store.prune(before);
+  }
+
+  acceptRequestAnswer(id: string, sourceMessageId: string, answerId: string): boolean {
+    const n = this.store.get(id);
+    if (!n || isTerminal(n) || n.parentId || n.rootId !== n.id || n.goalRunId || n.assignee.destination.groupId ||
+        n.origin.kind !== "person" || n.origin.source !== "chat" || n.requester.kind !== "person" || n.requester.chief ||
+        n.requester.messageId !== sourceMessageId || !answerId || answerId === sourceMessageId) return false;
+    if (n.acceptedAnswerIds?.includes(answerId)) return true;
+    (n.acceptedAnswerIds ??= []).push(answerId);
+    this.store.update(n);
+    return true;
+  }
+
+  readmitVerification(id: string, choose: (root: Assignment) => SupervisionTarget | undefined): boolean {
+    const n = this.store.get(id);
+    if (!n || n.status !== "needs_input" || !n.needsVerification || n.parentId || n.rootId !== n.id || n.goalRunId ||
+        n.origin.kind !== "person" || n.origin.source !== "chat" || n.requester.kind !== "person" || n.requester.chief ||
+        n.mode !== "work" || n.reply !== "resume" || n.assignee.destination.groupId ||
+        (n.outcome && n.verificationFailure !== n.outcome) ||
+        (n.verificationFailure && n.outcome !== n.verificationFailure) || n.cards?.length ||
+        n.executions >= this.limits.executions || (n.budgets && (n.budgets.requests >= this.limits.requests ||
+          n.budgets.executions >= this.limits.executions || n.budgets.wakes >= this.limits.wakes)) ||
+        n.depth + 1 > this.limits.depth || this.store.children(n.id).some(child => child.supervisionOf === n.id)) return false;
+    if (this.inputExpires(n) && this.clock.now() - this.since(n.lastActivityAt) > this.limits.inputWaitMs) return false;
+    const problem = this.safe("validate", () => this.runner.validate(n));
+    if (this.lastThrew || problem) return false;
+    const supervisor = choose(n);
+    if (!supervisor || supervisor.assignee.botId === n.assignee.botId || supervisor.assignee.destination.groupId) return false;
+    return this.withBatch(() => this.store.transaction(() => {
+      n.status = "running";
+      this.store.update(n);
+      this.settleTurn(n, n.outcome === "stalled" || n.outcome === "provider_error"
+        ? { kind: "failed", outcome: n.outcome, text: n.result, supervisor, ...(n.evidence ? { evidence: n.evidence } : {}) }
+        : { kind: "completed", text: n.result, supervisor, ...(n.evidence ? { evidence: n.evidence } : {}) });
+      return this.store.children(n.id).some(child => child.supervisionOf === n.id);
+    }));
   }
 
   /** Hand work to a teammate from a running node. Never throws. */
@@ -186,12 +228,21 @@ export class Runtime {
     const parent = req.parentId ? this.store.get(req.parentId) : undefined;
     if (req.parentId && !parent) return refuse("The requesting turn no longer exists");
     if (parent && parent.status !== "running") return refuse("The requesting turn is not running");
+    if (parent && supervised(parent) && parent.executions >= this.limits.executions &&
+      supervisionExecutions(this.store, parent.id) >= this.limits.executions) {
+      return refuse(`Chief supervision execution budget exhausted (${this.limits.executions}); review remaining work before resuming`, "budget");
+    }
     const brief = clip(req.brief, BRIEF_MAX);
     const mode = req.mode ?? "work";
     const lineage = parent ? path(this.store, parent) : [];
     const root = lineage[0];
+    if (req.supervisionOf && (!parent || parent.id !== req.supervisionOf || parent.parentId || parent.origin.kind !== "person" ||
+      parent.assignee.destination.groupId)) return refuse("Direct supervision must belong to its original person-owned worker root");
     const target = req.assignee;
-    if (!answersSender(parent, mode, { botId: target.botId, ...target.destination }) && lineage.some(a => a.assignee.botId === target.botId &&
+    const recoveringOriginal = directRecovery(parent, root, { botId: target.botId, ...target.destination }, mode, Boolean(req.rework));
+    if (!answersSender(parent, mode, { botId: target.botId, ...target.destination }) &&
+      !recoveringOriginal &&
+      lineage.some(a => a.assignee.botId === target.botId &&
       (!a.assignee.destination.groupId || !target.destination.groupId || a.assignee.destination.groupId === target.destination.groupId))) {
       return refuse("Cannot assign work back to an ancestor; results return automatically");
     }
@@ -206,12 +257,26 @@ export class Runtime {
       }
     }
     const chiefLineage = Boolean(req.requester.chief) || lineage.some(a => a.requester.chief === true);
-    const { level, source } = this.level({ own: req.levels.own, chief: req.levels.chief, origin: (root ?? req).origin.kind, chiefLineage,
+    const own = recoveringOriginal && root ? recoveryLevel(root.level, req.levels.own, req.driverKind) : req.levels.own;
+    const { level, source } = this.level({ own, chief: recoveringOriginal ? undefined : req.levels.chief, origin: (root ?? req).origin.kind, chiefLineage,
       driverKind: req.driverKind });
+    const recovery = req.rework && mode === "work" && parent && root && (supervised(root) || supervised(parent))
+      ? unresolvedWork(this.store.children(parent.id), parent.supervisionOf ? this.store.get(parent.supervisionOf) : undefined)
+        .findLast(child => child.assignee.botId === target.botId &&
+        child.assignee.destination.groupId === target.destination.groupId)
+      : undefined;
+    const doneWhen = req.doneWhen ?? recovery?.doneWhen;
+    const supervisionReceipt: Assignment["supervisionReceipt"] = req.supervisionOf && parent
+      ? parent.needsVerification && !parent.outcome
+        ? { kind: "unverified", text: parent.result, ...(parent.evidence ? { evidence: parent.evidence } : {}) }
+        : { kind: "failed", outcome: parent.outcome ?? "provider_error", text: parent.result, ...(parent.evidence ? { evidence: parent.evidence } : {}) }
+      : undefined;
     const node: Assignment = {
       id: randomUUID(), rootId: parent ? parent.rootId : "", ...(parent ? { parentId: parent.id } : {}), depth: parent ? parent.depth + 1 : 0,
       origin: root ? root.origin : req.origin, requester: req.requester, assignee: target, mode,
-      reply: req.reply ?? (mode === "notify" ? "none" : "resume"), brief, ...(req.doneWhen ? { doneWhen: req.doneWhen } : {}),
+      reply: req.reply ?? (mode === "notify" ? "none" : "resume"), brief, ...(doneWhen ? { doneWhen } : {}),
+      ...(recovery ? { recoveryOf: recovery.id } : {}),
+      ...(req.supervisionOf && supervisionReceipt ? { supervisionOf: req.supervisionOf, supervisionReceipt } : {}),
       status: "queued", level, levelSource: source, executions: 0, restarts: 0, createdAt: now, lastActivityAt: now, result: "",
       rework: Boolean(req.rework), ...(req.approved !== undefined ? { approved: req.approved } : {}),
       ...(req.batchKey !== undefined ? { batchKey: req.batchKey } : {}), version: 1,
@@ -437,7 +502,8 @@ export class Runtime {
       if (this.turns.get(id) !== live) return;
       const n = this.store.get(id);
       if (!n || n.status !== "running") return;
-      if (this.closing && result.kind === "failed") return;
+      if (this.closing && (result.kind === "failed" ||
+          (result.kind === "needs_input" && result.blocked?.outcome === "interrupted"))) return;
       this.withBatch(() => this.finishTurn(n, result, live));
     } catch (error) {
       this.log(`settling ${id} failed: ${String(error)}`);
@@ -462,6 +528,71 @@ export class Runtime {
     if (!this.lastThrew && problem) { this.settle(n, "failed", "refused", problem); return; }
     if (result.evidence) n.evidence = result.evidence;
     const root = n.parentId ? this.store.get(n.rootId) : n;
+    const supervising = supervised(n);
+    const executions = (supervising || ((result.kind === "failed" || result.kind === "completed") && result.supervisor)) && n.executions >= this.limits.executions
+      ? supervisionExecutions(this.store, n.id) : n.executions;
+    if ((result.kind === "failed" || result.kind === "completed") && result.supervisor && !n.parentId && n.origin.kind === "person" && n.requester.kind === "person") {
+      delete n.verificationFailure;
+      if (result.kind === "completed") { n.needsVerification = true; delete n.outcome; delete n.outcomeDetail; }
+      else { delete n.needsVerification; n.outcome = result.outcome; }
+      if (executions >= this.limits.executions) {
+        const question = `The original direct goal remains incomplete after ${executions} executions. Review the remaining work before resuming.`;
+        this.settleTurn(n, { kind: "needs_input", text: result.text, question,
+          blocked: { outcome: "budget", reason: question }, ...(result.evidence ? { evidence: result.evidence } : {}) }, live);
+        return;
+      }
+      n.result = clip(result.text, RESULT_MAX);
+      const supervisor = result.supervisor;
+      const admission = this.store.transaction(() => {
+        this.store.update(n);
+        const review = this.admit({
+          parentId: n.id, origin: n.origin,
+          requester: { kind: "bot_turn", botId: n.assignee.botId, threadId: n.assignee.destination.threadId },
+          assignee: supervisor.assignee, mode: "work", reply: "resume", brief: n.brief,
+          ...(n.doneWhen ? { doneWhen: n.doneWhen } : {}), supervisionOf: n.id,
+          levels: { own: supervisor.level }, ...(supervisor.driverKind ? { driverKind: supervisor.driverKind } : {}),
+        });
+        if (!review.ok) return review;
+        const current = this.store.get(n.id);
+        if (current?.budgets) n.budgets = current.budgets;
+        n.status = "waiting"; n.lastActivityAt = now;
+        delete n.question; delete n.decide;
+        this.store.update(n, { kind: "waiting", at: now, detail: `waiting: authorized Chief supervision ${review.assignment.id}` });
+        this.touch(n);
+        return review;
+      });
+      if (admission.ok) return;
+      if (result.kind === "completed") {
+        this.settleTurn(n, { kind: "needs_input", text: result.text, needsVerification: true,
+          question: `Goal verification remains pending: ${admission.reason}. Resolve this prerequisite before resuming.`,
+          ...(result.evidence ? { evidence: result.evidence } : {}) }, live);
+        return;
+      }
+    }
+    if ((result.kind === "completed" || result.kind === "failed") && supervising) {
+      const kids = awaited(this.store.children(n.id));
+      const outstanding = kids.some(child => !isTerminal(child) || (live !== undefined && !live.carried.has(child.id))) ||
+        awaited(childrenSince(this.store, n)).length > 0;
+      const unfinished = outstanding ? [] : unresolvedWork(kids, n.supervisionOf ? this.store.get(n.supervisionOf) : undefined);
+      if (unfinished.length) {
+        const blocked = unfinished.find(child => child.outcome === "denied" || child.outcome === "refused" ||
+          child.outcome === "stopped" || child.outcome === "interrupted" || child.outcome === "expired" || child.outcome === "budget");
+        if (blocked || executions >= this.limits.executions) {
+          const detail = blocked
+            ? `The original goal is incomplete. ${blocked.outcomeDetail || blocked.result || blocked.outcome}. Waiting for the person; denied or uncertain work is not retried.`
+            : `The original goal is incomplete after ${executions} Chief executions; review the remaining work before resuming.`;
+          this.settleTurn(n, { kind: "needs_input", text: result.text, question: detail, blocked: {
+            outcome: blocked?.outcome === "denied" || blocked?.outcome === "refused" ? "denied" : blocked ? "interrupted" : "budget", reason: detail,
+          }, ...(result.evidence ? { evidence: result.evidence } : {}) }, live);
+        } else {
+          this.settleTurn(n, { kind: "continue", text: result.text,
+            note: composeSupervision(n, unfinished.map(child => composeReport(child, this.names(child, n)))),
+            evidence: { ...result.evidence, okToolCalls: 0 },
+          }, live);
+        }
+        return;
+      }
+    }
     if (result.kind === "continue") {
       // The count comes from events because dispatch deletes n.continuation.
       n.result = clip(result.text, RESULT_MAX);
@@ -469,7 +600,11 @@ export class Runtime {
       const stop = loopStop(n.guard, result.text);
       if (stop) {
         this.store.update(n, { kind: "stalled", at: now, detail: `no progress: ${stop.reason}` });
-        this.settle(n, "failed", "stalled", stop.detail);
+        if (result.note.startsWith(SUPERVISION_NOTE)) {
+          const question = `The original goal remains incomplete after ${n.guard.stale} Chief responses without concrete remaining work. ${stop.detail}`;
+          this.settleTurn(n, { kind: "needs_input", text: result.text, question,
+            blocked: { outcome: "stalled", reason: question }, ...(result.evidence ? { evidence: result.evidence } : {}) }, live);
+        } else this.settle(n, "failed", "stalled", stop.detail);
         return;
       }
       n.status = "queued"; n.lastActivityAt = now;
@@ -485,6 +620,14 @@ export class Runtime {
     delete n.guard;
     if (result.kind === "needs_input") {
       n.status = "needs_input"; n.question = clip(result.question, BRIEF_MAX); n.lastActivityAt = now;
+      if (result.text !== undefined) n.result = clip(result.text, RESULT_MAX);
+      if (result.needsVerification && !result.blocked && !result.cards?.length) n.needsVerification = true;
+      else if (result.blocked || result.cards?.length) delete n.needsVerification;
+      if (result.needsVerification && result.verificationFailure && !result.blocked && !result.cards?.length) n.verificationFailure = result.verificationFailure;
+      else delete n.verificationFailure;
+      if (result.blocked) { n.outcome = result.blocked.outcome; n.outcomeDetail = clip(result.blocked.reason, DETAIL_MAX); }
+      else if (n.verificationFailure) { n.outcome = n.verificationFailure; delete n.outcomeDetail; }
+      else { delete n.outcome; delete n.outcomeDetail; }
       if (result.cards?.length) n.cards = result.cards; else delete n.cards;
       const choice = result.decide?.default?.trim();
       if (result.decide && n.parentId && !n.cards) n.decide = choice ? { default: clip(choice, BRIEF_MAX) } : {}; else delete n.decide;
@@ -511,6 +654,13 @@ export class Runtime {
       this.touch(n, ...root && root.id !== n.id ? [root] : []);
       return;
     }
+    if (result.kind === "completed" && !n.parentId && kids.some(child => child.supervisionOf === n.id) &&
+        !kids.some(child => child.supervisionOf === n.id && child.status === "completed")) {
+      this.settleTurn(n, { kind: "needs_input", text: result.text, needsVerification: true,
+        question: "The original goal remains unverified because its authorized Chief review did not complete. Resolve the failed review before resuming.",
+        ...(result.evidence ? { evidence: result.evidence } : {}) }, live);
+      return;
+    }
     const ownTurn = !n.parentId;
     if (result.kind === "completed") this.settle(n, "completed", "done", undefined, ownTurn);
     else this.settle(n, "failed", result.outcome, undefined, ownTurn);
@@ -532,8 +682,10 @@ export class Runtime {
   answer(id: string, text: string, by?: Answerer): boolean {
     const n = this.store.get(id);
     if (!n || n.status !== "needs_input") return false;
+    if (n.outcome === "denied" && by) return false;
     const now = this.clock.now();
     n.answer = clip(text, BRIEF_MAX); delete n.question; delete n.decide; n.status = "queued"; n.lastActivityAt = now;
+    delete n.outcome; delete n.outcomeDetail; delete n.guard;
     if (by) n.answeredBy = by; else delete n.answeredBy;
     const root = n.parentId ? this.store.get(n.rootId) : undefined;
     this.store.transaction(() => {
@@ -551,8 +703,8 @@ export class Runtime {
     this.withBatch(() => outcome === "failed" ? this.cancelTree(n, reason, "failed", "interrupted") : this.cancelTree(n, reason, "cancelled", "stopped"));
   }
 
-  /** The person stopped the requester's conversation: work that never started is dropped, a teammate
-   * mid-turn still reports, and nothing resumes the stopped conversation. */
+  /** The person stopped the requester's conversation: queued work is dropped and ordinary running teammates still report.
+   * An adopted direct goal is different: its derived Chief/worker supervision subtree is cancelled and aborted immediately. */
   stopRequester(owner: Owner, reason = "Stopped by user"): Assignment[] {
     const left: Assignment[] = [];
     this.withBatch(() => {
@@ -562,6 +714,10 @@ export class Runtime {
         if (!n || isTerminal(n)) continue;
         for (const child of this.store.children(n.id)) {
           if (isTerminal(child)) continue;
+          if (child.supervisionOf === n.id) {
+            this.cancelTree(child, reason, "cancelled", "stopped");
+            continue;
+          }
           if (child.status === "queued" && (child.executions === 0 || child.restart === "rerun")) {
             this.cancelTree(child, child.restart === "rerun" ? "Stopped before it resumed" : "Stopped before it started", "cancelled", "stopped");
           } else left.push(child);
@@ -636,6 +792,8 @@ export class Runtime {
     if (isTerminal(n)) return;
     const now = this.clock.now();
     n.status = status; n.outcome = outcome; n.finishedAt = now; n.lastActivityAt = now;
+    if (status === "completed") delete n.needsVerification;
+    delete n.verificationFailure;
     if (detail !== undefined) n.outcomeDetail = clip(detail, DETAIL_MAX); else delete n.outcomeDetail;
     if (status !== "completed" && detail !== undefined && n.result === "") n.result = clip(detail, RESULT_MAX);
     if (outcome === "refused" && detail !== undefined) { n.result = clip(detail, RESULT_MAX); delete n.evidence; }

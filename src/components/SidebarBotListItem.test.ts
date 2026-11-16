@@ -15,7 +15,9 @@ vi.mock("@/lib/interface-mode", async (original) => ({
 
 import { ConfirmDialogCard } from "./ConfirmDialog";
 import { BotDeleteMenuItem } from "./BotMenuDelete";
-import { BotListItem, botConfirmCopy, botRowProps, currentArchivableBot } from "./Sidebar";
+import { BotListItem, botConfirmCopy } from "./Sidebar";
+import { botRowProps } from "@/lib/sidebar-selection";
+import { currentArchivableBot } from "./bot-archive";
 import { endCall } from "@/lib/call";
 import { configureLiveMedia, resetLiveMedia, startLiveCall } from "@/lib/live-call-media";
 

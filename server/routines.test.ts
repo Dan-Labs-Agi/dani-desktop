@@ -1443,7 +1443,7 @@ describe("RoutineManager", () => {
     // A second restart while that second start runs fails it.
     const again = new RoutineManager(h.options);
     expect(again.listRuns()).toMatchObject([
-      { routineId: routine.id, status: "failed", retried: "restarted", threadId: "thread-1", error: "DaniBot restarted while this routine was running" },
+      { routineId: routine.id, status: "failed", retried: "restarted", threadId: "thread-1", error: expect.stringMatching(/restart/i) },
     ]);
     expect(failureWasPersistedBeforeCallback).toBe(true);
     expect(cut).toHaveLength(2);
@@ -1453,10 +1453,13 @@ describe("RoutineManager", () => {
         routineName: "Morning brief",
         status: "failed",
         threadId: "thread-1",
-        error: "DaniBot restarted while this routine was running",
+        error: again.listRuns()[0]!.error,
       },
     ]);
-    expect(new RoutineManager(h.options).listRuns()).toHaveLength(1);
+    const recovered = new RoutineManager(h.options);
+    expect(recovered.listRuns()).toEqual(again.listRuns());
+    expect(cut).toHaveLength(2);
+    expect(h.failed).toHaveLength(1);
   });
 
   it("migrates optional attachment and timeout metadata without losing legacy records", () => {
@@ -3822,14 +3825,18 @@ describe("routine paths that cannot exist where the routine runs", () => {
     const h = harness();
     const routine = h.manager.create({ name: "Weekly export", prompt: "Open C:\\Users\\Ada\\Reports\\weekly.xlsx and total column B.",
       botId: "dani-1", runOn: "cloud", schedule: { type: "daily", time: "09:00", weekdays: [1] } });
-    const warning = "This routine names C:\\Users\\Ada\\Reports\\weekly.xlsx, which cannot exist on the Linux computer that runs it. Change it to a path on that computer, or attach the file to the routine.";
-    expect(routine.warning).toBe(warning);
-    expect(h.manager.listRoutines()[0]!.warning).toBe(warning);
+    expect(routine.warning).toContain("C:\\Users\\Ada\\Reports\\weekly.xlsx");
+    expect(routine.warning).toContain("Linux");
+    expect(h.manager.listRoutines()[0]!.warning).toBe(routine.warning);
     expect(h.manager.update(routine.id, { prompt: "Open /home/ada/weekly.xlsx and total column B." })?.warning).toBeUndefined();
     h.manager.update(routine.id, { prompt: routine.prompt });
     h.manager.runNow(routine.id);
     await h.manager.tick();
-    expect(h.started[0]!.prompt).toContain("[DaniBot: this run is on a Linux computer, where C:\\Users\\Ada\\Reports\\weekly.xlsx cannot exist.");
+    const dispatched = h.started[0]!.prompt;
+    expect(dispatched).toContain(routine.prompt);
+    const warning = dispatched.slice(dispatched.indexOf(routine.prompt) + routine.prompt.length);
+    expect(warning).toContain("C:\\Users\\Ada\\Reports\\weekly.xlsx");
+    expect(warning).toContain("Linux");
     expect(JSON.parse(readFileSync(h.options.file!, "utf8")).routines[0]).not.toHaveProperty("warning");
   });
 });

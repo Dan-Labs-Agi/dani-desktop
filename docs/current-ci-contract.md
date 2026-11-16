@@ -20,9 +20,14 @@ contract. It does not change triggers, start runs, or authorize a release.
 - CI is read-only. Existing automatic CI can use caches and failure artifacts.
   The three `verify-main-*` workflows are different: manual, read-only,
   no artifact uploads or caches, with disposable native installation checks.
-- The release workflow still builds packages on branch pushes. Its assembler
-  can create a draft only for a manual or version-tag run, and refuses to
-  replace a published release. This is not a CI-success or shipping guarantee.
+- The release workflow builds packages on `main`/`prod` branch pushes and checks
+  all collected platform feeds, exact versions, hashes, sizes, ZIPs, required
+  blockmaps and stable download aliases. Branch-only build-version mode accepts
+  stable `X.Y.Z` and local `X.Y.Z-local.N`; it does not make local builds eligible
+  for publication or change their embedded version. Tag/manual verification
+  remains stable-only. Its assembler can create a draft only for a manual or
+  version-tag run after complete candidate CI, and refuses to replace a
+  published release. This is not a signing, installed-upgrade or shipping guarantee.
 
 ## Not adopted
 
@@ -35,10 +40,16 @@ Restoring them would be an automation change, not a test repair.
 ## Regression coverage and limits
 
 `scripts/ci-workflow.test.ts` checks the adopted triggers, platform matrix,
-blocking checks, optional-source detection, least privilege, action pins,
-manual verification storage limits and existing draft-release restrictions.
-Mutation cases reject omitted, conditional or advisory required checks.
-The delegated-approval receipt regression is retained.
+blocking checks, optional-source detection, least privilege, action pins and
+manual verification storage limits. Its Ubuntu public-feed probe executes
+against isolated HTTP-response fixtures, including auxiliary latest releases,
+absent manifests and lookup failures. `scripts/release-artifacts.test.ts`
+checks real temporary ZIP/feed bytes, hashes, required blockmap presence and
+stable alias equality. It also executes the collected-artifact workflow shell
+against those bytes: local-version branch builds pass full integrity checks,
+corrupt local builds fail, and tag/manual runs still reject local versions.
+Mutation cases reject omitted, conditional or advisory required checks. The
+delegated-approval receipt regression is retained.
 
 These structural tests do not prove native rendering, real provider replies,
 installation on a user's machine, signing/notarization, or release readiness.

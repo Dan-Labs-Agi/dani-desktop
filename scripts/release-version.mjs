@@ -28,6 +28,11 @@ export function nextReleaseVersion(current, bump, requested = "") {
   return next;
 }
 
+export function validateBuildVersion(version) {
+  parseVersion(version, true);
+  return version;
+}
+
 export function validateReleaseVersion(version, ref = "") {
   parseVersion(version);
   if (ref.startsWith("refs/tags/") && ref !== `refs/tags/v${version}`) {

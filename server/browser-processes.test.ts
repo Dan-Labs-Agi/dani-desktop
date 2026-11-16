@@ -4,11 +4,11 @@
 import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import { hostname, tmpdir } from "node:os";
+import { homedir, hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { browserProcessesRunning, browserProcessTree, orphanedBrowsers, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
+import { browserProcessesRunning, browserProcessTree, browserSessionProcessTrees, orphanedBrowsers, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 // The real tools, except where a test stands in for Windows' tasklist and taskkill.
@@ -47,6 +47,72 @@ function start(command: string, args: string[], env: NodeJS.ProcessEnv): ChildPr
   groups.push(child.pid!);
   return child;
 }
+
+describe.skipIf(!posix)("scoped hard interruption discovery", () => {
+  it.each([
+    { home: "/tmp", persistent: false },
+    { home: "/tmp", persistent: true },
+    { home: homedir(), persistent: false },
+    { home: homedir(), persistent: true },
+  ])("stops an owned orphan after launcher HOME rewrite (%j), preserving saved/foreign profiles", async ({ home: rewrittenHome, persistent }) => {
+    const home = mkdtempSync(join(tmpdir(), "omb-scope-"));
+    homes.push(home);
+    const profile = profileFolder(home, persistent ? "persistent-profile" : undefined);
+    const foreignProfile = profileFolder(home);
+    const expected = {
+      ...daemonEnv(home, `work-${randomUUID()}`),
+      OMB_BROWSER_PROCESS_SCOPE: randomUUID(),
+      ...(persistent ? { AGENT_BROWSER_PROFILE: profile } : {}),
+    };
+    const orphan = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: rewrittenHome });
+    const foreign = start(process.execPath, chromeArgs(home, foreignProfile), { ...expected, HOME: rewrittenHome, OMB_BROWSER_PROCESS_SCOPE: randomUUID() });
+    const otherSession = start(process.execPath, chromeArgs(home, foreignProfile), { ...expected, HOME: rewrittenHome, AGENT_BROWSER_SESSION: "another-session" });
+    // Process environments and command lines exist from exec; no guessed sleep.
+    const trees = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
+    expect(trees?.map((tree) => tree.daemon)).toEqual([orphan.pid]);
+    expect(await stopBrowserProcesses(trees![0]!, 0)).toBe(true);
+    expect(gone(orphan.pid!)).toBe(true);
+    for (const pid of [foreign.pid!, otherSession.pid!]) {
+      expect(execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
+    }
+    expect(existsSync(profile)).toBe(persistent);
+    if (persistent) expect(readFileSync(join(profile, "Default", "Cookies"), "utf8")).toBe("fixture");
+    expect(readFileSync(join(foreignProfile, "Default", "Cookies"), "utf8")).toBe("fixture");
+  });
+
+  it("stops a marked guest orphan when its temporary profile path contains spaces", async () => {
+    const home = mkdtempSync(join(tmpdir(), "omb scope "));
+    homes.push(home);
+    const profile = profileFolder(home);
+    const expected = { ...daemonEnv(home, `work-${randomUUID()}`), OMB_BROWSER_PROCESS_SCOPE: randomUUID() };
+    const orphan = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp" });
+    const foreign = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp", OMB_BROWSER_PROCESS_SCOPE: randomUUID() });
+    const trees = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
+    expect(trees?.map((tree) => tree.daemon)).toEqual([orphan.pid]);
+    expect(await stopBrowserProcesses(trees![0]!, 0)).toBe(true);
+    expect(gone(orphan.pid!)).toBe(true);
+    expect(execFileSync("ps", ["-o", "stat=", "-p", String(foreign.pid!)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
+  });
+
+  it.each([undefined, "foreign-tag"])("never signals an orphan with missing/foreign identity %j or claims ambiguous absence", async (marker) => {
+    const home = mkdtempSync(join(tmpdir(), "omb-scope-"));
+    homes.push(home);
+    const expected = { ...daemonEnv(home, `work-${randomUUID()}`), OMB_BROWSER_PROCESS_SCOPE: "owned-tag" };
+    const profile = profileFolder(home);
+    const orphan = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp", OMB_BROWSER_PROCESS_SCOPE: marker });
+    expect(await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected)).toEqual(marker ? [] : null);
+    expect(execFileSync("ps", ["-o", "stat=", "-p", String(orphan.pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
+    expect(readFileSync(join(profile, "Default", "Cookies"), "utf8")).toBe("fixture");
+  });
+
+  it("requires a filesystem scope before freezing an env-only same-session daemon", async () => {
+    const env = { PATH: process.env.PATH, AGENT_BROWSER_DAEMON: "1", AGENT_BROWSER_SESSION: `work-${randomUUID()}` };
+    const daemon = start(process.execPath, ["-e", IDLE], env);
+    expect(await browserProcessTree(process.execPath, daemon.pid!, env.AGENT_BROWSER_SESSION, true, env)).toBeNull();
+    expect(await browserSessionProcessTrees(process.execPath, env.AGENT_BROWSER_SESSION, env)).toBeNull();
+    expect(execFileSync("ps", ["-o", "stat=", "-p", String(daemon.pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
+  });
+});
 
 describe.skipIf(!posix)("browsers whose engine was killed under them", () => {
   it("finds a Chrome of a session whose daemon is gone, by the session its environment names, and stops its group", async () => {
@@ -205,6 +271,13 @@ describe("a browser on Windows", () => {
   afterEach(() => {
     Object.defineProperty(process, "platform", { value: platform, configurable: true });
     vi.mocked(execFile).mockImplementation(actualExecFile);
+  });
+
+  it("does not pretend an image basename proves a Windows daemon's session for hard interruption", async () => {
+    // The pinned daemon is launched without arguments; its session exists only
+    // in its environment, which tasklist/CIM command-line data cannot prove.
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    expect(await browserProcessTree("C:\\engine\\agent-browser.exe", process.ppid, "bot-a", true)).toBeNull();
   });
 
   it("kills the daemon's tree while the daemon runs, and never a program that took its pid or one tasklist cannot vouch for", async () => {

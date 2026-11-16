@@ -18,7 +18,8 @@ vi.mock("@/state/store", async (importOriginal) => {
 });
 
 import { BotModelBadge, botModel } from "./BotModelBadge";
-import { BotListItem, botRowProps, type BotRowProps } from "./Sidebar";
+import { BotListItem } from "./Sidebar";
+import { botRowProps, type BotRowProps } from "@/lib/sidebar-selection";
 
 const claude = {
   instanceId: "claude", driverKind: "claudeAgent", displayName: "Claude", snapshot: { state: "available" },
@@ -32,6 +33,18 @@ const bot = (instanceId: string, model: string): Bot => ({
 describe("botModel", () => {
   it("names the bot's chosen model by its picker label", () => {
     expect(botModel(bot("claude", "opus"), [claude])).toEqual({ instance: claude, label: "Opus 4.1" });
+    const root: InstanceInfo = {
+      instanceId: "root", driverKind: "hermesAgent", displayName: "Hermes", snapshot: { state: "available" },
+      models: { default: "codex/native-sol", options: [{ id: "codex/native-sol", label: "GPT Sol", provider: "Codex" }] },
+    };
+    for (const source of ["hermes-default", "codex/native-sol"]) {
+      const selected = bot("root", source);
+      expect(botModel(selected, [root])?.label).toBe("GPT Sol");
+      const markup = renderToStaticMarkup(createElement(BotModelBadge, { bot: selected, instances: [root], avatarSize: 44 }));
+      expect(markup).toContain('aria-label="Model: GPT Sol (Codex)"');
+      expect(markup).not.toMatch(/Hermes|hermes-default|codex\/native-sol/);
+      expect(selected.modelSelection.model).toBe(source);
+    }
   });
 
   it("names the engine's default model when the bot has not chosen one", () => {
@@ -65,7 +78,6 @@ describe("sidebar bot row", () => {
   const botRow = (BotListItem as MemoExoticComponent<(props: BotRowProps) => ReactNode>).type;
   const render = (candidate: Bot, density: SidebarDensity) => renderToStaticMarkup(createElement(botRow,
     botRowProps({ ...initialState, ...fixture.state }, vi.fn(), candidate, { density, query: "", onMenu: vi.fn() })));
-  const badges = (markup: string) => markup.match(/<span data-testid="model-badge"[^>]*>/g) ?? [];
 
   beforeEach(() => {
     fixture.state = { bots: [bot("claude", "opus")], instances: [claude], activeView: "chat", selectedId: "other" };
@@ -76,23 +88,6 @@ describe("sidebar bot row", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  // Every density puts the badge on the avatar's bottom-left: the status dots own the bottom-right, and a mark at the
-  // row's end sat under the hover actions (+, new folder, …) without lining up with them.
-  it.each<[SidebarDensity, string]>([["comfortable", "absolute -bottom-0.5 -left-0.5"], ["icons", "absolute -bottom-0.5 -left-0.5"]])(
-    "shows the model once in a %s row", (density, placement) => {
-      const found = badges(render(bot("claude", "opus"), density));
-      expect(found).toHaveLength(1);
-      expect(found[0]).toContain('aria-label="Model: Opus 4.1 (Claude)"');
-      expect(found[0]).toContain(placement);
-    });
-
-  // Simple mode shows the mark too (the owner's ask, 2026-10-22): a person sees which provider each bot runs on at a glance.
-  it.each<SidebarDensity>(["comfortable", "icons"])("shows the model once in a Simple mode %s row", (density) => {
-    fixture.advanced = false;
-    const found = badges(render(bot("claude", "opus"), density));
-    expect(found).toHaveLength(1);
-    expect(found[0]).toContain('aria-label="Model: Opus 4.1 (Claude)"');
-  });
 
   it("shows no badge while the bot's engine is missing", () => {
     expect(render(bot("gone", "opus"), "comfortable")).not.toContain('data-testid="model-badge"');

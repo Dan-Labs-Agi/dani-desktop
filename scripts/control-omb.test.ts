@@ -1,13 +1,53 @@
 // What crosses from the launching shell into a fixture server: only what a
 // test scripted on purpose. A real OpenAI key must never reach a fixture that
 // could send it to OpenAI.
-import { join } from "node:path";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { verificationServerEnvironment } from "./control-omb.ts";
 
-const childEnv = (parentEnv: NodeJS.ProcessEnv) => verificationServerEnvironment(parentEnv, join(tmpdir(), "omb-fixture-env"), 9100);
+const fixtureHome = mkdtempSync(join(tmpdir(), "omb-fixture-env-"));
+afterAll(() => rmSync(fixtureHome, { recursive: true, force: true }));
+const childEnv = (parentEnv: NodeJS.ProcessEnv) => verificationServerEnvironment(parentEnv, fixtureHome, 9100);
+
+describe("the fixture's isolated temporary directory", () => {
+  it("creates a private temporary parent before a consumer allocates MCP state", () => {
+    const home = join(fixtureHome, "missing-home");
+    const temp = join(home, "tmp");
+    expect(existsSync(home)).toBe(false);
+    const env = verificationServerEnvironment({
+      HOME: "/host/home",
+      USERPROFILE: "/host/profile",
+      TMPDIR: "/host/tmp",
+      TEMP: "/host/temp",
+      TMP: "/host/temp",
+      XDG_CACHE_HOME: "/host/cache",
+      XDG_CONFIG_HOME: "/host/config",
+      XDG_DATA_HOME: "/host/data",
+      HERMES_HOME: "/host/hermes",
+      OPENAI_API_KEY: "host-provider-key",
+    }, home, 9100);
+    expect(env).toMatchObject({
+      HOME: home,
+      USERPROFILE: home,
+      TMPDIR: temp,
+      TEMP: temp,
+      TMP: temp,
+      XDG_CACHE_HOME: join(home, ".cache"),
+      XDG_CONFIG_HOME: join(home, ".config"),
+      XDG_DATA_HOME: join(home, ".local", "share"),
+      HERMES_HOME: join(home, ".hermes"),
+      OMB_DATA_DIR: home,
+      OMB_TEST_SEALED_PATH: "1",
+    });
+    expect(env).not.toHaveProperty("OPENAI_API_KEY");
+    expect(existsSync(temp)).toBe(true);
+    if (process.platform !== "win32") expect(statSync(temp).mode & 0o777).toBe(0o700);
+    expect(dirname(mkdtempSync(join(temp, "omb-mcp-")))).toBe(temp);
+  });
+});
 
 describe("a fixture driven from a real browser", () => {
   it("trusts this machine's browsers as `pnpm dev` does, unless the caller tests the sign-in", () => {

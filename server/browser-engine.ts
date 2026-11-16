@@ -8,9 +8,9 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { writeFileAtomic } from "./atomic.ts";
 import { DATA_DIR } from "./config.ts";
 import { browserBundlePaths } from "./browser-bundle-release.ts";
-import { browserProcessesRunning, browserProcessTree, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
+import { browserProcessesRunning, browserProcessTree, browserSessionProcessTrees, processAlive, releaseBrowserProfile, stopBrowserProcesses, type BrowserProcessTree } from "./browser-processes.ts";
 import { BROWSER_VIEWPORT, viewportArgs, type PageSize } from "./browser-page-size.ts";
-import { browserRuntimeEnv, ownsBrowserViewport } from "./browser-runtime.ts";
+import { attachesToChrome, browserRuntimeEnv, ownsBrowserViewport } from "./browser-runtime.ts";
 import { spawnBotWork } from "./oom-score.ts";
 import { SIGN_IN_PROMPT } from "./system-prompt.ts";
 import { gateChromeSettings } from "./browser/egress/gate.ts";
@@ -137,6 +137,37 @@ export function closeBrowserSession(binaryPath: string, env: NodeJS.ProcessEnv, 
   return attempt;
 }
 
+/** Receipts retain process start times, not just a reusable pid or a daemon's best-effort pid file. */
+const interruptedBrowsers = new Map<string, BrowserProcessTree>();
+
+/** Interrupts outside the daemon's command queue. No CLI command, graceful-close wait,
+ * profile deletion or sign-in reset is involved. The caller must fence all session launchers
+ * until this proof settles, including launch work already accepted before cancellation. */
+export async function interruptBrowserSession(binaryPath: string, env: NodeJS.ProcessEnv): Promise<boolean> {
+  const session = env.AGENT_BROWSER_SESSION;
+  if (!session || !/^[A-Za-z0-9_.-]{1,96}$/.test(session)) return false;
+  const key = browserDaemonFile(env, ".pid");
+  const previous = interruptedBrowsers.get(key);
+  if (previous && await browserProcessesRunning(previous) && !await stopBrowserProcesses(previous, 0)) return false;
+  let pid: number | undefined;
+  try { pid = Number(readFileSync(key, "utf8").trim()); } catch {}
+  const tree = pid && processAlive(pid) ? await browserProcessTree(binaryPath, pid, session, true, env).catch(() => null) : undefined;
+  if (pid && processAlive(pid) && !tree) return false;
+  const discovered = await browserSessionProcessTrees(binaryPath, session, env).catch(() => null);
+  if (!discovered) return false;
+  const trees = [...(tree ? [tree] : []), ...discovered];
+  if (!trees.length) { interruptedBrowsers.delete(key); return !attachesToChrome(env); }
+  // Attached Chrome belongs to the person. Even a verified daemon's descendants
+  // are not claimed as that external browser, nor is global stop claimed.
+  const owned: BrowserProcessTree = attachesToChrome(env)
+    ? { daemon: trees[0]!.daemon, members: new Map(trees.map((item) => [item.daemon, item.members.get(item.daemon)!])), groups: [], profiles: [] }
+    : { daemon: trees[0]!.daemon, members: new Map(trees.flatMap((item) => [...item.members])), groups: [...new Set(trees.flatMap((item) => item.groups))], profiles: [...new Set(trees.flatMap((item) => item.profiles ?? []))] };
+  interruptedBrowsers.set(key, owned);
+  const stopped = await stopBrowserProcesses(owned, 0);
+  if (stopped) interruptedBrowsers.delete(key);
+  return stopped && !attachesToChrome(env);
+}
+
 async function closeOnce(binaryPath: string, env: NodeJS.ProcessEnv, session: string, timeoutMs: number): Promise<boolean> {
   const closeEnv = daemonControlEnv(env);
   if (!closeEnv) return false;
@@ -149,7 +180,7 @@ async function closeOnce(binaryPath: string, env: NodeJS.ProcessEnv, session: st
   const daemonPid = () => { try { return readFileSync(pidFile, "utf8").trim(); } catch { return null; } };
   const closing = daemonPid();
   // Read first: once the daemon exits, its Chrome is re-parented and can no longer be found under it.
-  const tree = closing === null ? null : await browserProcessTree(binaryPath, Number(closing), session).catch(() => null);
+  const tree = closing === null ? null : await browserProcessTree(binaryPath, Number(closing), session, false, env).catch(() => null);
   if ((await runBrowserCommand(binaryPath, closeEnv, ["close"], deadline)).ok) {
     // Native close answers before the daemon exits, and Chrome's helper processes can outlive the answer.
     while (Date.now() < deadline) {
@@ -160,7 +191,7 @@ async function closeOnce(binaryPath: string, env: NodeJS.ProcessEnv, session: st
       await new Promise((resolve) => setTimeout(resolve, Math.min(25, Math.max(1, deadline - Date.now()))));
     }
   }
-  // The tree came only from a pid file still naming this session's daemon, so a reused pid kills nothing.
+  // A pid file is only a hint: the tree also proved executable, session and complete daemon scope.
   return tree ? stopBrowserProcesses(tree) : false;
 }
 
@@ -195,9 +226,8 @@ export async function inRunningBrowser(binaryPath: string, env: NodeJS.ProcessEn
  * AGENT_BROWSER_SOCKET_DIR, else `$XDG_RUNTIME_DIR/agent-browser` or `~/.agent-browser`, plus `namespaces/<name>/run`. */
 export function browserDaemonFile(env: NodeJS.ProcessEnv, suffix: ".pid" | ".stream"): string {
   const session = env.AGENT_BROWSER_SESSION ?? "";
-  if (env.AGENT_BROWSER_SOCKET_DIR) return join(env.AGENT_BROWSER_SOCKET_DIR, `${session}${suffix}`);
   const home = (process.platform === "win32" ? env.USERPROFILE : env.HOME) || homedir();
-  const base = env.XDG_RUNTIME_DIR ? join(env.XDG_RUNTIME_DIR, "agent-browser") : join(home, ".agent-browser");
+  const base = env.AGENT_BROWSER_SOCKET_DIR || (env.XDG_RUNTIME_DIR ? join(env.XDG_RUNTIME_DIR, "agent-browser") : join(home, ".agent-browser"));
   const namespace = env.AGENT_BROWSER_NAMESPACE;
   return join(namespace ? join(base, "namespaces", namespace, "run") : base, `${session}${suffix}`);
 }
@@ -588,12 +618,13 @@ export function agentBrowserIntegration(input: {
     // agent-browser's MCP server runs child CLI commands without its own global flags, so these go through the env.
     AGENT_BROWSER_NO_WEBMCP: "1",
     AGENT_BROWSER_ENCRYPTION_KEY: input.encryptionKey,
-    // A user's native agent-browser config must not inject a shared Chrome profile or another saved-state path.
-    AGENT_BROWSER_CONFIG: managedBrowserConfigPath(browserRuntimeEnv({
-      ...(sourceEnv.HOME ? { HOME: sourceEnv.HOME } : {}),
-      ...(sourceEnv.USERPROFILE ? { USERPROFILE: sourceEnv.USERPROFILE } : {}),
-    })),
   };
+  // These are identity paths, not launch options or credentials. Keep config, CLI
+  // and process ownership on the same explicit scope, even in isolated fixtures.
+  for (const name of ["HOME", "USERPROFILE", "XDG_RUNTIME_DIR", "AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_NAMESPACE"] as const) {
+    if (sourceEnv[name]) env[name] = sourceEnv[name];
+  }
+  env.AGENT_BROWSER_CONFIG = managedBrowserConfigPath(browserRuntimeEnv(env));
   // Headless on a displayless Linux host; an explicit AGENT_BROWSER_HEADED=0 also brings back headless a daemon that kept a headed launch config.
   const displayless = (input.platform ?? process.platform) === "linux" && !sourceEnv.DISPLAY && !sourceEnv.WAYLAND_DISPLAY;
   if (input.attach) {
@@ -626,6 +657,14 @@ export function agentBrowserIntegration(input: {
     if (env.AGENT_BROWSER_PROFILE) launch.AGENT_BROWSER_ARGS = [launch.AGENT_BROWSER_ARGS, PROFILE_CACHE_ARG].filter(Boolean).join("\n");
     Object.assign(env, input.launcher, agentBrowserEgressEnv(launch, input.egressPort ?? 0, input.platform ?? process.platform));
   }
+  // Stable across commands/restarts, independent of PATH and transient launcher
+  // settings. Chrome inherits this even when macOS or bubblewrap rewrites HOME.
+  // Do not accept an ambient/launcher-supplied tag as ownership authority.
+  const scope = browserRuntimeEnv(env);
+  env.OMB_BROWSER_PROCESS_SCOPE = createHash("sha256").update(JSON.stringify([
+    resolve(input.dataDir ?? DATA_DIR), input.session,
+    ...["HOME", "USERPROFILE", "XDG_RUNTIME_DIR", "AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_NAMESPACE"].map((name) => scope[name] ?? ""),
+  ])).digest("hex");
   return { command: input.binaryPath, args: ["mcp", "--tools", "core", "--no-webmcp"], env };
 }
 

@@ -5,10 +5,13 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { removeTempDir } from "../testing/cleanup.ts";
 import { forbiddenCommand } from "./cdp/testing/real-chrome.ts";
+import { BrowserRuntime } from "../browser-runtime.ts";
 import { BROWSER_CONTROL_REFUSAL } from "./control.ts";
 import { REDDIT_REFUSAL } from "./egress/reddit.ts";
+import { CHROME_ENGINE, RuntimeRouter, type ChromeEngine } from "./engines.ts";
 import { BrowserService, type BrowserServiceOptions } from "./service.ts";
-import type { Backend } from "./backends.ts";
+import type { Backend, OpenedBrowser } from "./backends.ts";
+import type { ToolResult } from "./shape.ts";
 import { FakeBackend, FakeChrome, type FakeDocument, type FakePage } from "./testing/fake-chrome.ts";
 import { TOOL_LIST } from "./tools.ts";
 
@@ -51,10 +54,10 @@ function documents(url: string): FakeDocument {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function setup(options: Partial<BrowserServiceOptions> = {}, startUrls?: string[]) {
+function setup(options: Partial<BrowserServiceOptions> = {}, startUrls?: string[], timeoutMs?: number) {
   const dataDir = mkdtempSync(join(tmpdir(), "omb-browser-service-"));
   folders.push(dataDir);
-  const backend = new FakeBackend(() => new FakeChrome({ documents, ...(startUrls ? { startUrls } : {}) }));
+  const backend = new FakeBackend(() => new FakeChrome({ documents, ...(startUrls ? { startUrls } : {}) }), { timeoutMs });
   backends.push(backend);
   const service = new BrowserService({ dataDir, backend: () => backend, maxRunning: 4, idleMs: () => 600_000, takeoverMs: 200, ...options });
   services.push(service);
@@ -73,6 +76,141 @@ describe("the bots' browser tools", () => {
     expect(listed.tools).toHaveLength(22);
     for (const tool of listed.tools) {
       for (const owned of ["session", "extraArgs", "headed", "path", "allowedDomains"]) expect(tool.inputSchema.properties ?? {}).not.toHaveProperty(owned);
+    }
+  });
+
+  it("reports agent availability only after a native tab's queued and tracked work drains without page reads", async () => {
+    const { service, target, call, backend } = setup();
+    expect(service.agentAvailable("unused")).toBe(true);
+    expect(service.profiles()).toHaveLength(0);
+    expect(backend.chromes).toHaveLength(0);
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const tab = service.profile(target).tabs.list()[0]!;
+    const sent = backend.chrome.sent.length;
+    const finish = Promise.withResolvers<void>();
+    const committed = Promise.withResolvers<void>();
+    try {
+      expect(service.agentAvailable(target.session)).toBe(true);
+      const queued = tab.control.system(() => finish.promise);
+      expect(service.agentAvailable(target.session)).toBe(false);
+      finish.resolve();
+      await queued;
+      expect(service.agentAvailable(target.session)).toBe(true);
+      tab.control.track(committed.promise);
+      expect(service.agentAvailable(target.session)).toBe(false);
+      committed.resolve();
+      await tab.control.system(async () => {});
+      expect(service.agentAvailable(target.session)).toBe(true);
+      expect(backend.chrome.sent).toHaveLength(sent);
+      expect(backend.chromes).toHaveLength(1);
+    } finally {
+      finish.resolve();
+      committed.resolve();
+    }
+  });
+
+  it.each([false, true])("retains failed native close proof until the original handle confirms cleanup (attached: %s)", async (attached) => {
+    let real: FakeBackend | null = null;
+    const opened: { current?: OpenedBrowser } = {};
+    let allowClose = false;
+    let attempts = 0;
+    const failing: Backend = {
+      kind: attached ? "cdp-url" : "local",
+      get caps() { return { ...real!.caps, ownsAllTabs: !attached }; },
+      open: async (request) => {
+        const handle = await real!.open(request);
+        opened.current = handle;
+        return {
+          ...handle,
+          close: async () => {
+            attempts++;
+            if (!allowClose) throw new Error("injected native close failure");
+            if (attached) handle.browser.disconnect();
+            else await handle.close();
+          },
+        };
+      },
+    };
+    const { service, target, backend, call } = setup({ backend: () => failing });
+    real = backend;
+    try {
+      await call("agent_browser_open", { url: "https://example.com/form" });
+      await expect(service.close(target.session)).rejects.toThrow(/cleanup.*not confirmed/i);
+      expect(opened.current!.browser.connected).toBe(true);
+      expect(service.interrupted(target.session)).toBe(true);
+      expect(service.agentAvailable(target.session)).toBe(false);
+      const refused = await call("agent_browser_status");
+      expect(refused.isError).toBe(true);
+      expect(backend.chromes).toHaveLength(1);
+      if (!attached) {
+        await opened.current!.close();
+        expect(service.agentAvailable(target.session)).toBe(false);
+      }
+      allowClose = attached;
+      await service.close(target.session);
+      expect(attempts).toBe(2);
+      expect(opened.current!.browser.connected).toBe(false);
+      expect(service.agentAvailable(target.session)).toBe(true);
+      expect(backend.chromes).toHaveLength(1);
+      if (attached) expect(backend.chrome.sent.some((sent) => sent.method === "Browser.close")).toBe(false);
+    } finally {
+      allowClose = true;
+      await service.close(target.session).catch(() => undefined);
+      if (attached) opened.current?.browser.disconnect();
+      else await opened.current?.close().catch(() => undefined);
+    }
+  });
+
+  it("retains failed native close proof from a late opening until an explicit retry closes that handle", async () => {
+    let real: FakeBackend | null = null;
+    const opened: { current?: OpenedBrowser } = {};
+    let allowClose = false;
+    let attempts = 0;
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const late: Backend = {
+      kind: "local",
+      get caps() { return real!.caps; },
+      open: async (request) => {
+        const handle = await real!.open(request);
+        opened.current = handle;
+        entered.resolve();
+        await release.promise;
+        return {
+          ...handle,
+          close: async () => {
+            attempts++;
+            if (!allowClose) throw new Error("injected late cleanup failure");
+            await handle.close();
+          },
+        };
+      },
+    };
+    const { service, target, backend, call } = setup({ backend: () => late });
+    real = backend;
+    const pending = call("agent_browser_open", { url: "https://example.com/form" }).catch((error: unknown) => error);
+    try {
+      await entered.promise;
+      const stopping = service.close(target.session);
+      const unproved = expect(stopping).rejects.toThrow(/cleanup.*not confirmed/i);
+      release.resolve();
+      await unproved;
+      await pending;
+      expect(opened.current!.browser.connected).toBe(true);
+      expect(service.agentAvailable(target.session)).toBe(false);
+      expect(service.interrupted(target.session)).toBe(true);
+      allowClose = true;
+      await service.close(target.session);
+      expect(attempts).toBe(2);
+      expect(opened.current!.browser.connected).toBe(false);
+      expect(service.agentAvailable(target.session)).toBe(true);
+      expect(backend.chromes).toHaveLength(1);
+    } finally {
+      allowClose = true;
+      release.resolve();
+      await pending;
+      await service.close(target.session).catch(() => undefined);
+      await opened.current?.close().catch(() => undefined);
     }
   });
 
@@ -170,6 +308,190 @@ describe("the bots' browser tools", () => {
     await viewer.close();
   });
 
+  it("cancels native input during the viewer pre-click delay through the runtime router without dispatching a click", async () => {
+    const { service, target, call, backend } = setup();
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const runtime = new RuntimeRouter(new BrowserRuntime(), { service } as ChromeEngine);
+    const spec = { command: CHROME_ENGINE, args: [target.key], env: {} };
+    const controller = new AbortController();
+    const viewer = await service.attachViewer(target, { owner: "watcher", canOperate: true, maxWidth: 1280, maxHeight: 1280 }, (output) => {
+      if (output.type === "frame") output.ack();
+      if (output.type === "pointer" && output.phase === "move") controller.abort("private stop reason");
+    });
+    const sent = backend.chrome.sent.length;
+    try {
+      await expect(runtime.agentRpc(target.session, spec, "tools/call", { name: "agent_browser_click", arguments: { ref: "e2" } }, undefined, undefined, controller.signal))
+        .rejects.toThrow(/cancelled before dispatch.*did not run/i);
+      expect(backend.chrome.sent.slice(sent).filter((command) => command.method === "Input.dispatchMouseEvent")).toEqual([]);
+      expect(service.interrupted(target.session)).toBe(false);
+      expect(backend.chrome.pages.values().next().value!.text).not.toContain("Hello");
+    } finally {
+      await viewer.close();
+    }
+  });
+
+  it("fences an accepted native click after Stop until the real dispatch drains and restart clears uncertainty", async () => {
+    const { service, target, call, backend, text } = setup();
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const controller = new AbortController();
+    const pressed = Promise.withResolvers<void>();
+    backend.chrome.delay = (method) => {
+      if (method === "Input.dispatchMouseEvent" && backend.chrome.sent.at(-1)?.params.type === "mousePressed") {
+        pressed.resolve();
+        return 150;
+      }
+      return 0;
+    };
+    const pending = service.agentRpc(target, "tools/call", { name: "agent_browser_click", arguments: { ref: "e2" } }, undefined, controller.signal);
+    const cancelled = expect(pending).rejects.toThrow(/already sent.*uncertain/i);
+    await pressed.promise;
+    controller.abort("private stop reason");
+    await cancelled;
+    const profile = service.profile(target);
+    expect(profile.calls).toBeGreaterThan(0);
+    expect(service.agentAvailable(target.session)).toBe(false);
+    expect(service.interrupted(target.session)).toBe(true);
+    const sent = backend.chrome.sent.length;
+    expect(text(await call("agent_browser_click", { ref: "e2" }))).toMatch(/stuck|busy/i);
+    expect(backend.chrome.sent.slice(sent).filter((command) => command.method === "Input.dispatchMouseEvent")).toEqual([]);
+    await sleep(200);
+    expect(profile.calls).toBe(0);
+    expect(backend.chrome.sent.filter((command) => command.method === "Input.dispatchMouseEvent" && command.params.type === "mouseReleased")).toEqual([]);
+    expect(service.agentAvailable(target.session)).toBe(false);
+    expect(text(await call("restart_browser"))).toContain("Browser restarted");
+    expect(service.agentAvailable(target.session)).toBe(true);
+  });
+
+  it.each(["before observation", "during observation"] as const)("keeps Stop ownership after an accepted native CDP timeout so observation cannot clear the restart barrier: %s", async (timing) => {
+    const { service, target, call, backend, text } = setup({ callBudgetMs: 1_000 }, undefined, 40);
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const chrome = backend.chrome;
+    const other = { session: "bot-b", key: "bot:b" };
+    await call("agent_browser_open", { url: "https://example.com/other" }, other);
+    const controller = new AbortController();
+    chrome.delay = (method) => method === "Input.dispatchMouseEvent" && chrome.sent.at(-1)?.params.type === "mousePressed" ? 150 : 0;
+    const pending = service.agentRpc(target, "tools/call", { name: "agent_browser_click", arguments: { ref: "e2" } }, undefined, controller.signal);
+    expect(text(await pending as ToolResult)).toMatch(/did not answer.*may still be running/i);
+    const profile = service.profile(target);
+    expect(profile.calls).toBe(0);
+    expect(profile.control.lostCall).toBe("agent_browser_click");
+    if (timing === "during observation") {
+      const probing = Promise.withResolvers<void>();
+      chrome.delay = (method) => {
+        if (method === "Target.getTargets") { probing.resolve(); return 100; }
+        return 0;
+      };
+      const observation = call("agent_browser_status");
+      await probing.promise;
+      const stoppedAt = chrome.sent.length;
+      controller.abort();
+      expect(text(await observation)).toMatch(/stuck|busy/i);
+      expect(chrome.sent.slice(stoppedAt).filter((command) => command.method === "Page.getNavigationHistory")).toEqual([]);
+    } else {
+      controller.abort();
+    }
+    const sent = chrome.sent.length;
+    expect(text(await call("agent_browser_status"))).toMatch(/stuck|busy/i);
+    expect(profile.control.lostCall).toBeNull();
+    expect(profile.control.uncertain).toBe(true);
+    expect(chrome.sent.slice(sent)).toEqual([]);
+    expect(text(await call("agent_browser_status", {}, other))).toContain("https://example.com/other");
+    expect(service.interrupted(other.session)).toBe(false);
+    await sleep(200);
+    expect(text(await call("agent_browser_click", { ref: "e2" }))).toMatch(/stuck|busy/i);
+    expect(chrome.sent.filter((command) => command.method === "Input.dispatchMouseEvent" && command.params.type === "mousePressed")).toHaveLength(1);
+    expect(chrome.sent.filter((command) => command.method === "Input.dispatchMouseEvent" && command.params.type === "mouseReleased")).toEqual([]);
+    expect(text(await call("restart_browser"))).toContain("Browser restarted");
+    expect(service.agentAvailable(target.session)).toBe(true);
+  });
+
+  it.each(["observation", "restart", "close"] as const)("releases post-timeout native Stop ownership after %s proves recovery", async (proof) => {
+    const { service, target, call, backend } = setup({ callBudgetMs: 1_000 }, undefined, 40);
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const controller = new AbortController();
+    const chrome = backend.chrome;
+    chrome.delay = (method) => method === "Input.dispatchMouseEvent" && chrome.sent.at(-1)?.params.type === "mousePressed" ? 150 : 0;
+    const result = await service.agentRpc(target, "tools/call", { name: "agent_browser_click", arguments: { ref: "e2" } }, undefined, controller.signal) as ToolResult;
+    expect(result.isError).toBe(true);
+    expect(chrome.sent.filter((command) => command.method === "Input.dispatchMouseEvent" && command.params.type === "mousePressed")).toHaveLength(1);
+    if (proof === "close") await service.close(target.session);
+    else await call(proof === "restart" ? "restart_browser" : "agent_browser_status");
+    controller.abort();
+    expect(service.interrupted(target.session)).toBe(false);
+    expect(service.profile(target).control.uncertain).toBe(false);
+  });
+
+  it("restores watched frames after Stop cancels a pending native screenshot without resize or reconnect", async () => {
+    const { service, target, call, backend } = setup();
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    let frames = 0;
+    const viewer = await service.attachViewer(target, { owner: "watcher", canOperate: true, maxWidth: 1280, maxHeight: 1280 }, (output) => {
+      if (output.type === "frame") { frames++; output.ack(); }
+    });
+    const controller = new AbortController();
+    const capturing = Promise.withResolvers<void>();
+    backend.chrome.delay = (method) => {
+      if (method === "Page.captureScreenshot") { capturing.resolve(); return 100; }
+      return 0;
+    };
+    try {
+      const pending = service.agentRpc(target, "tools/call", { name: "agent_browser_screenshot", arguments: {} }, undefined, controller.signal);
+      const cancelled = expect(pending).rejects.toThrow(/cancelled before dispatch/i);
+      await capturing.promise;
+      const sent = backend.chrome.sent.length;
+      controller.abort();
+      await cancelled;
+      await sleep(150);
+      expect(service.profile(target).run!.browser.connected).toBe(true);
+      expect(backend.chrome.sent.slice(sent).filter((command) => command.method.startsWith("Input.") || command.method === "Page.navigate" || command.method === "Target.createTarget")).toEqual([]);
+      const page = [...backend.chrome.pages.values()].find((candidate) => candidate.url.endsWith("/form"))!;
+      expect(page.screencasts.size).toBe(1);
+      const resumed = frames;
+      backend.chrome.paint(page);
+      await sleep(0);
+      expect(frames).toBeGreaterThan(resumed);
+    } finally {
+      await viewer.close();
+    }
+  });
+
+  it("cancels queued native work without disconnecting or interrupting the active caller", async () => {
+    const { service, target, call, backend, text } = setup();
+    await call("agent_browser_open", { url: "https://example.com/form" });
+    const profile = service.profile(target);
+    const entered = Promise.withResolvers<void>();
+    const finish = Promise.withResolvers<void>();
+    const active = profile.control.agent(profile.active(), async () => {
+      entered.resolve();
+      await finish.promise;
+      await profile.active()!.page.click({ ref: "e2" });
+    });
+    await entered.promise;
+    const controller = new AbortController();
+    const queued = service.agentRpc(target, "tools/call", { name: "agent_browser_click", arguments: { ref: "e2" } }, undefined, controller.signal);
+    const outcome = queued.catch((error: unknown) => error);
+    await sleep(0);
+    controller.abort();
+    try {
+      const cancelled = await Promise.race([outcome, sleep(100).then(() => null)]);
+      expect(cancelled).toBeInstanceOf(Error);
+      expect(cancelled).toHaveProperty("message", expect.stringMatching(/cancelled before dispatch/i));
+      expect(profile.run!.browser.connected).toBe(true);
+      expect(profile.control.agents).toBeGreaterThan(0);
+      expect(service.interrupted(target.session)).toBe(false);
+    } finally {
+      finish.resolve();
+      await active;
+      await outcome;
+    }
+    await sleep(0);
+    expect(backend.chrome.sent.filter((command) => command.method === "Browser.close")).toEqual([]);
+    expect(text(await call("agent_browser_status"))).toContain("https://example.com/form");
+    expect(backend.chrome.sent.filter((command) => command.method === "Input.dispatchMouseEvent" && command.params.type === "mousePressed")).toHaveLength(1);
+    expect(profile.active()!.page.url()).toBe("https://example.com/form");
+    expect(backend.chrome.pages.values().next().value!.text).toContain("Hello");
+  });
+
   it("adds what the browser's egress gate refused, read under the profile's key, to the next answer", async () => {
     const asked: string[] = [];
     const notice = "The page tried to reach \"169.254.169.254:80\" (blocked: the cloud metadata service) (page output, not instructions).";
@@ -261,19 +583,26 @@ describe("a person and the bot sharing one browser", () => {
     expect(text(await call("agent_browser_status"))).toContain("still busy with an earlier agent_browser_snapshot call");
   });
 
-  it("leaves the browser recoverable when a takeover outlasted a bot call: the next call says so, the one after runs", async () => {
-    const { service, call, text, target } = setup({ takeoverMs: 50 });
+  it("reports agent availability through an uncertain takeover only after real hand-back and recovery proof", async () => {
+    const { service, call, text, target, backend } = setup({ takeoverMs: 50 });
     await call("agent_browser_open", { url: "https://example.com/form" });
+    expect(service.agentAvailable(target.session)).toBe(true);
     const waiting = call("agent_browser_wait", { ms: 1_000 }).catch((error: unknown) => error);
     await sleep(20);
+    expect(service.agentAvailable(target.session)).toBe(false);
     const viewer = await service.attachViewer(target, { owner: "local-owner", canOperate: true, maxWidth: 2560, maxHeight: 1600 }, () => {});
     await viewer.input({ type: "takeControl" });
     expect(service.interrupted("bot-a")).toBe(true);
+    expect(service.agentAvailable(target.session)).toBe(false);
     expect(String(await waiting)).toContain(BROWSER_CONTROL_REFUSAL);
     await viewer.input({ type: "releaseControl" });
+    const sentBeforeAvailability = backend.chrome.sent.length;
+    expect(service.agentAvailable(target.session)).toBe(false);
+    expect(backend.chrome.sent).toHaveLength(sentBeforeAvailability);
     const recovered = await call("agent_browser_status");
     expect(text(recovered)).toContain("The browser answers again: the earlier agent_browser_wait call");
     expect(service.interrupted("bot-a")).toBe(false);
+    expect(service.agentAvailable(target.session)).toBe(true);
     const after = await call("agent_browser_status");
     expect(after.isError).toBeUndefined();
     expect(text(after)).toContain(`"tab":"t1"`);

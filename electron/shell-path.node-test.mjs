@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { sharedCommand } from "./shared-computer-access.mjs";
@@ -37,4 +37,25 @@ test("the shell PATH comes first, then the app's own and the usual install folde
 test("a login shell that fails, prints nothing or hangs gives no PATH", { skip: process.platform === "win32" }, async () => {
   assert.equal(await probeShellPath({ shell: "/nonexistent/shell" }), null);
   assert.equal(await probeShellPath({ shell: "/usr/bin/true" }), null);
+});
+
+test("a login shell that ignores SIGTERM still gives no PATH at the deadline", { skip: process.platform === "win32", timeout: 15_000 }, async t => {
+  const dir = await realpath(await mkdtemp(path.join(tmpdir(), "omb-shell-timeout-")));
+  const pidFile = path.join(dir, "shell.pid");
+  let completed = false;
+  t.after(async () => {
+    try {
+      if (!completed) process.kill(Number(await readFile(pidFile, "utf8")), "SIGKILL");
+    } catch (error) {
+      if (error.code !== "ENOENT" && error.code !== "ESRCH") throw error;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+  const shell = path.join(dir, "login-shell");
+  const quotedPidFile = "'" + pidFile.replaceAll("'", "'\\''") + "'";
+  await writeFile(shell, `#!/bin/sh\ntrap '' TERM\nprintf '%s' "$$" > ${quotedPidFile}\nexec /bin/sleep 60\n`, { mode: 0o755 });
+  const result = await probeShellPath({ shell });
+  completed = true;
+  assert.equal(result, null);
 });

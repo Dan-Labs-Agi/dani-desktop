@@ -2,7 +2,8 @@
 // Copyright (c) 2026 T3 Tools Inc.), with DaniBot's routes, its watching viewer's resize and its own messages.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { browserStreamAccess, createPreviewStreamClient, type PreviewStreamControl, type PreviewStreamEvents } from "./browser-stream-client";
+import { browserStreamAccess, createPreviewStreamClient, type PreviewStreamEvents } from "./browser-stream-client";
+import type { PreviewStreamControl } from "../../shared/browser-stream";
 
 class FakeSocket extends EventTarget {
   static readonly OPEN = 1;
@@ -66,6 +67,13 @@ describe("preview stream control", () => {
     createPreviewStreamClient({ ...target, interactive: false }, events()).stop();
     expect(new URL(FakeSocket.current.url).searchParams.get("interactive")).toBe("false");
     expect(browserStreamAccess("a b", { protocol: "https:", host: "cloud.test" }).wsBase).toBe("wss://cloud.test/api/bots/a%20b/browser");
+  });
+
+  it("preserves the server takeover identity through the control protocol", () => {
+    const { client, socket, onControl } = connect();
+    socket.control({ ...agent, controller: "you", owned: true, attempt: "current-reservation" });
+    expect(onControl).toHaveBeenLastCalledWith({ ...agent, controller: "you", owned: true, attempt: "current-reservation" });
+    client.stop();
   });
 
   it("does not navigate before ownership is granted, but sizes the page for a viewer that may operate, as soon as it may", () => {
