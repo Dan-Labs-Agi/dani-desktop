@@ -4,10 +4,9 @@
 import { createHash } from "node:crypto";
 import type { ChildCalls, ToolCall } from "../server/mcp-bridge.ts";
 import { slimResponse, type SlimStructured } from "../server/saved-steps/driver-wire.ts";
+import { READ_TIMEOUT_MS, readWindow } from "./read.ts";
 
 type JsonObject = Record<string, unknown>;
-
-const OBSERVE_TIMEOUT_MS = 4_000;
 
 /** The actions that change a window, so an answer about them is worth no more than a read-back of what they changed. */
 export const VERIFIED_ACTIONS: ReadonlySet<string> = new Set([
@@ -78,17 +77,10 @@ export function canVerifyEffect(call: ToolCall): boolean {
   return VERIFIED_ACTIONS.has(call.name) && readBackTarget(call.arguments) !== null;
 }
 
-function observe(child: ChildCalls, target: JsonObject, timeoutMs: number): Promise<Observation | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+async function observe(child: ChildCalls, target: JsonObject, timeoutMs: number): Promise<Observation | null> {
   // A driver that never answers the read-back must not hold the turn open: the action has already gone out.
-  const expired = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), timeoutMs);
-    timer.unref?.();
-  });
-  return Promise.race([child.call("get_window_state", { ...target, include_screenshot: false }), expired])
-    .then((result) => (result ? observationOf(result) : null))
-    .catch(() => null)
-    .finally(() => clearTimeout(timer));
+  const result = await readWindow(child, target, timeoutMs);
+  return result ? observationOf(result) : null;
 }
 
 function withNote(result: JsonObject, note: string): JsonObject {
@@ -106,7 +98,7 @@ function withNote(result: JsonObject, note: string): JsonObject {
 export async function withVerifiedEffect(
   call: ToolCall,
   child: ChildCalls,
-  { timeoutMs = OBSERVE_TIMEOUT_MS, act, before: cachedBefore, onObserved }: {
+  { timeoutMs = READ_TIMEOUT_MS, act, before: cachedBefore, onObserved }: {
     timeoutMs?: number;
     act?: () => Promise<JsonObject>;
     before?: Observation | null;

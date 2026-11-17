@@ -1,25 +1,8 @@
 import type { ChildCalls, ToolCall } from "../../server/mcp-bridge.ts";
 import { observationOf, type Observation } from "../effect.ts";
+import { readWindow } from "../read.ts";
 
 type Result = Record<string, unknown>;
-
-async function readWindow(child: ChildCalls, args: Record<string, unknown>): Promise<Result | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), 4_000);
-    timer.unref?.();
-  });
-  try {
-    return await Promise.race([
-      child.call("get_window_state", { pid: args.pid, window_id: args.window_id, include_screenshot: false }),
-      timeout,
-    ]);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 function note(result: Result, message: string): Result {
   const content = Array.isArray(result.content) ? result.content : [];

@@ -336,7 +336,13 @@ export function runMcpBridge(options: BridgeOptions): void {
   const children = createChildCalls((line) => child.stdin.write(line + "\n"));
   const send = async (line: string) => {
     const frame = line.includes('"tools/call"') ? relayableCall(line) : null;
-    const relayed = frame && options.relay?.(frame.call, children.forCall(frame.meta));
+    let relayed: Promise<unknown> | null | undefined;
+    try {
+      relayed = frame && options.relay?.(frame.call, children.forCall(frame.meta));
+    } catch (error) {
+      // A relay that throws before it returns a promise must still answer: the agent waits on this call's id.
+      relayed = Promise.reject(error);
+    }
     if (!frame || !relayed) {
       child.stdin.write(line + "\n");
       return;

@@ -1,15 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { ComputerCounters } from "../counters.ts";
 
-export interface ComputerCounters {
-  actions: number;
-  changed: number;
-  unchanged: number;
-  unobserved: number;
-  refusals: Readonly<Record<string, number>>;
-  readBacks: number;
-  addedMs: number;
-}
+export type { ComputerCounters };
 
 export interface ComputerTaskResult {
   id: string;

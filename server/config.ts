@@ -1,4 +1,5 @@
 // ~/.danibot/config.json, with env vars overriding its credentials.
+import type { ComputerGuards } from "../computeruse/guards.ts";
 import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -259,6 +260,10 @@ const featureConfigSchema = z.object({
   wrapComputerScreenData: z.boolean().optional(),
   /** Add the see-act-verify workflow to computer tool descriptions. Off unless true. */
   guideComputerUse: z.boolean().optional(),
+  /** Show the driver's cursor gliding to each target so the person can follow along and take control. Off unless true. */
+  showComputerPointer: z.boolean().optional(),
+  /** Count what a computer session did and attach one plain line about it to the turn. Off unless true. */
+  reportComputerEvidence: z.boolean().optional(),
   claudeUserMcp: z.boolean().optional(), // Claude bots also load this machine's Claude Code MCP servers. Off unless true: tools cost tokens.
   claudeUserSkills: z.boolean().optional(), // Claude bots also load the skills in ~/.claude/skills, in place. Off unless true.
   /** LLM-generated titles for new threads. Off unless true. */
@@ -536,7 +541,7 @@ export interface AppConfig extends HelperConfig {
   context?: { rebuildBytes?: number; compactAt?: number; autoCompact?: boolean; roomCompactAt?: number; roomSessions?: boolean; replayToolHistory?: boolean };
   memory?: { captureQuietMs?: number; tidyHour?: number };
   localVm?: { mode?: "shared" | "per-bot" | "pool"; maxInstances?: number; idleTimeoutMinutes?: number; preserveInstalledApps?: boolean };
-  features?: { skillAuthoring?: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; verifyComputerEffects?: boolean; guardComputerStale?: boolean; guardComputerLoops?: boolean; verifyComputerTyping?: boolean; anchorComputerTargets?: boolean; verifyComputerScroll?: boolean; wrapComputerScreenData?: boolean; guideComputerUse?: boolean; claudeUserMcp?: boolean; claudeUserSkills?: boolean; llmThreadTitles?: boolean; smartSetupChoices?: boolean; autoRecall?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; parallelRoomJobs?: boolean; chiefEscalations?: boolean; acpPlanLines?: boolean; agentsToolBridge?: boolean; savedSteps?: boolean };
+  features?: { skillAuthoring?: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; verifyComputerEffects?: boolean; guardComputerStale?: boolean; guardComputerLoops?: boolean; verifyComputerTyping?: boolean; anchorComputerTargets?: boolean; verifyComputerScroll?: boolean; wrapComputerScreenData?: boolean; guideComputerUse?: boolean; showComputerPointer?: boolean; reportComputerEvidence?: boolean; claudeUserMcp?: boolean; claudeUserSkills?: boolean; llmThreadTitles?: boolean; smartSetupChoices?: boolean; autoRecall?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; parallelRoomJobs?: boolean; chiefEscalations?: boolean; acpPlanLines?: boolean; agentsToolBridge?: boolean; savedSteps?: boolean };
   onboarding?: { completedAt?: string; version?: number; reelSeen?: boolean; hintsSeen?: string[]; firstTurnAt?: string };
   browserProfiles?: BrowserProfile[];
   browserEngine?: BrowserEngineConfig;
@@ -671,6 +676,16 @@ export function threadEventLogRetentionDays(cfg: AppConfig): number | null {
 
 export function skillAuthoringEnabled(cfg: AppConfig): boolean {
   return cfg.features?.skillAuthoring !== false;
+}
+
+/** The checks a computer session runs, from the person's config. Each is off unless set. */
+export function computerGuardsFrom(cfg: AppConfig): ComputerGuards {
+  const features = cfg.features;
+  return {
+    stale: features?.guardComputerStale, loop: features?.guardComputerLoops, typing: features?.verifyComputerTyping,
+    anchor: features?.anchorComputerTargets, scroll: features?.verifyComputerScroll, untrusted: features?.wrapComputerScreenData,
+    guidance: features?.guideComputerUse, pointer: features?.showComputerPointer, evidence: features?.reportComputerEvidence,
+  };
 }
 
 export function verifyComputerEffectsEnabled(cfg: AppConfig): boolean {

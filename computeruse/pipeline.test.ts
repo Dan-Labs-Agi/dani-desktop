@@ -131,4 +131,80 @@ describe("computer pipeline", () => {
     expect(sent).toBe(100);
     expect(refusal.isError).toBe(true);
   });
+
+  describe("the visible pointer", () => {
+    const recording = () => {
+      const calls: string[] = [];
+      const child: ChildCalls = { driverVersion: "0.28.2", call: async (name) => { calls.push(name); return { content: [{ type: "text", text: "sent" }] }; } };
+      return { calls, child };
+    };
+
+    it("is turned on once, before the first action, and never for a read", async () => {
+      const { calls, child } = recording();
+      const relay = createComputerPipeline("linux", false, { pointer: true });
+      expect(relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, child)).toBeNull();
+      await relay({ name: "click", arguments: { pid: 1, window_id: 2, element_index: 3 } }, child);
+      await relay({ name: "press_key", arguments: { key: "Escape" } }, child);
+      expect(calls).toEqual(["set_agent_cursor_enabled", "set_agent_cursor_motion", "click"]);
+      expect(relay({ name: "press_key", arguments: { key: "Escape" } }, child)).toBeNull();
+    });
+
+    it("does nothing while its switch is off", () => {
+      const { child } = recording();
+      expect(createComputerPipeline("linux")({ name: "click", arguments: { pid: 1, window_id: 2, element_index: 3 } }, child)).toBeNull();
+    });
+
+    it("still performs the action when the driver has no cursor to show", async () => {
+      const calls: string[] = [];
+      const child: ChildCalls = { driverVersion: "0.28.2", call: async (name) => {
+        calls.push(name);
+        return name === "set_agent_cursor_enabled" ? { isError: true } : { content: [{ type: "text", text: "sent" }] };
+      } };
+      const answer = await createComputerPipeline("linux", false, { pointer: true })({ name: "click", arguments: { pid: 1, window_id: 2, element_index: 3 } }, child) as { isError?: boolean };
+      expect(answer.isError).not.toBe(true);
+      expect(calls).toEqual(["set_agent_cursor_enabled", "click"]);
+    });
+  });
+
+  describe("what a session counts", () => {
+    it("counts actions, verdicts and the reads it made for itself, but not the agent's own reads", async () => {
+      let revision = 0;
+      const child: ChildCalls = { driverVersion: "0.28.2", call: async (name) => {
+        if (name === "get_window_state") return { structuredContent: { app_name: "Notes", window_title: `Revision ${revision}`, elements: [] } };
+        if (name === "type_text") return { content: [{ type: "text", text: "typed" }] };
+        revision += 1;
+        return { content: [{ type: "text", text: "sent" }] };
+      } };
+      const relay = createComputerPipeline("linux", true, { evidence: true });
+      await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, child);
+      await relay({ name: "click", arguments: { pid: 1, window_id: 2, element_index: 3 } }, child);
+      const counters = relay.counters();
+      expect(counters).toMatchObject({ actions: 1, changed: 1, unchanged: 0, unobserved: 0, readBacks: 2 });
+      expect(counters.addedMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("counts a held-back call by the part that held it back, and counts nothing for a call it never saw", async () => {
+      let title = "Before";
+      const child: ChildCalls = { driverVersion: "0.28.2", call: async (name) => {
+        if (name === "get_window_state") return { structuredContent: { app_name: "Notes", window_title: title, elements: [] } };
+        title = "After";
+        return { content: [{ type: "text", text: "sent" }] };
+      } };
+      const relay = createComputerPipeline("linux", false, { stale: true, evidence: true });
+      const click = { name: "click", arguments: { pid: 1, window_id: 2, element_index: 3 } };
+      await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, child);
+      await relay(click, child);
+      await relay(click, child);
+      expect(relay.counters()).toMatchObject({ actions: 1, changed: 1, refusals: { stale: 1 } });
+    });
+
+    it("reports a copy that later actions cannot change", async () => {
+      const child: ChildCalls = { driverVersion: "0.28.2", call: async () => ({}) };
+      const relay = createComputerPipeline("linux", false, { evidence: true });
+      const before = relay.counters();
+      await relay({ name: "press_key", arguments: { key: "Escape" } }, child);
+      expect(before.actions).toBe(0);
+      expect(relay.counters().actions).toBe(1);
+    });
+  });
 });

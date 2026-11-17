@@ -1,6 +1,7 @@
 import type { ChildCalls, ToolCall } from "../../server/mcp-bridge.ts";
 import { namesSecret } from "../../server/saved-steps/screen-words.ts";
 import type { SlimStructured } from "../../server/saved-steps/driver-wire.ts";
+import { readWindow } from "../read.ts";
 
 type Result = Record<string, unknown>;
 type Element = Record<string, unknown>;
@@ -22,25 +23,6 @@ function secure(element: Element): boolean {
   const role = typeof element.role === "string" ? element.role.toLowerCase() : "";
   const label = typeof element.label === "string" ? element.label : "";
   return role.includes("secure") || role.includes("password") || namesSecret(label);
-}
-
-async function readWindow(child: ChildCalls, args: Record<string, unknown>): Promise<Result | null> {
-  if (typeof args.pid !== "number" || typeof args.window_id !== "number") return null;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), 4_000);
-    timer.unref?.();
-  });
-  try {
-    return await Promise.race([
-      child.call("get_window_state", { pid: args.pid, window_id: args.window_id, include_screenshot: false }),
-      timeout,
-    ]);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 function resultOf(verdict: TypingVerdict, failed: boolean): Result {

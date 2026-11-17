@@ -2,6 +2,7 @@ import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Stats } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { SPAWNED_PROXIES } from "../server/proxy-paths.ts";
+import { type ComputerGuards, guardEnv } from "./guards.ts";
 
 export const REQUIRED_LINUX_TOOLS = ["click", "get_window_state", "list_apps", "type_text"];
 // Electron publishes this identity in its Linux descriptor; the service revalidates it.
@@ -31,7 +32,7 @@ export function gatedLocalComputer(
   control: { url: string; token: string },
   journal = false,
   verifyEffects = false,
-  guards: { stale?: boolean; loop?: boolean; typing?: boolean; anchor?: boolean; scroll?: boolean; untrusted?: boolean; guidance?: boolean } = {},
+  guards: ComputerGuards = {},
 ): LocalComputerConnection {
   return {
     ...connection,
@@ -48,13 +49,7 @@ export function gatedLocalComputer(
       OMB_CONTROL_TOKEN: control.token,
       OMB_COMPUTER_JOURNAL: journal ? "1" : "0",
       OMB_COMPUTER_VERIFY: verifyEffects ? "1" : "0",
-      ...(guards.stale ? { OMB_COMPUTER_STALE: "1" } : {}),
-      ...(guards.loop ? { OMB_COMPUTER_LOOP: "1" } : {}),
-      ...(guards.typing ? { OMB_COMPUTER_TYPING: "1" } : {}),
-      ...(guards.anchor ? { OMB_COMPUTER_ANCHOR: "1" } : {}),
-      ...(guards.scroll ? { OMB_COMPUTER_SCROLL: "1" } : {}),
-      ...(guards.untrusted ? { OMB_COMPUTER_UNTRUSTED: "1" } : {}),
-      ...(guards.guidance ? { OMB_COMPUTER_GUIDANCE: "1" } : {}),
+      ...guardEnv(guards),
     },
   };
 }

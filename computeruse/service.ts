@@ -1,6 +1,8 @@
 // The descriptor and turn token travel in environment variables, never argv or logs.
 import { runMcpBridge } from "../server/mcp-bridge.ts";
 import { augmentedPath } from "../server/env-path.ts";
+import { createEvidenceReporter, evidenceUrl, postEvidence } from "./evidence.ts";
+import { guardsFromEnv } from "./guards.ts";
 import { localComputerCallQuery, localComputerRelay, localComputerResultLine } from "./guidance.ts";
 import { journalUrl } from "../server/saved-steps/journal-tap.ts";
 
@@ -12,15 +14,9 @@ const {
   OMB_CONTROL_TOKEN: token,
   OMB_COMPUTER_JOURNAL: journal,
   OMB_COMPUTER_VERIFY: verifyEffects,
-  OMB_COMPUTER_STALE: guardStale,
-  OMB_COMPUTER_LOOP: guardLoops,
-  OMB_COMPUTER_TYPING: verifyTyping,
-  OMB_COMPUTER_ANCHOR: anchorTargets,
-  OMB_COMPUTER_SCROLL: verifyScroll,
-  OMB_COMPUTER_UNTRUSTED: wrapScreen,
-  OMB_COMPUTER_GUIDANCE: showGuidance,
-  ...childEnv
+  ...environment
 } = process.env;
+const { guards, rest: childEnv } = guardsFromEnv(environment);
 
 let args: string[];
 try {
@@ -38,6 +34,13 @@ try {
   process.exit(2);
 }
 
+const pipeline = localComputerRelay(platform ?? process.platform, verifyEffects === "1", guards);
+const reporter = guards.evidence
+  ? createEvidenceReporter({ post: postEvidence(evidenceUrl(url!), token!), counters: pipeline.counters })
+  : null;
+// The service can outlive its turn or not, so totals go out as actions finish; this only catches the last one.
+if (reporter) process.once("beforeExit", () => void reporter.flush());
+
 runMcpBridge({
   command: command!,
   args,
@@ -45,6 +48,9 @@ runMcpBridge({
   label: "Local Cua Driver",
   gate: { url: url!, token: token!, describe: localComputerCallQuery },
   ...(journal === "1" ? { journal: { url: journalUrl(url!), token: token! } } : {}),
-  rewriteResponse: (line) => localComputerResultLine(line, wrapScreen === "1", showGuidance === "1"),
-  relay: localComputerRelay(platform ?? process.platform, verifyEffects === "1", { stale: guardStale === "1", loop: guardLoops === "1", typing: verifyTyping === "1", anchor: anchorTargets === "1", scroll: verifyScroll === "1" }),
+  rewriteResponse: (line) => localComputerResultLine(line, guards.untrusted === true, guards.guidance === true),
+  relay: (call, child) => {
+    const answer = pipeline(call, child);
+    return answer && reporter ? answer.finally(() => reporter.note()) : answer;
+  },
 });
