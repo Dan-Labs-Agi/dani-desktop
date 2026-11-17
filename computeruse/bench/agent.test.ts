@@ -45,18 +45,29 @@ describe("the scripted agent", () => {
     expect(desktop.snapshot().api.selected).toBe("D");
   });
 
-  it("reads again and tries once more when told its click may have landed on nothing", async () => {
+  it("reads again and tries once more when the window shows no change and the step says repeating is safe", async () => {
     const swallowing: DesktopSpec = { windows: [{ id: 1, title: "W", app: "A", elements: [
       { role: "AXButton", label: "Apply", inertClicks: 1, on: [{ do: "setSetting", name: "applied", value: "yes" }] }] }] };
     const { rpc, desktop } = direct(createDesktop(swallowing));
     const telling: Rpc = async (name, args) => {
       const result = await rpc(name, args);
       return name === "click" && desktop.snapshot().settings.applied === undefined
-        ? { ...result, content: [...result.content!, { type: "text", text: "The click was sent and the window did not change afterwards, so it may have landed on nothing." }] } : result;
+        ? { ...result, content: [...result.content!, { type: "text", text: "The click was sent, and the window shows no change afterwards." }] } : result;
     };
-    await run([{ do: "click", window: "W", label: "Apply" }], telling);
+    await run([{ do: "click", window: "W", label: "Apply", safeToRepeat: true }], telling);
     expect(desktop.snapshot().settings.applied).toBe("yes");
     expect(desktop.snapshot().api["calls.click"]).toBe("2");
+  });
+
+  it("does not repeat a click only because the window shows no change, unless the step says repeating is safe", async () => {
+    const saving: DesktopSpec = { windows: [{ id: 1, title: "W", app: "A", elements: [{ role: "AXButton", label: "Add", on: [{ do: "setApi", key: "added", value: "1" }] }] }] };
+    const { rpc, desktop } = direct(createDesktop(saving));
+    const telling: Rpc = async (name, args) => {
+      const result = await rpc(name, args);
+      return name === "click" ? { ...result, content: [...result.content!, { type: "text", text: "The click was sent, and the window shows no change afterwards." }] } : result;
+    };
+    await run([{ do: "click", window: "W", label: "Add" }], telling);
+    expect(desktop.snapshot().api["calls.click"]).toBe("1");
   });
 
   it("does not read the notes it was never shown: without them a swallowed click is simply lost", async () => {
@@ -72,9 +83,9 @@ describe("the scripted agent", () => {
     const { rpc, desktop } = direct(createDesktop(mail));
     const telling: Rpc = async (name, args) => {
       const result = await rpc(name, args);
-      return name === "click" ? { ...result, content: [...result.content!, { type: "text", text: "The window did not change afterwards, so it may have landed on nothing." }] } : result;
+      return name === "click" ? { ...result, content: [...result.content!, { type: "text", text: "The click was sent, and the window shows no change afterwards." }] } : result;
     };
-    await run([{ do: "click", window: "Mail", label: "Send" }], telling);
+    await run([{ do: "click", window: "Mail", label: "Send", safeToRepeat: true }], telling);
     expect(desktop.snapshot().api["calls.click"]).toBe("1");
   });
 
@@ -117,6 +128,18 @@ describe("the scripted agent", () => {
       { do: "read", window: "Sheet", record: { key: "plain", startsWith: "Screen data from" } },
     ], rpc);
     expect(out.extracted).toEqual({ total: "42", last: "Zed", plain: "no" });
+  });
+
+  it("reads what a field holds, and an empty string for a field whose value it was not given when the step allows it", async () => {
+    const form: DesktopSpec = { windows: [{ id: 1, title: "Form", app: "Forms", elements: [{ role: "AXTextField", label: "Body", value: "draft" }, { role: "AXButton", label: "Go" }] }] };
+    const { rpc } = direct(createDesktop(form));
+    const out = await run([
+      { do: "extract", window: "Form", readField: "Body", as: "body" },
+      { do: "extract", window: "Form", readField: "Go", optional: true, as: "go" },
+    ], rpc);
+    expect(out.extracted).toEqual({ body: "draft", go: "" });
+    const strict = await run([{ do: "extract", window: "Form", readField: "Go", as: "go" }], rpc);
+    expect(strict.scriptError).toMatch(/shows no value/);
   });
 
   it("reports a script that names something that is not on screen, rather than guessing", async () => {

@@ -45,12 +45,18 @@ const text = z.string().min(1);
 export const intentSchema = z.discriminatedUnion("do", [
   z.object({ do: z.literal("read"), window: text, record: z.object({ key: text, startsWith: text }).strict().optional() }).strict(),
   z.object({ do: z.literal("click"), window: text, label: text, via: z.enum(["index", "token"]).optional(),
-    fresh: z.boolean().optional(), repeat: z.number().int().min(1).max(10).optional() }).strict(),
+    fresh: z.boolean().optional(), repeat: z.number().int().min(1).max(10).optional(),
+    /** The click does no harm done twice, so a window that shows no change is worth trying again. */
+    safeToRepeat: z.literal(true).optional() }).strict(),
   z.object({ do: z.literal("set"), window: text, label: text, value: z.string() }).strict(),
   z.object({ do: z.literal("scroll"), window: text, direction: z.enum(["down", "up"]), amount: z.number().int().min(1).optional(),
     times: z.number().int().min(1).max(10).optional() }).strict(),
-  z.object({ do: z.literal("extract"), window: text, as: text, after: text.optional(), last: z.literal(true).optional() }).strict()
-    .refine((value) => (value.after === undefined) !== (value.last === undefined), "name the element to read after, or ask for the last one"),
+  z.object({ do: z.literal("extract"), window: text, as: text, after: text.optional(), last: z.literal(true).optional(),
+    /** Read what the field with this label holds. `optional`: a field whose value the agent was not given reads as empty. */
+    readField: text.optional(), optional: z.literal(true).optional() }).strict()
+    .refine((value) => [value.after, value.last, value.readField].filter((entry) => entry !== undefined).length === 1,
+      "name exactly one of: the element to read after, the last element, or a field whose value to read")
+    .refine((value) => value.optional === undefined || value.readField !== undefined, "only a field's value can be optional"),
 ]);
 
 /** A task for the fixture world: the schema's own fields, the desktop it runs on, who answers the person's questions,

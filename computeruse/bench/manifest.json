@@ -53,6 +53,10 @@
       "discriminates": true
     },
     {
+      "id": "read-field-value",
+      "discriminates": true
+    },
+    {
       "id": "repeated-unchanged-action",
       "discriminates": true
     }

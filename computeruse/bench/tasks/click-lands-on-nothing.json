@@ -44,7 +44,8 @@
     {
       "do": "click",
       "window": "Options",
-      "label": "Apply"
+      "label": "Apply",
+      "safeToRepeat": true
     }
   ]
 }

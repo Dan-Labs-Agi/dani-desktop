@@ -23,6 +23,7 @@ const ABLATIONS: Array<[string, Profile]> = [
   ["click-lands-on-nothing", without("effects", "stale", "anchor", "loop")],
   ["typing-does-not-take", without("typing")],
   ["injected-instructions", without("untrusted")],
+  ["read-field-value", without("untrusted")],
   ["repeated-unchanged-action", without("loop")],
 ];
 

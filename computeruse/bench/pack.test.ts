@@ -22,9 +22,9 @@ function copy() {
 describe("the shipped task pack", () => {
   it("loads, validates against the schema, and lists every task file once", () => {
     const pack = loadPack(REAL);
-    expect(pack.tasks.length).toBe(16);
-    expect(new Set(pack.tasks.map((entry) => entry.task.id)).size).toBe(16);
-    expect(pack.tasks.filter((entry) => entry.discriminates).length).toBe(7);
+    expect(pack.tasks.length).toBe(17);
+    expect(new Set(pack.tasks.map((entry) => entry.task.id)).size).toBe(17);
+    expect(pack.tasks.filter((entry) => entry.discriminates).length).toBe(8);
     expect(pack.tasks.every((entry) => entry.task.world === "fixture" && entry.task.tier === 1)).toBe(true);
   });
 

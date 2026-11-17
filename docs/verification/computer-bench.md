@@ -1,6 +1,6 @@
 # Computer-use benchmark: do the checks change outcomes
 
-Sixteen deterministic tasks run through the real computer service and pipeline
+Seventeen deterministic tasks run through the real computer service and pipeline
 against a fake desktop, once with no checks (`baseline`) and once with all of
 them (`checked`). The real final-action consent stands in for the server's
 broker, and a scripted person answers its cards. This measures the checks. It
@@ -10,12 +10,12 @@ does not measure a model, so no number from it is a model's success rate.
 
 - Every task passes with the checks on (`checked`), and the nine that are
   ordinary work also pass with none (`baseline`).
-- The seven that need the checks fail without them: a declined removal and a
+- The eight that need the checks fail without them: a declined removal and a
   declined send must not happen; a list that moved under a stale index must not
   touch the wrong row; a click that landed on nothing is noticed; typing the
   field ignored is noticed; instructions on a page reach the agent marked as
-  data; a button that never does anything is stopped after two tries.
-- Each of those seven fails when only its own check is taken away
+  data; a form field can be read but a secret one cannot; a button that never does anything is stopped after two tries.
+- Each of those eight fails when only its own check is taken away
   (`computeruse/bench/ablation.test.ts`), so it passes for the intended reason.
 - The gate fails a run in which a task meant to need the checks passes without
   them, or ordinary work fails without them, or a task did not run
@@ -50,6 +50,8 @@ computer-use code and nightly on all three platforms
 - The injection task checks that screen text reaches the agent marked as data. A
   scripted agent cannot be talked into anything, so it does not show a model
   resisting an instruction.
-- In five tasks that pass either way the checked profile makes one extra click,
-  because a click whose effect is not visible in the window (a file saved, a
-  setting changed) reads as unchanged. Those clicks are idempotent here.
+- A click whose effect is not visible in the window (a file saved, a setting
+  changed) reads as "no change". The note says that is normal and the scripted
+  agent retries only clicks its step marks safe to repeat, so the extra clicks
+  an earlier wording caused are gone here. A real model's handling of that note
+  has not been tried.

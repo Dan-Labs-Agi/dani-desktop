@@ -8,7 +8,7 @@ This tracks the build items in [plan.md](plan.md). **Implemented** means code an
 | --- | --- | --- |
 | Foundation | Per-session state and ordered relay pipeline | `session.ts` and `pipeline.ts`; each stage decides per call whether it applies, so a new stage does not grow a condition list. |
 | A1 | Stale-target and repeated-action guards | A changed window blocks stale index/point actions until a fresh read; identical unchanged actions and excessive actions are refused. |
-| A1 | Untrusted screen-result wrapper | Marks screen text as data and removes field values and forged wrapper tags from window results. |
+| A1 | Untrusted screen-result wrapper | Marks screen text as data, strips forged wrapper tags, and removes the value of secure or secret-named fields. What an ordinary field holds is kept, clipped in the compact text, so a form can be read. |
 | A1 | Error-path audit | A relay that threw before returning a promise left the agent's call unanswered forever (`send()` rejected, `forward()` swallowed it). The bridge now answers it with a readable error, with a test that hangs without the fix. The four copies of "read the window with a deadline" are one bounded read (`read.ts`). |
 | A2 | Computer-use guidance | The optional tool-description text tells the model to read, act once, and verify. |
 | A3 | Verified typing | Reads the field back and reports matched, different, unreadable, or sensitive-field-not-checked, without echoing typed text. |
@@ -22,11 +22,11 @@ This tracks the build items in [plan.md](plan.md). **Implemented** means code an
 | B1 | Task schema | `bench/task.ts`, with a `fixture` world, intents, and a scripted person. |
 | B2 | Fixture world | `bench/world.ts` and `bench/desktop.ts`: the real service and pipeline against a data-driven fake desktop (windows, scrolling lists, files, settings, swallowed clicks, dropped typing), with the real final-action consent as the broker. |
 | B3 | Inspectable-state scorers | Pure file, database, setting, API, package, and extracted-value scorers. |
-| B4 | Task pack | 16 deterministic tasks in `bench/tasks/`, 7 of which need the checks. |
+| B4 | Task pack | 17 deterministic tasks in `bench/tasks/`, 8 of which need the checks. |
 | B5 | Executed reports | `pnpm bench:computer` runs both profiles, writes `evals/reports/computer/`, and gates the run. |
 | B6 | CI | `.github/workflows/computer-bench.yml`: one platform on pull requests that touch this code, all three nightly, reports kept even on failure. |
 
-Last run: baseline 9 of 16, checked 16 of 16, gate ok. Each of the 7 tasks that need the checks fails when only its own check is removed (`bench/ablation.test.ts`).
+Last run: baseline 9 of 17, checked 17 of 17, gate ok, and no extra actions from the checks on the tasks that pass either way. Each of the 8 tasks that need the checks fails when only its own check is removed (`bench/ablation.test.ts`).
 
 ## Not done, and why
 
@@ -34,7 +34,7 @@ Last run: baseline 9 of 16, checked 16 of 16, gate ok. Each of the 7 tasks that 
 | --- | --- | --- |
 | A0 | Real-driver baseline | Needs a real click and `set_value` against a disposable Windows window. Driving a real desktop is not something to do unattended on a person's machine. Nothing here has met a real driver. |
 | B2 | Local VM and container worlds | Need a container runtime. The fixture world is the first world; the schema and runner take others. |
-| B3 | Screenshot or DOM scoring | Only for end states that cannot be inspected; none of the 16 needs it. |
+| B3 | Screenshot or DOM scoring | Only for end states that cannot be inspected; none of the 17 needs it. |
 | B7 | Live-model tier | Needs real models and spend. No number from this benchmark may be quoted as a model's success rate. |
 | C1 | Other surfaces on the pipeline | The pipeline already depends only on `ChildCalls` (a call and a driver version), which is the surface contract. Container, cloud and lent computers should join one at a time, each after the pack passes on it; none has been run. |
 | C2 | `read_window` | Plan said after C1. A relayed answer is not journalled, so any turn that used it could never save a recipe; that cost wants a decision first. |
@@ -46,9 +46,9 @@ Last run: baseline 9 of 16, checked 16 of 16, gate ok. Each of the 7 tasks that 
 
 - **A silent drop in the bridge**, described above. Fixed.
 - **Effect verification called working typing "unchanged".** The fingerprint leaves out field contents on purpose, so after a good `type_text` the bot was told the action "may have landed on nothing", and for `type_text`, which appends, a retry types the text twice. Typing is now excluded from effect verification and checked by reading the field. Found by the benchmark; the unit tests had never typed.
-- **Effect verification is blind to effects the window does not show.** A click that saves a file, changes a setting, or opens a different window reads "unchanged". In 5 of the 9 fixture tasks that pass with or without the checks, the checked profile made one extra click for this reason. Those clicks were idempotent; a non-idempotent one would be doubled. The scripted agent retries on the note without the nuance in its wording ("only do this again if the window shows the work still has to be done"), so this probably overstates the harm, but it is a reason to keep the switch off until a real model's behaviour on it is seen.
+- **Effect verification is blind to effects the window does not show.** A click that saves a file, changes a setting, or opens a different window reads "unchanged". Before the fix the note led with "may have landed on nothing", and in 5 of the 9 fixture tasks that pass with or without the checks the agent made one extra click because of it. The note now says no change is normal when the effect is somewhere the window does not show, names those cases, and asks the bot to check where the effect should have appeared before acting a second time. The scripted agent retries only a click its step marks `safeToRepeat`, never a final action, and the extra clicks are gone (5 of 9 to 0). That is the scripted agent's judgment, not a model's: whether wording alone keeps a real model from doubling a click that is not safe to repeat has not been tried. The window still cannot tell "worked elsewhere" from "landed on nothing"; only reading where the effect shows would.
 - **The effect check alone rescued the stale-index task.** After a click lands on the wrong row the window "did not change", so the bot re-reads and clicks the right row: the right outcome, after the wrong click. The stale guard's value is preventing that wrong click, so the task now treats a wrong-row click as a forbidden effect and the ablation fails without the guard.
-- **`wrapComputerScreenData` removes every field value.** Any task that needs a field's contents cannot be done with it on; the pack reads static text labels for that reason.
+- **`wrapComputerScreenData` used to remove every field value**, so no task that reads a field's contents could be done with it on. It now keeps the value of an ordinary field and removes only a secure field's or one named for a secret (the same word list saved steps use). The kept value has forged wrapper tags stripped and is clipped in the compact text line. The cost: a value the model reads can carry hostile text, which is marked as data like every other label but is not otherwise filtered. Fixture check: `read-field-value` reads a form field and must not see a card number; it fails without the wrapper. Names and words that mean "secret" in other languages are covered only as far as that word list is.
 - **Failures already on this branch's base**, none touched: `server/index.test.ts` "parks the turn at the wait ceiling…", "asks the person to sign in with one card…" and "brings a sign-in started in a browser…" fail on the commit this work started from; five tests in `scripts/ci-workflow.test.ts` assert a `ci.yml` shape that predates the sharding change.
 
 ## Verification

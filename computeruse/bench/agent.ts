@@ -22,7 +22,7 @@ export interface AgentRun {
   scriptError?: string;
 }
 
-interface Element { element_index: number; element_token?: string; role: string; label?: string }
+interface Element { element_index: number; element_token?: string; role: string; label?: string; value?: unknown }
 interface Win { id: number; pid: number }
 
 class GaveUp extends Error {}
@@ -32,12 +32,13 @@ const textOf = (result: RpcResult) => (result.content ?? []).map((part) => part.
 
 type Reaction = "done" | "reread" | "again" | "stop";
 
-/** A final action is never repeated because it looked unchanged: a second send is what the note warns about. */
-function react(result: RpcResult, said: string, tool: string, final: boolean): Reaction {
+/** No change in the window is ordinary for an action whose effect it cannot show, so it is acted on only when the step says
+ * repeating does no harm, and never for a final action: a second send is what the note warns about. */
+function react(result: RpcResult, said: string, tool: string, final: boolean, repeatable: boolean): Reaction {
   if (/call it again/i.test(said)) return "again";
   if (result.isError) return /read it again/i.test(said) ? "reread" : "stop";
   if (final) return "done";
-  if (/did not change|landed on nothing/i.test(said) || (tool === "set_value" && /differed/i.test(said))) return "reread";
+  if ((repeatable && /shows no change/i.test(said)) || (tool === "set_value" && /differed/i.test(said))) return "reread";
   return "done";
 }
 
@@ -73,7 +74,7 @@ export async function runScriptedAgent(intents: readonly Intent[], rpc: Rpc): Pr
     return { elements, result };
   };
 
-  const act = async (tool: string, title: string, label: string, extra: Record<string, unknown>, options: { via?: "index" | "token"; fresh?: boolean }) => {
+  const act = async (tool: string, title: string, label: string, extra: Record<string, unknown>, options: { via?: "index" | "token"; fresh?: boolean; repeatable?: boolean }) => {
     const win = await locate(title);
     let reread = options.fresh === true;
     let retried = false;
@@ -87,7 +88,7 @@ export async function runScriptedAgent(intents: readonly Intent[], rpc: Rpc): Pr
       }
       const result = await call(tool, args);
       const said = textOf(result);
-      const reaction = react(result, said, tool, namesFinalAction(label));
+      const reaction = react(result, said, tool, namesFinalAction(label), options.repeatable === true);
       if (!retried && (reaction === "reread" || reaction === "again")) {
         retried = true;
         reread = reaction === "reread";
@@ -105,7 +106,7 @@ export async function runScriptedAgent(intents: readonly Intent[], rpc: Rpc): Pr
         if (intent.record) extracted[intent.record.key] = textOf(result).startsWith(intent.record.startsWith) ? "yes" : "no";
       } else if (intent.do === "click") {
         for (let time = 0; time < (intent.repeat ?? 1); time += 1) {
-          await act("click", intent.window, intent.label, {}, { ...(intent.via ? { via: intent.via } : {}), ...(intent.fresh ? { fresh: true } : {}) });
+          await act("click", intent.window, intent.label, {}, { ...(intent.via ? { via: intent.via } : {}), ...(intent.fresh ? { fresh: true } : {}), ...(intent.safeToRepeat ? { repeatable: true } : {}) });
         }
       } else if (intent.do === "set") {
         await act("set_value", intent.window, intent.label, { value: intent.value }, {});
@@ -118,10 +119,17 @@ export async function runScriptedAgent(intents: readonly Intent[], rpc: Rpc): Pr
       } else {
         const { elements } = await read(await locate(intent.window));
         const labelled = elements.filter((element) => element.label !== undefined);
-        const found = intent.last
-          ? labelled.at(-1)
-          : labelled[labelled.findIndex((element) => element.label === intent.after) + 1];
-        const reading = intent.last || labelled.some((element) => element.label === intent.after) ? found?.label : undefined;
+        let reading: string | undefined;
+        if (intent.readField !== undefined) {
+          const field = elements.find((element) => element.label === intent.readField);
+          if (!field) throw new ScriptError(`There is no ${intent.readField} in ${intent.window}.`);
+          reading = typeof field.value === "string" ? field.value : intent.optional ? "" : undefined;
+          if (reading === undefined) throw new ScriptError(`${intent.readField} in ${intent.window} shows no value.`);
+        } else if (intent.last) {
+          reading = labelled.at(-1)?.label;
+        } else if (labelled.some((element) => element.label === intent.after)) {
+          reading = labelled[labelled.findIndex((element) => element.label === intent.after) + 1]?.label;
+        }
         if (reading === undefined) throw new ScriptError(`There is nothing to read ${intent.last ? "last" : `after ${intent.after}`} in ${intent.window}.`);
         extracted[intent.as] = reading;
       }

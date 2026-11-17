@@ -38,7 +38,8 @@
       "do": "click",
       "window": "Panel",
       "label": "Refresh",
-      "repeat": 6
+      "repeat": 6,
+      "safeToRepeat": true
     }
   ]
 }
