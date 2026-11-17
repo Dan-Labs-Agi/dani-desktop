@@ -111,10 +111,10 @@ describe("an action carried out with its effect verified", () => {
   });
 
   it("verifies the actions that act on a window, and leaves every observation alone", () => {
-    for (const tool of ["click", "double_click", "right_click", "type_text", "set_value", "press_key", "hotkey"]) {
+    for (const tool of ["click", "double_click", "right_click", "press_key", "hotkey"]) {
       expect(VERIFIED_ACTIONS.has(tool)).toBe(true);
     }
-    for (const tool of ["get_window_state", "list_apps", "screenshot", "launch_app", "drag", "move_cursor"]) {
+    for (const tool of ["get_window_state", "list_apps", "screenshot", "launch_app", "drag", "move_cursor", "type_text", "set_value"]) {
       expect(VERIFIED_ACTIONS.has(tool)).toBe(false);
     }
   });

@@ -36,6 +36,13 @@ on an effect that never happened.
   read-back: it sent nothing.
 - An action with no `pid` and `window_id` to address, and every observation
   tool, goes to the driver untouched.
+- Typing (`type_text`, `set_value`) is never given a verdict. The fingerprint
+  leaves out what a field holds, so it would call typing that worked
+  "unchanged" and send the bot to type it again, which for `type_text` types the
+  text twice. Typing is checked by `verifyComputerTyping`, which reads the field.
+- A click that opens a different window reads "unchanged", because only the
+  window it was sent to is read. The bot is told to read the window and decide;
+  a click that is safe to repeat is repeated, one that is not should not be.
 - On Windows the sent-click answer and one-character-at-a-time typing still
   apply, and the verdict is added to them.
 - With the switch off, `OMB_COMPUTER_VERIFY` is `0` and no read-back is made,

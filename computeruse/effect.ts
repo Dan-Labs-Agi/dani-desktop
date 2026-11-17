@@ -8,9 +8,11 @@ import { READ_TIMEOUT_MS, readWindow } from "./read.ts";
 
 type JsonObject = Record<string, unknown>;
 
-/** The actions that change a window, so an answer about them is worth no more than a read-back of what they changed. */
+/** The actions that change a window, so an answer about them is worth no more than a read-back of what they changed.
+ * Typing is not among them: the fingerprint leaves out what a field holds, so it would call typing that worked
+ * "unchanged" and send the bot to type it again; typing is checked by reading the field itself. */
 export const VERIFIED_ACTIONS: ReadonlySet<string> = new Set([
-  "click", "double_click", "right_click", "type_text", "set_value", "press_key", "hotkey",
+  "click", "double_click", "right_click", "press_key", "hotkey",
 ]);
 
 export type EffectVerdict = "changed" | "unchanged" | "unobserved";

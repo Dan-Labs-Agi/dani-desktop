@@ -243,4 +243,21 @@ describe("computer pipeline", () => {
       expect(await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, reader)).toBe(mailWindow);
     });
   });
+
+  describe("typing, whose effect the window's shape cannot show", () => {
+    const field = { structuredContent: { pid: 1, window_id: 2, app_name: "Notes", window_title: "Note", elements_complete: true, elements: [
+      { element_index: 1, role: "AXWindow", depth: 0 },
+      { element_index: 2, role: "AXTextField", label: "Body", depth: 1, parent_index: 1, value: "" },
+    ] } };
+    const child = (): ChildCalls => ({ driverVersion: "0.28.2", call: async (name) => (name === "get_window_state" ? field : { content: [{ type: "text", text: "typed" }] }) });
+
+    it("is never called unchanged by the effect check, which would tell the bot to type it again", async () => {
+      for (const tool of ["type_text", "set_value"]) {
+        const relay = createComputerPipeline("linux", true);
+        await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, child());
+        const answer = await relay({ name: tool, arguments: { pid: 1, window_id: 2, element_index: 2, text: "hi", value: "hi" } }, child());
+        expect(JSON.stringify(answer ?? null), tool).not.toMatch(/did not change|landed on nothing/);
+      }
+    });
+  });
 });
