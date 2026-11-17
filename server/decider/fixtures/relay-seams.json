@@ -23,7 +23,7 @@
   "seams": {
     "keyCheck": {
       "state": {
-        "purpose": "DaniBot is checking that a decision-model key works."
+        "purpose": "Dani Bot is checking that a decision-model key works."
       },
       "question": "Is this a connection check?"
     },
@@ -74,7 +74,7 @@
       "accepts": true,
       "body": {
         "state": {
-          "purpose": "DaniBot is checking that a decision-model key works."
+          "purpose": "Dani Bot is checking that a decision-model key works."
         },
         "model": "jev-latest",
         "questions": {

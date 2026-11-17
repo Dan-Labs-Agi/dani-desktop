@@ -6,17 +6,25 @@ import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
-import { SPEECH_MODEL_BUNDLE, SPEECH_MODEL_BUNDLE_BYTES } from "../server/speech-model-bundle.ts";
+import { existsSync } from "node:fs";
+// The desktop-only checkout excludes this optional licensed manifest.
+const manifestUrl = new URL("../server/speech-model-bundle.ts", import.meta.url);
+export const speechModelsAvailable = existsSync(fileURLToPath(manifestUrl));
+const manifest = speechModelsAvailable ? await import(manifestUrl.href) : null;
+const SPEECH_MODEL_BUNDLE = manifest?.SPEECH_MODEL_BUNDLE;
+const SPEECH_MODEL_BUNDLE_BYTES = manifest?.SPEECH_MODEL_BUNDLE_BYTES;
+export const UNAVAILABLE = "Local speech preparation is unavailable: this checkout does not include the optional speech-model manifest.";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const output = join(root, "dist-native", "speech-models");
-export const assets = Object.freeze([
+export const assets = Object.freeze(SPEECH_MODEL_BUNDLE ? [
   Object.freeze({ ...SPEECH_MODEL_BUNDLE.stt, path: join("whisper", SPEECH_MODEL_BUNDLE.stt.file) }),
   Object.freeze({ ...SPEECH_MODEL_BUNDLE.tts.model, path: join("kokoro", SPEECH_MODEL_BUNDLE.tts.model.file) }),
   Object.freeze({ ...SPEECH_MODEL_BUNDLE.tts.voice, path: join("kokoro", "voices", SPEECH_MODEL_BUNDLE.tts.voice.file) }),
-]);
+] : []);
 
 export function assertManifest(entries = assets) {
+  if (!speechModelsAvailable) throw new Error(UNAVAILABLE);
   const paths = new Set();
   let bytes = 0;
   for (const asset of entries) {

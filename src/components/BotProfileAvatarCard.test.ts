@@ -47,14 +47,14 @@ describe("BotProfileAvatarCard character picker", () => {
   });
 
   it("marks the bot's own character pressed and the rest unpressed", () => {
-    const markup = renderCard(makeBot());
+    const markup = renderCard(makeBot({ name: "Scout" }));
 
     expect(markup).toContain('aria-pressed="true" aria-label="Sweep"');
     expect(markup).toContain('aria-pressed="false" aria-label="Dani"');
   });
 
   it("reflects an explicitly chosen character colour", () => {
-    const markup = renderCard(makeBot({ color: "pink" }));
+    const markup = renderCard(makeBot({ name: "Scout", color: "pink" }));
 
     expect(markup).toContain('aria-pressed="true" aria-label="Bow"');
     expect(markup).toContain('aria-pressed="false" aria-label="Sweep"');

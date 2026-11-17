@@ -67,7 +67,7 @@ RUN apt-get update \
     libatk-bridge2.0-0 libdrm2 libxkbcommon0 libatspi2.0-0 libcups2 \
     libxshmfence1 libgbm1 fonts-noto-color-emoji fonts-noto-cjk fonts-freefont-ttf \
   && rm -rf /var/lib/apt/lists/* \
-  && useradd --create-home --home-dir /data --shell /bin/bash maus
+  && useradd --create-home --home-dir /data --shell /bin/bash dani
 # The bots' browser (docs/plans/browser-engine.md): the pinned agent-browser
 # and a Chrome for Testing with its libraries, so a server bot can browse.
 # Pin here and in server/browser-engine-release.ts together.
@@ -145,8 +145,8 @@ RUN echo "engines: ${CLOUD_HOME_ENGINES:-none} ${ENGINES_CACHE_TAG}" \
   && rm -rf /tmp/omb-build-home /tmp/node-compile-cache
 COPY deploy/fly/Caddyfile /app/cloud/Caddyfile
 # The root supervisor runs /app's code and hands the server its secrets, so
-# no file there may be one `maus` can change: unlike the server image's, these
-# copies stay root's. Only the /data volume is maus's; the launcher refuses to
+# no file there may be one `dani` can change: unlike the server image's, these
+# copies stay root's. Only the /data volume is dani's; the launcher refuses to
 # start otherwise (codeTrustProblem), and this check refuses to build.
 # DuckDB and resvg change on a version bump, not per commit: beneath the app files.
 COPY --from=build /src/dist-native/duckdb/linux-x64 ./duckdb
@@ -168,9 +168,9 @@ EXPOSE 8080
 # Fly uses the checks in fly.toml; this one serves a plain `docker run`.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
   CMD curl -sf http://127.0.0.1:8080/api/health | grep -q danibot || exit 1
-# Starts as root: hands a fresh volume to `maus`, runs the server and the edge
-# as `maus`, and hands the server its secrets over a pipe, never an
-# environment `maus` could read (server/cloud-home-start.ts). It runs only
+# Starts as root: hands a fresh volume to `dani`, runs the server and the edge
+# as `dani`, and hands the server its secrets over a pipe, never an
+# environment `dani` could read (server/cloud-home-start.ts). It runs only
 # root's code from the image, never anything on the volume.
 USER root
 CMD ["node", "/app/dist-server/cloud-home-start.js"]
@@ -180,13 +180,13 @@ FROM runtime AS server
 # Optional engine CLIs baked into the image (space-separated npm packages).
 ARG ENGINES=""
 RUN if [ -n "$ENGINES" ]; then HOME=/tmp/omb-build-home npm install -g $ENGINES && rm -rf /tmp/omb-build-home /tmp/node-compile-cache; fi
-COPY --from=build --chown=maus:maus /src/dist-native/duckdb/linux-x64 ./duckdb
-COPY --from=build --chown=maus:maus /src/dist-server ./dist-server
-COPY --from=build --chown=maus:maus /src/dist ./dist
-COPY --from=build --chown=maus:maus /src/skills ./skills
+COPY --from=build --chown=dani:dani /src/dist-native/duckdb/linux-x64 ./duckdb
+COPY --from=build --chown=dani:dani /src/dist-server ./dist-server
+COPY --from=build --chown=dani:dani /src/dist ./dist
+COPY --from=build --chown=dani:dani /src/skills ./skills
 ENV HOME=/data
 VOLUME ["/data"]
-USER maus
+USER dani
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -sf http://127.0.0.1:8799/api/health | grep -q danibot || exit 1
 # The launcher runs dist-server/index.js and starts it again when it asks to

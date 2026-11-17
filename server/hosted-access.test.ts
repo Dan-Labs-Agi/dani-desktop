@@ -1,6 +1,6 @@
 // The HTTPS backchannel is injected, never redirected to a real portal.
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { request, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,6 +12,9 @@ import { SessionRegistry } from "./sessions.ts";
 import { HOSTED_CONTRACT_HEADER, HOSTED_CONTRACT_METADATA } from "./hosted-contract.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// The hosted bridge ships in the proprietary enterprise layer; the OSS repo has no
+// enterprise/server/workspace-access.ts, so this suite runs only where the layer exists.
+const HAS_WORKSPACE_ACCESS = existsSync(join(ROOT, "enterprise/server/workspace-access.ts"));
 let PORT: number;
 const HOST = "acme.example.test";
 const EMAIL = "member@example.test";
@@ -151,7 +154,7 @@ afterAll(async () => {
   await removeTempDir(home);
 });
 
-describe("hosted bridge in the full server", () => {
+describe.skipIf(!HAS_WORKSPACE_ACCESS)("hosted bridge in the full server", () => {
   it("loads the optional hook before listening, redirects hosted navigation, and disables legacy sign-in", async () => {
     expect(log).toContain("enterprise edition for Fixture");
     expect((await call("/")).location).toBe("/api/auth/hosted/start");

@@ -11,7 +11,7 @@ This page records what is implemented and what still needs platform proof. It is
 - Speech during generation or playback aborts the local turn, stops playback, and asks the harness to interrupt the Hermes turn.
 - Reconnect retries are bounded and abortable.
 - The optional OpenAI Realtime path accepts session material only from a configured credential-free HTTPS OAuth proxy. The renderer never receives a long-lived provider credential.
-- Whisper and Kokoro model files have pinned sizes and SHA-256 digests in `server/speech-model-bundle.ts`.
+- Whisper and Kokoro model payloads are not shipped by this checkout.
 
 ## Not yet verified
 

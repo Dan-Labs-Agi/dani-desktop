@@ -12,6 +12,7 @@ const fs = await import("node:fs");
 const { DATA_DIR } = await import("./config.ts");
 const { batchSaves } = await import("./save-batch.ts");
 const { Store } = await import("./store.ts");
+const { closeMessageDb } = await import("./message-db.ts");
 const { RoutineManager } = await import("./routines.ts");
 type RuntimeEvent = import("./contracts.ts").RuntimeEvent;
 
@@ -23,6 +24,7 @@ const bots = () => readFileSync(join(DATA_DIR, "bots.json"), "utf8");
 
 describe("bots.json saves", () => {
   beforeEach(() => {
+    closeMessageDb();
     rmSync(DATA_DIR, { recursive: true, force: true });
     vi.mocked(fs.renameSync).mockClear();
   });

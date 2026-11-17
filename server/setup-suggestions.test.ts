@@ -24,7 +24,8 @@ describe("the prompt", () => {
     for (const { id, ctx } of evaluation.scenarios) {
       const prompt = setupSuggestionPrompt({ name: ctx.name ?? undefined, title: ctx.title, department: ctx.department, apps: ctx.apps ?? [],
         aboutMe: ctx.about || undefined, otherJobs: ctx.jobs ?? [], language: ctx.language, canBrowse: ctx.canBrowse ?? true });
-      expect(prompt, id).toBe(evaluation.prompts[id]);
+      // Preserve the recorded run; only the product display name migrated.
+      expect(prompt, id).toBe(evaluation.prompts[id]!.replace("in DaniBot,", "in Dani Bot,"));
     }
   });
 

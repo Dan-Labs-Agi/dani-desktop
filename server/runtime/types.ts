@@ -237,6 +237,8 @@ export interface RunInput {
   /** The awaited children parked on a question this turn passes on: a question not yet delivered, or, in the rerun
    * of a turn a restart cut, the questions that turn carried. */
   asked?: Assignment[];
+  /** Some awaited children are still open; this resume must not claim all work settled. */
+  partial?: boolean;
   /** For a continued turn: why it continues and, after a step cap, where
    * the steps so far are listed. */
   continuation?: { note: string; handoffPath?: string };

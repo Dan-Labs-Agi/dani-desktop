@@ -78,7 +78,7 @@ describe("sidebar bot row", () => {
 
   // Every density puts the badge on the avatar's bottom-left: the status dots own the bottom-right, and a mark at the
   // row's end sat under the hover actions (+, new folder, …) without lining up with them.
-  it.each<[SidebarDensity, string]>([["comfortable", "absolute -bottom-0.5 -left-0.5"], ["icons", "absolute -bottom-0.5 -left-0.5"]])(
+  it.each<[SidebarDensity, string]>([["comfortable", "absolute -bottom-0.5 -left-0.5"]])(
     "shows the model once in a %s row", (density, placement) => {
       const found = badges(render(bot("claude", "opus"), density));
       expect(found).toHaveLength(1);
@@ -86,8 +86,15 @@ describe("sidebar bot row", () => {
       expect(found[0]).toContain(placement);
     });
 
+  it.each([true, false])("keeps icon-only rows uncluttered and puts the model in their tooltip (advanced=%s)", (advanced) => {
+    fixture.advanced = advanced;
+    const markup = render(bot("claude", "opus"), "icons");
+    expect(badges(markup)).toHaveLength(0);
+    expect(markup).toContain("Model: Opus 4.1 (Claude)");
+  });
+
   // Simple mode shows the mark too (the owner's ask, 2026-10-22): a person sees which provider each bot runs on at a glance.
-  it.each<SidebarDensity>(["comfortable", "icons"])("shows the model once in a Simple mode %s row", (density) => {
+  it.each<SidebarDensity>(["comfortable"])("shows the model once in a Simple mode %s row", (density) => {
     fixture.advanced = false;
     const found = badges(render(bot("claude", "opus"), density));
     expect(found).toHaveLength(1);

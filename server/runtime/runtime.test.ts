@@ -361,13 +361,15 @@ describe("Runtime: one tree, one lane", () => {
     second.runtime.answer(asker.id, "eu");
     second.runtime.tick(); await flush();
     second.runtime.tick();
-    const [rootAsked, rootResume] = second.runner.runs.filter(r => r.a.id === root.id);
+    const rootTurns = second.runner.runs.filter(r => r.a.id === root.id);
+    const rootAsked = rootTurns[0], rootResume = rootTurns.at(-1);
     expect(rootAsked!.input.asked?.map(s => s.id)).toEqual([asker.id]);
     expect(rootAsked!.input.restartNote).toBe("");
     expect(rootResume!.input.resumed).toBe(true);
     expect(rootResume!.input.asked).toBeUndefined();
     expect(rootResume!.input.settled?.map(s => s.id)).toEqual([solo.id, lead.id, asker.id]);
-    expect(rootResume!.input.restartNote).toMatch(/restarted before your previous turn here finished.*A restart cut these teammates' turns: solo \(resumed once in place/);
+    expect(rootTurns.some(turn => /restarted before your previous turn here finished.*A restart cut these teammates' turns: solo \(resumed once in place/.test(turn.input.restartNote))).toBe(true);
+    expect(rootResume!.input.restartNote).toBe("");
     await flush();
     expect(store.get(root.id)?.status).toBe("completed");
     invariants(second);
@@ -843,7 +845,7 @@ describe("Runtime: a root's later executions (every turn a root)", () => {
     expect(store.inbox({ threadId: "chief-chat" })).toEqual([]);
     second.runtime.tick();
     expect(second.runner.runs.map(r => r.a.id)).toEqual(["root-cut"]);
-    expect(second.runner.runs[0]!.input).toMatchObject({ turn: "rerun", resumed: true, restartNote: expect.stringMatching(/^DaniBot restarted while your previous turn here was running/) });
+    expect(second.runner.runs[0]!.input).toMatchObject({ turn: "rerun", resumed: true, restartNote: expect.stringMatching(/^Dani Bot restarted while your previous turn here was running/) });
     expect(store.get("root-cut")).toMatchObject({ status: "running", executions: 2 });
     second.runtime.close();
 
@@ -932,12 +934,12 @@ describe("Runtime: a cut turn that already acted outward (contract §5)", () => 
 describe("tree.ts: the outward wording and the loop guard", () => {
   it("outwardDetail dedupes, trims and clips the labels, names at most four as verb phrases, and keeps the exact prefix and close", () => {
     expect(outwardDetail(["git push", "git push", "  GMAIL_SEND_EMAIL  "]))
-      .toBe("Interrupted by an DaniBot restart after it already pushed (git push), sent an email (GMAIL_SEND_EMAIL); not resumed, so nothing is done twice.");
+      .toBe("Interrupted by a Dani Bot restart after it already pushed (git push), sent an email (GMAIL_SEND_EMAIL); not resumed, so nothing is done twice.");
     expect(outwardDetail(["git commit", "STRIPE_CREATE_REFUND", "SLACK_SEND_MESSAGE", "TWITTER_CREATION_OF_A_POST", "COMPOSIO_PROXY_EXECUTE", "x"]))
       .toBe(`${INTERRUPTED_OUTWARD} committed (git commit), made a payment (STRIPE_CREATE_REFUND), sent a message (SLACK_SEND_MESSAGE), posted (TWITTER_CREATION_OF_A_POST) and 2 more; not resumed, so nothing is done twice.`);
     expect(outwardDetail(["COMPOSIO_PROXY_EXECUTE"])).toContain("completed an outward action (COMPOSIO_PROXY_EXECUTE)");
     const long = outwardDetail([`git push ${"origin/".repeat(20)}`, "", "   "]);
-    expect(long).toMatch(/^Interrupted by an DaniBot restart after it already pushed \(git push [^)]{0,40}\); not resumed, so nothing is done twice\.$/);
+    expect(long).toMatch(/^Interrupted by a Dani Bot restart after it already pushed \(git push [^)]{0,40}\); not resumed, so nothing is done twice\.$/);
     expect(long.length).toBeLessThan(200);
     expect(outwardDetail(["a\nb\tc"])).toContain("(a b c)");
   });
@@ -1013,7 +1015,34 @@ describe("Runtime: a teammate's question reaches the requester waiting on it", (
     invariants(w);
   });
 
-  it("a question parked before a restart resumes the requester once after it, and not again after the next restart", async () => {
+  it("delivers a sibling that finishes after the sign-in question once, without answering the question", async () => {
+    const w = world(asks);
+    const root = w.runtime.begin(beginReq());
+    const builder = ok(w.runtime.enqueue(toBot("builder", root.id)));
+    const tester = ok(w.runtime.enqueue(toBot("tester", root.id)));
+    w.runtime.end(root.id, { ok: true, text: "Handed out" });
+    w.runtime.tick(); await flush();
+    w.runtime.tick(); await flush();
+    expect(runsOf(w, root.id)).toHaveLength(1);
+    expect(runsOf(w, root.id)[0].input.asked?.map(a => a.id)).toEqual([builder.id]);
+    await w.runner.release(tester.id, { kind: "completed", text: "independent result" });
+    w.runtime.tick(); await flush();
+    expect(runsOf(w, root.id)).toHaveLength(2);
+    expect(runsOf(w, root.id)[1].input).toMatchObject({ partial: true, settled: [{ id: tester.id, result: "independent result" }] });
+    expect(runsOf(w, root.id)[1].input.asked).toBeUndefined();
+    expect(w.store.get(builder.id)).toMatchObject({ status: "needs_input", question: "Which region?" });
+    expect(w.store.get(builder.id)?.answer).toBeUndefined();
+    w.runtime.tick(); await flush(); w.runtime.tick(); await flush();
+    expect(runsOf(w, root.id)).toHaveLength(2);
+    expect(w.runtime.answer(builder.id, "eu-west")).toBe(true);
+    w.runtime.tick(); await flush(); w.runtime.tick(); await flush();
+    expect(w.store.get(root.id)?.status).toBe("completed");
+    expect(runsOf(w, root.id)).toHaveLength(3);
+    expect(runsOf(w, root.id)[2].input.partial).toBeUndefined();
+    invariants(w);
+  });
+
+  it("a parked question is delivered once across restarts, and a newly failed sibling is delivered separately", async () => {
     const store = openRuntimeStore(":memory:");
     const first = world(asks, {}, store);
     const root = first.runtime.begin(beginReq());
@@ -1033,7 +1062,11 @@ describe("Runtime: a teammate's question reaches the requester waiting on it", (
 
     const third = world(asks, {}, store);
     third.runtime.tick(); await flush(); third.runtime.tick(); await flush();
-    expect(runsOf(third, root.id)).toEqual([]);
+    expect(runsOf(third, root.id)).toHaveLength(1);
+    expect(runsOf(third, root.id)[0].input.asked).toBeUndefined();
+    expect(runsOf(third, root.id)[0].input).toMatchObject({ partial: true, settled: [{ status: "failed", outcome: "interrupted" }] });
+    third.runtime.tick(); await flush();
+    expect(runsOf(third, root.id)).toHaveLength(1);
     expect(store.get(root.id)?.status).toBe("waiting");
     expect(store.get(builder.id)?.status).toBe("needs_input");
     expect(third.runner.parks.map(p => p.a.id)).toEqual([builder.id]);

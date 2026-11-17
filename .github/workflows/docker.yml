@@ -34,6 +34,45 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build image
         run: docker build -t danibot:ci .
+      - name: Build Cloud home image
+        run: docker build --target cloud-home --build-arg CLOUD_HOME_ENGINES= -t omb-cloud-home:ci .
+      - name: Prove each image ships its files once and no throwaway build directory survives
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/image-scan
+          docker save danibot:ci -o /tmp/image-scan/server.tar
+          docker save omb-cloud-home:ci -o /tmp/image-scan/home.tar
+          python3 - <<'PY'
+          import json, re, tarfile
+          cache = re.compile(r"tmp/(grok-install|node-compile-cache|npm-cache|omb-build-home)/")
+          def files_in(image_path):
+              files = {}
+              with tarfile.open(image_path) as image:
+                  manifest = json.load(image.extractfile("manifest.json"))
+                  layers = manifest[0]["Layers"]
+                  assert layers, f"{image_path}: no image layers found"
+                  for layer_path in layers:
+                      with tarfile.open(fileobj=image.extractfile(layer_path)) as layer:
+                          for entry in layer.getmembers():
+                              if entry.isfile():
+                                  name = entry.name
+                                  while name.startswith("./"): name = name[2:]
+                                  files[name] = files.get(name, 0) + 1
+              return files
+          for image_path in ("/tmp/image-scan/server.tar", "/tmp/image-scan/home.tar"):
+              files = files_in(image_path)
+              leftovers = [name for name in files if cache.search(name)]
+              assert not leftovers, f"{image_path}: throwaway build directories survive: {leftovers}"
+              # OS package layers legitimately update passwd, dpkg state and caches.
+              # Only application payload duplication is a packaging regression.
+              payload = ("app/", "opt/danibot-browser/", "usr/local/bin/grok")
+              dupes = [name for name, count in files.items() if count > 1 and name.startswith(payload)]
+              assert not dupes, f"{image_path}: files shipped more than once: {dupes}"
+          files = files_in("/tmp/image-scan/home.tar")
+          grok = files["usr/local/bin/grok"]
+          assert grok == 1, f"cloud-home ships grok {grok} times"
+          print("each image ships its files once; no throwaway build directory survives")
+          PY
       - name: Boot the container and prove the server + UI answer
         run: |
           set -euo pipefail
@@ -148,6 +187,28 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - id: keys
+        env:
+          CLOUD_HOME_ENGINES: "@anthropic-ai/claude-code @openai/codex"
+        run: |
+          set -u
+          chrome="$(curl -sf https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json | jq -r '.channels.Stable.version')" || chrome=""
+          engines=""
+          ok=1
+          for pkg in $CLOUD_HOME_ENGINES; do
+            v="$(npm view "$pkg@latest" version)" || { ok=0; break; }
+            engines="$engines $pkg@$v"
+          done
+          engines="${engines# }"
+          if [ -z "$chrome" ] || [ "$ok" = 0 ]; then
+            today="date-$(date -u +%F)"
+            chrome="$today"
+            engines="$CLOUD_HOME_ENGINES"
+            engines_tag="$today"
+          else
+            engines_tag=""
+          fi
+          { echo "chrome=$chrome"; echo "engines=$engines"; echo "engines_tag=$engines_tag"; } >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
@@ -162,5 +223,22 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CHROME_CACHE_TAG=${{ steps.keys.outputs.chrome }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - id: home
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: true
+          target: cloud-home
+          tags: ghcr.io/${{ github.repository }}-cloud-home:latest
+          build-args: |
+            CHROME_CACHE_TAG=${{ steps.keys.outputs.chrome }}
+            CLOUD_HOME_ENGINES=${{ steps.keys.outputs.engines }}
+            ENGINES_CACHE_TAG=${{ steps.keys.outputs.engines_tag }}
+          cache-from: |
+            type=gha
+            type=gha,scope=cloud-home
+          cache-to: type=gha,scope=cloud-home,mode=max

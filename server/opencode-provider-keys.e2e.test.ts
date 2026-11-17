@@ -131,7 +131,15 @@ it("saves keys for any OpenCode provider on a Cloud, shows only their names, and
   const turnPid = JSON.parse(readFileSync(prompts, "utf8").trim().split("\n").at(-1)!).pid as number;
   expect(started().pid).toBe(turnPid);
   expect(started().env.VENICE_API_KEY).toBe(VENICE);
-  expect(started().env.ANTHROPIC_API_KEY).toBe(OWNER_ANTHROPIC);
+  // Turns use the box's per-process broker credential, never the owner's raw Anthropic key.
+  const brokerToken = started().env.ANTHROPIC_API_KEY;
+  expect(brokerToken).toMatch(/^omb_t0_[a-z0-9]+$/);
+  expect(brokerToken).not.toBe(OWNER_ANTHROPIC);
+  const brokerRoute = new URL(started().env.ANTHROPIC_BASE_URL);
+  expect(brokerRoute.hostname).toBe("127.0.0.1");
+  expect(brokerRoute.protocol).toBe("http:");
+  expect(brokerRoute.pathname).toContain(brokerToken);
+  expect(brokerRoute.pathname).toContain("anthropic");
   expect(started().env.OPENAI_API_KEY).toBeUndefined();
   await expect.poll(async () => (await api("GET", "/api/bots")).body.bots.find((entry: any) => entry.id === bot.id)
     ?.tasks.find((task: any) => task.threadId === thread)?.busy, { timeout: 15_000 }).toBe(false);
@@ -146,11 +154,11 @@ it("saves keys for any OpenCode provider on a Cloud, shows only their names, and
 }, 90_000);
 
 it("refuses a name Dani keeps, in one plain line, and saves nothing", async () => {
-  const before = readFileSync(join(dataDir, "config.json"), "utf8");
+  const before = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8")).opencodeGo;
   const refused = await api("PUT", "/api/config", { opencodeGo: { providerKeys: { OMB_CLOUD_BOAT_TOKEN: "x-token", VENICE_API_KEY: VENICE } } });
   expect(refused.status).toBe(400);
   expect(refused.body.error).toBe("Dani keeps OMB_CLOUD_BOAT_TOKEN for itself, so OpenCode can't be given it here. Put this key in opencode.json instead.");
-  expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(before);
+  expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8")).opencodeGo).toEqual(before);
   const opencodeKey = await api("PUT", "/api/config", { opencodeGo: { providerKeys: { OPENCODE_API_KEY: "zen" } } });
   expect(opencodeKey.status).toBe(400);
   expect(opencodeKey.body.error).toBe("Save the OpenCode key in the OpenCode API key box instead.");

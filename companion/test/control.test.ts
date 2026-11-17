@@ -344,7 +344,7 @@ describe("hosted endpoint advertisement", () => {
     expect(published.body.endpoints[0]).toEqual({
       kind: "hosted",
       priority: 0,
-      url: "https://c-opaque.DaniBot.test",
+      url: "https://c-opaque.danibot.test",
     });
 
     expect(

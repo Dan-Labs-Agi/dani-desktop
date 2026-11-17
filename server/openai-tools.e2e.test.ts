@@ -31,7 +31,7 @@ type ChatRequest = {
 };
 
 // The chat drivers keep the system message to the stable half of the prompt, so the provider's cached prefix survives a memory write.
-const CONTEXT_NOTE = "Context from DaniBot updated since this conversation started; it replaces any earlier copy:";
+const CONTEXT_NOTE = "Context from Dani Bot updated since this conversation started; it replaces any earlier copy:";
 const MEMORY = "Your memory (MEMORY.md):\n# Memory\n- Fixture prefers concise replies.";
 // Team availability changes whenever a teammate starts or finishes, so it must never reach the cached system message.
 const AVAILABILITY = "Team availability";
@@ -93,7 +93,7 @@ it.each(["openaiCompat", "groq", "meta"] as const)("%s runs structured MCP calls
   await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   const address = upstream.address();
   if (!address || typeof address === "string") throw new Error("fixture provider address missing");
-  const fixture = await launchVerificationServer().catch(async (error) => {
+  const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, [instanceId]).catch(async (error) => {
     upstream.closeAllConnections();
     await new Promise<void>((resolve) => upstream.close(() => resolve()));
     throw error;

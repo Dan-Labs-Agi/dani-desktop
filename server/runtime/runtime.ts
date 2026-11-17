@@ -303,7 +303,7 @@ export class Runtime {
         this.settle(n, "completed", "done");
       } else {
         n.status = "resume";
-        this.store.update(n, { kind: "resume_due", at: now, detail: due === "settled" ? "resume" : "resume: a teammate asks" });
+        this.store.update(n, { kind: "resume_due", at: now, detail: due === "settled" ? "resume" : due === "partial" ? "resume: a teammate finished" : "resume: a teammate asks" });
         this.touch(n);
       }
     }
@@ -384,6 +384,7 @@ export class Runtime {
         ...(n.continuation ? { continuation: { note: n.continuation.note, ...(n.continuation.handoffPath ? { handoffPath: n.continuation.handoffPath } : {}) } } : {}),
         ...(settled.length ? { settled } : {}),
         ...(asked.length ? { asked } : {}),
+        ...(resumed && awaited(children).some(c => !isTerminal(c)) ? { partial: true } : {}),
         level: n.level, mode: n.mode,
       };
       delivered = inbox.map(i => i.id);
@@ -704,7 +705,7 @@ export class Runtime {
 
   /** Each needs_input inbox item resumes its waiting requester at most once: dispatch marks it delivered in the
    * same transaction that starts the turn, and a delivered item never counts again, across restarts too. */
-  private resumeReason(n: Assignment): "settled" | "asked" | undefined {
+  private resumeReason(n: Assignment): "settled" | "asked" | "partial" | undefined {
     const kids = awaited(this.store.children(n.id));
     if (kids.length === 0) return undefined;
     if (kids.every(c => isTerminal(c) && c.reportedAt !== undefined)) return "settled";
@@ -712,7 +713,11 @@ export class Runtime {
     const parked = new Set(kids.filter(asking).map(c => c.id));
     if (parked.size === 0) return undefined;
     const items = this.store.inbox({ threadId: n.assignee.destination.threadId }, true);
-    return items.some(i => i.kind === "needs_input" && parked.has(i.assignmentId)) ? "asked" : undefined;
+    if (items.some(i => i.kind === "needs_input" && parked.has(i.assignmentId))) return "asked";
+    // A sibling can finish after the question's partial resume. Deliver that new result once,
+    // without answering or re-issuing the other child's question.
+    const completed = new Set(kids.filter(c => isTerminal(c) && c.reportedAt !== undefined).map(c => c.id));
+    return items.some(i => i.kind === "settled" && completed.has(i.assignmentId)) ? "partial" : undefined;
   }
 
   private inputExpires(n: Assignment): boolean {

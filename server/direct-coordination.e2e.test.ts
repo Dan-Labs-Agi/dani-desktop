@@ -28,7 +28,7 @@ async function fixture(test: (f: any) => Promise<void>, fakeEnv: NodeJS.ProcessE
 }
 
 async function fixtureSession(test: (f: any) => Promise<void>, fakeEnv: NodeJS.ProcessEnv) {
-  const session = await launchVerificationServer({ ...process.env, ...fakeEnv }, undefined, undefined, undefined, undefined, { scripted: true });
+  const session = await launchVerificationServer({ ...process.env, ...fakeEnv }, undefined, undefined, undefined, undefined, { scripted: true }, ["openaiCompat"]);
   const cli = (...args: string[]) => runControlOmb(args, { env: { DANIBOT_URL: session.info.url } }) as Promise<any>;
   const api = (path: string, body?: unknown, method = "POST") => request(path, body === undefined ? {} : { method, body: JSON.stringify(body) }, session.info.url) as Promise<any>;
   try {
@@ -117,7 +117,7 @@ it("marks a failed one-way send so restart recovery cannot duplicate its notice"
   // The failed send reports an incident to Clive, the lead's Chief; answering it must not send the task again.
   f.plan[f.chief.id] = { steps: [{ arguments: {
     bot_ids: [f.lead.id], message: "Try the task", thread: "new", reply: "none",
-  } }], reply: "Sent", byPrompt: [{ promptIncludes: "[Incident report from DaniBot", plan: { reply: "Noted the failed send" } }] };
+  } }], reply: "Sent", byPrompt: [{ promptIncludes: "[Incident report from Dani Bot", plan: { reply: "Noted the failed send" } }] };
   f.plan[f.lead.id] = { fail: true };
   await f.start();
   expect((await f.wait()).status).toBe("settled");
@@ -977,6 +977,7 @@ async function onLoopbackEngine(f: any, answer: (res: ServerResponse) => void): 
   const llm = createServer(async (req, res) => {
     for await (const _ of req) {}
     if (req.url?.endsWith("/models")) { res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ data: [{ id: "loop-model" }] })); return; }
+    if (req.method !== "POST") { res.writeHead(404).end(); return; }
     answer(res);
   });
   await new Promise<void>(resolve => llm.listen(0, "127.0.0.1", resolve));
@@ -989,8 +990,9 @@ async function onLoopbackEngine(f: any, answer: (res: ServerResponse) => void): 
 it("continues a teammate's step cap in place and stops it once it makes no progress", () => fixture(async f => {
   let calls = 0;
   const close = await onLoopbackEngine(f, res => {
-    // Never a final answer: one more tool call, every round.
-    const call = { tool_calls: [{ index: 0, id: `call_${++calls}`, type: "function", function: { name: "missing_tool", arguments: "{}" } }] };
+    // Never a final answer: distinct failing calls avoid the provider's same-call guard,
+    // so this scenario reaches the runtime continuation/no-progress guard.
+    const call = { tool_calls: [{ index: 0, id: `call_${++calls}`, type: "function", function: { name: `missing_tool_${calls}`, arguments: "{}" } }] };
     res.writeHead(200, { "content-type": "text/event-stream" });
     res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: call, finish_reason: "tool_calls" }] })}\n\ndata: [DONE]\n\n`);
   });

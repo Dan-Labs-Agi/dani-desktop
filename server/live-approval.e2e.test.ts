@@ -52,7 +52,7 @@ it("applies a level picked while the bot is working to its next tool call, and l
   await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
   const address = upstream.address();
   if (!address || typeof address === "string") throw new Error("fixture provider address missing");
-  const fixture = await launchVerificationServer();
+  const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, ["openaiCompat"]);
   const { url, dataDir } = fixture.info;
   const control = (args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {

@@ -68,7 +68,7 @@ describe("desktop companion endpoint", () => {
     expect(normalizeDesktopCompanionEndpoint(`https://${LABEL}.danibot.si`)).toBe(
       `https://${LABEL}.danibot.si`,
     );
-    expect(normalizeDesktopCompanionEndpoint(` ${LABEL.toUpperCase()}.Mausbot.SI/ `)).toBe(
+    expect(normalizeDesktopCompanionEndpoint(` ${LABEL.toUpperCase()}.Danibot.SI/ `)).toBe(
       `https://${LABEL}.danibot.si`,
     );
     for (const endpoint of [

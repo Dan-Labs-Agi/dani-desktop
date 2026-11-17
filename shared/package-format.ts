@@ -236,7 +236,7 @@ const packageDocumentV1Schema = z.object({
       name: requiredText(80),
       agent: key,
       prompt: requiredText(20_000),
-      runOn: z.enum(["dani", "cloud"]),
+      runOn: z.preprocess((value) => (value === "maus" ? "dani" : value), z.enum(["dani", "cloud"])),
       schedule: packageRoutineScheduleSchema,
       durationMinutes: z.number().int().min(5).max(240),
       timeoutMinutes: z.number().int().min(5).max(240).optional(),
