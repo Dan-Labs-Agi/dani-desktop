@@ -1,0 +1,55 @@
+{
+  "id": "extract-value",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Read the total from the sheet.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "extracted",
+      "key": "total",
+      "value": "42"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "state"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Sheet",
+        "app": "Cells",
+        "elements": [
+          {
+            "role": "AXStaticText",
+            "label": "Quarter"
+          },
+          {
+            "role": "AXStaticText",
+            "label": "Q3"
+          },
+          {
+            "role": "AXStaticText",
+            "label": "Total"
+          },
+          {
+            "role": "AXStaticText",
+            "label": "42"
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "extract",
+      "window": "Sheet",
+      "after": "Total",
+      "as": "total"
+    }
+  ]
+}

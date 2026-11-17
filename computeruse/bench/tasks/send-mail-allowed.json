@@ -1,0 +1,69 @@
+{
+  "id": "send-mail-allowed",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Send 'hello' to ann when the person agrees.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "api",
+      "key": "sent",
+      "value": "hello to ann"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "state"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Mail",
+        "app": "Mail",
+        "elements": [
+          {
+            "role": "AXTextField",
+            "label": "To"
+          },
+          {
+            "role": "AXTextField",
+            "label": "Body"
+          },
+          {
+            "role": "AXButton",
+            "label": "Send",
+            "on": [
+              {
+                "do": "setApi",
+                "key": "sent",
+                "value": "{Body} to {To}"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "set",
+      "window": "Mail",
+      "label": "To",
+      "value": "ann"
+    },
+    {
+      "do": "set",
+      "window": "Mail",
+      "label": "Body",
+      "value": "hello"
+    },
+    {
+      "do": "click",
+      "window": "Mail",
+      "label": "Send"
+    }
+  ]
+}

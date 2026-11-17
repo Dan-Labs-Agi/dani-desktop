@@ -6,7 +6,7 @@ export type { ComputerCounters };
 
 export interface ComputerTaskResult {
   id: string;
-  world: "local-vm" | "container";
+  world: "local-vm" | "container" | "fixture";
   passed: boolean;
   durationMs: number;
   counters: ComputerCounters;

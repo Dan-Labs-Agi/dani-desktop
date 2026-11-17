@@ -1,0 +1,66 @@
+{
+  "id": "change-setting",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Switch the theme to dark in Settings.",
+  "timeoutMs": 30000,
+  "setup": [
+    {
+      "kind": "setting",
+      "name": "theme",
+      "value": "light"
+    }
+  ],
+  "requiredEndState": [
+    {
+      "kind": "setting",
+      "name": "theme",
+      "value": "dark"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "theme"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Settings",
+        "app": "Settings",
+        "elements": [
+          {
+            "role": "AXButton",
+            "label": "Light",
+            "on": [
+              {
+                "do": "setSetting",
+                "name": "theme",
+                "value": "light"
+              }
+            ]
+          },
+          {
+            "role": "AXButton",
+            "label": "Dark",
+            "on": [
+              {
+                "do": "setSetting",
+                "name": "theme",
+                "value": "dark"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "click",
+      "window": "Settings",
+      "label": "Dark"
+    }
+  ]
+}

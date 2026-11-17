@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { desktopSchema } from "./desktop.ts";
 
 const relativePath = z.string().min(1).refine((value) =>
   !value.startsWith("/") && !value.startsWith("\\") && !/^[a-z]:/iu.test(value) &&
@@ -25,7 +26,7 @@ export const stateAssertionSchema = z.discriminatedUnion("kind", [
 export const computerTaskSchema = z.object({
   id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u),
   tier: z.number().int().min(1).max(3),
-  world: z.enum(["local-vm", "container"]),
+  world: z.enum(["local-vm", "container", "fixture"]),
   setup: z.array(setupStepSchema),
   goal: z.string().trim().min(1),
   timeoutMs: z.number().int().min(1_000).max(300_000),
@@ -36,3 +37,31 @@ export const computerTaskSchema = z.object({
 
 export type ComputerTask = z.infer<typeof computerTaskSchema>;
 export type StateAssertion = z.infer<typeof stateAssertionSchema>;
+
+const text = z.string().min(1);
+
+/** What the scripted agent does, in order. It addresses things the way a model does: by window title and element label,
+ * from its own last read of the window, which is what lets a stale index go wrong. */
+export const intentSchema = z.discriminatedUnion("do", [
+  z.object({ do: z.literal("read"), window: text, record: z.object({ key: text, startsWith: text }).strict().optional() }).strict(),
+  z.object({ do: z.literal("click"), window: text, label: text, via: z.enum(["index", "token"]).optional(),
+    fresh: z.boolean().optional(), repeat: z.number().int().min(1).max(10).optional() }).strict(),
+  z.object({ do: z.literal("set"), window: text, label: text, value: z.string() }).strict(),
+  z.object({ do: z.literal("scroll"), window: text, direction: z.enum(["down", "up"]), amount: z.number().int().min(1).optional(),
+    times: z.number().int().min(1).max(10).optional() }).strict(),
+  z.object({ do: z.literal("extract"), window: text, as: text, after: text.optional(), last: z.literal(true).optional() }).strict()
+    .refine((value) => (value.after === undefined) !== (value.last === undefined), "name the element to read after, or ask for the last one"),
+]);
+
+/** A task for the fixture world: the schema's own fields, the desktop it runs on, who answers the person's questions,
+ * and the scripted agent's steps. */
+export const benchTaskSchema = computerTaskSchema.extend({
+  world: z.literal("fixture"),
+  desktop: desktopSchema,
+  /** How the person answers a confirmation: the scripted agent never answers one itself. */
+  person: z.enum(["allow", "deny"]),
+  intents: z.array(intentSchema).min(1).max(40),
+});
+
+export type BenchTask = z.infer<typeof benchTaskSchema>;
+export type Intent = z.infer<typeof intentSchema>;

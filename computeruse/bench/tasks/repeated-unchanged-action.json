@@ -1,0 +1,44 @@
+{
+  "id": "repeated-unchanged-action",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Press a refresh button that never changes anything: stop after two tries, not six.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "api",
+      "key": "calls.click",
+      "value": "2"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "state"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Panel",
+        "app": "Monitor",
+        "elements": [
+          {
+            "role": "AXButton",
+            "label": "Refresh",
+            "inertClicks": 99
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "click",
+      "window": "Panel",
+      "label": "Refresh",
+      "repeat": 6
+    }
+  ]
+}

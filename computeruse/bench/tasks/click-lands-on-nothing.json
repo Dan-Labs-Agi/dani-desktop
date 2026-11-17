@@ -1,0 +1,50 @@
+{
+  "id": "click-lands-on-nothing",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Apply the setting: the first click reaches the window and does nothing.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "setting",
+      "name": "applied",
+      "value": "yes"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "applied"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Options",
+        "app": "Settings",
+        "elements": [
+          {
+            "role": "AXButton",
+            "label": "Apply",
+            "inertClicks": 1,
+            "on": [
+              {
+                "do": "setSetting",
+                "name": "applied",
+                "value": "yes"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "click",
+      "window": "Options",
+      "label": "Apply"
+    }
+  ]
+}

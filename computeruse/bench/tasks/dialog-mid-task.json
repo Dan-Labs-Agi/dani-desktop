@@ -1,0 +1,82 @@
+{
+  "id": "dialog-mid-task",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Save over doc.txt: a confirmation window appears and has to be answered.",
+  "timeoutMs": 30000,
+  "setup": [
+    {
+      "kind": "file",
+      "path": "doc.txt",
+      "content": "v1"
+    }
+  ],
+  "requiredEndState": [
+    {
+      "kind": "file",
+      "path": "doc.txt",
+      "exists": true,
+      "content": "v2"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "doc.txt"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Editor",
+        "app": "Editor",
+        "elements": [
+          {
+            "role": "AXButton",
+            "label": "Save",
+            "on": [
+              {
+                "do": "openWindow",
+                "id": 2
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Replace file?",
+        "app": "Editor",
+        "elements": [
+          {
+            "role": "AXButton",
+            "label": "Replace",
+            "on": [
+              {
+                "do": "writeFile",
+                "path": "doc.txt",
+                "content": "v2"
+              },
+              {
+                "do": "closeWindow"
+              }
+            ]
+          }
+        ],
+        "open": false
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "click",
+      "window": "Editor",
+      "label": "Save"
+    },
+    {
+      "do": "click",
+      "window": "Replace file?",
+      "label": "Replace"
+    }
+  ]
+}
