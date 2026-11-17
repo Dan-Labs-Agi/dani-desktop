@@ -57,13 +57,18 @@ export function effectVerdict(before: Observation | null, after: Observation | n
 }
 
 /** What the bot is told beside the driver's own answer, in plain words; nothing when the window moved.
- * It never says to send the action again: a second click pays twice, and whether the first one acted is the open question. */
+ * No change is ordinary for an action whose effect the window cannot show, so it is never put as a failure, and it never
+ * says to send the action again: a second click pays twice, and whether the first one acted is the open question. */
 export function effectNote(verdict: EffectVerdict, tool: string): string | null {
   if (verdict === "changed") return null;
-  const opening = verdict === "unchanged"
-    ? `The ${tool} was sent and the window did not change afterwards, so it may have landed on nothing.`
-    : `The ${tool} was sent, but the window could not be read back afterwards, so whether it landed is unknown.`;
-  return `${opening} Read the window with get_window_state and decide from what it shows now: act on what is there, ` +
+  if (verdict === "unchanged") {
+    return `The ${tool} was sent, and the window shows no change afterwards. That is normal when its effect is somewhere this window does not show ` +
+      `(a file saved, a setting changed, another window opened), and it is also how a ${tool} that landed on nothing looks. ` +
+      `Read the window with get_window_state, and check wherever the effect should have appeared, before acting on it a second time: ` +
+      `nothing moving here is not a reason by itself.`;
+  }
+  return `The ${tool} was sent, but the window could not be read back afterwards, so whether it landed is unknown. ` +
+    `Read the window with get_window_state and decide from what it shows now: act on what is there, ` +
     `and only do this again if the window shows the work still has to be done.`;
 }
 

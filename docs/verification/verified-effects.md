@@ -40,9 +40,11 @@ on an effect that never happened.
   leaves out what a field holds, so it would call typing that worked
   "unchanged" and send the bot to type it again, which for `type_text` types the
   text twice. Typing is checked by `verifyComputerTyping`, which reads the field.
-- A click that opens a different window reads "unchanged", because only the
-  window it was sent to is read. The bot is told to read the window and decide;
-  a click that is safe to repeat is repeated, one that is not should not be.
+- A click that opens a different window, or saves a file, or changes a setting,
+  reads "unchanged", because only the window it was sent to is read. The note
+  says so: no change is normal when the effect is elsewhere, and it asks the bot
+  to check where the effect should have appeared before acting a second time.
+  It never says the action failed, and never says to send it again.
 - On Windows the sent-click answer and one-character-at-a-time typing still
   apply, and the verdict is added to them.
 - With the switch off, `OMB_COMPUTER_VERIFY` is `0` and no read-back is made,

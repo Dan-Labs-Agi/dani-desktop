@@ -256,7 +256,7 @@ const featureConfigSchema = z.object({
   anchorComputerTargets: z.boolean().optional(),
   /** Verify scroll movement and try bounded scroll-area and page-key fallbacks. Off unless true. */
   verifyComputerScroll: z.boolean().optional(),
-  /** Wrap screen text as untrusted data and remove field values from window results. Off unless true. */
+  /** Wrap screen text as untrusted data and remove the values of secure or secret-named fields from window results. Off unless true. */
   wrapComputerScreenData: z.boolean().optional(),
   /** Add the see-act-verify workflow to computer tool descriptions. Off unless true. */
   guideComputerUse: z.boolean().optional(),

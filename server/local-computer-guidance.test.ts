@@ -129,7 +129,7 @@ describe("localComputerRelay", () => {
       const still = child((name) => (name === "get_window_state" ? window("Untitled") : typed));
       const held = await localComputerRelay("darwin", true)(clicked, still.relayed) as { content: unknown[] };
       expect(held.content).toHaveLength(2);
-      expect(JSON.stringify(held.content)).toMatch(/did not change/);
+      expect(JSON.stringify(held.content)).toMatch(/shows no change/);
       let reads = 0;
       const moved = child((name) => (name === "get_window_state" ? window(`Untitled ${++reads}`) : typed));
       expect(await localComputerRelay("darwin", true)(clicked, moved.relayed)).toEqual(typed);

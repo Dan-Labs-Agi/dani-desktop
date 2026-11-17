@@ -256,7 +256,7 @@ describe("computer pipeline", () => {
         const relay = createComputerPipeline("linux", true);
         await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, child());
         const answer = await relay({ name: tool, arguments: { pid: 1, window_id: 2, element_index: 2, text: "hi", value: "hi" } }, child());
-        expect(JSON.stringify(answer ?? null), tool).not.toMatch(/did not change|landed on nothing/);
+        expect(JSON.stringify(answer ?? null), tool).not.toMatch(/shows no change|landed on nothing/);
       }
     });
   });
