@@ -207,4 +207,40 @@ describe("computer pipeline", () => {
       expect(relay.counters().actions).toBe(1);
     });
   });
+
+  describe("what the check before a call is told", () => {
+    const mailWindow = { structuredContent: { pid: 1, window_id: 2, app_name: "Mail", window_title: "New message", elements_complete: true, elements: [
+      { element_index: 1, role: "AXWindow", depth: 0 },
+      { element_index: 2, role: "AXButton", label: "Send", depth: 1, parent_index: 1 },
+      { element_index: 3, role: "AXButton", label: "Attach", depth: 1, parent_index: 1 },
+    ] } };
+    const reader: ChildCalls = { driverVersion: "0.28.2", call: async () => mailWindow };
+    const frame = (element_index: number) => ({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "click", arguments: { pid: 1, window_id: 2, element_index } } });
+
+    it("says a click on Send is final, from what the session read of the window", async () => {
+      const relay = createComputerPipeline("linux", false, { risk: true });
+      await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, reader);
+      expect(relay.describe(frame(2))).toMatchObject({ risk: "final", rtool: "click", rlabel: "Send" });
+      expect(relay.describe(frame(3))).toEqual({});
+    });
+
+    it("says nothing at all while its switch is off", async () => {
+      const relay = createComputerPipeline("linux", true);
+      await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, reader);
+      expect(relay.describe(frame(2))).toEqual({});
+    });
+
+    it("treats a window it never read as doubtful, and anything that is not a call as nothing", () => {
+      const relay = createComputerPipeline("linux", false, { risk: true });
+      expect(relay.describe({ ...frame(2), params: { name: "click", arguments: { pid: 1, window_id: 2, x: 5, y: 6 } } })).toMatchObject({ risk: "final" });
+      expect(relay.describe(null)).toEqual({});
+      expect(relay.describe({ params: {} })).toEqual({});
+      expect(relay.describe({ params: { name: "click", arguments: [] } })).toEqual({});
+    });
+
+    it("records window reads for itself, so the next check can judge from them", async () => {
+      const relay = createComputerPipeline("linux", false, { risk: true });
+      expect(await relay({ name: "get_window_state", arguments: { pid: 1, window_id: 2 } }, reader)).toBe(mailWindow);
+    });
+  });
 });

@@ -6,6 +6,7 @@ import { canVerifyEffect, observationOf, withVerifiedEffect } from "./effect.ts"
 import { createComputerSession, windowKey, type ComputerSession } from "./session.ts";
 import { anchorSuggestion } from "./stages/anchor.ts";
 import { loopRefusal, recordAction } from "./stages/loop-guard.ts";
+import { finalActionRisk, riskQuery } from "./stages/risk.ts";
 import { enablePointer } from "./stages/pointer.ts";
 import { verifiedScroll } from "./stages/scroll.ts";
 import { staleRefusal } from "./stages/stale.ts";
@@ -26,12 +27,15 @@ export interface ComputerPipelineFlags {
   scroll?: boolean;
   pointer?: boolean;
   evidence?: boolean;
+  risk?: boolean;
 }
 
 export interface ComputerPipeline {
   (call: ToolCall, child: ChildCalls): Promise<unknown> | null;
   /** What this session has done so far, as a copy. */
   counters(): ComputerCounters;
+  /** What the check before a call should add about it: whether it would press something that cannot be undone. */
+  describe(frame: unknown): Record<string, string>;
 }
 
 function compose(call: ToolCall, child: ChildCalls, stages: readonly Stage[]): Promise<Result> {
@@ -63,7 +67,7 @@ export function createComputerPipeline(platform: string, verifyEffects = false, 
   const windows = platform === "win32";
   const guarding = Boolean(flags.stale || flags.anchor);
   const readBack = verifyEffects || guarding || Boolean(flags.loop);
-  const recording = readBack || Boolean(flags.typing || flags.scroll);
+  const recording = readBack || Boolean(flags.typing || flags.scroll || flags.risk);
   const counting = Boolean(flags.loop || flags.evidence);
 
   const observed = (call: ToolCall, child: ChildCalls): Promise<Result> =>
@@ -168,5 +172,15 @@ export function createComputerPipeline(platform: string, verifyEffects = false, 
     return stages.length > 0 || (counting && acting) ? compose(call, counted, stages) : null;
   };
 
-  return Object.assign(relay, { counters: () => snapshotCounters(session.counters) });
+  const describe = (frame: unknown): Record<string, string> => {
+    if (!flags.risk) return {};
+    const params = (frame as { params?: { name?: unknown; arguments?: unknown } } | null)?.params;
+    if (!params || typeof params.name !== "string") return {};
+    const args = params.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments)
+      ? params.arguments as Record<string, unknown> : {};
+    const risk = finalActionRisk({ name: params.name, arguments: args }, session);
+    return risk ? riskQuery(risk) : {};
+  };
+
+  return Object.assign(relay, { counters: () => snapshotCounters(session.counters), describe });
 }

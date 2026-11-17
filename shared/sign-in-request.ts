@@ -73,3 +73,31 @@ export function signInResumePrompt(site: string, outcome: "done" | "cancelled"):
     ? `Dani Bot sign-in update: the person finished signing in to ${site}. Check you are signed in, then continue the task that paused for it. Never ask them for a password or a one-time code in chat.`
     : `Dani Bot sign-in update: the person declined to sign in to ${site}. Continue without it if you can, or briefly explain what you could not do. Never ask them for a password or a one-time code in chat.`;
 }
+
+/** What a bot is told when the person already declined to sign in to this site for the request it is working on. */
+export const SIGN_IN_DECLINED =
+  "The person already said no to signing in to this site for this request, so no new sign-in was asked for. " +
+  "Do not ask again: stop here, tell them what you could not do, and what they can do themselves.";
+
+/** Whether the person declined to sign in to this site since they last wrote to the bot, so asking again would only be
+ * asking them the same question until they say yes. A new message from them starts the question afresh. In a room only
+ * the asking bot's own cards count. */
+export function declinedSinceLastRequest(
+  path: ReadonlyArray<{
+    role?: unknown;
+    kind?: unknown;
+    signIn?: { site?: unknown; cancelled?: unknown; superseded?: unknown };
+    from?: { botId?: unknown };
+  }>,
+  site: string,
+  requestingBotId: string,
+  roomThread: boolean,
+): boolean {
+  for (let index = path.length - 1; index >= 0; index -= 1) {
+    const message = path[index]!;
+    if (message.role === "user") return false;
+    if (message.kind !== "signin" || message.signIn?.site !== site || message.signIn.cancelled !== true) continue;
+    if (!roomThread || message.from?.botId === requestingBotId) return true;
+  }
+  return false;
+}

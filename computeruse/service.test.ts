@@ -24,7 +24,7 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   calls.push(name);
   if (name === "get_window_state") {
     return reply({ ...text(JSON.stringify(calls)), structuredContent: { pid: 4, window_id: 9, app_name: "Notes", window_title: "Revision " + revision,
-      elements: [{ element_index: 1, role: "AXButton", label: "Save", depth: 1 }] } });
+      elements: [{ element_index: 1, role: "AXButton", label: "Save", depth: 1 }, { element_index: 2, role: "AXButton", label: "Send", depth: 1 }] } });
   }
   if (name === "environment") return reply(text(Object.keys(process.env).filter((key) => /^OMB_(COMPUTER_|CONTROL_|CUA_)/.test(key)).sort().join(",")));
   if (name === "click") revision += 1;
@@ -32,11 +32,15 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
 });
 `;
 
-async function session(guards: Parameters<typeof gatedLocalComputer>[4], verifyEffects = true) {
+type Broker = (query: URLSearchParams) => { status: number; body: unknown };
+const OPEN: Broker = () => ({ status: 200, body: { held: false, helpOpen: false } });
+
+async function session(guards: Parameters<typeof gatedLocalComputer>[4], verifyEffects = true, broker: Broker = OPEN) {
   const folder = mkdtempSync(join(tmpdir(), "computeruse-service-"));
   const driver = join(folder, "driver.cjs");
   writeFileSync(driver, DRIVER);
   const evidence: Array<{ auth: string | undefined; body: any }> = [];
+  const checks: URLSearchParams[] = [];
   const server = createServer((request, response) => {
     if (request.method === "POST" && request.url === COMPUTER_EVIDENCE_PATH) {
       let raw = "";
@@ -48,8 +52,11 @@ async function session(guards: Parameters<typeof gatedLocalComputer>[4], verifyE
       });
       return;
     }
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ held: false, helpOpen: false }));
+    const query = new URL(request.url ?? "/", "http://localhost").searchParams;
+    checks.push(query);
+    const answer = broker(query);
+    response.writeHead(answer.status, { "content-type": "application/json" });
+    response.end(JSON.stringify(answer.body));
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const control = { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/control`, token: "turn-token" };
@@ -78,7 +85,7 @@ async function session(guards: Parameters<typeof gatedLocalComputer>[4], verifyE
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(folder, { recursive: true, force: true });
   };
-  return { call, close, evidence };
+  return { call, close, evidence, checks };
 }
 
 const window = { pid: 4, window_id: 9 };
@@ -100,6 +107,61 @@ describe("the computer service with its checks on", () => {
     }
     expect(run.evidence.at(-1)!.auth).toBe("Bearer turn-token");
     expect(run.evidence.at(-1)!.body).toMatchObject({ actions: 1, changed: 1, unchanged: 0 });
+  }, 30_000);
+
+  it("tells the control check when a call would press something that cannot be undone, and only then", async () => {
+    const run = await session({ risk: true }, false);
+    try {
+      await run.call("get_window_state", window);
+      await run.call("click", { ...window, element_index: 1 });
+      await run.call("click", { ...window, element_index: 2 });
+    } finally {
+      await run.close();
+    }
+    const clicks = run.checks.filter((query) => query.has("risk") || query.size === 0);
+    expect(run.checks.filter((query) => query.get("risk") === "final")).toHaveLength(1);
+    const final = run.checks.find((query) => query.get("risk") === "final")!;
+    expect(final.get("rtool")).toBe("click");
+    expect(final.get("rlabel")).toBe("Send");
+    expect(final.get("rhash")).toMatch(/^[a-f0-9]{32}$/);
+    expect(clicks.length).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("refuses a final action the broker holds back, and never lets it reach the driver", async () => {
+    const reason = "The person has not answered yet, so this call was NOT performed.";
+    const run = await session({ risk: true }, false, (query) => (query.get("risk") === "final"
+      ? { status: 200, body: { held: true, helpOpen: false, blockedReason: reason } }
+      : OPEN(query)));
+    try {
+      await run.call("get_window_state", window);
+      const refused = await run.call("click", { ...window, element_index: 2 });
+      expect(refused).toMatchObject({ isError: true, content: [{ type: "text", text: reason }] });
+      const calls = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
+      expect(calls).not.toContain("click");
+      const allowed = await run.call("click", { ...window, element_index: 1 });
+      expect(allowed.content).toEqual([{ type: "text", text: "done:click" }]);
+    } finally {
+      await run.close();
+    }
+  }, 30_000);
+
+  it("refuses a final action when the broker cannot be reached or answers badly", async () => {
+    let status = 200;
+    const run = await session({ risk: true }, false, (query) => (status === 200 ? OPEN(query) : { status, body: "no" }));
+    try {
+      await run.call("get_window_state", window);
+      status = 503;
+      for (const element_index of [2, 1]) {
+        const refused = await run.call("click", { ...window, element_index });
+        expect(refused.isError).toBe(true);
+        expect(refused.content[0].text).toMatch(/NOT performed/);
+      }
+      status = 200;
+      const calls = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
+      expect(calls).not.toContain("click");
+    } finally {
+      await run.close();
+    }
   }, 30_000);
 
   it("never hands a switch, or the turn's token, to the driver", async () => {

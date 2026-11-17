@@ -46,7 +46,7 @@ runMcpBridge({
   args,
   env: { ...childEnv, PATH: augmentedPath() },
   label: "Local Cua Driver",
-  gate: { url: url!, token: token!, describe: localComputerCallQuery },
+  gate: { url: url!, token: token!, describe: (frame) => ({ ...localComputerCallQuery(frame), ...pipeline.describe(frame) }) },
   ...(journal === "1" ? { journal: { url: journalUrl(url!), token: token! } } : {}),
   rewriteResponse: (line) => localComputerResultLine(line, guards.untrusted === true, guards.guidance === true),
   relay: (call, child) => {
