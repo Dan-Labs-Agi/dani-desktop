@@ -149,6 +149,7 @@ const NATIVE_EFFECT_METHODS: Readonly<Record<string, true | undefined>> = {
   "Page.handleJavaScriptDialog": true,
   "Page.close": true,
   "DOM.focus": true,
+  "DOM.scrollIntoViewIfNeeded": true,
   "DOM.setFileInputFiles": true,
   "Target.createTarget": true,
   "Target.closeTarget": true,

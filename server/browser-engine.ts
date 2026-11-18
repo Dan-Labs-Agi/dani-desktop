@@ -155,8 +155,12 @@ export async function interruptBrowserSession(binaryPath: string, env: NodeJS.Pr
   if (pid && processAlive(pid) && !tree) return false;
   const discovered = await browserSessionProcessTrees(binaryPath, session, env).catch(() => null);
   if (!discovered) return false;
-  const trees = [...(tree ? [tree] : []), ...discovered];
-  if (!trees.length) { interruptedBrowsers.delete(key); return !attachesToChrome(env); }
+  const trees = [...(tree ? [tree] : []), ...discovered.trees];
+  if (!trees.length) {
+    if (!discovered.complete) return false;
+    interruptedBrowsers.delete(key);
+    return !attachesToChrome(env);
+  }
   // Attached Chrome belongs to the person. Even a verified daemon's descendants
   // are not claimed as that external browser, nor is global stop claimed.
   const owned: BrowserProcessTree = attachesToChrome(env)
@@ -164,8 +168,9 @@ export async function interruptBrowserSession(binaryPath: string, env: NodeJS.Pr
     : { daemon: trees[0]!.daemon, members: new Map(trees.flatMap((item) => [...item.members])), groups: [...new Set(trees.flatMap((item) => item.groups))], profiles: [...new Set(trees.flatMap((item) => item.profiles ?? []))] };
   interruptedBrowsers.set(key, owned);
   const stopped = await stopBrowserProcesses(owned, 0);
-  if (stopped) interruptedBrowsers.delete(key);
-  return stopped && !attachesToChrome(env);
+  // An unclassified candidate must not erase this receipt or count as a proved stop.
+  if (stopped && discovered.complete) interruptedBrowsers.delete(key);
+  return stopped && discovered.complete && !attachesToChrome(env);
 }
 
 async function closeOnce(binaryPath: string, env: NodeJS.ProcessEnv, session: string, timeoutMs: number): Promise<boolean> {

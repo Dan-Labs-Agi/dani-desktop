@@ -8,7 +8,7 @@ import { homedir, hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { browserProcessesRunning, browserProcessTree, browserSessionProcessTrees, orphanedBrowsers, releaseBrowserProfile, stopBrowserProcesses } from "./browser-processes.ts";
+import { browserProcessesRunning, browserProcessTree, browserSessionProcessTrees, orphanedBrowsers, releaseBrowserProfile, stopBrowserProcesses, type BrowserSessionDiscovery } from "./browser-processes.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 // The real tools, except where a test stands in for Windows' tasklist and taskkill.
@@ -68,9 +68,10 @@ describe.skipIf(!posix)("scoped hard interruption discovery", () => {
     const foreign = start(process.execPath, chromeArgs(home, foreignProfile), { ...expected, HOME: rewrittenHome, OMB_BROWSER_PROCESS_SCOPE: randomUUID() });
     const otherSession = start(process.execPath, chromeArgs(home, foreignProfile), { ...expected, HOME: rewrittenHome, AGENT_BROWSER_SESSION: "another-session" });
     // Process environments and command lines exist from exec; no guessed sleep.
-    const trees = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
-    expect(trees?.map((tree) => tree.daemon)).toEqual([orphan.pid]);
-    expect(await stopBrowserProcesses(trees![0]!, 0)).toBe(true);
+    const found = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
+    expect(found?.complete).toBe(true);
+    expect(found?.trees.map((tree) => tree.daemon)).toEqual([orphan.pid]);
+    expect(await stopBrowserProcesses(found!.trees[0]!, 0)).toBe(true);
     expect(gone(orphan.pid!)).toBe(true);
     for (const pid of [foreign.pid!, otherSession.pid!]) {
       expect(execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
@@ -87,9 +88,10 @@ describe.skipIf(!posix)("scoped hard interruption discovery", () => {
     const expected = { ...daemonEnv(home, `work-${randomUUID()}`), OMB_BROWSER_PROCESS_SCOPE: randomUUID() };
     const orphan = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp" });
     const foreign = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp", OMB_BROWSER_PROCESS_SCOPE: randomUUID() });
-    const trees = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
-    expect(trees?.map((tree) => tree.daemon)).toEqual([orphan.pid]);
-    expect(await stopBrowserProcesses(trees![0]!, 0)).toBe(true);
+    const found = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
+    expect(found?.complete).toBe(true);
+    expect(found?.trees.map((tree) => tree.daemon)).toEqual([orphan.pid]);
+    expect(await stopBrowserProcesses(found!.trees[0]!, 0)).toBe(true);
     expect(gone(orphan.pid!)).toBe(true);
     expect(execFileSync("ps", ["-o", "stat=", "-p", String(foreign.pid!)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
   });
@@ -100,9 +102,70 @@ describe.skipIf(!posix)("scoped hard interruption discovery", () => {
     const expected = { ...daemonEnv(home, `work-${randomUUID()}`), OMB_BROWSER_PROCESS_SCOPE: "owned-tag" };
     const profile = profileFolder(home);
     const orphan = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp", OMB_BROWSER_PROCESS_SCOPE: marker });
-    expect(await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected)).toEqual(marker ? [] : null);
+    expect(await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected)).toEqual(marker ? { trees: [], complete: true } : { trees: [], complete: false });
     expect(execFileSync("ps", ["-o", "stat=", "-p", String(orphan.pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
     expect(readFileSync(join(profile, "Default", "Cookies"), "utf8")).toBe("fixture");
+  });
+
+  it("keeps a verified owned receipt when a later candidate cannot be classified", async () => {
+    const home = mkdtempSync(join(tmpdir(), "omb-scope-"));
+    homes.push(home);
+    const profile = profileFolder(home);
+    const unmarkedProfile = profileFolder(home);
+    const expected = { ...daemonEnv(home, `work-${randomUUID()}`), OMB_BROWSER_PROCESS_SCOPE: randomUUID() };
+    const orphan = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp" });
+    const foreign = start(process.execPath, chromeArgs(home, unmarkedProfile), { ...expected, HOME: "/tmp", OMB_BROWSER_PROCESS_SCOPE: randomUUID() });
+    const foreignHome = start(process.execPath, ["-e", IDLE], { ...expected, HOME: join(home, "foreign-home") });
+    const classified = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
+    expect(classified).toMatchObject({ complete: true });
+    expect(classified?.trees.map((tree) => tree.daemon)).toEqual([orphan.pid]);
+    for (const pid of [foreign.pid!, foreignHome.pid!]) {
+      expect(execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
+    }
+    const unmarked = start(process.execPath, chromeArgs(home, unmarkedProfile), { ...expected, HOME: "/tmp", OMB_BROWSER_PROCESS_SCOPE: undefined });
+    const partial = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
+    expect(partial?.complete).toBe(false);
+    expect(partial?.trees.map((tree) => tree.daemon)).toEqual([orphan.pid]);
+    expect(await stopBrowserProcesses(partial!.trees[0]!, 0)).toBe(true);
+    expect(gone(orphan.pid!)).toBe(true);
+    for (const pid of [foreign.pid!, foreignHome.pid!, unmarked.pid!]) {
+      expect(execFileSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
+    }
+    expect(existsSync(profile)).toBe(false);
+    expect(readFileSync(join(unmarkedProfile, "Default", "Cookies"), "utf8")).toBe("fixture");
+  });
+
+  // Same-user ps cannot hide an environment without another account. The detached
+  // process is real; only that one environment read is failed.
+  it.skipIf(process.platform === "linux")("keeps a verified owned receipt when an unrelated candidate environment cannot be read", async () => {
+    const home = mkdtempSync(join(tmpdir(), "omb-scope-"));
+    homes.push(home);
+    const profile = profileFolder(home);
+    const unrelatedProfile = profileFolder(home);
+    const expected = { ...daemonEnv(home, `work-${randomUUID()}`), OMB_BROWSER_PROCESS_SCOPE: randomUUID() };
+    const orphan = start(process.execPath, chromeArgs(home, profile), { ...expected, HOME: "/tmp" });
+    const unrelated = start(process.execPath, chromeArgs(home, unrelatedProfile), { ...expected, HOME: "/tmp" });
+    const actual = vi.mocked(execFile).getMockImplementation()!;
+    vi.mocked(execFile).mockImplementation(((file: string, args: string[], options: unknown, done?: (error: Error | null, stdout: string) => void) => {
+      if (Array.isArray(args) && args.includes("-E") && args.includes(String(unrelated.pid))) {
+        const callback = typeof options === "function" ? options as (error: Error | null, stdout: string) => void : done;
+        queueMicrotask(() => callback?.(new Error("unreadable"), ""));
+        return {} as ChildProcess;
+      }
+      return actual(file, args, options as never, done as never);
+    }) as unknown as typeof execFile);
+    let found: BrowserSessionDiscovery | null = null;
+    try {
+      found = await browserSessionProcessTrees(process.execPath, expected.AGENT_BROWSER_SESSION, expected);
+    } finally {
+      vi.mocked(execFile).mockImplementation(actual);
+    }
+    expect(found?.complete).toBe(false);
+    expect(found?.trees.map((tree) => tree.daemon)).toEqual([orphan.pid]);
+    expect(await stopBrowserProcesses(found!.trees[0]!, 0)).toBe(true);
+    expect(gone(orphan.pid!)).toBe(true);
+    expect(execFileSync("ps", ["-o", "stat=", "-p", String(unrelated.pid)], { encoding: "utf8" })).not.toMatch(/[TZ]/);
+    expect(readFileSync(join(unrelatedProfile, "Default", "Cookies"), "utf8")).toBe("fixture");
   });
 
   it("requires a filesystem scope before freezing an env-only same-session daemon", async () => {
