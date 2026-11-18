@@ -31,6 +31,10 @@ export const computerFeatureShape = {
   reportComputerEvidence: off(),
   /** Offer a bot read_window: one window as text, without a screenshot or the structured copy, wrapped as screen data. */
   offerComputerReadWindow: off(),
+  /** Offer a bot computer_batch: up to six actions in one step, each checked and confirmed as if made alone, stopping at the first
+   * that is refused, fails or shows no change. It needs verifyComputerEffects and reportComputerEvidence: without a verdict per action
+   * there is nothing to stop on, so the tool is not offered. */
+  offerComputerBatch: off(),
   /** Send an API model only the newest two screenshots a computer returned, and a line of text for each older one. */
   capComputerScreenshots: off(),
 };
@@ -44,6 +48,7 @@ export function computerGuardsFrom(features: ComputerFeatureFlags | undefined): 
     anchor: features?.anchorComputerTargets, scroll: features?.verifyComputerScroll, untrusted: features?.wrapComputerScreenData,
     guidance: features?.guideComputerUse, pointer: features?.showComputerPointer, evidence: features?.reportComputerEvidence,
     risk: features?.confirmComputerFinalActions, readWindow: features?.offerComputerReadWindow,
+    batch: features?.offerComputerBatch,
   };
 }
 

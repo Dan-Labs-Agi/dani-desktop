@@ -3,6 +3,7 @@
 // names only those two, so a bot relays them to the person, who has no way to act on either.
 import { describeComputerCall } from "../shared/your-computer.ts";
 import { createComputerPipeline, type ComputerPipelineFlags } from "./pipeline.ts";
+import { BATCH_TOOL } from "./batch-tool.ts";
 import { READ_WINDOW_TOOL } from "./read-window-tool.ts";
 import { wrapWindowResult } from "./stages/untrusted.ts";
 import { WALKTHROUGH_TOOL } from "./walkthrough-tool.ts";
@@ -38,8 +39,8 @@ function refusesOwnProfile(result: JsonObject): boolean {
 }
 
 /** One MCP stdio frame from the local driver; tool guidance and an existing-profile refusal may be rewritten. */
-export function localComputerResultLine(line: string, wrapScreen = false, addGuidance = false, offerReadWindow = false): string {
-  if (!line.includes(REFUSAL_CODE) && !((addGuidance || offerReadWindow) && line.includes('"tools"')) && !(wrapScreen && line.includes('"elements"'))) return line;
+export function localComputerResultLine(line: string, wrapScreen = false, addGuidance = false, offerReadWindow = false, offerBatch = false): string {
+  if (!line.includes(REFUSAL_CODE) && !((addGuidance || offerReadWindow || offerBatch) && line.includes('"tools"')) && !(wrapScreen && line.includes('"elements"'))) return line;
   let frame: unknown;
   try {
     frame = JSON.parse(line);
@@ -50,7 +51,7 @@ export function localComputerResultLine(line: string, wrapScreen = false, addGui
   if (wrapScreen && isObject(frame.result.structuredContent) && Array.isArray(frame.result.structuredContent.elements)) {
     return JSON.stringify({ ...frame, result: wrapWindowResult(frame.result) });
   }
-  if ((addGuidance || offerReadWindow) && Array.isArray(frame.result.tools)) {
+  if ((addGuidance || offerReadWindow || offerBatch) && Array.isArray(frame.result.tools)) {
     const tools = frame.result.tools.map((tool) => {
       if (!addGuidance || !isObject(tool) || typeof tool.name !== "string" || typeof tool.description !== "string") return tool;
       if (tool.name !== "get_window_state" && tool.name !== "screenshot") return tool;
@@ -59,6 +60,7 @@ export function localComputerResultLine(line: string, wrapScreen = false, addGui
     const offer = (extra: { name: string }) => { if (!tools.some((tool) => isObject(tool) && tool.name === extra.name)) tools.push(extra); };
     if (addGuidance) { offer(WALKTHROUGH_TOOL); offer(WALKTHROUGH_TARGET_TOOL); }
     if (offerReadWindow) offer(READ_WINDOW_TOOL);
+    if (offerBatch) offer(BATCH_TOOL);
     return JSON.stringify({ ...frame, result: { ...frame.result, tools } });
   }
   if (!Array.isArray(frame.result.content) || !refusesOwnProfile(frame.result)) return line;

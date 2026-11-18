@@ -259,6 +259,91 @@ describe("the computer service with its checks on", () => {
     }
   }, 30_000);
 
+  it("offers computer_batch only with the checks that give each action a verdict", async () => {
+    const names = async (guards: Parameters<typeof session>[0], verify: boolean) => {
+      const run = await session(guards, verify);
+      try {
+        return (await run.request("tools/list", {})).tools.map((tool: { name: string }) => tool.name);
+      } finally {
+        await run.close();
+      }
+    };
+    expect(await names({ batch: true, evidence: true }, true)).toContain("computer_batch");
+    expect(await names({ batch: true, evidence: true }, false)).not.toContain("computer_batch");
+    expect(await names({ batch: true }, true)).not.toContain("computer_batch");
+    expect(await names({ evidence: true }, true)).not.toContain("computer_batch");
+  }, 60_000);
+
+  it("runs a batch's calls one after another as the agent's own, answers once, and journals nothing for the batch itself", async () => {
+    const single = await session({ batch: true, evidence: true }, true, OPEN, true);
+    try {
+      await single.call("get_window_state", window);
+      await single.call("click", { ...window, element_index: 1 });
+      await single.call("click", { ...window, element_index: 1 });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } finally {
+      await single.close();
+    }
+    const run = await session({ batch: true, evidence: true }, true, OPEN, true);
+    try {
+      const batch = await run.call("computer_batch", { calls: [{ name: "get_window_state", arguments: window }, { name: "click", arguments: { ...window, element_index: 1 } }, { name: "click", arguments: { ...window, element_index: 1 } }] });
+      expect(batch.structuredContent).toMatchObject({ planned: 3, ran: 3, stopped: null });
+      expect(batch.isError).toBeUndefined();
+      expect(batch.content[0].text).toContain("Ran all 3 calls.");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(run.journal.map((entry) => entry.tool)).not.toContain("computer_batch");
+      expect(run.journal.map((entry) => entry.tool)).toEqual(single.journal.map((entry) => entry.tool));
+      const seen = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
+      expect(seen.filter((name) => name === "click")).toHaveLength(2);
+    } finally {
+      await run.close();
+    }
+  }, 30_000);
+
+  it("stops a batch at the first call that leaves the window unchanged, and makes none after it", async () => {
+    const run = await session({ batch: true, evidence: true }, true);
+    try {
+      const batch = await run.call("computer_batch", { calls: [{ name: "click", arguments: { ...window, element_index: 1 } }, { name: "press_key", arguments: { ...window, key: "F13" } }, { name: "click", arguments: { ...window, element_index: 1 } }] });
+      expect(batch.structuredContent).toMatchObject({ planned: 3, ran: 2, stopped: "the window did not change" });
+      expect(batch.content[0].text).toContain("Ran 2 of 3 calls and stopped");
+      const seen = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
+      expect(seen.filter((name) => name === "click")).toHaveLength(1);
+    } finally {
+      await run.close();
+    }
+  }, 30_000);
+
+  it("holds a final action inside a batch exactly as it would alone: asked about, refused, never sent, and nothing after it runs", async () => {
+    const reason = "The person has not answered yet, so this call was NOT performed.";
+    const run = await session({ batch: true, evidence: true, risk: true }, true, (query) => (query.get("risk") === "final"
+      ? { status: 200, body: { held: true, helpOpen: false, blockedReason: reason } }
+      : OPEN(query)));
+    try {
+      const batch = await run.call("computer_batch", { calls: [{ name: "get_window_state", arguments: window }, { name: "click", arguments: { ...window, element_index: 2 } }, { name: "click", arguments: { ...window, element_index: 1 } }] });
+      expect(batch.isError).toBe(true);
+      expect(batch.structuredContent).toMatchObject({ planned: 3, ran: 2, stopped: "it was refused or failed" });
+      expect(batch.content[0].text).toContain(reason);
+      expect(run.checks.some((query) => query.get("risk") === "final")).toBe(true);
+      const seen = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
+      expect(seen).not.toContain("click");
+    } finally {
+      await run.close();
+    }
+  }, 30_000);
+
+  it("runs nothing for a batch that cannot be run, and keeps the calls behind it in order", async () => {
+    const run = await session({ batch: true, evidence: true }, true);
+    try {
+      const refused = await run.call("computer_batch", { calls: [{ name: "launch_app", arguments: {} }] });
+      expect(refused.isError).toBe(true);
+      expect(refused.content[0].text).toContain("Nothing was run");
+      const seen = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
+      expect(seen).toEqual(["get_window_state"]);
+    } finally {
+      await run.close();
+    }
+  }, 30_000);
+
   it("leaves a plain session exactly as it was: no pointer, no read-backs, no report", async () => {
     const run = await session({}, false);
     try {

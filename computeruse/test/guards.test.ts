@@ -3,7 +3,7 @@ import { guardEnv, guardsFromEnv, type ComputerGuards } from "../guards.ts";
 
 const everything: Required<ComputerGuards> = {
   stale: true, loop: true, typing: true, anchor: true, scroll: true, untrusted: true, guidance: true,
-  pointer: true, evidence: true, risk: true, readWindow: true,
+  pointer: true, evidence: true, risk: true, readWindow: true, batch: true,
 };
 
 describe("computer guards", () => {

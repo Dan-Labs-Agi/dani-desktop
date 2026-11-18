@@ -4,6 +4,7 @@ import { StringDecoder } from "node:string_decoder";
 import { CONTROL_ACT_WITHIN_MS, CONTROL_UNCONFIRMED, CONTROL_WAITED, controlRefusal, createControlClient, type ControlState } from "./control-client.ts";
 import { augmentedPath, resolveCliSpawn } from "./env-path.ts";
 import { createAliases, type ToolAlias } from "./mcp-bridge-alias.ts";
+import { type BatchSpec, createBatches } from "./mcp-bridge-batch.ts";
 import { textOnlyErrorResultLine } from "./mcp-error-result.ts";
 import { createToolListNormalizer } from "./mcp-tool-schema.ts";
 import { createJournalTap, postJournal } from "./saved-steps/journal-tap.ts";
@@ -118,6 +119,8 @@ export interface BridgeOptions {
   rewriteResponse?: (line: string) => string;
   /** A tool the agent sees that is another of the driver's; see ToolAlias. */
   alias?: ToolAlias;
+  /** A tool that is several of the agent's own calls in one frame; see BatchSpec. Frames behind it wait for it. */
+  batch?: BatchSpec;
   /** A tools/call the bridge carries out itself through the child, answering the agent with what this resolves to; null
    * forwards the frame as it came. Frames after it wait, so the agent's calls still act in order. */
   relay?: (call: ToolCall, child: ChildCalls) => Promise<unknown> | null;
@@ -330,7 +333,9 @@ export function runMcpBridge(options: BridgeOptions): void {
   const tap = options.journal
     ? createJournalTap({ post: postJournal(options.journal.url, options.journal.token) })
     : null;
-  const reply = createReplyQueue(tap, (written) => process.stdout.write(written + "\n"));
+  const reply = createReplyQueue(tap, (written) => {
+    if (!batches.take(written)) process.stdout.write(written + "\n");
+  });
   const answer = (line: string) => reply(line, line);
   const toolLists = createToolListNormalizer(toolSchemaProfileFromEnv(), (line) => process.stderr.write(`${options.label}: ${line}\n`));
   // Injected responses must never land inside one of the child's half-written frames.
@@ -371,13 +376,25 @@ export function runMcpBridge(options: BridgeOptions): void {
     forward,
     ...(client ? { gate: { check: (frame: unknown) => client.state(true, options.gate?.describe?.(frame)) } } : {}),
   });
-  let pendingInput = Promise.resolve();
-  const inbound = createLineSplitter((received) => {
+  const handle = (received: string) => {
     const line = aliases.request(received);
     toolLists.observeRequest(line);
     tap?.request(line);
-    const completion = intercept(line);
-    if (completion) pendingInput = completion;
+    return intercept(line);
+  };
+  const batches = createBatches(options.batch, { feed: handle, reply: answer });
+  let pendingInput = Promise.resolve();
+  let lane = Promise.resolve();
+  const inbound = createLineSplitter((received) => {
+    if (!options.batch) {
+      const completion = handle(received);
+      if (completion) pendingInput = completion;
+      return;
+    }
+    // A batch makes its calls one after another, so a line behind it waits until it has answered.
+    const batch = batches.parse(received);
+    lane = lane.then(() => (batch ? batches.run(batch) : handle(received))).catch(() => {});
+    pendingInput = lane;
   });
 
   const onStdin = (chunk: Buffer) => inbound.push(chunk);

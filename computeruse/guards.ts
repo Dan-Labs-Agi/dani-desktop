@@ -11,6 +11,7 @@ export interface ComputerGuards {
   evidence?: boolean;
   risk?: boolean;
   readWindow?: boolean;
+  batch?: boolean;
 }
 
 const GUARD_ENV: Record<keyof ComputerGuards, string> = {
@@ -25,6 +26,7 @@ const GUARD_ENV: Record<keyof ComputerGuards, string> = {
   evidence: "OMB_COMPUTER_EVIDENCE",
   risk: "OMB_COMPUTER_RISK",
   readWindow: "OMB_COMPUTER_READ_WINDOW",
+  batch: "OMB_COMPUTER_BATCH",
 };
 
 const NAMES = Object.keys(GUARD_ENV) as Array<keyof ComputerGuards>;

@@ -80,6 +80,20 @@ verdict is still counted.
 - The checked flow, secret-value removal and tag stripping are tested on a fixture driver, not on this one: this driver held
   the card number's value back itself.
 
+## computer_batch
+
+`--phase batch` makes batches of two clicks on the fixture's Mark button (a toggle), then a `read_window`, with every check on.
+
+- The first click is a UIA Invoke and reads back "changed". The second is refused: by the driver when it carries the same token
+  ("element_token is stale; call get_window_state again to refresh"), and by the stale-window check when it carries the
+  snapshot id and index ("The window changed since this target was chosen"). The batch stops at it and says so; Mark was
+  toggled once, not twice.
+- So on this driver a second element-addressed action in one batch cannot run: the read-back after the first action mints new
+  tokens, and the window it changed is no longer the one the target was chosen from. That is the checks working, not a fault.
+  A batch earns its place only for steps that name no element: key presses, typing into the focused field, scrolling, and a
+  closing `read_window`.
+- Not measured: whether a batch saves time. Nothing here times a model's round trips.
+
 ## Limits
 
 - One run, one machine, one driver version, one small window. A large window will cost more per read; a read is cut

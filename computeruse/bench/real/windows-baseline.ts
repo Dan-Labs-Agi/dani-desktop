@@ -1,7 +1,7 @@
 // Runs the real Windows cua-driver, through the real computer service with the checks on, against a disposable window this
 // script opens itself, and records what the driver actually answered. It acts only on a window owned by that window's own
 // process, uses background delivery so the person's mouse and keyboard are not taken over, and stops everything it started.
-//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|foreground|readwindow|all] [--out FOLDER]
+//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|foreground|readwindow|batch|all] [--out FOLDER]
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -183,6 +183,36 @@ async function readWindowPhase() {
   }
 }
 
+async function batchPhase() {
+  const session = await openSession("batch", true, { ...CHECKED, batch: true, readWindow: true }, () => ({ held: false, helpOpen: false }));
+  try {
+    const target = await findWindow(session);
+    const read = () => session.call("get_window_state", { ...target, include_screenshot: false }, "read the fixture window");
+    const markOf = (state: Record<string, any>) => (state.structuredContent?.elements ?? []).find((element: any) => String(labelOf(element) ?? "").startsWith("Mark"));
+    const state = await read();
+    const mark = markOf(state);
+    note("what addresses an element in one read", { snapshot_id: state.structuredContent?.snapshot_id, token: mark?.element_token, index: mark?.element_index });
+    const byToken = await session.call("computer_batch", { calls: [
+      { name: "click", arguments: { ...target, element_token: mark?.element_token } },
+      { name: "click", arguments: { ...target, element_token: mark?.element_token } },
+      { name: "read_window", arguments: target },
+    ] }, "batch: two clicks on one token, then read_window");
+    note("batch of two clicks on one token", { structured: byToken.structuredContent, text: said(byToken, 700) });
+    const second = await read();
+    const mark2 = markOf(second);
+    const bySnapshot = await session.call("computer_batch", { calls: [
+      { name: "click", arguments: { ...target, snapshot_id: second.structuredContent?.snapshot_id, element_index: mark2?.element_index } },
+      { name: "click", arguments: { ...target, snapshot_id: second.structuredContent?.snapshot_id, element_index: mark2?.element_index } },
+      { name: "read_window", arguments: target },
+    ] }, "batch: two clicks on snapshot_id and element_index, then read_window");
+    note("batch of two clicks on snapshot_id and element_index", { structured: bySnapshot.structuredContent, text: said(bySnapshot, 900) });
+    const point = markOf(await read());
+    note("Mark after all of that", String(labelOf(point) ?? "?"));
+  } finally {
+    await session.close();
+  }
+}
+
 const tokenOf = (state: Record<string, any>, name: string): string | undefined => elementNamed(state, name)?.element_token;
 const said = (result: Record<string, any>, length = 450) => clip((result.content ?? []).map((part: any) => part.text).join(" | "), length);
 
@@ -302,6 +332,7 @@ try {
   if (phase === "stale" || phase === "all") await stalePhase();
   if (phase === "foreground") await foregroundPhase();
   if (phase === "readwindow") await readWindowPhase();
+  if (phase === "batch") await batchPhase();
 } finally {
   if (fixture && fixture.exitCode === null) spawnSync("taskkill", ["/pid", String(fixture.pid), "/t", "/f"], { stdio: "ignore" });
   if (!daemonWasRunning && daemonRunning()) {
