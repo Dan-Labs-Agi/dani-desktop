@@ -263,15 +263,18 @@ class BrowserClient {
   /** agent-browser's MCP loop exits on stdin EOF and leaves the daemon; Windows taskkill /T would kill that profile's Chrome too. */
   private retireTransport(): Promise<void> {
     return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout>;
       const finish = () => {
         clearTimeout(timer);
         this.child.off("exit", finish);
         this.terminationProved = this.child.exitCode !== null || this.child.signalCode !== null;
         resolve();
       };
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
+        // kill() requests termination; only the exit event (or the bounded
+        // recheck) proves it. Windows can deliver that event after this timer.
         try { this.child.kill("SIGKILL"); } catch {}
-        finish();
+        timer = setTimeout(finish, 1_000);
       }, 1_000);
       this.child.once("exit", finish);
       if (this.child.exitCode !== null || this.child.signalCode !== null) finish();

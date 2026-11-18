@@ -34,7 +34,7 @@ it("boots, starts an interrupted routine once more, and reports it back to its s
       XDG_DATA_HOME: join(dataDir, ".local", "share"), HERMES_HOME: join(dataDir, ".hermes"),
       TEMP: join(dataDir, "tmp"), TMP: join(dataDir, "tmp"), TMPDIR: join(dataDir, "tmp"),
       OMB_PORT: new URL(url).port, OMB_WEBHOOK_PORT: String(Number(new URL(url).port) + 1),
-      PATH: dirname(process.execPath), FAKE_CLAUDE_MODE: "happy",
+      PATH: dirname(process.execPath), FAKE_CLAUDE_MODE: "happy", OMB_TEST_SEALED_PATH: "1",
     });
     const log = openSync(logPath, "a", 0o600);
     restarted = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./index.ts", import.meta.url))], {

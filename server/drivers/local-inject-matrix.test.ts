@@ -1,5 +1,5 @@
 // Every local host × every agent writer, with the model-id dialects those CLIs actually speak.
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -484,7 +484,7 @@ describe("Qwen / Hermes ACP turns", () => {
     }
   });
 
-  it("Hermes ACP does not inherit OPENAI_API_KEY and set_model uses custom:omlx:…", async () => {
+  it("Hermes rejects an undiscovered local model before launching an unqualified ACP installation", async () => {
     const home = scratchHome("omb-hermes-turn-");
     mkdirSync(join(home, ".hermes"), { recursive: true });
     writeFileSync(
@@ -505,25 +505,12 @@ describe("Qwen / Hermes ACP turns", () => {
       enabled: true,
       config: { cli: FAKE_ACP, fullAuto: true },
     });
-    const recorder = recordEvents(instance.adapter);
     try {
-      await instance.adapter.sendTurn({ threadId: "t-hermes", text: "hi", model: "omlx::gemma-4-31b-it-bf16" });
-      await recorder.until((e) => e.type === "turn.completed");
-      const seen = JSON.parse(readFileSync(dump, "utf8")) as { argv: string[]; env: Record<string, string> };
-      expect(seen.argv).toEqual(["acp"]);
-      expect(seen.env.OPENAI_API_KEY).toBeUndefined();
-      expect(seen.env.OPENROUTER_API_KEY).toBeUndefined();
-      const configCalls = JSON.parse(readFileSync(`${dump}.config.json`, "utf8")) as Array<{
-        method: string;
-        params: { modelId?: string };
-      }>;
-      expect(configCalls).toContainEqual({
-        method: "session/set_model",
-        params: { sessionId: "fake-acp-session", modelId: "custom:omlx:gemma-4-31b-it-bf16" },
-      });
-      const yaml = readFileSync(join(home, ".hermes", "config.yaml"), "utf8");
-      expect(yaml).toContain("provider: auto");
-      expect(yaml).toContain("  omlx:");
+      await expect(instance.adapter.sendTurn({ threadId: "t-hermes", text: "hi", model: "omlx::gemma-4-31b-it-bf16" }))
+        .rejects.toThrow(/current provider catalog/);
+      expect(existsSync(dump)).toBe(false);
+      expect(readFileSync(join(home, ".hermes", "config.yaml"), "utf8"))
+        .toBe("model:\n  provider: auto\n  base_url: https://openrouter.ai/api/v1\n");
     } finally {
       await instance.dispose();
     }
@@ -553,7 +540,7 @@ describe("room turns must pass the picker model", () => {
     }
   });
 
-  it("Hermes without a model never session/set_model — that is the OpenRouter 401", async () => {
+  it("Hermes without a provider-qualified model rejects before a native prompt", async () => {
     const home = scratchHome("omb-hermes-noroom-");
     mkdirSync(join(home, ".hermes"), { recursive: true });
     const dump = join(home, "env.json");
@@ -564,15 +551,10 @@ describe("room turns must pass the picker model", () => {
       enabled: true,
       config: { cli: FAKE_ACP, fullAuto: true },
     });
-    const recorder = recordEvents(instance.adapter);
     try {
-      await instance.adapter.sendTurn({ threadId: "t-hermes-bare", text: "hi" });
-      await recorder.until((e) => e.type === "turn.completed");
-      let configCalls: Array<{ method: string }> = [];
-      try {
-        configCalls = JSON.parse(readFileSync(`${dump}.config.json`, "utf8")) as Array<{ method: string }>;
-      } catch {}
-      expect(configCalls.some((call) => call.method === "session/set_model")).toBe(false);
+      await expect(instance.adapter.sendTurn({ threadId: "t-hermes-bare", text: "hi" }))
+        .rejects.toThrow(/provider-qualified model/);
+      expect(existsSync(dump)).toBe(false);
     } finally {
       await instance.dispose();
     }

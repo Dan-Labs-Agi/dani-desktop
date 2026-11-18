@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -8,6 +9,7 @@ import { waitForExit } from "./testing/cleanup.ts";
 
 it("retains empty teams, moves existing bots, and keeps legacy imports additive through restart", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const { url, dataDir, logPath } = fixture.info;
   const evidence: unknown[] = [{ fixture: fixture.info }];
   let restarted: ChildProcess | undefined;
@@ -86,7 +88,7 @@ it("retains empty teams, moves existing bots, and keeps legacy imports additive 
       XDG_DATA_HOME: join(dataDir, ".local", "share"), HERMES_HOME: join(dataDir, ".hermes"),
       TEMP: join(dataDir, "tmp"), TMP: join(dataDir, "tmp"), TMPDIR: join(dataDir, "tmp"),
       OMB_PORT: new URL(url).port, OMB_WEBHOOK_PORT: String(Number(new URL(url).port) + 1),
-      PATH: dirname(process.execPath), FAKE_CLAUDE_MODE: "happy",
+      PATH: dirname(process.execPath), FAKE_CLAUDE_MODE: "happy", OMB_TEST_SEALED_PATH: "1",
     });
     const restartFixture = async () => {
       const log = openSync(logPath, "a", 0o600);

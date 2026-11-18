@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // The loop guard end to end, through a real harness server and the fake
 // Claude engine playing a turn that runs one shell command twelve times,
 // failing the same way every time, and then holds. Off, the turn is left
@@ -36,6 +37,7 @@ it("leaves a stuck turn alone when off; on, tells it at 5 in a row and stops it 
     rmSync(scratch, { recursive: true, force: true });
     throw error;
   });
+  await disableFixtureChiefs(fixture.info.url);
   const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(`${fixture.info.url}${path}`, {

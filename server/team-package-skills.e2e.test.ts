@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -7,6 +8,7 @@ import { parseBotPackage } from "./bot-package.ts";
 
 it("transfers only selected skills disabled, preserves originals, and rolls back failed installation", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   console.log(JSON.stringify({ fixture: fixture.info }));
   const url = fixture.info.url;
   const post = (path: string, body: unknown) => request(path, { method: "POST", body: JSON.stringify(body) }, url);

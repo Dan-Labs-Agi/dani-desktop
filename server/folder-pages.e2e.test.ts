@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // End-to-end on the fakes: a scripted bot shows a dashboard folder (index.html, a script and a Parquet file) inline,
 // its frame's files load through the token route with no sign-in, another bot can't show that folder, and publishing the
 // folder gives the same card its link. One loopback stub stands in for the pages service; no model is called.
@@ -41,6 +42,7 @@ beforeAll(async () => {
   globalThis.fetch = (input, init = {}) => realFetch(input, { ...init, headers: { ...Object.fromEntries(new Headers(init.headers)), "x-danibot-desktop-owner": owner } });
   fixture = await launchVerificationServer({ ...process.env, OMB_TEST_DESKTOP_OWNER_TOKEN: owner,
     OMB_TEST_DESKTOP_PAGES_ACCESS: JSON.stringify({ url: `${stub.url}/api/cloud/pages/token`, token: FAKE_DESKTOP_TOKEN }) }, undefined, undefined, undefined, undefined, { scripted: true });
+  await disableFixtureChiefs(fixture.info.url);
 }, 90_000);
 afterAll(async () => {
   globalThis.fetch = realFetch;

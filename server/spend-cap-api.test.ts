@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // The isolated fake-engine fixture with a stand-in enterprise layer granting `budgets` and `billing`; no real licence, engine or provider.
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,6 +23,7 @@ describe("spend cap and prices through real turns", () => {
     mkdirSync(join(layerDir, "server"));
     writeFileSync(join(layerDir, "server", "index.js"), 'export async function register() { return { customer: "Fixture Co", features: ["budgets", "billing"], expiresAt: "2099-01-01" }; }\n');
     session = await launchVerificationServer(process.env, undefined, undefined, undefined, { dir: layerDir, licenseKey: "fixture-key" });
+    await disableFixtureChiefs(session.info.url);
   }, 60_000);
 
   afterEach(async () => {
@@ -46,6 +48,7 @@ describe("spend cap and prices through real turns", () => {
     }));
     session = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_TEXT_ROUTES: routes, FAKE_CLAUDE_TEXT_DUMP: dump },
       undefined, undefined, undefined, { dir: layerDir, licenseKey: "fixture-key" });
+    await disableFixtureChiefs(session.info.url);
     const created = await api("/api/bots", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Budgeted memory" }) });
     expect(created.status).toBe(201);
     const { bot } = await created.json() as any;

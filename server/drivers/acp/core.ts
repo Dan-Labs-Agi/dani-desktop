@@ -1547,7 +1547,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
                 }
                 acknowledge();
                 if (!state.stopped) emit({ ...base(threadId, turnId), type: "runtime.error", message: engineFailureMessage(support.displayName, message) ?? message });
-                emit({ ...base(threadId, turnId), type: "turn.completed", ok: state.stopped,
+                emit({ ...base(threadId, turnId), type: "turn.completed", ok: false,
                   stopReason: state.stopped ? "cancelled" : "rpc_error", cost: null });
                 return;
               }

@@ -139,7 +139,7 @@ it("Stop cancels a stalled summary without writing a late record or starting an 
   const count = f.turns().length;
   await f.compact();
   await expect.poll(() => {
-    const dump = JSON.parse(readFileSync(f.session.fixtureDumpPath, "utf8"));
+    const dump = JSON.parse(readFileSync(join(f.session.info.dataDir, "fake-claude-text.json"), "utf8"));
     return typeof dump.prompt === "string" && dump.prompt.startsWith("Summarize this conversation");
   }).toBe(true);
   await expect(f.compact()).rejects.toThrow(/already working/);
