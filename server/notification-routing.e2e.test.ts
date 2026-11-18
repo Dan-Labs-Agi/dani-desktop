@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -164,6 +165,7 @@ beforeAll(async () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
+  await disableFixtureChiefs(base);
 }, 45_000);
 
 afterAll(async () => {
