@@ -1,12 +1,13 @@
-name: Verify main installed Windows app
+name: Verify exact release Linux installer
 on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   installed:
-    runs-on: windows-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -15,11 +16,23 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
-      - run: pnpm install --frozen-lockfile
-      - run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs
-      - run: pnpm package:win
-        env:
-          NODE_OPTIONS: --max-old-space-size=7168
-      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - run: node scripts/verify-main-installed.cjs
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: linux-release
+          path: release
+          run-id: 44368392873
+          github-token: ${{ github.token }}
+      - run: sudo apt-get update && sudo apt-get install -y at-spi2-core dbus-x11 libxi6 libxkbcommon0 xvfb
+      - name: Verify exact DEB upgrade
+        run: |
+          sha256sum release/*.deb
+          sudo --preserve-env=CI,RUNNER_TEMP node scripts/smoke-deb-upgrade.mjs release/DaniBot-0.1.141-amd64.deb
+      - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
+      - run: dbus-run-session -- xvfb-run -a node scripts/verify-exact-linux-installed.cjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: installed-linux-evidence
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 7
