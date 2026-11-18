@@ -1,25 +1,20 @@
-name: Verify main installed Windows app
+name: Diagnose Windows CUA binary
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  installed:
+  diagnose:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
-      - run: pnpm install --frozen-lockfile
-      - run: node --test electron/startup-tray.node-test.mjs scripts/source-installer.node-test.mjs
-      - run: pnpm package:win
-        env:
-          NODE_OPTIONS: --max-old-space-size=7168
-      - run: npm install --prefix "$env:RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
-      - run: node scripts/verify-main-installed.cjs
+      - shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.28.2/cua-driver-rs-0.28.2-windows-x86_64-binary.zip' -OutFile "$env:RUNNER_TEMP/cua.zip"
+          Get-FileHash "$env:RUNNER_TEMP/cua.zip" -Algorithm SHA256
+          Expand-Archive "$env:RUNNER_TEMP/cua.zip" "$env:RUNNER_TEMP/cua"
+          Get-ChildItem "$env:RUNNER_TEMP/cua"
+          & "$env:RUNNER_TEMP/cua/cua-driver.exe" --version
+          Write-Output "PowerShell exit: $LASTEXITCODE"
+          $env:CUA_DIAG = "$env:RUNNER_TEMP/cua/cua-driver.exe"
+          node -e 'const {execFile}=require("node:child_process");execFile(process.env.CUA_DIAG,["--version"],{timeout:30000,windowsHide:true},(error,stdout,stderr)=>console.log(JSON.stringify({error:error?{message:error.message,code:error.code,signal:error.signal,killed:error.killed}:null,stdout,stderr})))'
