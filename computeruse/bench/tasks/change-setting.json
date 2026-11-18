@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Switch the theme to dark in Settings.",
+  "ask": "Switch the theme to dark in Settings.",
   "timeoutMs": 30000,
   "setup": [
     {

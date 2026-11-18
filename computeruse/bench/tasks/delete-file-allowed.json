@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Remove draft.txt when the person agrees, and leave keep.txt alone.",
+  "ask": "Remove draft.txt.",
   "timeoutMs": 30000,
   "setup": [
     {

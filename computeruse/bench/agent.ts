@@ -20,6 +20,12 @@ export interface AgentRun {
   gaveUp?: string;
   /** Why it could not carry on: its own steps name something that is not there. */
   scriptError?: string;
+  /** What a model agent spent. A scripted agent spends nothing. */
+  usage?: { requests: number; inputTokens: number; outputTokens: number };
+  /** Why a model agent was stopped rather than finishing: its steps, its tokens, or the model itself. */
+  stopped?: "step-limit" | "token-budget" | "model-error";
+  /** What a model agent has to say about why it stopped. */
+  note?: string;
 }
 
 interface Element { element_index: number; element_token?: string; role: string; label?: string; value?: unknown }

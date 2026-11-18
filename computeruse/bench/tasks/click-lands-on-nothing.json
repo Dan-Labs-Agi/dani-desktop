@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Apply the setting: the first click reaches the window and does nothing.",
+  "ask": "Apply the options in the Options window.",
   "timeoutMs": 30000,
   "setup": [],
   "requiredEndState": [

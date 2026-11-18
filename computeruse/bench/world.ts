@@ -17,7 +17,7 @@ import { type ComputerCounters, emptyCounters } from "../counters.ts";
 import { COMPUTER_EVIDENCE_PATH, parseEvidence } from "../evidence.ts";
 import type { ComputerGuards } from "../guards.ts";
 import { gatedLocalComputer } from "../local-computer.ts";
-import { runScriptedAgent, type RpcResult } from "./agent.ts";
+import { type AgentRun, type Rpc, runScriptedAgent, type RpcResult } from "./agent.ts";
 import type { ComputerTaskResult } from "./report.ts";
 import { type ComputerSnapshot, scoreTask } from "./scorers/state.ts";
 import type { BenchTask } from "./task.ts";
@@ -36,11 +36,30 @@ export const PROFILES: Readonly<Record<string, Profile>> = {
   },
 };
 
+export interface ToolSpec { name: string; description?: string; inputSchema?: Record<string, unknown> }
+
+/** What an agent is given: the calls of the computer as the bridge answers them, the tools the bridge lists (with the checks'
+ * own guidance in their descriptions), and a signal that fires when the task runs out of time. */
+export interface AgentSession {
+  rpc: Rpc;
+  tools(): Promise<ToolSpec[]>;
+  signal: AbortSignal;
+}
+export type RunAgent = (task: BenchTask, session: AgentSession) => Promise<AgentRun>;
+
+export interface RunOptions {
+  /** Defaults to the task's scripted steps. */
+  agent?: RunAgent;
+  /** Defaults to the task's own limit. */
+  timeoutMs?: number;
+}
+
 export interface TaskRun {
   result: ComputerTaskResult;
   trace: string[];
   gaveUp?: string;
   scriptError?: string;
+  note?: string;
 }
 
 const DRIVER = fileURLToPath(new URL("./driver.ts", import.meta.url));
@@ -110,7 +129,7 @@ function broker(task: BenchTask, profile: Profile) {
   return { server, evidence: () => evidence };
 }
 
-export async function runFixtureTask(task: BenchTask, profile: Profile): Promise<TaskRun> {
+export async function runFixtureTask(task: BenchTask, profile: Profile, options: RunOptions = {}): Promise<TaskRun> {
   const folder = mkdtempSync(join(tmpdir(), "computeruse-bench-"));
   const desktopFile = join(folder, "desktop.json");
   writeFileSync(desktopFile, JSON.stringify({ spec: task.desktop, seed: seedOf(task) }));
@@ -122,25 +141,29 @@ export async function runFixtureTask(task: BenchTask, profile: Profile): Promise
     false, profile.verifyEffects, profile.guards,
   );
   const child: ChildProcess = spawn(connection.command, connection.args, { env: { ...process.env, ...connection.env }, stdio: ["pipe", "pipe", "inherit"] });
-  const replies = new Map<number, (value: RpcResult) => void>();
+  const replies = new Map<number, (value: any) => void>();
   createInterface({ input: child.stdout! }).on("line", (line) => {
     const message = JSON.parse(line) as { id: number; result: RpcResult };
     replies.get(message.id)?.(message.result);
     replies.delete(message.id);
   });
   let next = 0;
-  const rpc = (name: string, args: Record<string, unknown>): Promise<RpcResult> => new Promise((resolve) => {
+  const request = <T>(method: string, params: unknown): Promise<T> => new Promise((resolve) => {
     const id = ++next;
     replies.set(id, resolve);
-    child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } }) + "\n");
+    child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
   });
+  const rpc: Rpc = (name, args) => request<RpcResult>("tools/call", { name, arguments: args });
+  const tools = async () => (await request<{ tools?: ToolSpec[] }>("tools/list", {})).tools ?? [];
+  const abort = new AbortController();
 
   const started = Date.now();
   let timedOut = false;
   try {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const limit = new Promise<null>((resolve) => { timer = setTimeout(() => { timedOut = true; resolve(null); }, task.timeoutMs); });
-    const agent = await Promise.race([runScriptedAgent(task.intents, rpc), limit]);
+    const limit = new Promise<null>((resolve) => { timer = setTimeout(() => { timedOut = true; abort.abort(); resolve(null); }, options.timeoutMs ?? task.timeoutMs); });
+    const run = options.agent ? options.agent(task, { rpc, tools, signal: abort.signal }) : runScriptedAgent(task.intents, rpc);
+    const agent = await Promise.race([run, limit]);
     clearTimeout(timer);
     const world = timedOut ? null : (await rpc("__snapshot", {})).structuredContent as Record<string, any> | undefined;
     const exited = once(child, "exit");
@@ -155,6 +178,7 @@ export async function runFixtureTask(task: BenchTask, profile: Profile): Promise
     const failures: ComputerTaskResult["failures"][number][] = [];
     if (timedOut) failures.push("timeout");
     if (agent?.scriptError) failures.push("script-error");
+    if (agent?.stopped) failures.push(agent.stopped);
     if (!score.passed) {
       if (score.required.some((entry) => !entry.passed)) failures.push("required-state");
       if (score.forbidden.some((entry) => entry.passed)) failures.push("forbidden-side-effect");
@@ -163,10 +187,12 @@ export async function runFixtureTask(task: BenchTask, profile: Profile): Promise
     const counters = control.evidence() ?? emptyCounters();
     if (!control.evidence()) counters.actions = (agent?.trace ?? []).filter((name) => !READS.has(name)).length;
     return {
-      result: { id: task.id, world: "fixture", passed: !timedOut && !agent?.scriptError && score.passed, durationMs: Date.now() - started, counters, failures },
+      result: { id: task.id, world: "fixture", passed: !timedOut && !agent?.scriptError && score.passed, durationMs: Date.now() - started, counters, failures,
+        ...(agent?.usage ? { usage: agent.usage } : {}) },
       trace: agent?.trace ?? [],
       ...(agent?.gaveUp ? { gaveUp: agent.gaveUp } : {}),
       ...(agent?.scriptError ? { scriptError: agent.scriptError } : {}),
+      ...(agent?.note ? { note: agent.note } : {}),
     };
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");

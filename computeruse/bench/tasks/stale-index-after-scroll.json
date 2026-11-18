@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Open the report in the list after scrolling: the rows move, so the first read is out of date, and the row now under the old position must not be touched.",
+  "ask": "Open the Report entry in the Reports list.",
   "timeoutMs": 30000,
   "setup": [],
   "requiredEndState": [

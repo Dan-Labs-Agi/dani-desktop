@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Keep the draft: the person says no to sending it.",
+  "ask": "Send \"hello\" to ann. If it cannot be sent, keep it as a draft.",
   "timeoutMs": 30000,
   "setup": [],
   "requiredEndState": [

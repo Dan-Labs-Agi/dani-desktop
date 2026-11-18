@@ -66,6 +66,9 @@ export const benchTaskSchema = computerTaskSchema.extend({
   desktop: desktopSchema,
   /** How the person answers a confirmation: the scripted agent never answers one itself. */
   person: z.enum(["allow", "deny"]),
+  /** What the person tells a model, with none of the scenario's traps given away. A task without one is not run by a model:
+   * its end state describes the scripted agent's behaviour (two tries, then stop), not a result a person asked for. */
+  ask: z.string().trim().min(1).optional(),
   intents: z.array(intentSchema).min(1).max(40),
 });
 

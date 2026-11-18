@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Fill in the name and continue to step two.",
+  "ask": "Fill in the name Ann in the signup form and continue to the next step.",
   "timeoutMs": 30000,
   "setup": [],
   "requiredEndState": [

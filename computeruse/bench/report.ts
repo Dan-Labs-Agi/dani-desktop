@@ -10,7 +10,9 @@ export interface ComputerTaskResult {
   passed: boolean;
   durationMs: number;
   counters: ComputerCounters;
-  failures: readonly ("timeout" | "required-state" | "forbidden-side-effect" | "driver-refusal" | "unobserved" | "script-error")[];
+  failures: readonly ("timeout" | "required-state" | "forbidden-side-effect" | "driver-refusal" | "unobserved" | "script-error" | "step-limit" | "token-budget" | "model-error")[];
+  /** Present only on a model run. */
+  usage?: { requests: number; inputTokens: number; outputTokens: number };
 }
 
 export interface ComputerReport {

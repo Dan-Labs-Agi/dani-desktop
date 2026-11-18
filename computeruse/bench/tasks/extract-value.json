@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Read the total from the sheet.",
+  "ask": "What is the total in the sheet?",
   "timeoutMs": 30000,
   "setup": [],
   "requiredEndState": [

@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Send 'hello' to ann when the person agrees.",
+  "ask": "Send \"hello\" to ann.",
   "timeoutMs": 30000,
   "setup": [],
   "requiredEndState": [

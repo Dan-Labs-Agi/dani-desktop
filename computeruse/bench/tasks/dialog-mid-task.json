@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Save over doc.txt: a confirmation window appears and has to be answered.",
+  "ask": "Save the open document over doc.txt.",
   "timeoutMs": 30000,
   "setup": [
     {

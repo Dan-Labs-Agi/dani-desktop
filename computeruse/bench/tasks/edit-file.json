@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Add 'and eggs' to the shopping note and save it.",
+  "ask": "Add \"and eggs\" to the shopping note and save it.",
   "timeoutMs": 30000,
   "setup": [
     {

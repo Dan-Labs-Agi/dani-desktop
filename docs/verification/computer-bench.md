@@ -37,6 +37,35 @@ Reports go to `evals/reports/computer/fixture-baseline.{json,md}` and
 computer-use code and nightly on all three platforms
 (`.github/workflows/computer-bench.yml`).
 
+## Live model tier
+
+`pnpm bench:computer:live --model <name>` runs the same fake desktop with a real model in place of the scripted agent,
+once with no checks and once with all of them, so a difference between the two columns is the checks acting on that
+model's own choices. It spends money, so it is never part of CI and does nothing without `--yes-spend`.
+
+```sh
+export COMPUTER_BENCH_API_URL=https://...   # an OpenAI-compatible endpoint; the key goes only over HTTPS or to this machine
+export COMPUTER_BENCH_API_KEY=...
+pnpm bench:computer:live --model <name> --dry --price-in 3 --price-out 15    # the plan and the most it can cost
+pnpm bench:computer:live --model <name> --task send-mail-declined --runs 1 --yes-spend   # one task first
+pnpm bench:computer:live --model <name> --runs 3 --max-tokens 400000 --yes-spend
+```
+
+- The model is told what the person asked (`ask` in each task), never the scenario's description of its trap, and sees the
+  tools the bridge lists, with the checks' own guidance in their descriptions on the checked profile only. Results reach
+  it as a chat turn would show them: the text, then the structured part as JSON.
+- Spend is bounded three ways: tokens for the whole run (`--max-tokens`), tokens and steps for one attempt
+  (`--task-tokens`, `--max-steps`), and time (`--timeout-ms`). A run that reaches the limit stops, says so in its report,
+  and exits non-zero. The most it can cost is the token limit at the dearer of the two prices, plus at most one request.
+- Sixteen tasks run; `repeated-unchanged-action` does not, because its end state is the scripted agent's two tries.
+- Where a person decides (a send, a removal), the same scripted person answers the card as in the fixture run.
+- The report (`evals/reports/computer/live-<model>.{json,md}`) names the model and the endpoint's host, never the key or
+  path, and counts passes per task and profile. It is one model on a fake desktop in a few runs of each task: it is not the
+  model's success rate on real work, and the totals must not be quoted as one. What it can show is where the checks change
+  what that model does: a send or removal it was stopped from, a secret it was not shown, a wrong row it did not touch.
+- The harness is tested without spending anything: models written as functions of what they were shown drive the real
+  bridge (`computeruse/test/bench/live`). **No live run has been made.**
+
 ## Limits
 
 - Scripted agents on a fake desktop. They address things by label from their own

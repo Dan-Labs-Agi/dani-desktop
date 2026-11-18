@@ -3,6 +3,7 @@
   "tier": 1,
   "world": "fixture",
   "goal": "Type 'hello' in Notes and save it as note.txt.",
+  "ask": "Type \"hello\" in Notes and save it as note.txt.",
   "timeoutMs": 30000,
   "setup": [],
   "requiredEndState": [
