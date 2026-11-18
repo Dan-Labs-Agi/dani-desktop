@@ -94,7 +94,7 @@ const checks = (...areas: string[]) => [...new Set(areas.flatMap((area) => AREA_
 describe("CI path scope", () => {
   it("runs only the docs tests, without the build, for documentation, its evidence and the docs site", () => {
     expect(selectCiScope([
-      "README.md", "AGENTS.md", "docs/guide.md", "docs/nested/guide.md", ".github/FUNDING.yml", "apps/docs/content/index.mdx",
+      "README.md", "AGENTS.md", "docs/guide.md", "docs/nested/guide.md", ".github/FUNDING.yml",
       "docs/verification/evidence/mentions/rtl-dom.json", "docs/screenshots/home.png",
     ])).toEqual({ areas: ["docs"], checks: ["docs-tests"] });
   });
@@ -105,7 +105,7 @@ describe("CI path scope", () => {
   });
 
   it("runs the build, the Linux shards and the renderer smoke for a renderer change", () => {
-    expect(selectCiScope(["src/App.tsx", "public/icon.svg", "cloud-buy-preview.html", "src/locales/en.json", "docs/guide.md"]))
+    expect(selectCiScope(["src/App.tsx", "public/icon.svg", "previews/cloud-buy-preview.html", "src/locales/en.json", "docs/guide.md"]))
       .toEqual({ areas: ["docs", "web"], checks: ["build", "docs-tests", "linux-tests", "ui-smoke"] });
   });
 
@@ -579,7 +579,7 @@ describe("version-only package.json", () => {
 
   it("never narrows a push the way it narrows a pull request", () => {
     const show = () => pkg("0.1.100");
-    for (const file of ["apps/docs/content/index.mdx", "src/locales/de.json", "src/App.tsx", "cloudflare/control-plane/src/index.ts", "server/index.ts"]) {
+    for (const file of ["src/locales/de.json", "src/App.tsx", "cloudflare/control-plane/src/index.ts", "server/index.ts"]) {
       expect(selectPushScope([file], show), file).toEqual({ runtime: true });
     }
     expect(selectPushScope([], show)).toEqual({ runtime: true });

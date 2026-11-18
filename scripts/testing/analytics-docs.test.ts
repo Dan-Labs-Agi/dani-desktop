@@ -1,5 +1,3 @@
-// docs/analytics.md is the promise of what the app sends: its Events table has a row for exactly the product events the
-// app can send, and the docs site shows the same page.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -38,9 +36,5 @@ describe("docs/analytics.md", () => {
     expect(rows.filter((event) => event.startsWith("$")), "PostHog's own events the app causes").toEqual([]);
   });
 
-  it("is the page the docs site shows", () => {
-    const docs = read("docs/analytics.md");
-    const site = read("apps/docs/content/docs/security/analytics.mdx");
-    expect(site.slice(site.indexOf("\n---\n", 3) + "\n---\n".length)).toBe(docs.slice(docs.indexOf("\n") + 1));
-  });
+
 });

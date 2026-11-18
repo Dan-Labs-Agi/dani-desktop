@@ -337,7 +337,7 @@ out of its commits and screenshots.
 
 - No DCO sign-off is required. Submit only code you wrote or have the right
   to contribute under the applicable project license.
-- Changes under `enterprise/` (source-available, see [LICENSING.md](LICENSING.md))
+- Changes under `enterprise/` (source-available, see [LICENSING.md](docs/licensing.md))
   need the [CLA](CLA.md), signed once by commenting on the pull request
   when the bot asks. Changes outside `enterprise/` do not require a CLA.
 - `enterprise/`, the cloud seam and the licensing files have code owners; a

@@ -1,12 +1,12 @@
 # Licensing
 
-DaniBot is open source under the [Apache License 2.0](LICENSE), with one
+DaniBot is open source under the [Apache License 2.0](../LICENSE), with one
 carve-out and a few notes.
 
 ## The carve-out: `enterprise/`
 
 Everything under `enterprise/` is source-available under the
-[DaniBot Enterprise License](enterprise/LICENSE), not Apache 2.0. You may
+[DaniBot Enterprise License](../enterprise/LICENSE), not Apache 2.0. You may
 read, build, and evaluate it, and run it freely in development and test.
 Running its features in production needs a license key issued for your
 organisation. Hosting it for third parties or white-labelling the product needs
@@ -20,7 +20,7 @@ its configured sign-in authority. The `open-source edition builds without
 enterprise/` CI job proves the OSS build, boot response and absent adapter
 factory; it does not exercise every hosted HTTP route. The isolated hosted
 workspace tests verify those sign-in and revocation paths separately. The list
-of entitlement ids the server understands is in [`enterprise/FEATURES`](enterprise/FEATURES).
+of entitlement ids the server understands is in [`enterprise/FEATURES`](../enterprise/FEATURES).
 
 The routing rule for new work: could any open-source user want it? Then it goes
 in core, as a public pull request. Organisation-, admin- or tier-flavoured?
@@ -32,17 +32,17 @@ data and configuration, never as a fork.
 
 - Outside `enterprise/`: contribute under Apache 2.0. No DCO sign-off or CLA is
   required. Submit only code you wrote or have the right to contribute.
-- Inside `enterprise/`: sign the [Contributor License Agreement](CLA.md) once, by
+- Inside `enterprise/`: sign the [Contributor License Agreement](../CLA.md) once, by
   commenting on your pull request. It lets the project keep that folder under
   its own license while still accepting your work.
 - The open-core boundary, the cloud seam and this file are covered by
-  [`CODEOWNERS`](.github/CODEOWNERS): a maintainer reviews changes there.
+  [`CODEOWNERS`](../.github/CODEOWNERS): a maintainer reviews changes there.
 
 ## Third-party components and trademarks
 
 Bundled third-party software keeps its own licenses; notices, license texts,
-source locations and the SBOM are listed in [NOTICE](NOTICE) and
-[`third_party/`](third_party/). The DaniBot and DaniBot names and the
+source locations and the SBOM are listed in [NOTICE](../NOTICE) and
+[`third_party/`](../third_party/). The DaniBot and DaniBot names and the
 mascot are trademarks of Supamaus Software Private Limited; the Apache License
 does not grant trademark rights (section 6),
 so a product built on DaniBot needs its own name unless a partner agreement

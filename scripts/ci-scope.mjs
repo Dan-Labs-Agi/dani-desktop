@@ -56,7 +56,7 @@ export const VITEST_SUBSETS = {
   },
   "docs-tests": {
     part: "docs tests",
-    files: ["scripts/testing/analytics-docs.test.ts", "server/model-providers-docs.test.ts", "src/locales/vocabulary.test.ts"],
+    files: ["scripts/testing/analytics-docs.test.ts", "server/model-providers-docs.test.ts"],
     shards: 1,
     nodeTests: false,
   },
@@ -80,10 +80,10 @@ export const DOCS = /^(?:[^/]+\.md|docs\/.+\.md|\.github\/FUNDING\.yml)$/;
 // anything. English is the source every test reads, so en.json is web.
 const AREAS = [
   [DOCS, "docs"],
-  [/^(?:apps\/)?docs\//, "docs"],
+  [/^docs\//, "docs"],
   [/^scripts\/.+\.test\.[cm]?[jt]sx?$/, "script-tests"],
   [/^src\/locales\/(?:(?!en\.json$)[^/]+\.json|[^/]+\.test\.ts)$/, "locales"],
-  [/^(?:src|public)\/|^[^/]+-preview\.html$/, "web"],
+  [/^(?:src|public)\/|^previews\/[^/]+-preview\.html$/, "web"],
   [/^(?:server|computeruse|shared|enterprise|companion|evals|skills|deploy|cloudflare\/composio-broker)\/|^(?:Dockerfile|\.dockerignore|compose\.yaml)$/, "server"],
   [/^electron\/(?:cua|cua-failure|cua-connection|capabilities|screen-status|shared-cua-connection|shared-computer-access|lent-screen-tools|lent-screen-failures|paced-typing)\.[cm]js$/, "windows-computer-control"],
   [/^(?:electron|build)\/|^(?:electron-builder\.yml|index\.html|rail\.html)$/, "desktop"],
