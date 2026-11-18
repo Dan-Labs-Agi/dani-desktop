@@ -14,7 +14,7 @@ too) into areas, and runs only the jobs some area can affect:
 
 | Area | Paths | What runs |
 | --- | --- | --- |
-| docs | `*.md` at the root, everything under `docs/` and `apps/docs/`, `.github/FUNDING.yml` | lint, the docs tests (the three vitest files that read the docs) on Linux |
+| docs | `*.md` at the root, everything under `docs/`, `.github/FUNDING.yml` | lint, the docs tests (the three vitest files that read the docs) on Linux |
 | locales | `src/locales/*.json` except `en.json`, `src/locales/*.test.ts` | the build, the locale tests: every `src/` test and `scripts/generate-locale.test.mjs` in two Linux shards, with the Electron node tests |
 | web | the rest of `src/`, `public/`, the root `*-preview.html` pages | the build, the eight Linux shards, the renderer smoke |
 | script tests | `scripts/**/*.test.*` | the Linux shards (and Windows', see Windows), the renderer smoke, browser identity |

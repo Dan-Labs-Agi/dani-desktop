@@ -76,7 +76,7 @@ and set the maximum number of desktops. Give each bot **Local VM** as its comput
 then create its desktop. The first image preparation needs a large download.
 Each desktop has the existing 4 GiB / 2 CPU limits; allow capacity for the server
 and build as well as all concurrent desktops. See the
-[Local VM guide](../../apps/docs/content/docs/computers/local-vm.mdx).
+[Self-hosting guide](../../docs/self-hosting.md).
 
 The server's `maus` user (1001) and each desktop's `cua` user (1000) map to the same
 rootless host user through separate `keep-id` namespaces. The server mounts the

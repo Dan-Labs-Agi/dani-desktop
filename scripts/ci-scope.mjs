@@ -56,7 +56,7 @@ export const VITEST_SUBSETS = {
   },
   "docs-tests": {
     part: "docs tests",
-    files: ["scripts/testing/analytics-docs.test.ts", "server/model-providers-docs.test.ts", "src/locales/vocabulary.test.ts"],
+    files: ["scripts/testing/analytics-docs.test.ts", "server/model-providers-docs.test.ts"],
     shards: 1,
     nodeTests: false,
   },
@@ -80,7 +80,7 @@ export const DOCS = /^(?:[^/]+\.md|docs\/.+\.md|\.github\/FUNDING\.yml)$/;
 // anything. English is the source every test reads, so en.json is web.
 const AREAS = [
   [DOCS, "docs"],
-  [/^(?:apps\/)?docs\//, "docs"],
+  [/^docs\//, "docs"],
   [/^scripts\/.+\.test\.[cm]?[jt]sx?$/, "script-tests"],
   [/^src\/locales\/(?:(?!en\.json$)[^/]+\.json|[^/]+\.test\.ts)$/, "locales"],
   [/^(?:src|public)\/|^previews\/[^/]+-preview\.html$/, "web"],

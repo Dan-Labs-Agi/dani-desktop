@@ -251,64 +251,6 @@ importers:
         specifier: 4.123.0
         version: 4.123.0(@cloudflare/workers-types@5.20260825.1)
 
-  apps/docs:
-    dependencies:
-      cnfast:
-        specifier: ^0.1.0
-        version: 0.1.0
-      fumadocs-core:
-        specifier: 16.14.5
-        version: 16.14.5(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.5)(@types/mdast@4.0.4)(@types/react@19.2.18)(lucide-react@1.33.0(react@19.2.8))(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.6.7)
-      fumadocs-mdx:
-        specifier: 15.3.0
-        version: 15.3.0(@types/mdast@4.0.4)(@types/mdx@2.0.14)(@types/react@19.2.18)(fumadocs-core@16.14.5(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.5)(@types/mdast@4.0.4)(@types/react@19.2.18)(lucide-react@1.33.0(react@19.2.8))(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.6.7))(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(vite@7.3.6(@types/node@26.2.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.16.9)(yaml@2.9.0))
-      fumadocs-ui:
-        specifier: npm:@fumadocs/base-ui@16.14.5
-        version: '@fumadocs/base-ui@16.14.5(@types/mdx@2.0.14)(@types/react@19.2.18)(fumadocs-core@16.14.5(@mdx-js/mdx@3.1.1)(@types/estree-jsx@1.0.5)(@types/hast@3.0.5)(@types/mdast@4.0.4)(@types/react@19.2.18)(lucide-react@1.33.0(react@19.2.8))(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@4.6.7))(next@16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tailwindcss@4.3.3)'
-      lucide-react:
-        specifier: ^1.31.0
-        version: 1.33.0(react@19.2.8)
-      next:
-        specifier: 16.4.3
-        version: 16.4.3(@babel/core@7.29.7)(@types/node@26.2.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
-      react-markdown:
-        specifier: ^10.1.0
-        version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
-    devDependencies:
-      '@tailwindcss/postcss':
-        specifier: ^4.3.3
-        version: 4.3.3
-      '@types/mdx':
-        specifier: ^2.0.14
-        version: 2.0.14
-      '@types/node':
-        specifier: ^26.2.0
-        version: 26.2.0
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: ^19.2.4
-        version: 19.2.4(@types/react@19.2.18)
-      oxlint:
-        specifier: 1.80.0
-        version: 1.80.0
-      postcss:
-        specifier: ^8.5.26
-        version: 8.5.26
-      tailwindcss:
-        specifier: ^4.3.3
-        version: 4.3.3
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   cloudflare/control-plane:
     dependencies:
       better-auth:

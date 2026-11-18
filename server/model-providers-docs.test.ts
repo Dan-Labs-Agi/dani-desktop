@@ -12,7 +12,7 @@ import { OPENROUTER_FAILURES, freeLabel } from "./drivers/openrouter-free.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PAGE = readFileSync(join(ROOT, "apps", "docs", "content", "docs", "providers", "model-providers.mdx"), "utf8");
+const PAGE = readFileSync(join(ROOT, "docs", "model-providers.mdx"), "utf8");
 const EN = JSON.parse(readFileSync(join(ROOT, "src", "locales", "en.json"), "utf8")) as Record<string, string>;
 
 function section(heading: string): string {
