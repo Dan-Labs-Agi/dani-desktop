@@ -19,6 +19,12 @@ beforeAll(async () => {
   fx = await launchOwnHomeFixture();
   garage = await fx.addServer("Garage server");
   family = await fx.addServer("Family server", { OMB_SIGNIN_MEMBER_EMAILS: "friend@example.test" });
+  // Ownership/move fixture, no scripted Chief verification loop.
+  for (const side of [fx.local, garage.as, family.as]) {
+    for (const bot of (await side("GET", "/api/bots")).body.bots) {
+      if (bot.chiefOfStaff) expect((await side("PATCH", `/api/bots/${bot.id}`, { chiefOfStaff: false })).status).toBe(200);
+    }
+  }
 }, hostTimeout(120_000));
 afterAll(async () => { await fx?.close(); });
 

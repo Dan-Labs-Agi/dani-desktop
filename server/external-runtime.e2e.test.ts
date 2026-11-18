@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { launchVerificationServer, verificationServerEnvironment, type VerificationServer } from "../scripts/control-omb.ts";
 import { ENVELOPE_MARK } from "./runtime/envelope.ts";
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { waitForExit } from "./testing/cleanup.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
@@ -49,6 +50,7 @@ beforeAll(async () => {
   fixture = await launchVerificationServer();
   data = fixture.info.dataDir;
   base = fixture.info.url;
+  await disableFixtureChiefs(base);
 }, 30_000);
 
 afterAll(async () => {

@@ -343,6 +343,16 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     return { status: response.status, body: parse(await response.text()) };
   };
   for (let tries = 0; (await local("GET", "/api/bots")).status !== 200 && tries < 50; tries++) await new Promise((resolve) => setTimeout(resolve, 100));
+  // Transport fixtures do not script the separate seeded Chief review loop.
+  for (const side of [local, onCloud]) {
+    const result = await side("GET", "/api/bots");
+    if (result.status !== 200) throw new Error(`fixture bot list failed: ${result.status}`);
+    for (const bot of result.body.bots) {
+      if (!bot.chiefOfStaff) continue;
+      const changed = await side("PATCH", `/api/bots/${bot.id}`, { chiefOfStaff: false });
+      if (changed.status !== 200) throw new Error(`fixture Chief isolation failed: ${changed.status}`);
+    }
+  }
 
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const port = { postMessage: (message: unknown) => { desktop.send(message as object); } };
@@ -529,6 +539,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
       }
       desktop = await startDesktop();
       for (let tries = 0; (await local("GET", "/api/bots")).status !== 200 && tries < 50; tries++) await new Promise((resolve) => setTimeout(resolve, 100));
+
       main = wire();
       listen();
     },
