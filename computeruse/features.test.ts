@@ -16,7 +16,8 @@ describe("the computer-use switches", () => {
 
   it("turn on only when true, each its own check", () => {
     const every = Object.fromEntries(Object.keys(computerFeatureShape).map((name) => [name, true]));
-    expect(Object.keys(guardEnv(computerGuardsFrom(every as never))).length).toBe(Object.keys(computerFeatureShape).length - 1);
+    const outsideTheBridge = ["verifyComputerEffects", "capComputerScreenshots"];
+    expect(Object.keys(guardEnv(computerGuardsFrom(every as never))).length).toBe(Object.keys(computerFeatureShape).length - outsideTheBridge.length);
     expect(verifyComputerEffectsEnabled({ verifyComputerEffects: true })).toBe(true);
     expect(guardEnv(computerGuardsFrom({ confirmComputerFinalActions: true }))).toEqual({ OMB_COMPUTER_RISK: "1" });
     expect(guardEnv(computerGuardsFrom({ showComputerPointer: true, reportComputerEvidence: true }))).toEqual({ OMB_COMPUTER_POINTER: "1", OMB_COMPUTER_EVIDENCE: "1" });

@@ -2,6 +2,7 @@ import { lstatSync, mkdirSync, readlinkSync, rmdirSync, statSync, symlinkSync, u
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { claudeUserMcpEnabled, mcpCallTimeoutMinutes, type AppConfig } from "./config.ts";
+import { NEWEST_SCREENSHOTS_KEPT } from "./drivers/chat-images.ts";
 import { correctiveRounds } from "./host/loop-guard.ts";
 
 export function claudeUserSkillsEnabled(cfg: AppConfig): boolean {
@@ -60,6 +61,7 @@ export function settingsTurnFields(cfg: AppConfig, dataDir: string, restrictsMcp
   mcpFromUserConfig: boolean;
   userSkillsDir?: string;
   mcpCallTimeoutMs: number;
+  keepComputerScreenshots?: number;
   toolErrorCorrectiveRounds: number;
 } {
   const userSkillsDir = claudeUserSkillsEnabled(cfg) ? claudeUserSkillsDir(dataDir, home) : null;
@@ -68,6 +70,7 @@ export function settingsTurnFields(cfg: AppConfig, dataDir: string, restrictsMcp
     mcpFromUserConfig: claudeUserMcpEnabled(cfg) && !restrictsMcp,
     ...(userSkillsDir ? { userSkillsDir } : {}),
     mcpCallTimeoutMs: mcpCallTimeoutMinutes(cfg) * 60_000,
+    ...(cfg.features?.capComputerScreenshots ? { keepComputerScreenshots: NEWEST_SCREENSHOTS_KEPT } : {}),
     toolErrorCorrectiveRounds: correctiveRounds(cfg),
   };
 }

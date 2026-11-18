@@ -29,6 +29,8 @@ export const computerFeatureShape = {
   confirmComputerFinalActions: off(),
   /** Count what a computer session did and attach one plain line about it to the turn. */
   reportComputerEvidence: off(),
+  /** Send an API model only the newest two screenshots a computer returned, and a line of text for each older one. */
+  capComputerScreenshots: off(),
 };
 
 export type ComputerFeatureFlags = { [Name in keyof typeof computerFeatureShape]?: boolean };
