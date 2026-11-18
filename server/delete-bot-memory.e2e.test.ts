@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -7,6 +8,7 @@ import type { WireBot } from "../shared/wire.ts";
 
 it("deletes the memory journal and memory index with the bot", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
   const api = async <T = unknown>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {
     const response = await fetch(fixture.info.url + path, {

@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ it("applies the bot's own alert and voice changes at once, refuses a stale Undo,
   const gates = mkdtempSync(join(tmpdir(), "omb-profile-cards-"));
   const gate = join(gates, "finish");
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: gate });
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [];
   const api = async (method: string, path: string, body?: unknown, expected = 200, token?: string) => {
     const response = await fetch(fixture.info.url + path, {

@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { closeSync, existsSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -11,6 +12,7 @@ import { splitLaunchNote } from "./testing/launch-note.ts";
 
 it("reports every run into the bot's main thread while fresh executions, approvals, deletion and unread stay reachable", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [{ fixture: fixture.info }];
   let broker: Socket | undefined;
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
@@ -150,6 +152,7 @@ it("reports every run into the bot's main thread while fresh executions, approva
 
 it("reports a routine made in a chat into that chat once the person writes there, not the bot's first thread or a new results thread", async () => {
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, { scripted: true });
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [{ fixture: fixture.info }];
   const planPath = join(fixture.info.dataDir, "room-plan.json");
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
@@ -210,6 +213,7 @@ it("reports a routine made in a chat into that chat once the person writes there
 
 async function resultsFixture() {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const { dataDir, url, logPath } = fixture.info;
   let server: ChildProcess | undefined;
   const api = async (method: string, path: string, body?: unknown, status = 200) => {

@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // The only provider is the launcher's fake CLI; each thread has its own gate.
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -67,6 +68,7 @@ describe("guarded external messages through an isolated runtime", () => {
   beforeEach(async () => {
     evidence = [];
     fixture = await launchVerificationServer();
+    await disableFixtureChiefs(fixture.info.url);
     const wrapper = join(fixture.info.dataDir, "guarded-fake-claude.mjs");
     writeFileSync(wrapper, [
       "#!/usr/bin/env node",

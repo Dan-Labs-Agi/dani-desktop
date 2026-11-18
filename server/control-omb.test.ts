@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -254,6 +255,7 @@ describe("control-omb isolated verification loop", () => {
       FAKE_CLAUDE_PROBE: "fixture-scripting-knob",
     };
     const session = await launchVerificationServer(parentEnv);
+  await disableFixtureChiefs(session.info.url);
     const env = { DANIBOT_URL: session.info.url };
     try {
       const doctor = await runControlOmb(["doctor"], { env }) as any;
@@ -309,6 +311,7 @@ describe("control-omb isolated verification loop", () => {
       ...process.env,
       FAKE_CLAUDE_TOOL_CALLS: '[{"name":"Bash","input":{"command":"pnpm control:omb doctor","password":"fixture-secret"},"output":{"text":"fixture healthy","api_key":"fixture-output-secret"},"ok":true},{"name":"Bash","input":{"command":"false"},"output":"fixture command failed","ok":false}]',
     });
+  await disableFixtureChiefs(session.info.url);
     const env = { DANIBOT_URL: session.info.url };
     try {
       const created = await runControlOmb(["new-bot", "--name", "Tool Script Probe"], { env }) as any;

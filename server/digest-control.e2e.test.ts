@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -12,6 +13,7 @@ it("records independent turns and room speakers through the shared control fixtu
     FAKE_CLAUDE_HOOKS: "1",
     FAKE_CLAUDE_TOOL_CALLS: JSON.stringify([{ name: "Bash", id: "reused-tool-id", input: { command: "echo receipt" }, output: "receipt", ok: true }]),
   });
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [{ fixture: fixture.info }];
   const control = async (args: string[]) => {
     const result = await runControlOmb([...args, "--url", fixture.info.url]);

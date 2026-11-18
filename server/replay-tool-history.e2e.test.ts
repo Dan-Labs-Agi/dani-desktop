@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -17,6 +18,7 @@ it("names earlier tool calls in a rebuilt session only when switched on", async 
       { name: "Read", input: { file_path: "/fixture/notes.md", limit: 40 }, output: "RESULT_BODY notes", ok: true },
     ]),
   }, undefined, undefined, undefined, undefined, undefined, ["codex"]);
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [{ fixture: fixture.info }];
   const control = async (...args: string[]) => {
     const result = await runControlOmb([...args, "--url", fixture.info.url]) as any;

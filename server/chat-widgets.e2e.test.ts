@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // The fixture's engine resumes its session (a CLI new enough for strictResume), so the press turn also shows what a resumed session is handed.
 import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +13,7 @@ it("shows, replaces and answers a widget on a bot's own conversation, once per p
   const gates = mkdtempSync(join(tmpdir(), "omb-chat-widgets-"));
   const gate = join(gates, "finish");
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: gate, FAKE_CLAUDE_VERSION: "2.1.270" });
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [];
   const api = async (method: string, path: string, body?: unknown, expected = 200, token?: string) => {
     const response = await fetch(fixture.info.url + path, {

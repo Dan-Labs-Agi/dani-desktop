@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // TZ pins the server's timezone, so the line does not depend on the runner.
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +20,7 @@ it("stamps every direct and room turn with the time it was sent", async () => {
   const scratch = mkdtempSync(join(tmpdir(), "omb-turn-clock-"));
   const prompts = join(scratch, "prompts.jsonl");
   const fixture = await launchVerificationServer({ ...process.env, TZ: ZONE, FAKE_CLAUDE_PROMPTS: prompts });
+  await disableFixtureChiefs(fixture.info.url);
   const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
   const api = async <T = any>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {
     const response = await fetch(fixture.info.url + path, {
