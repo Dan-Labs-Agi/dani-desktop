@@ -2,12 +2,13 @@
 // "Just do it" covers what a bot does in its own places, never a final action on the person's screen. An approval is for
 // the exact call it was asked about, for that turn only, once, and for a few minutes; a refusal holds for the turn.
 // Asks live in memory: a card a previous run left open can never be answered, so it is closed at startup.
-import { FINAL_ACTION_TOOL, FINAL_ACTION_VERBS, cleanTargetLabel, finalActionQuestion, type FinalActionCall } from "../shared/computer-final-action.ts";
+import { FINAL_ACTION_TOOL, cleanTargetLabel, isFinalActionTool, type FinalActionCall, type FinalActionTool } from "../shared/computer-final-action.ts";
 import type { ControlState } from "./control-client.ts";
 import { newId } from "./contracts.ts";
 import type { DecisionRow } from "./decision-log.ts";
 import { optionCardsForTools } from "./message-db.ts";
 import { buildNotification, type Notification } from "./notify.ts";
+import { conversationLanguage, serverLine, type ServerLineKey } from "./server-lines.ts";
 import type { BotRecord, Store } from "./store.ts";
 
 export const FINAL_ACTION_WAITING =
@@ -40,10 +41,32 @@ type ConsentStore = Pick<Store, "appendMessage" | "groupByThread" | "messagesFor
 
 export type FinalActionDecision = { pass: true } | { pass: false; text: string };
 
+/** The tool and the label the page gave it when that is fit to show: what a decision log row says, with no prose of its own. */
 function summaryOf(call: FinalActionCall): string {
-  const verb = FINAL_ACTION_VERBS[call.tool] ?? FINAL_ACTION_VERBS.click!;
   const label = cleanTargetLabel(call.label);
-  return label ? `${verb.labelled} “${label}”` : verb.plain;
+  return label ? `${call.tool}: ${label}` : call.tool;
+}
+
+const VERB_LINES = {
+  click: { labelled: "server.finalAction.verb.click.labelled", plain: "server.finalAction.verb.click.plain" },
+  double_click: { labelled: "server.finalAction.verb.double_click.labelled", plain: "server.finalAction.verb.double_click.plain" },
+  right_click: { labelled: "server.finalAction.verb.right_click.labelled", plain: "server.finalAction.verb.right_click.plain" },
+  press_key: { labelled: "server.finalAction.verb.press_key.labelled", plain: "server.finalAction.verb.press_key.plain" },
+  hotkey: { labelled: "server.finalAction.verb.hotkey.labelled", plain: "server.finalAction.verb.hotkey.plain" },
+  set_value: { labelled: "server.finalAction.verb.set_value.labelled", plain: "server.finalAction.verb.set_value.plain" },
+  launch_app: { labelled: "server.finalAction.verb.launch_app.labelled", plain: "server.finalAction.verb.launch_app.plain" },
+} as const satisfies Record<FinalActionTool, Record<"labelled" | "plain", ServerLineKey>>;
+
+/** The question for this call, in the language of the conversation it is asked in. */
+function questionOf(threadId: string, call: FinalActionCall, name: string): { title: string; detail: string } {
+  const language = conversationLanguage(threadId);
+  const label = cleanTargetLabel(call.label);
+  const tool = isFinalActionTool(call.tool) ? call.tool : "click";
+  const verb = serverLine(language, VERB_LINES[tool][label ? "labelled" : "plain"]);
+  return {
+    title: label ? serverLine(language, "server.finalAction.titleLabelled", { verb, label }) : serverLine(language, "server.finalAction.titlePlain", { verb }),
+    detail: serverLine(language, "server.finalAction.detail", { name }),
+  };
 }
 
 export function createFinalActionConsent(deps: {
@@ -74,8 +97,7 @@ export function createFinalActionConsent(deps: {
   };
 
   const open = (owner: { threadId: string; generation: string }, bot: Pick<BotRecord, "id" | "name" | "color" | "avatarUrl" | "notifications"> | undefined, call: FinalActionCall): Entry => {
-    const question = finalActionQuestion(call);
-    const name = bot?.name ?? "The bot";
+    const question = questionOf(owner.threadId, call, bot?.name ?? serverLine(conversationLanguage(owner.threadId), "server.finalAction.unnamedBot"));
     const room = deps.store.groupByThread(owner.threadId);
     const requestId = newId();
     let settle!: () => void;
@@ -87,7 +109,7 @@ export function createFinalActionConsent(deps: {
       ...(room && bot ? { from: { botId: bot.id, name: bot.name, color: bot.color } } : {}),
       card: {
         title: question.title,
-        subtitle: question.detail(name),
+        subtitle: question.detail,
         options: ["Allow once", "Deny"],
         requestId,
         requestType: "permission",

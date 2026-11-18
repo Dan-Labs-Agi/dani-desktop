@@ -32,7 +32,7 @@ export function createComputerEvidence(options: {
       const counters = totals.get(key);
       if (!counters) return;
       totals.delete(key);
-      const line = summarizeCounters(counters);
+      const line = options.enabled() ? summarizeCounters(counters) : null;
       if (line) options.append(owner.threadId, line);
     },
     routes(internal: { capability: JournalCapability; readBody(): Promise<unknown> }): RouteHandler {

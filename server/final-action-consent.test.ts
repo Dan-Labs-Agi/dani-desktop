@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { FINAL_ACTION_TOOL, type FinalActionCall } from "../shared/computer-final-action.ts";
+import { FINAL_ACTION_TOOL, FINAL_ACTION_TOOLS, type FinalActionCall } from "../shared/computer-final-action.ts";
 import type { DecisionRow } from "./decision-log.ts";
+import "./server-line-packs.ts";
+import { serverLine, type ServerLineKey } from "./server-lines.ts";
 import type { BotRecord } from "./store.ts";
 import {
   createFinalActionConsent,
@@ -133,7 +135,42 @@ describe("asking before a final action", () => {
     await ask(f);
     f.answer(0, "allow");
     expect(f.audit.map((row) => row.decision)).toEqual(["card-shown", "user-approved"]);
-    expect(f.audit[1]).toMatchObject({ source: "user", summary: "click “Send”" });
+    expect(f.audit[1]).toMatchObject({ source: "user", summary: "click: Send" });
+  });
+});
+
+describe("the words on the card", () => {
+  const verbKeys = FINAL_ACTION_TOOLS.flatMap((tool) => (["labelled", "plain"] as const).map((kind) => `server.finalAction.verb.${tool}.${kind}` as ServerLineKey));
+
+  it("come from the language packs: every line exists in English and in German, with its places filled", () => {
+    for (const key of [...verbKeys, "server.finalAction.titleLabelled", "server.finalAction.titlePlain", "server.finalAction.detail"] as ServerLineKey[]) {
+      expect(serverLine("en", key), key).not.toBe(key);
+      expect(serverLine("de", key), key).not.toBe(key);
+    }
+    const german = serverLine("de", "server.finalAction.titleLabelled", { verb: "V", label: "L" });
+    expect(german).toContain("V");
+    expect(german).toContain("L");
+    expect(german).not.toMatch(/[{}]/);
+    expect(serverLine("de", "server.finalAction.detail", { name: "Bow" })).toContain("Bow");
+  });
+
+  it("read in the person's language when the conversation has one", async () => {
+    const { setConversationLanguage } = await import("./server-lines.ts");
+    setConversationLanguage((threadId) => (threadId === "t1" ? "de" : undefined));
+    try {
+      const f = fixture();
+      await ask(f);
+      expect(f.card().title).toBe("Ich möchte „Send“ klicken, was sich nicht rückgängig machen lässt. Einmal erlauben?");
+      expect(f.card().subtitle).toContain("Bow");
+    } finally {
+      setConversationLanguage(() => undefined);
+    }
+  });
+
+  it("fall back to a plain click for a tool it has no words for, rather than printing a key", async () => {
+    const f = fixture();
+    await f.consent.check(OWNER, BOT, { tool: "shell", hash: "d".repeat(32) }, { waitMs: 5 });
+    expect(f.card().title).toBe("I'm about to click where something can't be undone. Allow once?");
   });
 });
 

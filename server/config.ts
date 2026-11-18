@@ -1,5 +1,5 @@
 // ~/.danibot/config.json, with env vars overriding its credentials.
-import type { ComputerGuards } from "../computeruse/guards.ts";
+import { type ComputerFeatureFlags, computerFeatureShape } from "../computeruse/features.ts";
 import { readFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -243,31 +243,9 @@ const featureConfigSchema = z.object({
   browser: z.boolean().optional(),
   /** Computer sharing. Off unless true, set by hand: there is no Settings toggle. */
   sharedComputers: z.boolean().optional(),
-  /** Read this computer's window back after every action a bot takes on it, and tell the bot what it actually changed.
-   * Off unless true, set by hand: it costs two extra driver reads per action and is unproven on real hardware. */
-  verifyComputerEffects: z.boolean().optional(),
-  /** Refuse index or point actions after a window changes until the bot reads it again. Off unless true. */
-  guardComputerStale: z.boolean().optional(),
-  /** Stop repeated unchanged actions and cap actions in one computer session. Off unless true. */
-  guardComputerLoops: z.boolean().optional(),
-  /** Compare typed text with a non-secret field read-back inside the computer bridge. Off unless true. */
-  verifyComputerTyping: z.boolean().optional(),
-  /** Suggest a fresh element identity in stale target refusals. Off unless true. */
-  anchorComputerTargets: z.boolean().optional(),
-  /** Verify scroll movement and try bounded scroll-area and page-key fallbacks. Off unless true. */
-  verifyComputerScroll: z.boolean().optional(),
-  /** Wrap screen text as untrusted data and remove the values of secure or secret-named fields from window results. Off unless true. */
-  wrapComputerScreenData: z.boolean().optional(),
-  /** Add the see-act-verify workflow to computer tool descriptions. Off unless true. */
-  guideComputerUse: z.boolean().optional(),
-  /** Show the driver's cursor gliding to each target so the person can follow along and take control. Off unless true. */
-  showComputerPointer: z.boolean().optional(),
-  /** Ask the person before a bot presses something on their computer that cannot be undone. Off unless true. */
-  confirmComputerFinalActions: z.boolean().optional(),
+  ...computerFeatureShape,
   /** A bot cannot ask again to sign in to a site the person already declined for the same request. Off unless true. */
   holdDeclinedSignIn: z.boolean().optional(),
-  /** Count what a computer session did and attach one plain line about it to the turn. Off unless true. */
-  reportComputerEvidence: z.boolean().optional(),
   claudeUserMcp: z.boolean().optional(), // Claude bots also load this machine's Claude Code MCP servers. Off unless true: tools cost tokens.
   claudeUserSkills: z.boolean().optional(), // Claude bots also load the skills in ~/.claude/skills, in place. Off unless true.
   /** LLM-generated titles for new threads. Off unless true. */
@@ -545,7 +523,7 @@ export interface AppConfig extends HelperConfig {
   context?: { rebuildBytes?: number; compactAt?: number; autoCompact?: boolean; roomCompactAt?: number; roomSessions?: boolean; replayToolHistory?: boolean };
   memory?: { captureQuietMs?: number; tidyHour?: number };
   localVm?: { mode?: "shared" | "per-bot" | "pool"; maxInstances?: number; idleTimeoutMinutes?: number; preserveInstalledApps?: boolean };
-  features?: { skillAuthoring?: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; verifyComputerEffects?: boolean; guardComputerStale?: boolean; guardComputerLoops?: boolean; verifyComputerTyping?: boolean; anchorComputerTargets?: boolean; verifyComputerScroll?: boolean; wrapComputerScreenData?: boolean; guideComputerUse?: boolean; showComputerPointer?: boolean; confirmComputerFinalActions?: boolean; holdDeclinedSignIn?: boolean; reportComputerEvidence?: boolean; claudeUserMcp?: boolean; claudeUserSkills?: boolean; llmThreadTitles?: boolean; smartSetupChoices?: boolean; autoRecall?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; parallelRoomJobs?: boolean; chiefEscalations?: boolean; acpPlanLines?: boolean; agentsToolBridge?: boolean; savedSteps?: boolean };
+  features?: { skillAuthoring?: boolean; skillReview?: boolean; skillReviewSteps?: number; showToolCalls?: boolean; browser?: boolean; sharedComputers?: boolean; holdDeclinedSignIn?: boolean; claudeUserMcp?: boolean; claudeUserSkills?: boolean; llmThreadTitles?: boolean; smartSetupChoices?: boolean; autoRecall?: boolean; skillsLibrary?: boolean; shareLearnedSkills?: "off" | "ask" | "auto"; roomMemoryCapture?: boolean; parallelRoomJobs?: boolean; chiefEscalations?: boolean; acpPlanLines?: boolean; agentsToolBridge?: boolean; savedSteps?: boolean } & ComputerFeatureFlags;
   onboarding?: { completedAt?: string; version?: number; reelSeen?: boolean; hintsSeen?: string[]; firstTurnAt?: string };
   browserProfiles?: BrowserProfile[];
   browserEngine?: BrowserEngineConfig;
@@ -680,20 +658,6 @@ export function threadEventLogRetentionDays(cfg: AppConfig): number | null {
 
 export function skillAuthoringEnabled(cfg: AppConfig): boolean {
   return cfg.features?.skillAuthoring !== false;
-}
-
-/** The checks a computer session runs, from the person's config. Each is off unless set. */
-export function computerGuardsFrom(cfg: AppConfig): ComputerGuards {
-  const features = cfg.features;
-  return {
-    stale: features?.guardComputerStale, loop: features?.guardComputerLoops, typing: features?.verifyComputerTyping,
-    anchor: features?.anchorComputerTargets, scroll: features?.verifyComputerScroll, untrusted: features?.wrapComputerScreenData,
-    guidance: features?.guideComputerUse, pointer: features?.showComputerPointer, evidence: features?.reportComputerEvidence, risk: features?.confirmComputerFinalActions,
-  };
-}
-
-export function verifyComputerEffectsEnabled(cfg: AppConfig): boolean {
-  return cfg.features?.verifyComputerEffects === true;
 }
 
 export const DEFAULT_SKILL_REVIEW_STEPS = 10;

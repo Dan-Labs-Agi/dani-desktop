@@ -87,6 +87,16 @@ describe(`POST ${COMPUTER_EVIDENCE_PATH}`, () => {
     expect(lines).toEqual([]);
   });
 
+  it("writes nothing for totals recorded while the switch was on if it has been turned off since", async () => {
+    let enabled = true;
+    const lines: string[] = [];
+    const evidence = createComputerEvidence({ enabled: () => enabled, append: (_thread, text) => void lines.push(text) });
+    evidence.record({ botId: "b", threadId: "t1", generation: "g1" }, { ...COUNTERS });
+    enabled = false;
+    evidence.flush({ threadId: "t1", generation: "g1" });
+    expect(lines).toEqual([]);
+  });
+
   it("does not answer a GET, or another path, so the route table moves on", async () => {
     const { send } = await fixture();
     expect((await send(COUNTERS, "GET")).status).toBe(404);

@@ -3,7 +3,7 @@ import type { ToolCall } from "../../server/mcp-bridge.ts";
 import { elementPath, type SlimStructured, type WireElement } from "../../server/saved-steps/driver-wire.ts";
 import { type ActionTool, pressesReturn, unsafeStep } from "../../server/saved-steps/rules.ts";
 import { namesFinalAction } from "../../server/saved-steps/screen-words.ts";
-import { cleanTargetLabel, FINAL_ACTION_VERBS, finalActionQuery, type FinalActionCall } from "../../shared/computer-final-action.ts";
+import { cleanTargetLabel, finalActionQuery, isFinalActionTool, type FinalActionCall } from "../../shared/computer-final-action.ts";
 import { type ComputerSession, windowKey } from "../session.ts";
 
 type Args = Record<string, unknown>;
@@ -29,7 +29,7 @@ function locate(args: Args, snapshot: SlimStructured | undefined): WireElement |
 /** Whether this call might press something that cannot be undone, judged from the bridge's own last read of the window.
  * A target it cannot identify, in a window that shows a final action or one it never read, counts: doubt asks. */
 export function finalActionRisk(call: ToolCall, session: ComputerSession): FinalActionCall | null {
-  if (!Object.hasOwn(FINAL_ACTION_VERBS, call.name)) return null;
+  if (!isFinalActionTool(call.name)) return null;
   const key = windowKey(call.arguments);
   const snapshot = key ? session.snapshots.get(key) : undefined;
   const found = locate(call.arguments, snapshot);

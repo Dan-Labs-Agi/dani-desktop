@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   cleanTargetLabel,
   FINAL_ACTION_TOOL,
+  FINAL_ACTION_TOOLS,
   finalActionFrom,
-  finalActionQuestion,
   finalActionQuery,
-  FINAL_ACTION_VERBS,
+  isFinalActionTool,
 } from "./computer-final-action.ts";
 
 const HASH = "0123456789abcdef0123456789abcdef";
@@ -42,25 +42,11 @@ describe("a button label a page wrote", () => {
   });
 });
 
-describe("the question for a final action", () => {
-  it("names what is about to be pressed, in quotation marks, and says it cannot be undone", () => {
-    const question = finalActionQuestion({ tool: "click", hash: HASH, label: "Send" });
-    expect(question.title).toBe("I'm about to click “Send”, which can't be undone. Allow once?");
-    expect(question.detail("Bow")).toBe("Bow will do this once on your computer, and nothing else. If you say no, it will not try again this turn.");
-  });
-
-  it("uses plain wording of its own when the target has no label it can show", () => {
-    expect(finalActionQuestion({ tool: "press_key", hash: HASH }).title)
-      .toBe("I'm about to press a key where something can't be undone. Allow once?");
-    expect(finalActionQuestion({ tool: "click", hash: HASH }).title)
-      .toBe("I'm about to click where something can't be undone. Allow once?");
-  });
-
-  it("has a verb for every tool that can be asked about, and never names the plumbing", () => {
-    expect(Object.keys(FINAL_ACTION_VERBS).sort()).toEqual(["click", "double_click", "hotkey", "launch_app", "press_key", "right_click", "set_value"]);
-    for (const tool of Object.keys(FINAL_ACTION_VERBS)) {
-      expect(finalActionQuestion({ tool, hash: HASH, label: "Send" }).title).not.toMatch(/element|pid|hash|fingerprint|driver|set_value|launch_app/i);
-    }
+describe("the calls that can be asked about", () => {
+  it("are exactly the ones a bridge can press something with", () => {
+    expect([...FINAL_ACTION_TOOLS].sort()).toEqual(["click", "double_click", "hotkey", "launch_app", "press_key", "right_click", "set_value"]);
+    for (const tool of FINAL_ACTION_TOOLS) expect(isFinalActionTool(tool)).toBe(true);
+    for (const tool of ["get_window_state", "scroll", "type_text", "constructor", "toString", ""]) expect(isFinalActionTool(tool), tool).toBe(false);
   });
 
   it("has a card tool name no engine has, so Always allow is never offered", () => {
