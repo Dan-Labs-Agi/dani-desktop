@@ -208,7 +208,7 @@ jobs:
         run: node scripts/prepare-cloudflared.mjs
       - name: Build unsigned macOS draft packages
         if: vars.DANI_MAC_SIGNING != 'true' || (github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/v'))
-        run: pnpm package:mac
+        run: pnpm package:mac -c.mac.identity=-
       - name: Build and verify Developer ID signed, notarized macOS packages
         id: signed
         if: vars.DANI_MAC_SIGNING == 'true' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v'))
