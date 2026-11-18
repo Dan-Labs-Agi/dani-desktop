@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PreviewStreamEvents } from "./browser-stream-client";
 import { browserFrameSize, createLiveInputQueue, createLiveStreamClient, jpegSize, liveAction, liveControl } from "./browser-stream-v1";
+import { BROWSER_HAND_BACK_MS, createBrowserControl } from "./browser-control";
 
 const deferred = () => {
   let resolve!: () => void;
@@ -115,6 +116,25 @@ describe("the v1 live client", () => {
     source.emit("url", { url: "https://a.test/next" });
     expect(handlers.onMessage).toHaveBeenCalledWith({ type: "tabs", tabs: [{ tabId: "t1", title: "A", url: "https://a.test/", active: true }] });
     expect(handlers.onMessage).toHaveBeenCalledWith({ type: "url", url: "https://a.test/next" });
+  });
+
+  it("keeps an authenticated recovery view connected for Restart without sending normal control or input", async () => {
+    const { client, post, source } = open();
+    const message = "Choose Restart browser… before continuing.";
+    source.emit("ready", { viewerId: "recovery", recoveryOnly: true, message });
+    source.emit("control", { held: false, owned: false, controlling: false });
+    expect(client.send({ type: "takeControl" })).toBe(false);
+    expect(client.send({ type: "text", text: "never typed" })).toBe(false);
+    client.transport.send({ type: "text", text: "never typed either" });
+    client.send({ type: "resize", width: 900, height: 700 });
+    await expect(client.transport.take()).rejects.toThrow(/Restart/);
+    await client.transport.release();
+    expect(post).not.toHaveBeenCalled();
+    post.mockResolvedValueOnce({ ok: true, notice: "Chrome was not globally stopped. Check the page." });
+    expect(client.send({ type: "restart" })).toBe(true);
+    await client.transport.settle();
+    expect(post).toHaveBeenCalledExactlyOnceWith({ type: "restart" }, "recovery");
+    client.stop();
   });
 
   it("opens at the panel's size and sends each new size to its view while it only watches, the newest once the last is answered", async () => {
@@ -238,6 +258,24 @@ describe("the v1 live client", () => {
     expect(FixtureEventSource.instances).toHaveLength(6);
     expect(handlers.onGone).toHaveBeenCalledOnce();
     expect(post.mock.calls.some(([body]) => body.type === "input_keyboard")).toBe(false);
+  });
+
+  it("reconnects a waiting busy preview without replaying input when the browser becomes free", () => {
+    vi.useFakeTimers();
+    const { client, post, handlers, source } = open();
+    source.emit("waiting", { reason: "busy" });
+    source.fail({ retryable: true, message: "The bot is still using this browser. The live view will reconnect when it is free." });
+    client.transport.send({ type: "text", text: "must not be replayed" });
+    vi.advanceTimersByTime(1_000);
+    const resumed = FixtureEventSource.instances.at(-1)!;
+    expect(resumed).not.toBe(source);
+    resumed.emit("ready", { viewerId: "available" });
+    resumed.emit("frame", { seq: 1, data: base64(JPEG_2X1), metadata: { deviceWidth: 2, deviceHeight: 1 } });
+    expect(handlers.onConnectedChange).toHaveBeenLastCalledWith(true);
+    expect(handlers.onFrame).toHaveBeenCalledOnce();
+    expect(handlers.onGone).not.toHaveBeenCalled();
+    expect(post.mock.calls.filter(([body]) => body.type !== "ack")).toEqual([]);
+    client.stop();
   });
 
   it("does not retry the server's terminal refusal, and shows its reason", () => {
@@ -409,6 +447,91 @@ describe("a v1 live view whose stream dropped", () => {
       ["input_mouse", "new-viewer"], ["release", "new-viewer"],
     ]);
     client.stop();
+  });
+
+  it.each(["observer", "handback", "expiry"] as const)("trusts the server's watch-only control after %s reconnect without reacquiring or replaying", async (reason) => {
+    const { client, post, handlers } = open();
+    latest().emit("ready", { viewerId: "old-viewer" });
+    latest().emit("control", { held: reason !== "observer", owned: reason !== "observer", controlling: reason !== "observer", attempt: "old-reservation" });
+    if (reason === "handback") await client.transport.release("old-reservation");
+    const sent = post.mock.calls.length;
+    interrupted(latest());
+    vi.advanceTimersByTime(1_000);
+    latest().emit("ready", { viewerId: "new-viewer" });
+    latest().emit("control", { held: false, owned: false, controlling: false });
+    expect(handlers.onControl).toHaveBeenLastCalledWith(expect.objectContaining({ controller: "unclaimed" }));
+    expect(client.transport.reservation()).toBeUndefined();
+    expect(client.send({ type: "text", text: "not authorized" })).toBe(false);
+    await client.transport.settle();
+    expect(post.mock.calls.slice(sent)).toEqual([]);
+    client.stop();
+  });
+
+  it.each(["idle", "leave"] as const)("adopts a reconnect reservation through the legacy transport for %s", async (cleanup) => {
+    const { client, post, handlers } = open();
+    const control = createBrowserControl({
+      transport: client.transport,
+      owned: () => vi.mocked(handlers.onControl!).mock.lastCall?.[0]?.controller === "you",
+      mine: () => vi.mocked(handlers.onControl!).mock.lastCall?.[0]?.owned === true,
+      onTakeStatus: () => {}, onError: () => {}, onHalted: () => {},
+    });
+    try {
+      latest().emit("ready", { viewerId: "old-viewer" });
+      control.takeControl();
+      await vi.advanceTimersByTimeAsync(0);
+      const before = post.mock.calls.find(([body]) => body.type === "take")![0].attempt;
+      latest().emit("control", { held: true, owned: true, controlling: true, attempt: before });
+      control.observe();
+      interrupted(latest());
+      control.observe();
+      vi.advanceTimersByTime(1_000);
+      latest().emit("ready", { viewerId: "new-viewer" });
+      latest().emit("control", { held: true, owned: true, controlling: true, attempt: "carried-reservation" });
+      control.observe();
+      if (cleanup === "idle") await vi.advanceTimersByTimeAsync(BROWSER_HAND_BACK_MS);
+      else { control.leave(); await vi.advanceTimersByTimeAsync(0); }
+      expect(post.mock.calls.filter(([body]) => body.type === "take")).toHaveLength(1);
+      expect(post).toHaveBeenLastCalledWith({ type: "release", attempt: "carried-reservation" }, "new-viewer");
+    } finally {
+      control.close();
+      client.stop();
+    }
+  });
+
+  it("hands back its current reservation after taking an already controlled view again", async () => {
+    const { client, post, handlers } = open();
+    let held = true;
+    let currentAttempt = "carried-reservation";
+    post.mockImplementation(async (body) => {
+      if (body.type === "take" && typeof body.attempt === "string") {
+        currentAttempt = body.attempt;
+        latest().emit("control", { held: true, owned: true, controlling: true, attempt: currentAttempt });
+      } else if (body.type === "release" && body.attempt === currentAttempt) {
+        held = false;
+        latest().emit("control", { held: false, owned: false, controlling: false });
+      }
+      return { ok: true, waited: false };
+    });
+    const control = createBrowserControl({
+      transport: client.transport,
+      owned: () => vi.mocked(handlers.onControl!).mock.lastCall?.[0]?.controller === "you",
+      mine: () => vi.mocked(handlers.onControl!).mock.lastCall?.[0]?.owned === true,
+      onTakeStatus: () => {}, onError: () => {}, onHalted: () => {},
+    });
+    try {
+      latest().emit("ready", { viewerId: "carried-viewer" });
+      latest().emit("control", { held: true, owned: true, controlling: true, attempt: currentAttempt });
+      control.observe();
+      control.interact({ type: "text", text: "continue typing" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(currentAttempt).not.toBe("carried-reservation");
+      await vi.advanceTimersByTimeAsync(BROWSER_HAND_BACK_MS);
+      expect(held).toBe(false);
+      expect(vi.mocked(handlers.onControl!).mock.lastCall?.[0]?.owned).toBeUndefined();
+    } finally {
+      control.close();
+      client.stop();
+    }
   });
 
   it("stops listening to the window once stopped", () => {

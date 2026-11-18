@@ -1,7 +1,7 @@
 // Claude Code over stream-json both ways: prompt on stdin, one retained CLI process per thread,
 // each turn settled by the CLI's own `result` frame.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join, dirname, isAbsolute, normalize } from "node:path";
@@ -429,8 +429,8 @@ export function claudeHookSettings(helperPath: string): Record<string, unknown> 
 }
 
 export function permissionSocketPath(threadId: string, botId?: string) {
-  // Half the tag digests the full bot+thread key: Windows named pipes share one global namespace
-  // and are never unlinked, and 8 chars keeps POSIX paths under the 104-byte sun_path limit.
+  // Half the tag digests the full bot+thread key: Windows named pipes share one global namespace.
+  // Keep the tag short; createPermissionBroker handles directories that still exceed POSIX sun_path.
   const key = botId ? `${botId}\0${threadId}` : threadId;
   const prefix = threadId.replace(/[^\w-]/g, "").slice(0, 4);
   const digest = createHash("sha256").update(key).digest("hex").slice(0, 4);
@@ -533,16 +533,43 @@ export async function createPermissionBroker(opts: {
     });
   };
   let server: ReturnType<typeof createNetServer> | null = null;
-  for (const [index, candidate] of opts.socketPaths.entries()) {
+  let privateSocketDir: string | undefined;
+  const removePrivateSocketDirectory = () => {
+    if (!privateSocketDir) return;
+    // Never recursively remove a shared temp root or anything another caller left beside the socket.
+    try { rmdirSync(privateSocketDir); } catch {}
+    privateSocketDir = undefined;
+  };
+  for (const [index, requestedPath] of opts.socketPaths.entries()) {
+    let candidate = requestedPath;
+    if (process.platform !== "win32" && Buffer.byteLength(candidate, "utf8") > 103) {
+      // An occupied candidate is not ours to replace, even when its path cannot host a socket here.
+      if (existsSync(candidate)) continue;
+      try {
+        // tmpdir() itself can be too deep on macOS or in an isolated installation.
+        // mkdtemp gives this broker a fresh directory, not a predictable shared socket to unlink.
+        privateSocketDir = mkdtempSync("/tmp/omb-perm-");
+        chmodSync(privateSocketDir, 0o700);
+        candidate = join(privateSocketDir, "broker.sock");
+      } catch (error) {
+        removePrivateSocketDirectory();
+        console.error(`permission broker private socket directory unavailable: ${error instanceof Error ? error.message : String(error)}`);
+        continue;
+      }
+    }
     const attempt = createNetServer(connectionHandler);
     try {
       unlinkSync(candidate);
     } catch {}
-    let outcome = await new Promise<"listening" | (Error & { code?: string })>((resolve) => {
-      attempt.once("listening", () => resolve("listening"));
-      attempt.once("error", (error) => resolve(error as Error & { code?: string }));
+    const listening = Promise.withResolvers<"listening" | (Error & { code?: string })>();
+    attempt.once("listening", () => listening.resolve("listening"));
+    attempt.once("error", (error) => listening.resolve(error));
+    try {
       attempt.listen(candidate);
-    });
+    } catch (error) {
+      listening.resolve(error instanceof Error ? error : new Error(String(error)));
+    }
+    let outcome = await listening.promise;
     // A fallback under the shared OS temp root must not be connectable by another local account.
     if (outcome === "listening" && process.platform !== "win32") {
       try {
@@ -571,6 +598,7 @@ export async function createPermissionBroker(opts: {
     try {
       attempt.close();
     } catch {}
+    removePrivateSocketDirectory();
     if (index === opts.socketPaths.length - 1) {
       console.error(`permission broker unavailable on ${candidate}: ${outcome.message}`);
       break;
@@ -596,6 +624,7 @@ export async function createPermissionBroker(opts: {
       drain();
     },
     close() {
+      if (closed) return;
       closed = true;
       drain();
       try {
@@ -604,6 +633,7 @@ export async function createPermissionBroker(opts: {
       try {
         unlinkSync(boundPath);
       } catch {}
+      removePrivateSocketDirectory();
     },
     socketPath: boundPath,
   };

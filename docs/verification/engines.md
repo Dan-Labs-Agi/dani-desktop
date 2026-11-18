@@ -5,7 +5,7 @@
 - Confirm the endpoint identifies itself as DaniBot.
 - List configured provider instances without exposing executable paths.
 - Distinguish available and unavailable engines.
-- Add named Claude accounts and select them independently for bots.
+- Keep Hermes as the production harness while selecting different configured models.
 
 ## User path
 
@@ -21,7 +21,46 @@ pnpm control:omb models --url http://127.0.0.1:PORT
 `doctor.ok` is true only when the endpoint is DaniBot and at least one
 engine is available. The isolated fixture should expose `claude`.
 
-## Named Claude accounts
+## Hermes-only runtime
+
+Start the synthetic ACP fixture with the production harness policy enabled:
+
+```sh
+node --experimental-strip-types scripts/control-omb.ts launch --hermes
+```
+
+Use its printed URL; no command below should target the live app:
+
+```sh
+pnpm control:omb doctor --url http://127.0.0.1:PORT
+pnpm control:omb models --url http://127.0.0.1:PORT
+pnpm control:omb new-bot --name "Hermes check" --url http://127.0.0.1:PORT
+pnpm control:omb set-model --bot BOT_ID --instance hermes --model openai:fixture-a --url http://127.0.0.1:PORT
+pnpm control:omb send --bot BOT_ID --text "First model" --url http://127.0.0.1:PORT
+pnpm control:omb wait --bot BOT_ID --timeout 30 --url http://127.0.0.1:PORT
+pnpm control:omb set-model --bot BOT_ID --instance hermes --model openrouter:fixture-b --url http://127.0.0.1:PORT
+pnpm control:omb send --bot BOT_ID --text "Second model" --url http://127.0.0.1:PORT
+pnpm control:omb wait --bot BOT_ID --timeout 30 --url http://127.0.0.1:PORT
+pnpm control:omb messages --bot BOT_ID --limit 20 --url http://127.0.0.1:PORT
+```
+
+Both turns must settle with `hello from fake acp`. The model catalog must expose
+only the Hermes instance. Selecting the `claude` instance must be refused.
+These are synthetic protocol checks, not evidence of live provider credentials,
+quota, inference quality, or a packaged Hermes installation.
+
+Regular sealed fake-engine fixtures retain their injected transports for driver
+conformance. `launch --hermes` sets `OMB_TEST_HERMES_HARNESS=1` inside the child
+so those tests exercise the same Hermes-only policy as production. Neither an
+unavailable Hermes nor a missing model enables a native-agent fallback.
+
+Saved bot, pinned-thread, and backup models retain their IDs during migration.
+Unscoped or missing models fail with an actionable selection error instead of
+silently running Hermes' configured default. Migration persists atomically and
+does not carry provider-specific Custom or Edits permissions into Hermes.
+
+
+## Native-driver conformance fixtures
 
 Run the offline API fixture and driver regressions:
 
@@ -35,13 +74,6 @@ directory/history guards, removal, malformed-account repair, and admin-only
 mutations. Updating an idle sibling must preserve the busy bot's process and
 subsequent events. No real provider login is required.
 
-For a renderer check, open the isolated launcher's app in a browser, dismiss
-onboarding, and go to **Settings → Engines**. Add Work and Personal, inspect
-their distinct sign-in commands, and select one account per bot from the model
-picker's single Claude entry and nested Account dropdown. Choose a model to
-save the selection. Reload and revisit both bots. Confirm the account labels persist,
-including at narrow window widths. Use synthetic accounts only; this does not
-prove real OAuth login or native Windows execution.
 
 ## Gotchas
 

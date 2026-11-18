@@ -1,8 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createServer, type IncomingMessage, type Server } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { DEVICE_PROXY_TIMEOUT_MS, HARNESS_PROXY_TIMEOUT_MS } from "./harness-budget.ts";
+import { DEVICE_PROXY_TIMEOUT_MS, HARNESS_PROXY_TIMEOUT_MS, HARNESS_PROXY_TIMEOUTS_MS } from "./harness-budget.ts";
 import { OUTBOUND_HOLD_MS } from "./outbound-hold.ts";
 import { PHONE_RECOVERY } from "./phones/instructions.ts";
 import { PHONE_RECONNECT_WAIT_MS, PHONE_SEND_TIMEOUT_MS } from "./phones/jobs.ts";
@@ -10,10 +13,12 @@ import { harnessMcpRequest } from "./harness-mcp-proxy.ts";
 
 let server: Server;
 let url = "";
+let entrypointHome = "";
 let status = 200;
 let payload: unknown = { result: { tools: [{ name: "agent_browser_snapshot" }] } };
 const requests: Array<{ path: string | undefined; auth: string | undefined; body: unknown }> = [];
 beforeAll(async () => {
+  entrypointHome = await mkdtemp(join(tmpdir(), "dani-mcp-entrypoint-"));
   server = createServer((req, res) => {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
@@ -26,10 +31,66 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 });
-afterAll(async () => { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); });
+afterAll(async () => {
+  server.closeAllConnections();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  await rm(entrypointHome, { recursive: true, force: true });
+});
 const connection = (kind: "browser" | "computer" | "data" | "highlevel" | "device" = "browser") => ({ url, token: "scoped-capability", kind });
 const frame = (method: string, params: unknown = {}) => ({ jsonrpc: "2.0", id: 1, method, params });
 
+async function pendingProxy(run: (fixture: {
+  child: ChildProcessWithoutNullStreams;
+  held: Map<string, ServerResponse>;
+  closed: Set<string>;
+  replies: Array<{ id?: unknown; result?: unknown; error?: unknown }>;
+  send: (message: unknown) => void;
+}) => Promise<void>): Promise<void> {
+  const held = new Map<string, ServerResponse>();
+  const closed = new Set<string>();
+  const peer = createServer((req, res) => {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      const name = JSON.parse(body).params.name as string;
+      held.set(name, res);
+      res.once("close", () => { if (!res.writableEnded) closed.add(name); });
+    });
+  });
+  await new Promise<void>((resolve) => peer.listen(0, "127.0.0.1", resolve));
+  const home = await mkdtemp(join(tmpdir(), "dani-mcp-transport-"));
+  const address = peer.address();
+  if (!address || typeof address === "string") throw new Error("Test server did not bind a TCP port.");
+  const child = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./harness-mcp-proxy.ts", import.meta.url)), "browser"], {
+    env: {
+      HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, "config"), XDG_DATA_HOME: join(home, "data"),
+      OMB_HARNESS_URL: `http://127.0.0.1:${address.port}`, OMB_MCP_TOKEN_BROWSER: "test-capability",
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const replies: Array<{ id?: unknown; result?: unknown; error?: unknown }> = [];
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output += chunk;
+    let newline: number;
+    while ((newline = output.indexOf("\n")) !== -1) {
+      replies.push(JSON.parse(output.slice(0, newline)));
+      output = output.slice(newline + 1);
+    }
+  });
+  try {
+    await run({ child, held, closed, replies, send: (message) => { child.stdin.write(`${JSON.stringify(message)}\n`); } });
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      const exited = new Promise<void>((resolve) => child.once("close", () => resolve()));
+      child.kill();
+      await exited;
+    }
+    peer.closeAllConnections();
+    await new Promise<void>((resolve) => peer.close(() => resolve()));
+    await rm(home, { recursive: true, force: true });
+  }
+}
 describe("harness MCP capability proxy", () => {
   it("answers initialize/ping locally and ignores notifications", async () => {
     const count = requests.length;
@@ -37,6 +98,25 @@ describe("harness MCP capability proxy", () => {
     await expect(harnessMcpRequest(frame("ping"), connection())).resolves.toMatchObject({ result: {} });
     await expect(harnessMcpRequest({ jsonrpc: "2.0", method: "notifications/initialized" }, connection())).resolves.toBeUndefined();
     expect(requests.length).toBe(count);
+  });
+
+  it("does not forward a pre-aborted browser call or expose the abort reason", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("/private/payload-secret"));
+    const count = requests.length;
+    const result = await harnessMcpRequest(frame("tools/call"), connection(), controller.signal);
+    expect(result).toMatchObject({ result: { isError: true, content: [{ text: expect.stringContaining("cancelled") }] } });
+    expect(JSON.stringify(result)).not.toContain("/private/payload-secret");
+    expect(requests.length).toBe(count);
+  });
+
+  it("does not echo malformed upstream JSON or unexpected transport error values", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("/private/payload-secret", { status: 200 })));
+    try {
+      const result = await harnessMcpRequest(frame("tools/call"), connection());
+      expect(result).toMatchObject({ result: { isError: true } });
+      expect(JSON.stringify(result)).not.toContain("/private/payload-secret");
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it("relays only the RPC result and scoped capability, not a session/engine command", async () => {
@@ -117,16 +197,17 @@ describe("harness MCP capability proxy", () => {
     const gone = await listening();
     await new Promise<void>((resolve) => gone.peer.close(() => resolve()));
     expect(textOf(await harnessMcpRequest(click, { url: gone.url, token: "t", kind: "browser" })))
-      .toMatch(/^Dani Bot is restarting, so this browser call did not reach it and did not run\. Wait a few seconds/);
+      .toContain("is restarting, so this browser call did not reach it and did not run. Wait a few seconds");
     const resetting = await listening((req) => req.socket.destroy());
     try {
       expect(textOf(await harnessMcpRequest(click, { url: resetting.url, token: "t", kind: "computer" })))
-        .toMatch(/^Dani Bot restarted while this cloud computer call was running, so it may or may not have taken effect\./);
+        .toContain("restarted while this cloud computer call was running, so it may or may not have taken effect.");
     } finally { await new Promise<void>((resolve) => resetting.peer.close(() => resolve())); }
     vi.stubGlobal("fetch", vi.fn(async () => { throw new DOMException("The operation was aborted due to timeout", "TimeoutError"); }));
     try {
       const late = textOf(await harnessMcpRequest(click, connection()));
-      expect(late).toMatch(new RegExp(`^Dani Bot did not answer this browser call within ${HARNESS_PROXY_TIMEOUT_MS / 1_000} seconds\\. It may still be running`));
+      const timeoutMs = HARNESS_PROXY_TIMEOUTS_MS.browser ?? HARNESS_PROXY_TIMEOUT_MS;
+      expect(late).toContain(`did not answer this browser call within ${timeoutMs / 1_000} seconds. It may still be running`);
       expect(late).not.toMatch(/restart/i);
     } finally { vi.unstubAllGlobals(); }
   });
@@ -136,7 +217,7 @@ describe("harness MCP capability proxy", () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new DOMException("The operation was aborted due to timeout", "TimeoutError"); }));
     try {
       const answer = await harnessMcpRequest(frame("tools/call", { name: "phone_send", arguments: {} }), connection("device")) as { result: { content: Array<{ text: string }> } };
-      expect(answer.result.content[0]!.text).toContain("within 705 seconds");
+      expect(answer.result.content[0]!.text).toContain(`within ${DEVICE_PROXY_TIMEOUT_MS / 1_000} seconds`);
     } finally { vi.unstubAllGlobals(); }
   });
 
@@ -166,7 +247,7 @@ describe("harness MCP capability proxy", () => {
     payload = { result: { tools: [{ name: "agent_browser_snapshot" }] } };
     const child: ChildProcessWithoutNullStreams = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./harness-mcp-proxy.ts", import.meta.url)), "computer"], {
       // Codex hands every server the same environment: each reads only its own family's token.
-      env: { OMB_HARNESS_URL: url, OMB_MCP_TOKEN_COMPUTER: "entrypoint-capability", OMB_MCP_TOKEN_DATA: "data-capability" }, stdio: ["pipe", "pipe", "pipe"],
+      env: { HOME: entrypointHome, USERPROFILE: entrypointHome, OMB_HARNESS_URL: url, OMB_MCP_TOKEN_COMPUTER: "entrypoint-capability", OMB_MCP_TOKEN_DATA: "data-capability" }, stdio: ["pipe", "pipe", "pipe"],
     });
     let output = "";
     const result = new Promise<unknown>((resolve, reject) => {
@@ -187,9 +268,58 @@ describe("harness MCP capability proxy", () => {
     }
   });
 
+  it("cancels only the exact typed stdio request ID, not another active request", async () => {
+    await pendingProxy(async ({ send, held, closed, replies }) => {
+      send({ ...frame("tools/call", { name: "numeric" }), id: 7 });
+      send({ ...frame("tools/call", { name: "string" }), id: "7" });
+      await vi.waitFor(() => expect(held.size).toBe(2));
+      send({ jsonrpc: "2.0", id: 99, method: "notifications/cancelled", params: { requestId: "7" } });
+      send({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 7, reason: "/private/secret" } });
+      await vi.waitFor(() => expect(closed.has("numeric")).toBe(true));
+      expect(closed.has("string")).toBe(false);
+      held.get("string")!.end(JSON.stringify({ result: { content: [] } }));
+      await vi.waitFor(() => expect(replies).toContainEqual({ jsonrpc: "2.0", id: "7", result: { content: [] } }));
+      expect(JSON.stringify(replies)).not.toContain("/private/secret");
+    });
+  });
+
+  it("accepts matching cancellation even when all stdio pending slots are full", async () => {
+    await pendingProxy(async ({ send, held, closed, replies }) => {
+      for (let id = 0; id < 16; id++) send({ ...frame("tools/call", { name: `pending-${id}` }), id });
+      await vi.waitFor(() => expect(held.size).toBe(16));
+      send({ ...frame("tools/call", { name: "over-limit" }), id: 17 });
+      await vi.waitFor(() => expect(replies.some((reply) => reply.id === 17)).toBe(true));
+      expect(held.has("over-limit")).toBe(false);
+      send({ jsonrpc: "2.0", method: "notifications/cancelled", params: { requestId: 15 } });
+      await vi.waitFor(() => expect(closed.has("pending-15")).toBe(true));
+      expect(closed.size).toBe(1);
+    });
+  });
+
+  it("aborts outstanding forwarded browser HTTP requests on stdin EOF", async () => {
+    await pendingProxy(async ({ child, send, held, closed }) => {
+      send({ ...frame("tools/call", { name: "first" }), id: 1 });
+      send({ ...frame("tools/call", { name: "second" }), id: 2 });
+      await vi.waitFor(() => expect(held.size).toBe(2));
+      child.stdin.end();
+      await vi.waitFor(() => expect([...closed].sort()).toEqual(["first", "second"]));
+    });
+  });
+
+  it("aborts forwarded browser HTTP requests before shutting down on SIGTERM", async () => {
+    await pendingProxy(async ({ child, send, held, closed }) => {
+      send({ ...frame("tools/call", { name: "shutdown" }), id: 1 });
+      await vi.waitFor(() => expect(held.has("shutdown")).toBe(true));
+      const exited = new Promise<void>((resolve) => child.once("close", () => resolve()));
+      child.kill("SIGTERM");
+      await vi.waitFor(() => expect(closed.has("shutdown")).toBe(true));
+      await exited;
+    });
+  });
+
   it("refuses to start without a known tool family", async () => {
     const child = spawn(process.execPath, ["--experimental-strip-types", fileURLToPath(new URL("./harness-mcp-proxy.ts", import.meta.url)), "shell"], {
-      env: { OMB_HARNESS_URL: url, OMB_MCP_TOKEN_BROWSER: "entrypoint-capability" }, stdio: ["pipe", "pipe", "pipe"],
+      env: { HOME: entrypointHome, USERPROFILE: entrypointHome, OMB_HARNESS_URL: url, OMB_MCP_TOKEN_BROWSER: "entrypoint-capability" }, stdio: ["pipe", "pipe", "pipe"],
     });
     const code = await new Promise<number | null>((resolve) => child.once("close", resolve));
     expect(code).toBe(2);

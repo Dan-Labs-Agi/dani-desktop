@@ -1,5 +1,76 @@
 # Latest handoff
 
+## Hermes-only bot harness — 2026-11-12
+
+Scope: DaniBot in `dani-desktop`, starting from observed base
+`3a7797656f12a23c1702af59342751e5e65f0287`. No assistant commit,
+push, release, installed-app replacement, or live-data migration was performed.
+Concurrent browser-runtime changes in this working tree are not this slice.
+
+### Implemented
+
+- Production loads and exposes Hermes instances only. A missing or unavailable
+  Hermes does not select another agent CLI. The registry execution guard also
+  rejects native-agent bot turns and background text calls after provider reloads
+  or custom decoration.
+- Models remain independent: Hermes provider-qualified and local-endpoint model
+  IDs are retained. Unscoped or missing IDs are refused rather than silently
+  running Hermes' configured default.
+- Startup migrates bot defaults, pinned conversations, and backup selections
+  with one durable bots-file write before publishing the changes. Instructions,
+  histories, model IDs, and follow-the-bot semantics remain intact. Unsupported
+  provider-specific approval modes step down to Ask; engine-specific model
+  controls are cleared when changing harnesses.
+- Store mutation boundaries normalize subsequent creates, imports, reviewed
+  team updates, bot/task patches, and model switches. Configuration defaults,
+  recovery backups, and helper selection move to Hermes as well.
+- The ordinary picker hides the single-Hermes engine rail and uses model-neutral
+  labels. The connection surface shows Hermes rather than offering competing
+  harness setup.
+  The connection card invites model selection without claiming that CLI/catalog
+  discovery alone proves a healthy model provider.
+- `control-omb launch --hermes` provides a disposable ACP fixture with the
+  production policy enabled. Other sealed fake-driver fixtures retain their
+  injected transports for protocol conformance; the fixture flag is never
+  enabled by a network request or by runtime availability.
+
+### Exercised verification
+
+- Eight focused runtime/store/picker/onboarding files: **370 passed**.
+  `server/comms.test.ts`: **32 passed** after marking its synthetic fleet as
+  sealed and removing obsolete branding/prompt-wording assertions. The replay
+  test still checks completed work, prior context, and exactly one result.
+- The new Hermes regression failed before the fix because an unscoped model
+  was accepted; missing, empty, and unscoped models are now rejected.
+- Actual serving-path smoke used `launchVerificationServer` and the canonical
+  `runControlOmb` commands: the default bot used `hermes`; turns on
+  `openai:fixture-a` and `openrouter:fixture-b` both settled; captured ACP
+  `session/set_model` calls contained the requested model IDs; selecting
+  `claude` was refused. The final run confirmed removal of its temporary data.
+- The canonical `launch --hermes` command was also launched directly. Its
+  starter and active task both reported `instanceId: "hermes"`.
+- Real renderer verification used disposable previews: the model menu displayed
+  both fixture models without a competing-agent selector, a UI click changed
+  the selected model, and the onboarding connection card displayed Hermes.
+  No browser-console errors were observed on those surfaces.
+- Changed-source `oxlint --deny-warnings` passed.
+- Verification services and tabs were stopped; throwaway smoke/preview source
+  files were removed.
+
+### Limits
+
+`pnpm typecheck` and the standalone server typecheck both stopped on
+`server/browser-calls.test.ts:80` (`Promise.withResolvers`, TS2550), outside
+this harness change. A separate registry run had two npm-install fixture
+failures (`env: node: No such file or directory`); those cases are not claimed
+as passing.
+
+The ACP engine and model responses above were synthetic. No live model
+credential, paid request, packaged installer, Windows runtime, or real Hermes
+distribution was qualified. Hermes must be installed and its model providers
+configured before a real bot can run. This does not close the packaging,
+bootstrap, provider-health, or release gates in spec 110.
+
 ## Local release/update and compact-sidebar work — 2026-11-10
 
 Source branch: `main`; last observed base:

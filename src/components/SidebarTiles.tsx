@@ -14,10 +14,11 @@ import { botTooltip } from "./BotModelBadge";
 import { liveBadgeFor } from "./LiveCallPill";
 import { pinnedCircleDragClass, pinnedCircleDragHandlers, usePinnedCircleDrag, type PinnedCircleDragProps } from "./PinnedCircleThreads";
 import { RenameTitle } from "./RenameTitle";
-import { openBotContextMenu, useVisibleMessages, type BotRowProps } from "./Sidebar";
+import { openBotContextMenu, useVisibleMessages, type BotRowProps } from "@/lib/sidebar-selection";
 import { sidebarBotStatus } from "./SidebarBotActivity";
 import { SIMPLE_ROW_FOCUS } from "./SidebarSimpleTop";
 import { useBotUnread } from "./unread-notice";
+import { tilesClearCorner } from "@/lib/sidebar-layout";
 
 const RING = "ring-2 ring-[var(--tile)]";
 
@@ -134,16 +135,6 @@ export function SidebarNoBots() {
   return <p data-sidebar-empty="" className="px-5 pt-4 text-[13px] leading-[18px] text-ink-tertiary">{t("onboarding.shell.noBots")}</p>;
 }
 
-/** How much of the grid's right end Search and New take in a framed window's corner (Sidebar's corner row). */
-const CORNER_CLEAR = 60;
-
-/** Whether the tiles' first row, as laid out, ends before the corner's buttons: the sidebar's width and the number of
- * tiles decide it. */
-export function tilesClearCorner(tiles: { top: number; right: number }[], gridRight: number): boolean {
-  if (!tiles.length) return false;
-  const top = tiles[0]!.top;
-  return Math.max(...tiles.filter((tile) => Math.abs(tile.top - top) < 1).map((tile) => tile.right)) <= gridRight - CORNER_CLEAR;
-}
 
 /** While the tiles clear the corner they rise beside its buttons (styles.css); else they start under them. */
 function useBesideCorner(corner: boolean, count: number) {

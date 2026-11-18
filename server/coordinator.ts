@@ -1,7 +1,7 @@
 import { RuntimeCoordinator } from "./runtime-coordinator.ts";
 import type { WorkOrigin } from "./peer-provenance.ts";
 import type { LegacyThreadResolver } from "./runtime/import-legacy.ts";
-import type { Answerer, Assignment, EnvelopeNames, Level, Limits, Mode, Origin, Outcome, Owner, Reply, Requester, StatusView, TurnEvidence } from "./runtime/types.ts";
+import type { Answerer, Assignment, BlockedTurn, EnvelopeNames, Level, Limits, Mode, Origin, Outcome, Owner, Reply, Requester, StatusView, TurnEvidence } from "./runtime/types.ts";
 
 /** One coordinate_bots call, as the internal route hands it to the server. */
 export type CoordinateBotsCall = {
@@ -66,6 +66,10 @@ export interface HandoffView {
   cards?: string[];
   continuation?: { note: string; handoffPath?: string; count: number };
   goalRunId?: string;
+  /** Trusted direct-work adoption: this Chief assignment supervises the original worker root. */
+  supervisionOf?: string;
+  /** The owned goal still needs a Chief receipt; an accompanying native failure is retained, not treated as success. */
+  needsVerification?: boolean;
 }
 
 export interface BeginTurnRequest {
@@ -76,6 +80,8 @@ export interface BeginTurnRequest {
   opener?: HandoffOpener;
   origin?: WorkOrigin;
   goalRunId?: string;
+  /** Trusted host binding to the original person line; never accepted from model-written work. */
+  sourceMessageId?: string;
 }
 
 /** `cap` continues the same node in place (a step cap, a seat it could not get); `cards` parks it on the person. */
@@ -90,6 +96,11 @@ export interface HostTurnResult {
   /** The host's stall watchdog stopped the turn, including a room turn a stall ended during setup, before it had an
    * outcome: it failed as `stalled`, not as a provider error. */
   stalled?: boolean;
+  /** A trusted denial, prerequisite or uncertain execution: park it, never treat provider settlement as task success. */
+  blocked?: BlockedTurn;
+  /** Trusted host eligibility for ordinary direct multi-step work, never inferred from page/model text. */
+  needsVerification?: true;
+  waitingOnBrowser?: string;
 }
 
 export interface HandoffOpener {
@@ -142,6 +153,10 @@ export interface CoordinatorHost {
    * so it resolves from `source`, the requester's node, whose parents lead up the chain. */
   levelOf(target: RoomAddress, source?: HandoffView): { level: Level; chief?: Level; driverKind?: string };
   chiefOf(address: RoomAddress): boolean;
+  /** Authoritative same-person Chief selection for an incomplete ordinary direct task; no Q&A, autonomous work or blocked authority.
+   * Also queried by tick for an unreviewed root parked only on trusted pending verification; unavailable selection must not create a thread.
+   * The host rechecks the original request's generation, Stop/newer-message fences and Chief access at dispatch too. */
+  supervisor?(node: HandoffView, result: HostTurnResult): { address: RoomAddress; level: Level; driverKind?: string } | undefined;
   /** What the cut turn already did outward (sent, posted, paid): a turn that acted outward is not run again. */
   outward?(node: HandoffView): string[];
   /** Whether `joiner`'s requester may read the answer `first` gives its own (the same people see both conversations),
@@ -172,6 +187,8 @@ export interface Coordinator {
   outstandingFor(threadId: string): HandoffView[];
   beginTurn(req: BeginTurnRequest): HandoffView;
   endTurn(id: string, result: HostTurnResult): void;
+  /** Host-only proof that an actual clarification answer belongs to the original direct request. */
+  acceptRequestAnswer(id: string, sourceMessageId: string, answerId: string): boolean;
   /** The parked node's next turn carries `text`, given by the person unless `by` says otherwise. */
   answerNode(id: string, text: string, by?: Answerer): boolean;
   answerRoot(id: string, text: string): boolean;

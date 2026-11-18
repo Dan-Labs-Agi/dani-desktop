@@ -1,8 +1,11 @@
 // A person's hold of a bot's browser as its viewers share it on the new engine. The hold is the person's: every view of
 // theirs sees it, any of them may take it over or hand it back, and their next view carries on with it when the view it
 // was used from went. Input runs only from that one view. How long it lasts unasked is in ../hold.ts.
+import { randomUUID } from "node:crypto";
 import { HoldClock } from "../hold.ts";
 import type { HubHost, Viewer } from "./core.ts";
+
+interface Reservation { viewer: Viewer; attempt?: string }
 
 export class ViewerHold {
   readonly #host: HubHost;
@@ -11,6 +14,7 @@ export class ViewerHold {
   readonly #clock: HoldClock;
   /** The view the hold is used from. */
   #driver: Viewer | null = null;
+  #reservation: Reservation | null = null;
   /** What the view it was used from pressed, being let go after that view went. */
   #letGo: Promise<void> = Promise.resolve();
 
@@ -20,9 +24,13 @@ export class ViewerHold {
     this.#changed = changed;
     this.#clock = new HoldClock(() => void this.handBack(), host.holdLimits);
     // A hold that ended, whichever way, leaves nothing behind for the next one.
+    let owner = host.control.owner;
     host.control.onChange(() => {
-      if (host.control.owner !== null) return;
+      const released = owner !== null && host.control.owner === null;
+      owner = host.control.owner;
+      if (owner !== null) return;
       this.#driver = null;
+      if (released) this.#reservation = null;
       this.#clock.stop();
     });
   }
@@ -69,23 +77,45 @@ export class ViewerHold {
     const free = () => !viewer.closed && viewer.options.canOperate && this.owns(viewer) && (this.#driver === null || !this.#viewers.has(this.#driver));
     if (!free()) return;
     await this.#letGo;
-    if (free()) this.#driver = viewer;
+    if (free()) {
+      this.#driver = viewer;
+      this.#reservation = { viewer, attempt: randomUUID() };
+    }
+  }
+
+  reserve(viewer: Viewer, attempt?: string): Reservation | null {
+    const control = this.#host.control;
+    if (control.releasing || control.closing || (control.owner !== null && !this.owns(viewer))) return null;
+    const reservation = { viewer, ...(attempt ? { attempt } : {}) };
+    this.#reservation = reservation;
+    return reservation;
+  }
+
+  attempt(viewer: Viewer): string | undefined {
+    return this.owns(viewer) && this.#reservation?.viewer === viewer ? this.#reservation.attempt : undefined;
+  }
+
+  current(reservation: Reservation): boolean {
+    return this.#reservation === reservation && !reservation.viewer.closed;
   }
 
   /** The person's take was granted: their hold is used from this view now, never with what the view before it pressed. */
-  async took(viewer: Viewer): Promise<void> {
+  async took(viewer: Viewer, reservation: Reservation): Promise<void> {
+    if (!this.current(reservation)) return;
     const person = viewer.options.person;
     const before = this.#driver;
     if (before && before !== viewer && this.#viewers.has(before)) await this.#host.control.letGo(person, () => before.releaseInput());
+    if (!this.current(reservation)) return;
     await this.#letGo;
-    if (viewer.closed || !this.owns(viewer)) return;
+    if (!this.owns(viewer) || !this.current(reservation)) return;
     this.#driver = viewer;
     this.#clock.used();
     this.#clock.watched(true);
   }
 
   /** Any view of the person hands their hold back, whichever of their views it is used from. */
-  async release(viewer: Viewer): Promise<void> {
+  async release(viewer: Viewer, attempt?: string): Promise<void> {
+    if (attempt !== undefined && (this.#reservation?.viewer !== viewer || this.#reservation.attempt !== attempt)) return;
     if (this.owns(viewer)) await this.#end(viewer.options.person);
   }
 

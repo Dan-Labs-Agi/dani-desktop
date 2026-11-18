@@ -236,7 +236,8 @@ const packageDocumentV1Schema = z.object({
       name: requiredText(80),
       agent: key,
       prompt: requiredText(20_000),
-      runOn: z.preprocess((value) => (value === "maus" ? "dani" : value), z.enum(["dani", "cloud"])),
+      // v1 writes the historical target; also read files exported during the branding transition.
+      runOn: z.enum(["maus", "dani", "cloud"]).transform((target) => target === "dani" ? "maus" as const : target),
       schedule: packageRoutineScheduleSchema,
       durationMinutes: z.number().int().min(5).max(240),
       timeoutMinutes: z.number().int().min(5).max(240).optional(),
@@ -465,6 +466,16 @@ export const packageDocumentSchema = z.object({
     presets: z.array(presetSchema).max(PACKAGE_MAX_PRESETS).optional(),
     connections: z.array(connectionSchema).max(PACKAGE_MAX_CONNECTIONS).optional(),
     examples: z.array(exampleSchema).max(12).optional(),
+  }),
+});
+
+// Historical v2 files used "maus" before the branding change, without a version bump.
+// Decode only at the package boundary; the current schema and all returned values stay canonical.
+const packageImportDocumentSchema = packageDocumentSchema.extend({
+  package: packageDocumentSchema.shape.package.extend({
+    routines: z.array(routineSchema.extend({
+      runOn: z.enum(["maus", "dani", "cloud"]).transform((target) => target === "maus" ? "dani" as const : target),
+    })).max(50).optional(),
   }),
 });
 
@@ -723,7 +734,7 @@ export function parsePackageV1(value: unknown): PackageDocumentV1 {
 }
 
 function validateV2(source: unknown): PackageDocument {
-  const parsed = packageDocumentSchema.safeParse(source);
+  const parsed = packageImportDocumentSchema.safeParse(source);
   if (!parsed.success) throw invalid(schemaSentence(parsed.error, source));
   checkV2References(parsed.data.package);
   return parsed.data;
@@ -735,7 +746,7 @@ function normalizedRelease(release: string): string {
 }
 
 /** v1 → v2: chiefOfStaff becomes team.leader, the team is named after the
- * package, routines stay paused. Everything else is copied as it is. */
+ * package, historical local targets become "dani", and routines stay paused. */
 export function upgradeV1(document: PackageDocumentV1): PackageDocument {
   const { chiefOfStaff, ...pkg } = document.package;
   return validateV2({
@@ -745,7 +756,9 @@ export function upgradeV1(document: PackageDocumentV1): PackageDocument {
       ...pkg,
       release: normalizedRelease(pkg.release),
       team: { name: pkg.name.slice(0, 60).trim(), ...(chiefOfStaff ? { leader: chiefOfStaff } : {}) },
-      ...(pkg.routines ? { routines: pkg.routines.map((routine) => ({ ...routine, enabledAfterInstall: false })) } : {}),
+      ...(pkg.routines ? { routines: pkg.routines.map((routine) => ({
+        ...routine, runOn: routine.runOn === "maus" ? "dani" : routine.runOn, enabledAfterInstall: false,
+      })) } : {}),
     },
   });
 }
@@ -821,7 +834,7 @@ export function downgradeToV1(document: PackageDocument):
     const { room: _room, continuity, runOnStartup, ...kept } = routine;
     if (continuity !== undefined) dropped.push(`routines[${routine.key}].continuity`);
     if (runOnStartup !== undefined) dropped.push(`routines[${routine.key}].runOnStartup`);
-    return [{ ...kept, enabledAfterInstall: false as const }];
+    return [{ ...kept, runOn: kept.runOn === "dani" ? "maus" as const : kept.runOn, enabledAfterInstall: false as const }];
   });
   const {
     team, publisher: _publisher, notes: _notes, presets: _presets, connections: _connections,

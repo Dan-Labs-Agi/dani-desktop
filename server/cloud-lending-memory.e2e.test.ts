@@ -9,6 +9,8 @@ import { connect } from "node:net";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 import { createComputerSharing } from "../electron/computer-sharing.mjs";
 import { cloudPairingSignature } from "./cloud-home.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
@@ -68,7 +70,10 @@ async function toolsFor(start: () => Promise<void>) {
   rmSync(dumpOf("held"), { force: true });
   await start();
   const agents = (await dumped(dumpOf("held"))).mcpConfig.mcpServers.agents;
-  const proxy = spawn(agents.command, agents.args, { env: { PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
+  const proxy = spawn(agents.command, agents.args, { env: {
+    ...verificationServerEnvironment({}, join(home, ".danibot"), Number(new URL(base).port)),
+    HOME: home, USERPROFILE: home, ...agents.env,
+  }, stdio: ["pipe", "pipe", "pipe"] });
   proxies.push(proxy);
   const replies = new Map<number, (value: any) => void>();
   createInterface({ input: proxy.stdout! }).on("line", line => { const msg = JSON.parse(line); replies.get(msg.id)?.(msg.result); replies.delete(msg.id); });
@@ -153,7 +158,7 @@ const reads = async (call: Awaited<ReturnType<typeof toolsFor>>) => {
 beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), "omb-cloud-lending-memory-"));
   const dataDir = join(home, ".danibot");
-  mkdirSync(dataDir, { recursive: true });
+  mkdirSync(join(dataDir, "tmp"), { recursive: true });
   const fake = pathToFileURL(join(SERVER_DIR, "testing", "fake-claude-cli.ts")).href;
   // `held`: every turn stays open, so the test can use the bot's tools mid-turn.
   const held = join(home, "held-claude.mjs");
@@ -187,7 +192,9 @@ await import(${JSON.stringify(fake)});
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
     memory: { captureQuietMs: 1_000 },
     instances: {
-      ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi", "claude"].map((id) => [id, { driver: "not-a-real-driver" }])),
+      ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+        id, { driver: "not-a-real-driver", enabled: false },
+      ])),
       held: { driver: "claudeAgent", displayName: "Held", config: { cli: held } },
       done: { driver: "claudeAgent", displayName: "Done", config: { cli: done } },
       brief: { driver: "claudeAgent", displayName: "Brief", config: { cli: brief } },
@@ -200,7 +207,7 @@ await import(${JSON.stringify(fake)});
     child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: {
-        PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+        ...verificationServerEnvironment(process.env, dataDir, port),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
         OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
         OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,

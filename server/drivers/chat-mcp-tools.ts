@@ -21,6 +21,7 @@ import type { ToolSchemaProfile } from "../tool-schema-profile.ts";
 import { allowsTool, canUseMcpServer, parseToolScope, type ToolScope } from "../../shared/tool-scope.ts";
 import { OWN_APPS_SERVER } from "../../shared/own-apps.ts";
 import { CHAT_TOOL_LIMIT, type ToolBudget } from "../../shared/tool-budget.ts";
+import { ownMcpOverHttp } from "./turn-mcp.ts";
 
 export interface ChatToolDefinition {
   type: "function";
@@ -48,7 +49,7 @@ export interface ChatToolSession {
 }
 
 type Server = { command: string; args: string[]; env: Record<string, string> };
-type RegisteredTool = { client: ChatMcpClient; server: string; launch: string; builtInBrowser: boolean; agents: boolean; hostComputer: boolean; name: string; schema: ValidateFunction; searched: boolean };
+type RegisteredTool = { client: ChatMcpClient; server: string; launch: string; builtInBrowser: boolean; harnessApproval: boolean; agents: boolean; hostComputer: boolean; name: string; schema: ValidateFunction; searched: boolean };
 function chatToolName(server: string, tool: string): string {
   return `${server}_${tool}`.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64) || "mcp_tool";
 }
@@ -430,7 +431,9 @@ export async function mountChatTools(integrations: SendTurnInput["integrations"]
       // Harness mounts are known by descriptor, never by a name a configured server could claim. A grant
       // hashes the descriptor (no credential kept); machine bridges mint a bearer per turn, so theirs last a turn.
       const launch = createHash("sha256").update(JSON.stringify(descriptor)).digest("hex");
-      const origin: ToolOrigin = { client, server: name, launch, builtInBrowser: descriptor === integrations?.browser, agents: descriptor === agentsServer,
+      const origin: ToolOrigin = { client, server: name, launch, builtInBrowser: descriptor === integrations?.browser,
+        harnessApproval: descriptor === integrations?.browser && ownMcpOverHttp({ name, ...descriptor })?.url.endsWith("/browser") === true,
+        agents: descriptor === agentsServer,
         hostComputer: descriptor === integrations?.localComputer && integrations?.localComputer?.scope === "local-computer", searched: searchable.has(name) };
       return { origin, tools };
     }));
@@ -530,6 +533,7 @@ export async function mountChatTools(integrations: SendTurnInput["integrations"]
     if (!object(args) || (!(tool.searched && isDirectoryTool(tool.name)) && !tool.schema(args))) throw new Error(ARGUMENTS_MISFIT);
   };
   const viewOf = (tool: RegisteredTool, args: Record<string, unknown>, title: string): ChatToolCallView => {
+    if (tool.harnessApproval) return { title, input: { arguments: "<REDACTED>" }, ask: false };
     const runs = target(tool, args);
     if (runs === undefined || tool.agents) return { title, input: args, ask: false };
     const grant = !tool.hostComputer ? JSON.stringify([tool.server, tool.launch, runs]) : undefined;

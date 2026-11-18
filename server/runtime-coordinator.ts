@@ -7,8 +7,8 @@ import { Runtime } from "./runtime/runtime.ts";
 import { importLegacyDelegations, importLegacyHandoffs, type LegacyThreadResolver } from "./runtime/import-legacy.ts";
 import { openRuntimeStore, type RuntimeStore } from "./runtime/store.ts";
 import { personOnly, requesterDecides, withDefault } from "./runtime/questions.ts";
-import { answersSender, childrenSince, clip, isTerminal, path } from "./runtime/tree.ts";
-import type { Answerer, Assignment, EndResult, Origin, Owner, Reply, Requester, RunInput, RunResult, StatusView, TurnRunner } from "./runtime/types.ts";
+import { answersSender, childrenSince, clip, directRecovery, isTerminal, path, supervised } from "./runtime/tree.ts";
+import type { Answerer, Assignment, EndResult, Origin, Owner, Reply, Requester, RunInput, RunResult, StatusView, SupervisionTarget, TurnRunner } from "./runtime/types.ts";
 import { sameRequest } from "./same-request.ts";
 
 const NOT_RUNNING = "The originating room task is no longer running";
@@ -23,6 +23,7 @@ const NO_TURN = "The requesting turn has no root (no turn)";
 const BRIEF_MAX = 12_000;
 const RUNTIME_DEPTH = /^Assignment depth limit reached/;
 const NEEDS_INPUT = /^needs input:/i;
+const VERIFICATION_PENDING = "This task still needs goal verification, but its authorized Chief is not available. Resolve the prerequisite before resuming.";
 
 /** Per-turn stalls belong to the host's watchdog: this only keeps the runtime's window out of its way. */
 const TURN_STALL_MS = 24 * 60 * 60_000;
@@ -93,6 +94,8 @@ export function view(a: Assignment, parent?: Assignment): HandoffView {
   if (a.cards !== undefined) node.cards = a.cards;
   if (a.continuation !== undefined) node.continuation = { ...a.continuation };
   if (a.goalRunId !== undefined) node.goalRunId = a.goalRunId;
+  if (a.supervisionOf !== undefined) node.supervisionOf = a.supervisionOf;
+  if (a.needsVerification !== undefined) node.needsVerification = a.needsVerification;
   if (a.parentId !== undefined) node.parentId = a.parentId;
   if (groupId !== undefined) node.groupId = groupId;
   if (a.batchKey !== undefined) node.requestBatchKey = a.batchKey;
@@ -218,7 +221,9 @@ export class RuntimeCoordinator implements Coordinator {
     const kind: HandoffView["kind"] = target.groupId !== undefined && target.groupId === source.groupId ? "assignment" : "work";
     const lineage = path(this.store, parent);
     const root = lineage[0]!;
-    if (!answersSender(parent, mode, target) && lineage.some(n => ancestorOf(address(n), target))) throw new Error(ANCESTOR);
+    const recoveringOriginal = directRecovery(parent, root, target, mode, rework);
+    if (!answersSender(parent, mode, target) && !recoveringOriginal &&
+      lineage.some(n => ancestorOf(address(n), target))) throw new Error(ANCESTOR);
     const siblings = this.store.children(parent.id);
     const existing = siblings.findLast(c => c.assignee.botId === target.botId && c.assignee.destination.groupId === target.groupId && c.brief === brief && c.mode === mode);
     if (existing && !(rework && isTerminal(existing))) return { node: view(existing, parent), duplicate: true };
@@ -229,7 +234,7 @@ export class RuntimeCoordinator implements Coordinator {
     const reply: Reply = wanted === "none" ? "none" : root.reply === "poll" ? "poll" : wanted;
     const requester: Requester = { kind: "bot_turn", botId: parent.assignee.botId, threadId: parent.assignee.destination.threadId,
       chief: this.host.chiefOf(address(parent)), ...(parent.id === root.id && root.requester.runId !== undefined ? { runId: root.requester.runId } : {}) };
-    const level = this.host.levelOf(target, this.project(parent));
+    const level = this.host.levelOf(target, this.project(recoveringOriginal ? root : parent));
     const result = this.runtime.enqueue({
       parentId: parent.id,
       origin: parent.origin,
@@ -238,7 +243,7 @@ export class RuntimeCoordinator implements Coordinator {
         threadId: target.threadId, ...(target.groupId ? { groupId: target.groupId } : {}) } },
       mode, reply, brief: text, rework,
       ...(options.doneWhen ? { doneWhen: options.doneWhen } : {}),
-      levels: { own: level.level, ...(level.chief !== undefined ? { chief: level.chief } : {}) },
+      levels: { own: level.level, ...(!recoveringOriginal && level.chief !== undefined ? { chief: level.chief } : {}) },
       ...(level.driverKind !== undefined ? { driverKind: level.driverKind } : {}),
       approved: approvalGranted,
       ...(target.groupId && requestBatchKey ? { batchKey: requestBatchKey } : {}),
@@ -305,7 +310,8 @@ export class RuntimeCoordinator implements Coordinator {
       origin: opener?.origin ?? runtimeOrigin(req.origin, address),
       requester: opener
         ? { ...opener.requester, botId: opener.requester.botId ?? address.botId, threadId: opener.requester.threadId ?? address.threadId, chief: this.host.chiefOf(address) }
-        : { kind: "person", threadId: address.threadId, botId: address.botId, chief: this.host.chiefOf(address) },
+        : { kind: "person", threadId: address.threadId, botId: address.botId, chief: this.host.chiefOf(address),
+          ...(req.origin?.kind === "user" && req.sourceMessageId ? { messageId: req.sourceMessageId } : {}) },
       assignee: { botId: address.botId, destination: { kind: address.groupId ? "room_thread" : "standing_thread", threadId: address.threadId,
         ...(address.groupId ? { groupId: address.groupId } : {}) } },
       brief: req.brief.slice(0, BRIEF_MAX),
@@ -319,11 +325,23 @@ export class RuntimeCoordinator implements Coordinator {
   endTurn(id: string, result: HostTurnResult): void {
     this.ready();
     const cards = result.cards && result.cards.ids.length > 0 ? result.cards : undefined;
+    const row = this.store.get(id);
+    const supervisor = row ? this.supervisor(row, result) : undefined;
     const end: EndResult = { ok: result.ok, text: result.text, ...(result.evidence ? { evidence: result.evidence } : {}),
-      ...(cards ? { needsInput: { question: cards.question, cards: cards.ids } } : {}),
-      ...(result.cap ? { continue: { note: result.cap.note, ...(result.cap.handoffPath ? { handoffPath: result.cap.handoffPath } : {}) } } : {}),
+      ...(result.blocked ? { needsInput: { question: result.blocked.reason, blocked: result.blocked, ...(cards ? { cards: cards.ids } : {}) } }
+        : cards ? { needsInput: { question: cards.question, cards: cards.ids } }
+        : result.needsVerification && !supervisor && !result.cap
+          ? { needsInput: { question: VERIFICATION_PENDING, needsVerification: true,
+            ...(!result.ok ? { verificationFailure: result.stalled ? "stalled" as const : "provider_error" as const } : {}) } } : {}),
+      ...(!result.blocked && result.cap ? { continue: { note: result.cap.note, ...(result.cap.handoffPath ? { handoffPath: result.cap.handoffPath } : {}) } } : {}),
+      ...(supervisor ? { supervisor } : {}),
       ...(result.stalled ? { stalled: true } : {}) };
     this.runtime.end(id, end);
+  }
+
+  acceptRequestAnswer(id: string, sourceMessageId: string, answerId: string): boolean {
+    this.ready();
+    return this.runtime.acceptRequestAnswer(id, sourceMessageId, answerId);
   }
 
   answerNode(id: string, text: string, by?: Answerer): boolean {
@@ -447,6 +465,11 @@ export class RuntimeCoordinator implements Coordinator {
   tick(): void {
     this.ready();
     this.pruneDaily();
+    for (const root of this.live()) {
+      if (root.status !== "needs_input" || !root.needsVerification) continue;
+      this.runtime.readmitVerification(root.id, current => this.chooseSupervisor(current,
+        { ok: !current.outcome, needsVerification: true, text: current.result, ...(current.evidence ? { evidence: current.evidence } : {}) }));
+    }
     this.runtime.tick();
   }
 
@@ -491,7 +514,17 @@ export class RuntimeCoordinator implements Coordinator {
   private runner(): TurnRunner {
     const host = this.host;
     return {
-      validate: (a, parent) => host.validate(view(a, parent), parent && this.project(parent)),
+      validate: (a, parent) => {
+        for (const owner of path(this.store, a)) {
+          if (!owner.supervisionOf) continue;
+          const original = this.store.get(owner.supervisionOf);
+          if (!original || isTerminal(original) || original.parentId || original.origin.kind !== "person" ||
+            owner.parentId !== original.id || owner.rootId !== original.id) {
+            return "The original direct request is no longer active; its supervision cannot continue";
+          }
+        }
+        return host.validate(view(a, parent), parent && this.project(parent));
+      },
       canStart: a => !host.busy(this.project(a)),
       run: (a, input, signal) => this.run(a, input, signal),
       park: (a, question, restored) => host.park(this.project(a), question, restored),
@@ -534,14 +567,47 @@ export class RuntimeCoordinator implements Coordinator {
     const result = await this.host.run(node, resumed, signal,
       { text: `${input.restartNote}${body}`, note: `${input.restartNote}${note}`, restartNote: input.restartNote, turn: input.turn });
     if (signal.aborted) return { kind: "failed", outcome: "stopped", text: result.text };
+    if (result.blocked) return { kind: "needs_input", text: result.text, question: result.blocked.reason, blocked: result.blocked,
+      ...(result.cards ? { cards: result.cards.ids } : {}), ...evidence(result) };
     if (result.cap) return { kind: "continue", text: result.text, note: result.cap.note, ...(result.cap.handoffPath ? { handoffPath: result.cap.handoffPath } : {}), ...evidence(result) };
     if (result.cards) return { kind: "needs_input", question: result.cards.question, cards: result.cards.ids, ...evidence(result) };
-    if (!result.ok) return { kind: "failed", outcome: result.stalled ? "stalled" : "provider_error", text: result.text, ...evidence(result) };
-    const question = root ? undefined : needsInputQuestion(result.text);
+    const supervisor = this.supervisor(a, result);
+    if (root && result.needsVerification && !supervisor) return {
+      kind: "needs_input", text: result.text, question: VERIFICATION_PENDING, needsVerification: true,
+      ...(!result.ok ? { verificationFailure: result.stalled ? "stalled" as const : "provider_error" as const } : {}), ...evidence(result),
+    };
+    if (!result.ok) {
+      return { kind: "failed", outcome: result.stalled ? "stalled" : "provider_error", text: result.text,
+        ...(supervisor ? { supervisor } : {}), ...evidence(result) };
+    }
+    if (root && result.needsVerification) return supervisor
+      ? { kind: "completed", text: result.text, supervisor, ...evidence(result) }
+      : { kind: "needs_input", text: result.text, question: VERIFICATION_PENDING, needsVerification: true, ...evidence(result) };
+    const question = root && !(supervised(a) && this.store.children(a.id).some(child => child.mode === "work" && child.reply !== "none"))
+      ? undefined : needsInputQuestion(result.text);
     if (question === undefined) return { kind: "completed", text: result.text, ...evidence(result) };
     const named = withDefault(question);
     const decide = requesterDecides(a) && !result.privateQuestion && !personOnly(named.question) ? { decide: named.default ? { default: named.default } : {} } : {};
     return { kind: "needs_input", question, ...decide, ...evidence(result) };
+  }
+
+  private supervisor(a: Assignment, result: HostTurnResult): SupervisionTarget | undefined {
+    if (a.status !== "running" || a.parentId || a.goalRunId || a.origin.kind !== "person" || a.requester.kind !== "person" ||
+      a.requester.chief || a.reply !== "resume" || a.assignee.destination.groupId || (result.ok && !result.needsVerification) ||
+      result.blocked || result.cards || result.cap) return undefined;
+    return this.chooseSupervisor(a, result);
+  }
+
+  private chooseSupervisor(a: Assignment, result: HostTurnResult): SupervisionTarget | undefined {
+    try {
+      const chosen = this.host.supervisor?.(this.project(a), result);
+      if (!chosen || chosen.address.botId === a.assignee.botId || chosen.address.groupId) return undefined;
+      return { assignee: { botId: chosen.address.botId, destination: { kind: "work_thread", threadId: chosen.address.threadId } },
+        level: chosen.level, ...(chosen.driverKind ? { driverKind: chosen.driverKind } : {}) };
+    } catch (error) {
+      this.log(`direct supervision unavailable for ${a.id}: ${String(error)}`);
+      return undefined;
+    }
   }
 
   private live(): Assignment[] {

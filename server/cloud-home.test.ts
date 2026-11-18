@@ -102,9 +102,10 @@ it("offers the built-in browser and cloud computers, never this computer or a Lo
 
 it("refuses the places it never offers with what is true there, not a setup step", () => {
   const local = cloudHomePlaceRefusal("local")!, vm = cloudHomePlaceRefusal("vm")!;
-  expect(local).toBe("This computer isn't a place in the Cloud. Set Works on to Auto, Cloud desktop or Browser; your own computer is reached while Dani Bot is open on it.");
-  expect(vm).toBe("Cloud bots can't use a private desktop. Set Works on to Auto, Cloud desktop or Browser.");
+  expect(local).toMatch(/computer.*(?:isn't|not).*Cloud/i);
+  expect(vm).toMatch(/Cloud.*(?:can't|cannot).*private desktop/i);
   for (const text of [local, vm]) {
+    for (const offered of ["Auto", "Cloud desktop", "Browser"]) expect(text).toContain(offered);
     expect(text).not.toMatch(/configure|Computer panel|install|set (?:it|one) up/i);
     // A failed turn shows the first 160 characters of its error.
     expect(text.length).toBeLessThanOrEqual(160);
@@ -381,8 +382,8 @@ it("gives the edge only its routing name and the server the contract, never a ga
   expect(edge.OMB_CLOUD_PUBLIC_HOST).toBe(cloudHomeHost(config));
   expect(JSON.stringify(edge)).not.toContain(token);
   expect(JSON.stringify(edge)).not.toContain(secret);
-  expect(passwdIds("root:x:0:0::/root:/bin/sh\ndani:x:1001:1002::/data:/bin/bash\n", "dani")).toEqual({ uid: 1001, gid: 1002 });
-  expect(passwdIds("root:x:0:0::/root:/bin/sh\n", "dani")).toBeNull();
+  expect(passwdIds("root:x:0:0::/root:/bin/sh\nmaus:x:1003:1004::/legacy:/bin/bash\ndani:x:1001:1002::/data:/bin/bash\n", "dani")).toEqual({ uid: 1001, gid: 1002 });
+  expect(passwdIds("root:x:0:0::/root:/bin/sh\nmaus:x:1003:1004::/legacy:/bin/bash\n", "dani")).toBeNull();
 });
 
 it("holds requests at the edge while the server starts only when the Admin asked for it (a plan that sleeps)", () => {

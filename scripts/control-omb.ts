@@ -77,7 +77,7 @@ mutating (an explicit --url or DANIBOT_URL/OMB_PORT is required):
 ${HELP_UI}
 
 isolated fixture:
-  node --experimental-strip-types scripts/control-omb.ts launch
+  node --experimental-strip-types scripts/control-omb.ts launch [--hermes]
 
 Output is JSON. wait defaults to 30 seconds here. launch and ui launch own a temporary fake-engine server until interrupted.`;
 
@@ -129,8 +129,8 @@ export interface VerificationServer {
   close(): Promise<void>;
 }
 
-/** A temporary home in `dataDir`, the fake engine's knobs from `parentEnv`, node
- * on PATH, and nothing else from the parent shell or this machine's CLIs. */
+/** Prepares a private temporary directory under `dataDir` and an isolated home,
+ * with the fake engine's knobs from `parentEnv` and only node on PATH. */
 export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, dataDir: string, port: number): NodeJS.ProcessEnv {
   const childEnv: NodeJS.ProcessEnv = {};
   const platformKeys = new Set(["SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "TZ"]);
@@ -139,6 +139,7 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     if (value && platformKeys.has(normalized)) childEnv[normalized] = value;
   }
   const fixtureTemp = join(dataDir, "tmp");
+  mkdirSync(fixtureTemp, { recursive: true, mode: 0o700 });
   Object.assign(childEnv, {
     HOME: dataDir,
     USERPROFILE: dataDir,
@@ -157,6 +158,7 @@ export function verificationServerEnvironment(parentEnv: NodeJS.ProcessEnv, data
     // A caller's FAKE_CLAUDE_MODE overrides this below to drive failure paths.
     FAKE_CLAUDE_MODE: parentEnv.FAKE_CLAUDE_MODE || "happy",
     FAKE_CLAUDE_DUMP: join(dataDir, "fake-claude-dump.json"),
+    FAKE_CLAUDE_TEXT_DUMP: join(dataDir, "fake-claude-text.json"),
     // POSIX resolves the fake CLI's `#!/usr/bin/env node` shebang through PATH;
     // Windows resolves it through spawnCli without a shell.
     PATH: dirname(process.execPath),
@@ -263,7 +265,7 @@ export async function launchVerificationServer(
   enterprise?: { dir: string; licenseKey: string },
   room?: { scripted: boolean },
   /** Optional repository-owned fake providers for multi-engine setup checks. */
-  extraProviders: Array<"codex" | "cline" | "copilot" | "customAcp" | "openaiCompat" | "groq" | "meta"> = [],
+  extraProviders: Array<"codex" | "cline" | "copilot" | "customAcp" | "hermes" | "openaiCompat" | "groq" | "meta"> = [],
   /** Programmatic tests only: an owned loopback Boat provider, never a live account. */
   boatFixtureApi?: string,
   /** Programmatic web UI qualification against the fixture's static server. */
@@ -290,12 +292,16 @@ export async function launchVerificationServer(
   // Native browser daemons use UNIX sockets, and a macOS temp home can exceed
   // their path limit.
   const dataDir = mkdtempSync(join(browser && process.platform !== "win32" ? "/tmp" : tmpdir(), "danibot-verify-data-"));
-  const fixtureTemp = join(dataDir, "tmp");
   const fixtureDumpPath = join(dataDir, "fake-claude-dump.json");
-  mkdirSync(fixtureTemp, { recursive: true });
   const evidenceDir = join(tmpdir(), "danibot-verification-evidence");
   mkdirSync(evidenceDir, { recursive: true });
   const logPath = join(evidenceDir, `server-${Date.now()}-${process.pid}.log`);
+  if (extraProviders.includes("hermes")) {
+    const hermesHome = join(dataDir, ".hermes");
+    mkdirSync(hermesHome, { recursive: true });
+    writeFileSync(join(hermesHome, ".env"), "OPENROUTER_API_KEY=synthetic-fixture-only\n", { mode: 0o600 });
+    writeFileSync(join(hermesHome, "config.yaml"), "model:\n  provider: openai\n  default: fixture-a\n", { mode: 0o600 });
+  }
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
     ...(boatFixtureApi ? { box: { token: "box_verification_fixture" } } : {}),
     // A setup card's answers would be one more engine call at every new bot, taking replies a test scripts for its turns.
@@ -328,6 +334,15 @@ export async function launchVerificationServer(
         config: { cli: fileURLToPath(new URL("../server/testing/fake-acp-cli.ts", import.meta.url)) },
         environment: { FAKE_ACP_MODELS: "fixture-fast,fixture-deep", FAKE_ACP_DUMP: join(dataDir, "custom-acp-launch.json") },
       } } : {}),
+      ...(extraProviders.includes("hermes") ? { hermes: {
+        driver: "hermesAgent", displayName: "Hermes",
+        config: { cli: fileURLToPath(new URL("../server/testing/fake-acp-cli.ts", import.meta.url)) },
+        environment: {
+          FAKE_ACP_SESSION_MODELS: "openai:fixture-a|Fixture A,openrouter:fixture-b|Fixture B",
+          FAKE_ACP_DUMP: join(dataDir, "hermes-launch.json"),
+          FAKE_ACP_RPC_DUMP: join(dataDir, "hermes-rpc.json"),
+        },
+      } } : {}),
       claude: {
         driver: "claudeAgent",
         displayName: "Verification fixture",
@@ -339,6 +354,7 @@ export async function launchVerificationServer(
 
   const log = openSync(logPath, "a", 0o600);
   const childEnv = verificationServerEnvironment(parentEnv, dataDir, port);
+  if (extraProviders.includes("hermes")) childEnv.OMB_TEST_HERMES_HARNESS = "1";
   // Opt-in live Local VM fixture: keep the temporary home and fake engine,
   // granting only the explicitly selected machine connection and static UI.
   if (localVm) Object.assign(childEnv, {
@@ -461,13 +477,14 @@ async function main() {
   }
   if (command === "launch") {
     requireForegroundTerminal("launch");
+    const options = parse("launch", process.argv.slice(3), { hermes: { type: "boolean" } });
     const startup = new AbortController();
     const cancelStartup = () => startup.abort();
     process.once("SIGINT", cancelStartup);
     process.once("SIGTERM", cancelStartup);
     let session: VerificationServer;
     try {
-      session = await launchVerificationServer(process.env, startup.signal);
+      session = await launchVerificationServer(process.env, startup.signal, undefined, undefined, undefined, undefined, options.hermes ? ["hermes"] : []);
     } finally {
       process.removeListener("SIGINT", cancelStartup);
       process.removeListener("SIGTERM", cancelStartup);

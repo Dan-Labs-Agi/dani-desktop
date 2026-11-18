@@ -317,9 +317,42 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: node scripts/release-ci.mjs
 
+  verify-artifacts:
+    name: Verify collected release artifacts
+    needs: [prepare, linux, windows, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: release-assets
+          pattern: "*-release"
+          merge-multiple: false
+      - name: Verify complete artifact set
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          args=(release-assets "$VERSION")
+          if [[ "$GITHUB_EVENT_NAME" == push && ( "$GITHUB_REF" == refs/heads/main || "$GITHUB_REF" == refs/heads/prod ) ]]; then
+            args+=(--build-version)
+          fi
+          node scripts/release-artifacts.mjs "${args[@]}"
+
   release:
     name: Create draft release
-    needs: [prepare, candidate-ci, linux, windows, macos]
+    needs: [prepare, candidate-ci, verify-artifacts, macos]
     # Release hold: an ordinary branch push only validates the packaging above.
     # Tags and draft releases are created only by a v* tag push or an explicit
     # manual dispatch, after the required checks have passed.
@@ -341,39 +374,11 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: npm install --global pnpm@10.33.0 --no-audit --no-fund
-      - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: release-assets
           pattern: "*-release"
           merge-multiple: false
-      - name: Verify complete artifact set
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Downloaded release asset inventory:"
-          find release-assets -maxdepth 2 -type f -printf '%P\n' | sort
-          node scripts/release-artifacts.mjs release-assets "$VERSION"
-          required=(
-            DaniBot.AppImage
-            danibot-amd64.deb
-            DaniBot-setup.exe
-            DaniBot-Windows-Portable.zip
-            DaniBot-Intel.dmg
-            DaniBot-Intel-Portable.zip
-            DaniBot-Silicon.dmg
-            DaniBot-Silicon-Portable.zip
-            latest-linux.yml latest.yml latest-mac.yml
-          )
-          for file in "${required[@]}"; do
-            test -s "$(find release-assets -type f -name "$file")" || {
-              echo "::error::missing release asset: $file"
-              exit 1
-            }
-          done
       - name: Create or refresh draft release
         env:
           GH_TOKEN: ${{ github.token }}

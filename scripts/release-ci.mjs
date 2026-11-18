@@ -7,12 +7,12 @@ import { versionOnlyPackageJson } from "./ci-scope.mjs";
 const RELEASE_EVENTS = { push: true, merge_group: true, schedule: true, workflow_dispatch: true };
 /** @type {Record<string, true>} */
 const FINISHED_CONCLUSIONS = { success: true, skipped: true, neutral: true };
-// The CI matrix shards vitest per OS; keep these counts in sync with
-// .github/workflows/ci.yml (ubuntu 8, windows 8, macos 4).
-const VITEST_SHARDS = [["macos-latest", 4], ["ubuntu-latest", 8], ["windows-latest", 8]];
+const REQUIRED_TEST_JOBS = new Set(
+  Object.entries({ "ubuntu-latest": 8, "windows-latest": 8, "macos-latest": 4 }).flatMap(([os, count]) =>
+    Array.from({ length: count }, (_, index) => `vitest (${os}, shard ${index + 1}/${count})`)),
+);
 const REQUIRED_JOBS = [
-  ...VITEST_SHARDS.flatMap(([os, shards]) =>
-    Array.from({ length: shards }, (_, i) => `vitest (${os}, shard ${i + 1}/${shards})`)),
+  ...REQUIRED_TEST_JOBS,
   "package + smoke (Ubuntu 24.04 x64)",
   "control-plane check + workerd tests + dry run",
   "Detect optional jobs",
@@ -34,7 +34,7 @@ export function judgeRun(jobs) {
   const unsettled = jobs.find((job) => !Object.hasOwn(FINISHED_CONCLUSIONS, job.conclusion ?? ""));
   if (unsettled) return unsettled.conclusion ?? "no verdict";
   if (REQUIRED_JOBS.every((name) => jobs.some((job) => job.name === name && job.conclusion === "success"))) return "green";
-  const platforms = jobs.filter((job) => job.name.startsWith("vitest (") || job.name.startsWith("typecheck + test ("));
+  const platforms = jobs.filter((job) => REQUIRED_TEST_JOBS.has(job.name));
   if (platforms.length === 0 || platforms.some((job) => job.conclusion !== "success")) return "scoped";
   return "partial";
 }
@@ -112,6 +112,17 @@ export async function waitForReleaseCi({ api, sha, version, sleep = (ms) => new 
       const runsFor = (target) => memo(target, async () => releaseRuns(await api.runsForCommit(target)));
       const recent = () => memo("recent", async () => releaseRuns(await api.recentRuns()));
 
+      // Candidate failures are stronger evidence than an older green run or
+      // inherited proof. Only a later successful attempt of that failed run
+      // clears it; never hide a real failure behind another commit's CI.
+      const runs = await runsFor(sha);
+      for (const run of runs) {
+        if (run.status !== "completed" || await verdict(run) !== "red") continue;
+        return { ok: false, reason: dispatched && inLane(run)
+          ? `CI in the release lane did not pass (red): run ${run.id}`
+          : `The CI check on ${sha} failed: run ${run.id}` };
+      }
+
       const own = await proof(sha, tree, runsFor, recent);
       if (own) {
         log(own.sameTree
@@ -127,7 +138,6 @@ export async function waitForReleaseCi({ api, sha, version, sleep = (ms) => new 
         }
       }
 
-      const runs = await runsFor(sha);
       // The lane's run that lost a runner gets its failed jobs re-run once;
       // any other red is a verdict.
       const settle = async (run) => {
@@ -151,12 +161,12 @@ export async function waitForReleaseCi({ api, sha, version, sleep = (ms) => new 
           log(laneRun ? `Release-lane CI run ${laneRun.id} is ${laneRun.status}; waiting.` : "Waiting for the release-lane CI run to appear.");
         }
       } else {
-        // Red is red: a failed gate stops the release rather than being retried.
+        // Only a never-started runner in the release lane gets one retry.
         let rerunning = false;
         for (const run of runs.filter((run) => run.status === "completed")) {
           const { wait, result } = await settle(run);
           if (wait) rerunning = true;
-          else if (result === "red" || (result === "runner-lost" && inLane(run))) return { ok: false, reason: `The CI check on ${sha} failed: run ${run.id}` };
+          else if (result === "runner-lost" && inLane(run)) return { ok: false, reason: `The CI check on ${sha} failed: run ${run.id}` };
           else if (result === "runner-lost") log(`CI run ${run.id} on ${sha} failed only because jobs never got a runner; it is not re-run in ${run.head_branch}'s queue.`);
         }
         const live = runs.find((run) => run.status !== "completed");

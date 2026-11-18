@@ -66,7 +66,9 @@ const localComputerGrant = createLocalComputerGrant({
 
 function ensureLinuxRuntime() {
   if (!linuxRuntime) {
-    const support = linuxLocalControlSupport(process.platform, process.env);
+    const support = process.env.DANI_DISABLE_CUA === "1"
+      ? { available: false, reasonCode: "disabled-by-launch", message: "Computer control is disabled for this launch" }
+      : linuxLocalControlSupport(process.platform, process.env);
     if (!support.available) {
       linuxRuntime = createUnavailableLinuxRuntime({
         connectionStore,
@@ -136,6 +138,7 @@ export function resolveWindowsDriver() {
 }
 
 export function resolveDriverBinary() {
+  if (process.env.DANI_DISABLE_CUA === "1") return null;
   if (process.env.CUA_DRIVER_PATH) return process.env.CUA_DRIVER_PATH;
   if (app.isPackaged) {
     const bundled = path.join(process.resourcesPath, "cua-driver" + (process.platform === "win32" ? ".exe" : ""));

@@ -8,6 +8,7 @@ import { homedir, tmpdir } from "node:os";
 import { lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { z } from "zod";
 
 import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, WORKSPACE_CREDENTIAL_ENV } from "../../config.ts";
 import { openStartupModelCatalog, readStartupModelCache, unconfirmedModelCatalog, writeStartupModelCache } from "../../startup-model-catalog.ts";
@@ -19,6 +20,7 @@ import { describeSpawnFailure, execCli, killCliTree, spawnCli } from "../../proc
 import { runAcpOneShot } from "./background-text.ts";
 import { sanitizeAcpToolMessage } from "./tool-log.ts";
 import { stripLeakedSystemHarnessMessages } from "../../../shared/system-message-guard.ts";
+import { NATIVE_MODEL_ID_MAX_LENGTH } from "../../../shared/hermes-harness.ts";
 import {
   classifyQuiet, clearsLoggedBeforeNotice, describeQuiet, formatQuietLimit, lastSeenPhrase, LIMIT_WORDS, LogTail, promptIdleTimeoutMs, quietKey, quietNoticeMs, quietTickMs, quietVerdict, sampleProcessTree,
   type LogSignal, type ProcessSample, type QuietState,
@@ -58,12 +60,14 @@ import { openQuestionRequest, questionRequestFor, type AcpQuestionRequest } from
 import { commandSummary, toolDetailPreview } from "../../tool-summary.ts";
 import { acpToolEndEvents } from "./tool-items.ts";
 import { AcpHost } from "./host.ts";
-import { endTurn, trackRunningTool, type AcpAskFinish, type AcpSession, type AcpTurn } from "./turn-state.ts";
+import { endTurn, trackRunningTool, type AcpAskFinish, type AcpContinuationState, type AcpSession, type AcpTurn } from "./turn-state.ts";
 import { recoveryPromptFor } from "../../resume-recovery.ts";
 import { armIdleClose, engineIdleMs, sessionIdlePolicy, stopIdleClose } from "../session-idle.ts";
 import { classifyError } from "../retry.ts";
-import { engineFailureKind, engineFailureMessage, stopCause } from "../engine-errors.ts";
+import { engineFailureKind, engineFailureMessage, errorReplyFailure, stopCause } from "../engine-errors.ts";
+import { announcesAction, asksForInput, CONTINUE_UNFINISHED_ACTION, RECOVER_FAILED_OBSERVATION, TaskContinuation } from "../task-continuation.ts";
 import { narrowsNativeTools, parseToolScope } from "../../../shared/tool-scope.ts";
+import { isBrowserObservation } from "../../../shared/browser-tool-policy.ts";
 import { acpMcpServers, type AcpMcpServer } from "../turn-mcp.ts"; import { acpToolOutput, acpToolProgress } from "../tool-progress.ts";
 import { learnedToolCountLimit, mcpToolBudget, retryUnderToolLimit } from "../../tool-count-limit.ts"; import { instanceEnvNames } from "../../bot-box/env.ts";
 
@@ -111,6 +115,10 @@ export interface AcpSupport {
   ): ModelCatalog | Promise<ModelCatalog>;
   /** Some managed agents are not probed at app startup; their Refresh is the only lookup. */
   resolveModelsOnCreate?: boolean;
+  /** Native read-only metadata must rebuild authorization instead of using the lossy display cache. */
+  startupModelCache?: false;
+  /** Release support-owned private catalog credentials when an instance is removed. */
+  disposeModelCatalog?(instanceId: string): void;
   /** Native-protocol log label, e.g. "grok.acp". */
   nativeSource: string;
   /** Whether models behind this CLI can consume a referenced image. */
@@ -159,6 +167,8 @@ export interface AcpSupport {
     env: Record<string, string | undefined>,
     config: AcpConfig,
     instanceId: string,
+    turn?: SendTurnInput,
+    purpose?: "foreground" | "background",
   ): Promise<{ command: string; args?: string[]; env?: Record<string, string | undefined> }>;
   /** Snapshot override for agents whose binary has no conventional --version. */
   snapshot?(
@@ -173,6 +183,8 @@ export interface AcpSupport {
   /** hermes-agent 0.22.4 re-sends a streamed reply whole under its messageId, as its `💭` reasoning block, a blank line,
    * then the reply; that chunk is dropped instead of appended. */
   resendsReasoningReply?: boolean;
+  /** Keep an explicitly unfinished response in the same native turn/session, bounded by actual tool progress. */
+  nudgeAnnouncedAction?: boolean;
   /** Threads with the same spawn contract run their sessions in one process (OpenCode 1.19: about 100 MB a session
    * instead of about 450 MB a process), up to SHARED_SESSIONS_MAX. */
   shareProcess?: boolean;
@@ -268,11 +280,53 @@ function isHermesReasoningReplay(chunk: string, streamed: string): boolean {
     && /\n\n[ \t]*$/.test(replay.slice(0, -reply.length));
 }
 
+const NativeObservationSchema = z.object({
+  title: z.string().nullish(),
+  kind: z.string().nullish(),
+  rawInput: z.unknown().optional(),
+});
+const NativeUsageSchema = z.object({
+  inputTokens: z.number().nullish(),
+  outputTokens: z.number().nullish(),
+  cachedReadTokens: z.number().nullish(),
+  totalTokens: z.number().nullish(),
+}).passthrough();
+const AcpPromptResultSchema = z.object({
+  stopReason: z.string().nullish(),
+  error: z.unknown().optional(),
+  message: z.unknown().optional(),
+  usage: NativeUsageSchema.nullish(),
+  _meta: NativeUsageSchema.nullish(),
+}).passthrough();
+type AcpPromptResult = z.infer<typeof AcpPromptResultSchema>;
+const NativeFailureFlagsSchema = z.object({
+  acpPromptStall: z.boolean().optional(),
+  acpUsageLimit: z.boolean().optional(),
+  acpSessionFailure: z.boolean().optional(),
+});
+
+function isObservation(update: unknown): boolean {
+  const parsed = NativeObservationSchema.safeParse(update);
+  if (!parsed.success) return false;
+  const { title = "", kind, rawInput } = parsed.data;
+  const separator = title?.indexOf(":") ?? -1;
+  const name = separator < 0 ? title ?? "" : title!.slice(0, separator);
+  const browserName = name.startsWith("mcp__browser__") ? name.slice("mcp__browser__".length) : name;
+  if (browserName.startsWith("agent_browser_")) {
+    if (browserName === "agent_browser_read" && (rawInput === null || typeof rawInput !== "object" || Array.isArray(rawInput))) return false;
+    return isBrowserObservation(browserName, rawInput);
+  }
+  return !name.includes("agent_browser_") && (kind === "read" || kind === "search");
+}
+
 let unkeyedToolSeq = 0;
 /** A synthetic id for a `tool_call` without `toolCallId`, paired FIFO with the first terminal update. */
-function nextUnkeyedToolId(current: AcpTurn): string {
-  const id = `acp-tool-unkeyed-${++unkeyedToolSeq}`;
-  current.unkeyedToolIds.push(id);
+function nextUnkeyedToolId(current: AcpTurn, track = true): string {
+  const sequence = ++unkeyedToolSeq;
+  const id = current.continuation
+    ? `${current.turnId}:prompt-${current.continuation.round}:unkeyed:${sequence}`
+    : `acp-tool-unkeyed-${sequence}`;
+  if (track) current.unkeyedToolIds.push(id);
   return id;
 }
 const CLIENT_FILE_MAX_BYTES = 8 * 1024 * 1024;
@@ -350,10 +404,12 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             accountModels = new Set(resolved.options.map((option) => option.id));
           } else unconfirmedModelCatalog(models);
         } catch { unconfirmedModelCatalog(models); }
-        try { writeStartupModelCache(instanceId, models); } catch {}
+        if (support.startupModelCache !== false) {
+          try { writeStartupModelCache(instanceId, models); } catch {}
+        }
       };
       let startupModelRefresh: Promise<void> | null = null;
-      if (support.resolveModels && support.resolveModelsOnCreate !== false) {
+      if (support.resolveModels && support.resolveModelsOnCreate !== false && support.startupModelCache !== false) {
         startupModelRefresh = (await openStartupModelCatalog({
           instanceId,
           use: (catalog) => { models = catalog; },
@@ -755,12 +811,14 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
               type: "runtime.error",
               message: `${support.displayName} offered no "${want}" permission option — cancelling the request instead of guessing`,
             });
+          const blockContinuation = () => { if (current.continuation) current.continuation.blocked = true; };
 
           const toolCall = params.toolCall ?? {};
           const isQuestion = String(toolCall.toolCallId ?? "").startsWith("interaction_");
           if (current.turnConfig.fullAuto && current.turn.approvalMode === undefined && !isQuestion && answersAlone(toolCall.rawInput?.command)) {
             const allow = optionFor("allow");
             if (!allow) missing("allow");
+            if (!allow) blockContinuation();
             return send({
               jsonrpc: "2.0",
               id: msg.id,
@@ -816,11 +874,13 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
               sessionAllows.set(threadId, remembered);
             }
             if (behavior !== "cancel" && !optionId) {
+              blockContinuation();
               if (!isQuestion) missing(want);
               else if (behavior === "answer") {
                 emit({ ...base(threadId, current.turnId), type: "runtime.error", message: QUESTION_NO_MATCH_NOTE });
               }
             }
+            if (current.continuation && (!optionId || (!isQuestion && behavior !== "allow"))) current.continuation.blocked = true;
             send({
               jsonrpc: "2.0",
               id: msg.id,
@@ -877,10 +937,40 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             current.state.startupActivity = true;
           }
           if (!current || !current.state.promptSent) return;
-          const u = p.update ?? {};
+          let u = p.update ?? {};
+          if (current.continuation && (u.sessionUpdate === "tool_call" || u.sessionUpdate === "tool_call_update")) {
+            const rawId = typeof u.toolCallId === "string" && u.toolCallId ? u.toolCallId : null;
+            const toolCallId = rawId
+              ? `${current.turnId}:prompt-${current.continuation.round}:native:${rawId}`
+              : u.sessionUpdate === "tool_call"
+                ? nextUnkeyedToolId(current, u.status !== "completed" && u.status !== "failed")
+                : u.status === "completed" || u.status === "failed" ? current.unkeyedToolIds.shift() : current.unkeyedToolIds[0];
+            u = { ...u, toolCallId };
+            if (toolCallId && u.sessionUpdate === "tool_call") {
+              current.continuation.toolIds.add(toolCallId);
+              if (isObservation(u)) current.continuation.observationTools.add(toolCallId);
+            } else if (!toolCallId || !current.continuation.toolIds.has(toolCallId)) {
+              current.continuation.blocked = true;
+              current.continuation.unknownWork = true;
+            }
+          }
           const finished = u.status === "completed" || u.status === "failed";
           const toolEnded = (itemId: string | undefined) => {
             current.state.producedItem = true;
+            if (current.continuation) {
+              current.continuation.producedItem = true;
+              const observation = itemId !== undefined && current.continuation.observationTools.has(itemId);
+              if (u.status === "failed") {
+                if (observation) {
+                  current.continuation.failedObservation = true;
+                  current.continuation.observationRecovery = true;
+                } else current.continuation.blocked = true;
+              }
+              if (itemId && current.continuation.toolIds.has(itemId) && !current.endedToolIds.has(itemId) && u.status === "completed") {
+                current.continuation.completedTools += 1;
+                if (observation) current.continuation.failedObservation = false;
+              }
+            }
             for (const event of acpToolEndEvents(u, itemId, current.endedToolIds)) emit({ ...base(threadId, current.turnId), ...event });
           };
           switch (u.sessionUpdate) {
@@ -890,6 +980,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
               if (content?.type === "image" && typeof content.data === "string" && content.data) {
                 current.flushAssistantText();
                 current.state.producedItem = true;
+                if (current.continuation) current.continuation.producedItem = true;
                 emit({
                   ...base(threadId, current.turnId),
                   type: "item.completed",
@@ -944,8 +1035,16 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             case "usage_update":
             case "session_info_update":
             case "plan": {
+              if (u.sessionUpdate === "plan" && Array.isArray(u.entries) && u.entries.length &&
+                  u.entries.every((entry: { status?: unknown } | null) =>
+                    entry && (entry.status === "pending" || entry.status === "in_progress" || entry.status === "completed" || entry.status === "cancelled"))) {
+                const remaining = u.entries.some((entry: { status?: unknown }) =>
+                  entry.status === "pending" || entry.status === "in_progress");
+                if (current.continuation) current.continuation.pendingPlan = remaining;
+                emit({ ...base(threadId, current.turnId), type: "turn.work-status", status: remaining ? "remaining" : "complete" });
+              }
               const report = readSessionReport(u, p._meta, current.state, session);
-              if (report.context) emit({ ...base(threadId, current.turnId), type: "thread.token-usage.updated", input: 0, output: 0, ...report.context });
+              if (report.context) emit({ ...base(threadId, current.turnId), type: "thread.token-usage.updated", ...(current.continuation?.usage ?? { input: 0, output: 0 }), ...report.context });
               if (!report.step) break;
               current.flushAssistantText();
               const itemId = `plan-${newId()}`;
@@ -1065,7 +1164,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         let launch: { command: string; args?: string[]; env?: Record<string, string | undefined> };
         try {
           launch = support.resolveCommand
-            ? await support.resolveCommand(env, turnConfig, instanceId)
+            ? await support.resolveCommand(env, turnConfig, instanceId, cliTurn)
             : { command: turnConfig.cli };
         } catch (error) {
           requireRunning();
@@ -1091,7 +1190,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           support.sessionScopedApproval ? null : turnConfig.fullAuto === true, envFingerprint,
           support.spawnFingerprint?.(spawnEnv, turnConfig) ?? null];
         const contractKey = JSON.stringify([...processContract, cwd, turn.toolScope ?? null, inheritedScopeFingerprint]);
-        const launchModel = support.sessionModelEnv && cliTurn.model && /^[\w.:/-]{1,200}$/u.test(cliTurn.model)
+        const launchModel = support.sessionModelEnv && cliTurn.model && cliTurn.model.length <= NATIVE_MODEL_ID_MAX_LENGTH && /^[\w.:/@+-]+$/u.test(cliTurn.model)
           && accountModels?.has(cliTurn.model) ? cliTurn.model : undefined;
         const launchEnv = support.sessionModelEnv && launchModel
           ? { ...spawnEnv, [support.sessionModelEnv]: launchModel }
@@ -1171,6 +1270,10 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           if (!text.trim()) return;
           state.producedItem = true;
           state.repliedText = true;
+          if (current.continuation) {
+            current.continuation.producedItem = true;
+            current.continuation.repliedText = true;
+          }
           emit({ ...base(threadId, turnId), type: "item.completed", itemType: "assistant_text", text });
         };
         const current: AcpTurn = {
@@ -1178,6 +1281,11 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           turn: cliTurn,
           turnConfig,
           controlsHost,
+          ...(support.nudgeAnnouncedAction ? { continuation: {
+            round: 0, pendingPlan: false, blocked: false, completedTools: 0,
+            toolIds: new Set<string>(), observationTools: new Set<string>(), failedObservation: false, observationRecovery: false, unknownWork: false,
+            producedItem: false, repliedText: false, usage: { input: 0, output: 0 },
+          } } : {}),
           state,
           acknowledge,
           asks,
@@ -1454,84 +1562,167 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
             state.promptSent = true;
             acknowledge();
             const promptIdleMs = promptIdleTimeoutMs();
-            const quiet = startQuietWatch(threadId, session, current);
-            const result = await request(
-              "session/prompt",
-              { sessionId, prompt: [{ type: "text", text }, ...imageBlocks] },
-              undefined,
-              undefined,
-              promptIdleMs,
-              () => {
-                const last = quiet.lastState();
-                return `${support.displayName} sent nothing for ${formatQuietLimit(promptIdleMs)} with no tool running, so the turn was stopped as stuck` +
-                  `${last ? ` (last seen: ${lastSeenPhrase(last)})` : ""}. Send the message again to retry.`;
-              },
-              );
-            if (pendingSplitReceipt) {
-              // session/prompt resolving is the acceptance boundary: a rejected prompt leaves no receipt.
-              if (state.usageCompacted) {
-                deletePromptSplitReceipt(DRIVER_KIND, pendingSplitReceipt.key);
-              } else {
-                const previousLastUsed = typeof pendingSplitReceipt.previous?.lastUsed === "number"
-                  ? pendingSplitReceipt.previous.lastUsed
-                  : undefined;
-                const lastUsed = state.usageLast ?? previousLastUsed;
-                writePromptSplitReceipt(
-                  DRIVER_KIND,
-                  pendingSplitReceipt.key,
-                  {
-                    ...pendingSplitReceipt.receipt,
-                    ...(lastUsed === undefined ? {} : { lastUsed }),
-                    ...(state.usagePeak === null ? {} : { peakUsed: state.usagePeak }),
-                  },
-                );
+            let continuationPolicy: TaskContinuation | undefined;
+            let prompt = [{ type: "text", text }, ...imageBlocks];
+            const continuePrompt = (continuation: AcpContinuationState, nextText: string) => {
+              current.flushAssistantText();
+              continuation.round += 1;
+              continuation.producedItem = false;
+              continuation.repliedText = false;
+              state.textMessageId = null;
+              prompt = [{ type: "text", text: nextText }];
+            };
+            for (;;) {
+              if (state.settled || state.stopped || session.closing) {
+                settle(threadId, session, true, "cancelled");
+                break;
               }
-            }
-            // opencode 1.18.18 reports usage at the result root; grok and gemini under _meta.
-            const usage = result?.usage ?? result?._meta ?? {};
-            if (typeof usage.inputTokens === "number" || typeof usage.outputTokens === "number") {
-              // opencode 1.18.25 keeps only the uncached share in inputTokens and reports cache reads
-              // beside it (omitted when 0); other agents count them inside. Absent is not zero.
-              const input = usage.inputTokens ?? 0;
-              const output = usage.outputTokens ?? 0;
-              const cachedRead = typeof usage.cachedReadTokens === "number" && usage.cachedReadTokens > 0
-                ? usage.cachedReadTokens
-                : null;
-              const exclusive = cachedRead !== null
-                && (typeof usage.totalTokens !== "number"
-                  || usage.totalTokens >= input + output + cachedRead);
-              emit({
-                ...base(threadId, turnId),
-                type: "thread.token-usage.updated",
-                input: cachedRead !== null && exclusive ? input + cachedRead : input,
-                output,
-                ...(cachedRead !== null
-                  ? { cachedInput: exclusive ? cachedRead : Math.min(cachedRead, input) }
-                  : {}),
-              });
-            }
-            const reason = result?.stopReason;
-            if (reason === "end_turn") settle(threadId, session, true, null);
-            else if (reason === "cancelled" || state.stopped) settle(threadId, session, true, "cancelled");
-            else {
-              const errorMessage = typeof result?.error === "string" && result.error
-                ? result.error
-                : typeof result?.message === "string" && result.message
-                  ? result.message
-                  : stopCause(reason, support.displayName) ?? `${support.displayName} stopped without saying why.`;
-              emit({
-                ...base(threadId, turnId),
-                type: "runtime.error",
-                message: engineFailureMessage(support.displayName, errorMessage) ?? errorMessage,
-              });
-              settle(threadId, session, false, reason ?? "failed");
+              const quiet = startQuietWatch(threadId, session, current);
+              let result: AcpPromptResult;
+              try {
+                result = AcpPromptResultSchema.parse(await request(
+                  "session/prompt",
+                  { sessionId, prompt },
+                  undefined,
+                  undefined,
+                  promptIdleMs,
+                  () => {
+                    const last = quiet.lastState();
+                    return `${support.displayName} sent nothing for ${formatQuietLimit(promptIdleMs)} with no tool running, so the turn was stopped as stuck` +
+                      `${last ? ` (last seen: ${lastSeenPhrase(last)})` : ""}. Send the message again to retry.`;
+                  },
+                ));
+              } catch (error) {
+                current.stopQuietWatch?.();
+                const continuation = current.continuation;
+                if (continuation?.failedObservation && !continuation.blocked && !continuation.unknownWork
+                    && !current.runningTools.size && !asks.size && !state.stopped && !state.settled && !session.closing
+                    && current.turn.continuationAllowed?.("observation") !== false) {
+                  const decision = (continuationPolicy ??= new TaskContinuation()).next(
+                    continuation.completedTools, continuation.round, continuation.toolIds.size, "observation",
+                  );
+                  if (decision === "continue") {
+                    emit({ ...base(threadId, turnId), type: "runtime.notice", message: "The observation failed. The original task is still active; retrying a current read without repeating earlier effects." });
+                    continuePrompt(continuation, `${RECOVER_FAILED_OBSERVATION}\n\nOriginal accepted request:\n${turn.text}`);
+                    continue;
+                  }
+                }
+                throw error;
+              }
+              current.stopQuietWatch?.();
+              if (pendingSplitReceipt) {
+                if (state.usageCompacted) {
+                  deletePromptSplitReceipt(DRIVER_KIND, pendingSplitReceipt.key);
+                } else {
+                  const previousLastUsed = typeof pendingSplitReceipt.previous?.lastUsed === "number"
+                    ? pendingSplitReceipt.previous.lastUsed
+                    : undefined;
+                  const lastUsed = state.usageLast ?? previousLastUsed;
+                  writePromptSplitReceipt(
+                    DRIVER_KIND,
+                    pendingSplitReceipt.key,
+                    {
+                      ...pendingSplitReceipt.receipt,
+                      ...(lastUsed === undefined ? {} : { lastUsed }),
+                      ...(state.usagePeak === null ? {} : { peakUsed: state.usagePeak }),
+                    },
+                  );
+                }
+              }
+              // opencode 1.18.18 reports usage at the result root; grok and gemini under _meta.
+              const usage = result?.usage ?? result?._meta ?? {};
+              if (typeof usage.inputTokens === "number" || typeof usage.outputTokens === "number") {
+                let input = typeof usage.inputTokens === "number" ? usage.inputTokens : 0;
+                let output = typeof usage.outputTokens === "number" ? usage.outputTokens : 0;
+                const cachedRead = typeof usage.cachedReadTokens === "number" && usage.cachedReadTokens > 0
+                  ? usage.cachedReadTokens
+                  : null;
+                const exclusive = cachedRead !== null
+                  && (typeof usage.totalTokens !== "number"
+                    || usage.totalTokens >= input + output + cachedRead);
+                let cachedInput = cachedRead === null ? undefined : exclusive ? cachedRead : Math.min(cachedRead, input);
+                if (cachedRead !== null && exclusive) input += cachedRead;
+                if (current.continuation) {
+                  const total = current.continuation.usage;
+                  total.input += input;
+                  total.output += output;
+                  if (cachedInput !== undefined) total.cachedInput = (total.cachedInput ?? 0) + cachedInput;
+                  input = total.input;
+                  output = total.output;
+                  cachedInput = total.cachedInput;
+                }
+                emit({
+                  ...base(threadId, turnId),
+                  type: "thread.token-usage.updated", input, output,
+                  ...(cachedInput !== undefined ? { cachedInput } : {}),
+                });
+              }
+              const reason = result?.stopReason;
+              if (state.stopped || reason === "cancelled") {
+                settle(threadId, session, true, "cancelled");
+                break;
+              }
+              if (reason !== "end_turn" || (current.continuation && typeof result?.error === "string" && result.error)) {
+                const errorMessage = typeof result?.error === "string" && result.error
+                  ? result.error
+                  : typeof result?.message === "string" && result.message
+                    ? result.message
+                    : stopCause(reason, support.displayName) ?? `${support.displayName} stopped without saying why.`;
+                emit({
+                  ...base(threadId, turnId),
+                  type: "runtime.error",
+                  message: engineFailureMessage(support.displayName, errorMessage) ?? errorMessage,
+                });
+                settle(threadId, session, false, reason === "end_turn" ? "rpc_error" : reason ?? "failed");
+                break;
+              }
+              const continuation = current.continuation;
+              const providerError = continuation && !continuation.repliedText
+                ? errorReplyFailure(support.displayName, state.text) : null;
+              if (!continuation || providerError) {
+                settle(threadId, session, true, null);
+                break;
+              }
+              const allowed = current.turn.continuationAllowed?.(continuation.observationRecovery ? "observation" : undefined) !== false;
+              if ((asks.size || asksForInput(state.text)) && !continuation.blocked && allowed) {
+                settle(threadId, session, true, null);
+                break;
+              }
+              if (!continuation.pendingPlan && !continuation.failedObservation && !continuation.blocked && allowed
+                  && !announcesAction(stripLeakedSystemHarnessMessages(state.text))) {
+                settle(threadId, session, true, null);
+                break;
+              }
+              const decision = continuation.blocked || current.runningTools.size || !allowed ? "stalled"
+                : (continuationPolicy ??= new TaskContinuation()).next(
+                  continuation.completedTools, continuation.round, continuation.toolIds.size,
+                  continuation.failedObservation ? "observation" : undefined,
+                );
+              if (decision !== "continue") {
+                emit({
+                  ...base(threadId, turnId), type: "runtime.error",
+                  message: decision === "limit"
+                    ? `${support.displayName} reached the continuation budget before finishing the task.`
+                    : continuation.failedObservation
+                      ? `${support.displayName} could not recover the observation within the bounded retry budget. The task remains incomplete.`
+                      : `${support.displayName} stopped with unfinished work and no safe, verified progress to continue from.`,
+                  recovery: continuation.unknownWork || current.runningTools.size ? "blocked" : continuation.failedObservation ? "observation" : continuation.blocked ? "inspect" : undefined,
+                });
+                settle(threadId, session, false, "incomplete_action");
+                break;
+              }
+              if (continuation.failedObservation) {
+                emit({ ...base(threadId, turnId), type: "runtime.notice", message: "Recovering the failed observation in this same task; previous effects are not being replayed." });
+                continuePrompt(continuation, RECOVER_FAILED_OBSERVATION);
+              } else continuePrompt(continuation, CONTINUE_UNFINISHED_ACTION);
             }
           } catch (e) {
             if (pendingSplitReceipt && state.promptSent && state.usageCompacted) {
               deletePromptSplitReceipt(DRIVER_KIND, pendingSplitReceipt.key);
             }
             if (!state.settled && !state.cancelling) {
-              const untouched = retryOf === undefined && !state.producedItem && !state.text && !current.runningTools.size && !asks.size && !state.stopped && !session.closing;
+              const untouched = retryOf === undefined && (!current.continuation || current.continuation.round === 0)
+                && !state.producedItem && !state.text && !current.runningTools.size && !asks.size && !state.stopped && !session.closing;
               if (untouched && retryUnderToolLimit(e, { key: toolLimitKey, model: resolvedModel, engine: DRIVER_KIND, retry: () => {
                 state.settled = true; session.current = null; active.delete(threadId); current.stopQuietWatch?.();
                 return sendTurn({ ...turn, startupRecovery: undefined, sessionReset: undefined, resumeCursor: session.sessionId ?? turn.resumeCursor }, turnId);
@@ -1569,22 +1760,29 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
                 return;
               }
               // After the person's Stop, a request the stop cut short is not an error.
+              const parsedFlags = NativeFailureFlagsSchema.safeParse(e);
+              const errorFlags = parsedFlags.success ? parsedFlags.data : {};
+              const promptStalled = errorFlags.acpPromptStall === true;
+              const usageLimited = errorFlags.acpUsageLimit === true;
+              const continuation = current.continuation;
               if (!state.stopped) emit({
                 ...base(threadId, turnId), type: "runtime.error",
                 message: (accountError ? support.describeAccountError?.(code, cliTurn.model) : undefined) ?? engineFailureMessage(support.displayName, message) ?? message,
-                ...(needsAuth ? { setup: true } : {}), ...((e as any)?.acpPromptStall === true ? { stalled: true } : {}),
-                ...((e as any)?.acpUsageLimit === true || (code === "quota_or_region_restriction" && LIMIT_WORDS.test(message)) ? { limit: "engine" as const } : {}), // waited out, or the engine gave up: another AI can carry on
+                ...(needsAuth ? { setup: true } : {}), ...(promptStalled ? { stalled: true } : {}),
+                ...(usageLimited || (code === "quota_or_region_restriction" && LIMIT_WORDS.test(message)) ? { limit: "engine" as const } : {}),
+                recovery: continuation?.unknownWork || current.runningTools.size ? "blocked" : continuation?.failedObservation ? "observation" : continuation?.blocked ? "inspect" : undefined,
               });
               // Never replay an accepted prompt (it may have run tools); evict before listeners start the next turn.
-              if (!needsAuth && !accountError && ((e as any)?.acpPromptStall === true || (e as any)?.acpUsageLimit === true || (e as any)?.acpSessionFailure === true
+              if (!needsAuth && !accountError && (promptStalled || usageLimited || errorFlags.acpSessionFailure === true
                   || code === "upstream_outage") && session.child.exitCode === null && !session.closing) {
-                closeSession(threadId, (e as any)?.acpPromptStall === true ? "prompt-stall" : "rpc-failure");
+                closeSession(threadId, promptStalled ? "prompt-stall" : "rpc-failure");
               } else if (approvalUnconfirmed && session.child.exitCode === null && !session.closing) {
                 closeSession(threadId, "approval-unconfirmed");
               } else if (staleProcess && !state.promptSent && session.child.exitCode === null && !session.closing) {
                 closeSession(threadId, "stale-models");
               }
-              settle(threadId, session, state.stopped, state.stopped ? "cancelled" : needsAuth ? "auth_required" : (e as any)?.acpUsageLimit === true ? "quota" : "rpc_error");
+              const toolError = continuation && (continuation.blocked || current.runningTools.size > 0 || current.turn.continuationAllowed?.(continuation.observationRecovery ? "observation" : undefined) === false);
+              settle(threadId, session, state.stopped, state.stopped ? "cancelled" : toolError ? "tool_error" : needsAuth ? "auth_required" : usageLimited ? "quota" : "rpc_error");
             }
           }
         })();
@@ -1631,7 +1829,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
         try {
           const turn = { threadId: `memory-text-${newId()}`, text: prompt, approvalMode: "ask", cwd } as SendTurnInput;
           support.applyTurnEnv?.(env, { fullAuto: false, cwd, threadId: turn.threadId, mcpServers: [] });
-          const launch = support.resolveCommand ? await support.resolveCommand(env, turnConfig, instanceId) : { command: turnConfig.cli };
+          const launch = support.resolveCommand ? await support.resolveCommand(env, turnConfig, instanceId, turn, "background") : { command: turnConfig.cli };
           const spawnEnv = launch.env ?? env;
           return await runAcpOneShot({
             displayName: support.displayName,
@@ -1737,6 +1935,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           for (const [threadId, children] of retiring) {
             for (const child of children) void retireChild(threadId, child);
           }
+          support.disposeModelCatalog?.(instanceId);
           listeners.clear();
         },
       };

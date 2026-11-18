@@ -7,7 +7,8 @@ import { departmentOwner, setTeamPeople, type TeamPeople } from "@/state/team-pe
 
 vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({}) }));
 
-import { BotListItem, botRowProps, TeamMenuItems } from "./Sidebar";
+import { BotListItem, TeamMenuItems } from "./Sidebar";
+import { botRowProps } from "@/lib/sidebar-selection";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { MentionMenu, teammateChoices } from "./MentionMenu";
 import { AskingLine, NeedsYouButton, NeedsYouTitle, PersonFace } from "./TeamOwner";

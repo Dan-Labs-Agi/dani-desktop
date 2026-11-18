@@ -2,12 +2,18 @@ import type { InstanceInfo, ModelSelection } from "@/state/store";
 import { typedOpenCodeModel, typedOpenCodeModelId } from "../../shared/opencode-model-id";
 import { DANI_FREE_INSTANCE_IDS } from "../../shared/dani-free";
 import { t } from "./i18n";
+import { isHermesHarness } from "../../shared/hermes-harness";
 
 type ModelOption = InstanceInfo["models"]["options"][number];
 
 export type ModelChoice = ModelOption & { nativeModel?: string; variant?: string };
 
-/** Public free-model presentation keeps routing and upstream service identities out of picker copy. */
+export function modelOptionForId(instance: InstanceInfo | undefined, model: string): ModelOption | undefined {
+  if (!instance) return undefined;
+  const id = isHermesHarness(instance) && model === "hermes-default" ? instance.models.default : model;
+  return instance.models.options.find((option) => option.id === id);
+}
+
 export function daniModelLabel(option: Pick<ModelOption, "id" | "label">): string {
   const label = option.label
     .replace(/^(?:OpenCode(?:\s+Zen)?|Kilo(?:Code)?|Zen)(?:\s*[·:|/-]\s*|\s+)/i, "")

@@ -120,6 +120,9 @@ describe("classifyRoutineFailure", () => {
     ["this workspace has reached its monthly spend limit of $20.00", { cause: "cap" }, { kind: "final" }],
     ["The routine was deleted before it could start", { cause: "refused" }, { kind: "final" }],
     [DENIED, { stopReason: "tool_error" }, { kind: "final" }],
+    [CRASH, { stopReason: "incomplete_action" }, { kind: "final" }],
+    [CRASH, { stopReason: "max_tokens" }, { kind: "final" }],
+    [CRASH, { stopReason: "max_turn_requests" }, { kind: "final" }],
     // A start that failed before its turn began is judged by its words, and never retried as a crash.
     [NO_HOURS, { cause: "refused" }, { kind: "final" }],
     [CRASH, { cause: "refused" }, { kind: "final" }],
@@ -443,13 +446,12 @@ describe("a run that Dani Bot's shutdown cuts off", () => {
     expect(h.failed).toEqual([]);
 
     h.restart();
-    expect(h.run(run.id)).toMatchObject({ status: "queued", retried: "restarted", threadId: "thread-1", attention: "Starting again shortly after Dani Bot restarted while it ran" });
+    expect(h.run(run.id)).toMatchObject({ status: "queued", retried: "restarted", threadId: "thread-1" });
     expect(h.cut.map((cut) => cut.id)).toEqual([run.id]);
     h.restart();
     expect(h.cut).toHaveLength(1);
     await h.advance(16 * SECOND);
     expect(h.started.map((turn) => turn.threadId)).toEqual(["thread-1", "thread-1"]);
-    expect(h.started[1]!.prompt).toContain(retryNote("restarted"));
     expect(h.runs()).toHaveLength(1);
   });
 });

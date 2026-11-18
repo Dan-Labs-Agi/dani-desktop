@@ -32,8 +32,8 @@ Derived from the actual source: `src/` (React renderer), `electron/` (main proce
 
 ## 5. Model picker (the honest part)
 
-- `ModelPicker.tsx` + engine rail: switch a bot's model mid-conversation. Providers shown side by side — Claude, Codex, Grok, Gemini, Kimi, Droid, Cursor, OpenCode, Qwen, Hermes, Pi, Minimax, Antigravity, OpenAI-compatible (OpenRouter/Groq) — with defaults marked and unavailable providers dimmed *with the reason* (`server/drivers/builtIn.ts`, catalog `*-catalog.ts` files).
-- Custom CLI binaries / wrapper CLIs per engine in Settings → Engines (`EngineSetup.tsx`, `EnginesSettings.tsx`).
+- `ModelPicker.tsx`: choose a model for a bot or one conversation, using Hermes' hosted or local model catalog. Production instance lists expose Hermes only; an unavailable Hermes never selects another agent CLI.
+- Saved bot, thread, and backup selections migrate to Hermes without guessing model providers. Internal native-driver integrations remain available to isolated conformance fixtures, not as competing production harnesses.
 
 ## 6. Approvals: bots ask before they act
 

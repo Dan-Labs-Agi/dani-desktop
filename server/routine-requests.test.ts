@@ -420,18 +420,21 @@ describe("RoutineRequestService", () => {
 
   it("carries run on startup from the proposal through the card to the created routine", async () => {
     const { service, store, routines } = harness();
-    const plain = await service.propose({ botId: "bot-a", threadId: "thread-plain", proposal: createProposal() });
-    expect(plain.detail).not.toContain("On startup:");
+    await service.propose({ botId: "bot-a", threadId: "thread-plain", proposal: createProposal() });
+    expect(store.messagesFor("thread-plain")[0]!.card!.routineRequest?.operation)
+      .not.toHaveProperty("routine.runOnStartup");
 
     const proposed = await service.propose({ botId: "bot-a", threadId: "thread-a", proposal: createProposal({ runOnStartup: true }) });
-    expect(proposed.detail).toContain("On startup: Also runs once each time Dani Bot starts");
+    expect(routines.listRoutines()).toHaveLength(0);
     expect(store.messagesFor("thread-a")[0]!.card!.routineRequest?.operation).toMatchObject({ action: "create", routine: { runOnStartup: true } });
     expect(service.resolve({ botId: "bot-a", threadId: "thread-a", requestId: proposed.requestId, behavior: "allow" }).state).toBe("applied");
     const routine = routines.listRoutines().find((candidate) => candidate.name === "Morning brief")!;
     expect(routine.runOnStartup).toBe(true);
 
     const off = await service.propose({ botId: "bot-a", threadId: "thread-b", proposal: { action: "update", routineId: routine.id, changes: { runOnStartup: false } } });
-    expect(off.detail).toContain("On startup: Runs only on its schedule");
+    expect(store.messagesFor("thread-b")[0]!.card!.routineRequest?.operation)
+      .toMatchObject({ action: "update", routineId: routine.id, changes: { runOnStartup: false } });
+    expect(routines.listRoutines().find((candidate) => candidate.id === routine.id)?.runOnStartup).toBe(true);
     expect(service.resolve({ botId: "bot-a", threadId: "thread-b", requestId: off.requestId, behavior: "allow" }).state).toBe("applied");
     expect(routines.listRoutines().find((candidate) => candidate.id === routine.id)?.runOnStartup).toBeUndefined();
   });

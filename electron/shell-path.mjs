@@ -11,7 +11,7 @@ const MARK = "__OMB_PATH__";
  * $PATH from what those files print. */
 export function probeShellPath({ shell = process.env.SHELL || "/bin/zsh" } = {}) {
   return new Promise(resolve => {
-    execFile(shell, ["-l", "-i", "-c", `printf "${MARK}%s" "$PATH"`], { timeout: 5000 }, (error, stdout) => {
+    execFile(shell, ["-l", "-i", "-c", `printf "${MARK}%s" "$PATH"`], { timeout: 5000, killSignal: "SIGKILL" }, (error, stdout) => {
       const found = error ? null : new RegExp(`${MARK}([^\\n]*)`).exec(String(stdout));
       resolve(found?.[1] || null);
     });

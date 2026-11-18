@@ -90,8 +90,10 @@ export class RelayPorts {
   }
 
   /** From the `.stream` file the daemon writes and deletes on exit, confirmed by `session_info` once per daemon: a port a
-   * dead daemon left behind may already belong to another bot's browser. A daemon too busy to confirm trips the session. */
-  async port(target: RelayTarget): Promise<number | null> {
+   * dead daemon left behind may already belong to another bot's browser. A daemon too busy to confirm trips the session.
+   * Call-owned consumers provide their current ownership predicate; other readers keep their independent lifetime. */
+  async port(target: RelayTarget, active?: () => boolean): Promise<number | null> {
+    if (active && !active()) return null;
     const text = this.readFile(browserDaemonFile(target.env, ".stream"))?.trim() ?? "";
     const port = /^\d{1,5}$/.test(text) ? Number(text) : 0;
     if (port < 1 || port > 65_535) { this.known.delete(target.session); return null; }
@@ -99,7 +101,9 @@ export class RelayPorts {
     if (known?.port === port && (known.daemonPid === null || this.alive(known.daemonPid))) return port;
     this.known.delete(target.session);
     try {
+      if (active && !active()) return null;
       const info = await relay(port, { action: "session_info" }, { timeoutMs: PROBE_MS * 4, maxBytes: 65_536 });
+      if (active && !active()) return null;
       if (!info.success || info.data?.session !== target.session) return null;
       const daemonPid = typeof info.data.backgroundPid === "number" ? info.data.backgroundPid : null;
       this.known.set(target.session, { port, daemonPid });
@@ -115,12 +119,13 @@ export class RelayPorts {
   /** After a relay timeout: no more relay work for this session until a probe answers. */
   trip(session: string): void { this.tripped.add(session); }
 
-  /** Null when there is nothing to read: no daemon, no answer in the probe budget, or a tripped session whose probe still fails. */
-  async probe(target: RelayTarget): Promise<{ port: number; connected: boolean } | null> {
-    const port = await this.port(target);
-    if (port === null) return null;
+  /** Null when there is nothing to read: no daemon, no answer in the probe budget, an ended consumer, or a tripped session whose probe still fails. */
+  async probe(target: RelayTarget, active?: () => boolean): Promise<{ port: number; connected: boolean } | null> {
+    const port = await this.port(target, active);
+    if (port === null || (active && !active())) return null;
     try {
       const status = await relay(port, { action: "stream_status" }, { timeoutMs: PROBE_MS, maxBytes: 65_536 });
+      if (active && !active()) return null;
       this.tripped.delete(target.session);
       return { port, connected: status.success && status.data?.connected === true };
     } catch (error) {

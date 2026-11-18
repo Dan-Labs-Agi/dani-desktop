@@ -1,3 +1,5 @@
+import { blockingTurnStop, TurnStops } from "./turn-outcome.ts";
+import { roomTurnEnd } from "./room-turn-end.ts";
 import { describe, expect, it } from "vitest";
 import {
   GROUP_GOAL_CONTROL_CLOSE,
@@ -5,7 +7,6 @@ import {
   GROUP_GOAL_MAX_TURNS,
   groupGoalAssignmentKey,
   groupGoalCompletionTurnId,
-  groupGoalCoordinatorInstructions,
   parseGroupGoalDecision,
   resolveGroupGoalMember,
   runGoalRun,
@@ -94,36 +95,15 @@ describe("group goal runs", () => {
   });
 });
 
-describe("groupGoalCoordinatorInstructions harness note", () => {
-  const base = {
-    goal: "Ship the release notes",
-    members: [{ id: "lead", name: "Lead" }, { id: "scout", name: "Scout" }],
-    turn: 3,
-    maxTurns: 13,
-    remainingTurns: 10,
-  };
-
-  it("renders a harness note on its own line, before the ledger guidance", () => {
-    const lines = groupGoalCoordinatorInstructions({ ...base, note: "Scout stayed busy for 30 minutes" }).split("\n");
-    const noteAt = lines.indexOf("Harness note: Scout stayed busy for 30 minutes");
-    const ledgerAt = lines.findIndex((line) => line.startsWith("Use the conversation as the progress ledger"));
-    expect(noteAt).toBeGreaterThan(-1);
-    expect(ledgerAt).toBeGreaterThan(noteAt);
-  });
-
-  it("omits the note line entirely when there is nothing to report", () => {
-    expect(groupGoalCoordinatorInstructions(base)).not.toContain("Harness note:");
-  });
-});
 
 const envelope = (decision: Record<string, string>) =>
   `Update.\n${GROUP_GOAL_CONTROL_OPEN}${JSON.stringify(decision)}${GROUP_GOAL_CONTROL_CLOSE}`;
 const settled = (replyText: string): GoalStepResult => ({ ran: true, replyText, outcome: "settled" });
 
 /** Drives the real loop with scripted steps; a step that runs counts one turn, as a claimed member turn does. */
-function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: string }>; steps: Array<GoalStepResult | ((call: number) => GoalStepResult)>; cancelAfter?: number }) {
+function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: string }>; steps: Array<GoalStepResult | ((call: number) => GoalStepResult)>; cancelAfter?: number; maxTurns?: number; waitForBrowser?: (session: string, cancelled: () => boolean) => Promise<boolean> }) {
   const members = options.members ?? [{ id: "solo-id", name: "Solo" }];
-  const run = { goal: "Get every test passing", turnCount: 0, maxTurns: GROUP_GOAL_MAX_TURNS, finished: false };
+  const run = { goal: "Get every test passing", turnCount: 0, maxTurns: options.maxTurns ?? GROUP_GOAL_MAX_TURNS, finished: false };
   const calls: Array<{ bot: string; coordinator: boolean; instructions: string }> = [];
   const finished: Array<{ status: GoalRunEnd; detail: string }> = [];
   const progress: string[] = [];
@@ -135,6 +115,7 @@ function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: 
     solo: options.solo,
     cancelled: () => cancelled,
     current: (id) => members.find((member) => member.id === id),
+    waitForBrowser: options.waitForBrowser,
     step: async (bot, coordinator, instructions) => {
       calls.push({ bot: bot.id, coordinator, instructions });
       const scripted = options.steps[Math.min(calls.length - 1, options.steps.length - 1)]!;
@@ -150,7 +131,7 @@ function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: 
     progress: (detail) => progress.push(detail),
     note: () => {},
   });
-  return { done, run, calls, finished, progress };
+  return { done, run, calls, finished, progress, cancel: () => { cancelled = true; } };
 }
 
 describe("one goal-run loop for a room and a one-on-one chat", () => {
@@ -164,10 +145,6 @@ describe("one goal-run loop for a room and a one-on-one chat", () => {
     });
     await goal.done;
     expect(goal.calls.map((call) => [call.bot, call.coordinator])).toEqual([["solo-id", true], ["solo-id", true]]);
-    expect(goal.calls[0]!.instructions).toContain("You are working alone toward a bounded goal.");
-    expect(goal.calls[0]!.instructions).toContain(`"next":"solo-id"`);
-    expect(goal.calls[0]!.instructions).not.toContain("Available room members");
-    expect(goal.calls[1]!.instructions).toContain("Harness note: Your next step: Fix the failing parser test");
     expect(goal.finished).toEqual([{ status: "completed", detail: "Every test passes." }]);
     expect(goal.run.turnCount).toBe(2);
   });
@@ -199,7 +176,6 @@ describe("one goal-run loop for a room and a one-on-one chat", () => {
     const goal = goalRun({ solo: true, steps: [{ ran: true, replyText: "", outcome: "provider_failed", stopReason: "exit 1" }] });
     await goal.done;
     expect(goal.calls).toHaveLength(2);
-    expect(goal.progress).toContain("Solo's turn did not settle (provider failed) — retrying once.");
     expect(goal.finished).toEqual([{ status: "failed", detail: "Solo could not complete the coordination step — exit 1." }]);
   });
 
@@ -239,7 +215,162 @@ describe("one goal-run loop for a room and a one-on-one chat", () => {
     });
     await goal.done;
     expect(goal.calls.map((call) => [call.bot, call.coordinator])).toEqual([["lead-id", true], ["scout-id", false], ["lead-id", true]]);
-    expect(goal.calls[0]!.instructions).toContain("Available room members: Lead (lead-id), Scout (scout-id).");
     expect(goal.finished).toEqual([{ status: "completed", detail: "Draft verified." }]);
+  });
+});
+
+const flushGoalSteps = async () => {
+  for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+};
+
+describe("goal browser hand-back and trusted blockers", () => {
+  it("waits without model polling and resumes only remaining work on the same worker assignment", async () => {
+    const { promise: availability, resolve: handBack } = Promise.withResolvers<boolean>();
+    const sessions: string[] = [];
+    const effects: string[] = [];
+    const goal = goalRun({
+      members: [{ id: "lead", name: "Lead" }, { id: "worker", name: "Worker" }],
+      waitForBrowser: async (session) => { sessions.push(session); return availability; },
+      steps: [
+        settled(envelope({ status: "continue", next: "worker", instruction: "Commit the draft, then verify its receipt" })),
+        () => {
+          effects.push("draft committed");
+          return { ran: true, replyText: "", outcome: "provider_failed", waitingOnBrowser: "browser-session" };
+        },
+        () => {
+          effects.push("receipt verified");
+          return settled("The existing draft receipt is verified.");
+        },
+        settled(envelope({ status: "completed", detail: "Draft and receipt verified." })),
+      ],
+    });
+    await flushGoalSteps();
+    expect(sessions).toEqual(["browser-session"]);
+    expect(goal.calls).toHaveLength(2);
+    expect(effects).toEqual(["draft committed"]);
+    expect(goal.finished).toEqual([]);
+    await flushGoalSteps();
+    expect(goal.calls).toHaveLength(2);
+    handBack(true);
+    await goal.done;
+    expect(goal.calls.map((call) => [call.bot, call.coordinator])).toEqual([
+      ["lead", true], ["worker", false], ["worker", false], ["lead", true],
+    ]);
+    expect(goal.calls[2]!.instructions).toContain(goal.calls[1]!.instructions);
+    expect(goal.calls[2]!.instructions).toMatch(/inspect.*current/i);
+    expect(effects).toEqual(["draft committed", "receipt verified"]);
+    expect(goal.finished).toEqual([{ status: "completed", detail: "Draft and receipt verified." }]);
+  });
+
+  it("does not dispatch a late continuation after cancellation while waiting", async () => {
+    const { promise: availability, resolve: handBack } = Promise.withResolvers<boolean>();
+    let wasCancelled: (() => boolean) | undefined;
+    const goal = goalRun({
+      solo: true,
+      waitForBrowser: (_session, cancelled) => {
+        wasCancelled = cancelled;
+        return availability;
+      },
+      steps: [{ ran: true, replyText: "", outcome: "provider_failed", waitingOnBrowser: "browser-session" }],
+    });
+    await flushGoalSteps();
+    expect(goal.calls).toHaveLength(1);
+    expect(wasCancelled?.()).toBe(false);
+    goal.cancel();
+    expect(wasCancelled?.()).toBe(true);
+    handBack(true);
+    await goal.done;
+    expect(goal.calls).toHaveLength(1);
+    expect(goal.finished).toEqual([]);
+  });
+
+  it("does not retry a room member's native cancellation after an unfinished tool", async () => {
+    const stops = new TurnStops();
+    const base = { eventId: "native-cancel", provider: "hermesAgent", threadId: "t", turnId: "turn", createdAt: "" };
+    stops.note({ ...base, type: "turn.started" });
+    stops.note({ ...base, type: "item.started", itemType: "tool", itemId: "pending-write" });
+    const terminal = { ...base, type: "turn.completed" as const, ok: false, stopReason: "cancelled" };
+    stops.note(terminal);
+    const goal = goalRun({ steps: [{ ran: true, replyText: "", ...roomTurnEnd(terminal, true),
+      blocked: blockingTurnStop(stops.read("t", "turn")) }] });
+    await goal.done;
+    expect(goal.calls).toHaveLength(1);
+    expect(goal.finished.map(end => end.status)).toEqual(["blocked"]);
+  });
+
+  it.each([true, false])("finishes blocked without dispatch when browser readiness is not restored (wait callback: %s)", async (hasWait) => {
+    const goal = goalRun({
+      solo: true,
+      waitForBrowser: hasWait ? async () => false : undefined,
+      steps: [{ ran: true, replyText: "", outcome: "provider_failed", waitingOnBrowser: "browser-session" }],
+    });
+    await goal.done;
+    expect(goal.calls).toHaveLength(1);
+    expect(goal.finished[0]?.status).toBe("blocked");
+  });
+
+  it("bounds browser resumptions by actual turn budget rather than readiness polling", async () => {
+    let waits = 0;
+    const goal = goalRun({
+      solo: true,
+      maxTurns: 2,
+      waitForBrowser: async () => { waits += 1; return true; },
+      steps: [{ ran: true, replyText: "", outcome: "provider_failed", waitingOnBrowser: "browser-session" }],
+    });
+    await goal.done;
+    expect(goal.calls).toHaveLength(2);
+    expect(waits).toBeLessThanOrEqual(2);
+    expect(goal.finished[0]?.status).toBe("limit-reached");
+  });
+
+  it("retains only one transient retry across a browser hand-back", async () => {
+    const goal = goalRun({
+      solo: true,
+      waitForBrowser: async () => true,
+      steps: [
+        { ran: true, replyText: "", outcome: "provider_failed" },
+        { ran: true, replyText: "", outcome: "provider_failed", waitingOnBrowser: "browser-session" },
+        { ran: true, replyText: "", outcome: "provider_failed" },
+      ],
+    });
+    await goal.done;
+    expect(goal.calls).toHaveLength(3);
+    expect(goal.finished[0]?.status).toBe("failed");
+  });
+
+  it("never dispatches a transient retry beyond the actual turn budget", async () => {
+    const goal = goalRun({
+      solo: true,
+      maxTurns: 1,
+      steps: [{ ran: true, replyText: "", outcome: "provider_failed" }],
+    });
+    await goal.done;
+    expect(goal.calls).toHaveLength(1);
+    expect(goal.run.turnCount).toBe(1);
+    expect(goal.finished[0]?.status).not.toBe("completed");
+  });
+
+  it.each(["denied", "provider_error"] as const)("never retries or reassigns a trusted %s worker blocker", async (outcome) => {
+    const reason = outcome === "denied" ? "The person denied this action." : "The purchase may have committed; inspect its receipt before any further action.";
+    const goal = goalRun({
+      members: [{ id: "lead", name: "Lead" }, { id: "worker", name: "Worker" }],
+      steps: [
+        settled(envelope({ status: "continue", next: "worker", instruction: "Make the approved purchase" })),
+        { ran: true, replyText: "Done.", outcome: "provider_failed", blocked: { outcome, reason } },
+      ],
+    });
+    await goal.done;
+    expect(goal.calls).toHaveLength(2);
+    expect(goal.finished).toEqual([{ status: "blocked", detail: reason }]);
+  });
+
+  it("does not accept a completion marker over a trusted setup blocker", async () => {
+    const goal = goalRun({
+      solo: true,
+      steps: [{ ...settled(envelope({ status: "completed", detail: "Done." })), blocked: { outcome: "provider_error", reason: "Browser setup requires the person." } }],
+    });
+    await goal.done;
+    expect(goal.calls).toHaveLength(1);
+    expect(goal.finished).toEqual([{ status: "blocked", detail: "Browser setup requires the person." }]);
   });
 });

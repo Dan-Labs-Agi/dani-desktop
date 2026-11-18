@@ -1,4 +1,4 @@
-import type { PreviewStreamClient, PreviewStreamControl, PreviewStreamInput } from "./browser-stream-client";
+import type { PreviewStreamControl, PreviewStreamInput } from "../../shared/browser-stream.ts";
 
 export type BrowserTakeStatus = "" | "pending" | "slow" | "stale";
 
@@ -11,9 +11,12 @@ export interface ControlTransport {
   size(): number;
   /** v1 stops taking input once the browser falls behind it. */
   stopped(): boolean;
+  /** The current view's authoritative reservation, refreshed when its hold carries over a reconnect. */
+  reservation(): string | undefined;
   /** Resolves once this viewer holds the browser; `waited` when bot work was running then. */
-  take(): Promise<{ waited: boolean } | void>;
-  release(): Promise<void>;
+  take(attempt?: string): Promise<{ waited: boolean } | void>;
+  /** An attempt limits automatic cleanup to that reservation; omitted for intentional person-wide hand-back. */
+  release(attempt?: string): Promise<void>;
 }
 
 export const BROWSER_HAND_BACK_MS = 8_000;
@@ -70,6 +73,8 @@ export function createBrowserControl(options: {
   let kept = false;
   let soon = false;
   let ownedBefore = false;
+  let failedTake = false;
+  let attempt: string | undefined;
   let activity = 0;
   let chain: Promise<unknown> = Promise.resolve();
   let idle: ReturnType<typeof setTimeout> | undefined;
@@ -83,22 +88,24 @@ export function createBrowserControl(options: {
     else if (isRelease(input)) held.delete(inputId(input));
   };
   const quiet = () => !closed && !pinned && (soon || !kept) && !flushing && !held.size
-    && (state === "held" || (state === "bot" && options.owned()));
+    && (state === "held" || (state === "bot" && (options.owned() || (failedTake && options.mine?.()))));
   const arm = () => {
     clearTimeout(idle);
     idle = closed ? undefined : setTimeout(() => { idle = undefined; void idleHandBack(); }, soon ? 0 : BROWSER_HAND_BACK_MS);
   };
-  const release = () => {
+  const release = (conditional = true) => {
+    const reservation = conditional ? (options.owned() ? transport.reservation() ?? attempt : attempt) : undefined;
+    failedTake = false;
     state = "releasing";
     if (status === "stale") report("");
-    chain = chain.then(() => closed ? undefined : transport.release()).catch(() => {})
+    chain = chain.then(() => closed ? undefined : transport.release(reservation)).catch(() => {})
       .then(() => { if (state === "releasing") state = "bot"; });
   };
   const idleHandBack = async () => {
     if (!quiet()) return;
     const seen = activity;
     await transport.drain();
-    if (seen === activity && quiet()) release();
+    if (seen === activity && quiet()) release(!soon);
   };
   /** The bot was busy when the person asked: what they did meanwhile aimed at a page that may have changed. */
   const dropStale = () => {
@@ -120,13 +127,16 @@ export function createBrowserControl(options: {
   };
   const take = () => {
     state = "taking";
+    failedTake = false;
+    attempt = crypto.randomUUID();
+    const reservation = attempt;
     options.onError("");
     report("pending");
     clearTimeout(notice);
     notice = setTimeout(() => { if (!closed && state === "taking") report("slow"); }, BROWSER_TAKE_NOTICE_MS);
     chain = chain.then(async () => {
       if (closed) return;
-      const grant = await transport.take().then((reply) => ({ reply }), (cause: unknown) => {
+      const grant = await transport.take(reservation).then((reply) => ({ reply }), (cause: unknown) => {
         if (!closed) options.onError(cause instanceof Error ? cause.message : String(cause));
         return null;
       });
@@ -136,7 +146,7 @@ export function createBrowserControl(options: {
         state = "held";
         report(grant.reply?.waited === true && dropStale() ? "stale" : "");
         await flush();
-      } else { report(""); state = "bot"; buffer = []; held.clear(); }
+      } else { failedTake = true; report(""); state = "bot"; buffer = []; held.clear(); }
       arm();
     }).catch(() => {});
   };
@@ -174,7 +184,7 @@ export function createBrowserControl(options: {
         state = "bot"; held.clear(); dropped.clear(); clearTimeout(idle); idle = undefined;
       }
       ownedBefore = owned;
-      if (idle === undefined && owned) arm();
+      if (idle === undefined && (owned || (failedTake && options.mine?.()))) arm();
     },
     takeControl() {
       if (closed || state === "held" || state === "taking" || flushing) return;
@@ -189,7 +199,7 @@ export function createBrowserControl(options: {
     handBack() {
       if (closed) return;
       // Their hold is used from another view of theirs: this one has nothing of its own to send first.
-      if (state === "bot" && !options.owned() && options.mine?.()) { release(); return; }
+      if (state === "bot" && !options.owned() && options.mine?.()) { release(false); return; }
       soon = true;
       arm();
     },
@@ -201,7 +211,7 @@ export function createBrowserControl(options: {
     leave() {
       if (!quiet() || transport.size()) return;
       state = "releasing";
-      void transport.release().catch(() => {});
+      void transport.release(options.owned() ? transport.reservation() ?? attempt : attempt).catch(() => {});
     },
     close() { closed = true; clearTimeout(idle); clearTimeout(notice); buffer = []; held.clear(); dropped.clear(); },
   };
@@ -213,7 +223,7 @@ export type BrowserControl = ReturnType<typeof createBrowserControl>;
  * The v2 stream as a control transport: input goes out at once, and a take resolves when the server says this viewer
  * controls the browser, which happens only once any running bot work has drained.
  */
-export function streamTransport(client: PreviewStreamClient, control: {
+export function streamTransport(client: { send(input: PreviewStreamInput): boolean }, control: {
   current(): PreviewStreamControl | null;
   /** Calls `listener` with every control message until the returned function is called. */
   watch(listener: (control: PreviewStreamControl | null) => void): () => void;
@@ -224,19 +234,22 @@ export function streamTransport(client: PreviewStreamClient, control: {
     settle: async () => {},
     size: () => 0,
     stopped: () => false,
-    take: () => new Promise((resolve, reject) => {
+    reservation: () => control.current()?.attempt,
+    take: (attempt) => {
+      const { promise, resolve, reject } = Promise.withResolvers<{ waited: boolean }>();
       const before = control.current();
-      if (before?.controller === "you") { resolve({ waited: false }); return; }
-      if (!client.send({ type: "takeControl" })) { reject(new Error("The browser view is not connected. Reconnect it, then try again.")); return; }
+      if (before?.controller === "you" && attempt === undefined) { resolve({ waited: false }); return promise; }
+      if (!client.send({ type: "takeControl", ...(attempt ? { attempt } : {}) })) { reject(new Error("The browser view is not connected. Reconnect it, then try again.")); return promise; }
       const waited = before?.controller === "agent";
       const done = (outcome: () => void) => { clearTimeout(timer); unwatch(); outcome(); };
       const timer = setTimeout(() => done(() => reject(new Error("Could not take control of the browser. Try again shortly."))), TAKE_TIMEOUT_MS);
       const unwatch = control.watch((next) => {
-        if (next?.controller === "you") done(() => resolve({ waited }));
+        if (next?.controller === "you" && (attempt === undefined || next.attempt === attempt)) done(() => resolve({ waited }));
         else if (next?.controller === "another-viewer") done(() => reject(new Error(heldElsewhere)));
         else if (next === null) done(() => reject(new Error("The browser view disconnected.")));
       });
-    }),
-    release: async () => { client.send({ type: "releaseControl" }); },
+      return promise;
+    },
+    release: async (attempt) => { client.send({ type: "releaseControl", ...(attempt ? { attempt } : {}) }); },
   };
 }

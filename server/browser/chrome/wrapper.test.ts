@@ -37,17 +37,18 @@ describe("the launcher agent-browser runs instead of Chrome", () => {
     const chromeFolder = join(folder, "Chrome's \"odd\" $place");
     mkdirSync(chromeFolder);
     const chrome = join(chromeFolder, "Google Chrome");
-    writeFileSync(chrome, `#!/bin/sh\nprintf '%s\\0' "$@" > "$ARGV_OUT"\nprintf '%s' "$TZ" > "$ARGV_OUT.tz"\nprintf '%s' "$HOME" > "$ARGV_OUT.home"\n`, { mode: 0o755 });
+    writeFileSync(chrome, `#!/bin/sh\nprintf '%s\\0' "$@" > "$ARGV_OUT"\nprintf '%s' "$TZ" > "$ARGV_OUT.tz"\nprintf '%s' "$HOME" > "$ARGV_OUT.home"\nprintf '%s' "$OMB_BROWSER_PROCESS_SCOPE" > "$ARGV_OUT.scope"\n`, { mode: 0o755 });
     const path = launcherPath(join(folder, "data"), "darwin");
     writeLauncher(path, { ...settings, chrome, timeZone: "America/New_York", home: "/Users/ada" }, "darwin");
     expect(statSync(path).mode & 0o777).toBe(0o700);
     const out = join(folder, "argv");
-    execFileSync(path, ENGINE_ARGS, { env: { PATH: "/usr/bin:/bin", ARGV_OUT: out, HOME: join(folder, "temporary-home") } });
+    execFileSync(path, ENGINE_ARGS, { env: { PATH: "/usr/bin:/bin", ARGV_OUT: out, HOME: join(folder, "temporary-home"), OMB_BROWSER_PROCESS_SCOPE: "stable-session-scope" } });
     const argv = readFileSync(out, "utf8").split("\0").slice(0, -1);
     expect(argv).toEqual([...ENGINE_ARGS, ...launcherFlags(settings, "darwin")]);
     expect(argv).toContain(`--user-agent=${UA}`);
     expect(readFileSync(`${out}.tz`, "utf8")).toBe("America/New_York");
     expect(readFileSync(`${out}.home`, "utf8")).toBe("/Users/ada");
+    expect(readFileSync(`${out}.scope`, "utf8")).toBe("stable-session-scope");
   });
 
   it("writes a shell script that execs Chrome, so agent-browser keeps Chrome's own pid and process group", () => {
@@ -83,7 +84,7 @@ describe("the launcher of a Team Cloud's boxed browsers", () => {
     folders.push(folder);
     const bwrap = join(folder, "bwrap");
     // A stand-in for bubblewrap: what it was asked, and whether descriptor 9 holds the filter.
-    writeFileSync(bwrap, `#!/bin/sh\nprintf '%s\\0' "$@" > "$ARGV_OUT"\ncat <&9 > "$ARGV_OUT.fd9" 2>/dev/null || printf none > "$ARGV_OUT.fd9"\nps -o args= -p $PPID > "$ARGV_OUT.parent"\n`, { mode: 0o755 });
+    writeFileSync(bwrap, `#!/bin/sh\nprintf '%s\\0' "$@" > "$ARGV_OUT"\ncat <&9 > "$ARGV_OUT.fd9" 2>/dev/null || printf none > "$ARGV_OUT.fd9"\nps -o args= -p $PPID > "$ARGV_OUT.parent"\nprintf '%s' "$OMB_BROWSER_PROCESS_SCOPE" > "$ARGV_OUT.scope"\n`, { mode: 0o755 });
     const filter = join(folder, "seccomp.bpf");
     writeFileSync(filter, "FILTER");
     const path = launcherPath(join(folder, "data"), "linux");
@@ -91,11 +92,13 @@ describe("the launcher of a Team Cloud's boxed browsers", () => {
     const out = join(folder, "argv");
     const profile = join(folder, "profiles", "ada's profile");
     const engine = ["--remote-debugging-port=0", "--headless=new", `--user-data-dir=${profile}`, "--x=it's $HOME"];
-    execFileSync(path, engine, { env: { PATH: "/usr/bin:/bin", ARGV_OUT: out } });
+    execFileSync(path, engine, { env: { PATH: "/usr/bin:/bin", ARGV_OUT: out, OMB_BROWSER_PROCESS_SCOPE: "stable-boxed-scope" } });
     const argv = readFileSync(out, "utf8").split("\0").slice(0, -1);
     expect(argv).toEqual(["--unshare-user", "--seccomp", "9", "--ro-bind", "/usr", "/usr", "--bind", profile, profile, "--setenv", "HOME", "/tmp", "--", "/opt/chrome/chrome", ...engine, ...launcherFlags(settings, "linux")]);
     expect(statSync(profile).isDirectory(), "the profile exists before bubblewrap binds it").toBe(true);
     expect(readFileSync(`${out}.fd9`, "utf8")).toBe("FILTER");
+    expect(readFileSync(`${out}.scope`, "utf8")).toBe("stable-boxed-scope");
+    expect(argv).not.toContain("--clearenv");
     // bubblewrap's --die-with-parent follows the thread that started it; the launcher, not agent-browser's thread, is its parent.
     expect(readFileSync(`${out}.parent`, "utf8"), "the launcher stays bubblewrap's parent").toContain("chrome-launcher.sh");
     // Without a profile (the launcher's own check), still boxed, binding nothing of the disk.

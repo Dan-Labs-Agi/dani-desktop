@@ -27,7 +27,7 @@ function turnWith(text: string, state: { stopped?: boolean; replied?: string } =
 describe("endTurn on a reply that is a provider's error body", () => {
   it("after the person's Stop, ends the turn as stopped and keeps what was said", () => {
     const { current, replies } = turnWith(ERROR_BODY, { stopped: true });
-    expect(endTurn(current, true, null, "omp")).toEqual({ ok: true, stopReason: "cancelled" });
+    expect(endTurn(current, true, null, "omp")).toEqual({ ok: false, stopReason: "cancelled" });
     expect(replies).toEqual([ERROR_BODY]);
   });
 

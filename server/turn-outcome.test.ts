@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "./contracts.ts";
 import { classifyError } from "./drivers/retry.ts";
 import type { Message } from "./store.ts";
-import { TurnStops, outwardActions, stoppedTurnOutcome, turnEvidence } from "./turn-outcome.ts";
+import { TurnStops, blockingTurnStop, outwardActions, stoppedTurnOutcome, turnEvidence } from "./turn-outcome.ts";
+import { classifyRoutineFailure } from "./routine-recovery.ts";
 
 const event = (fields: Record<string, unknown>): RuntimeEvent =>
   ({ eventId: "e", provider: "fake", threadId: "t1", createdAt: "", ...fields }) as unknown as RuntimeEvent;
@@ -13,6 +14,27 @@ const tool = (name: string, ok: boolean, turnId = "turn-1"): Message =>
   ({ id: `m-${Math.random()}`, role: "bot", kind: "activity", at: 1, turnId, tool: { name, ok, itemId: `i-${Math.random()}` } }) as Message;
 
 describe("TurnStops", () => {
+  it("retains only structured native remaining-work status for the current turn", () => {
+    const stops = new TurnStops();
+    stops.note(event({ type: "turn.started", turnId: "turn-1" }));
+    stops.note(event({ type: "turn.work-status", turnId: "turn-1", status: "remaining" }));
+    expect(stops.read("t1", "turn-1")?.workRemaining).toBe(true);
+    stops.note(event({ type: "turn.work-status", turnId: "turn-1", status: "complete" }));
+    expect(stops.read("t1", "turn-1")?.workRemaining).toBeUndefined();
+    stops.note(event({ type: "turn.work-status", turnId: "turn-1", status: "remaining" }));
+    stops.note(event({ type: "turn.started", turnId: "turn-2" }));
+    expect(stops.read("t1", "turn-2")).toBeUndefined();
+  });
+
+  it("keeps known effect uncertainty stronger than native cancellation", () => {
+    const stops = new TurnStops();
+    stops.note(event({ type: "turn.started", turnId: "turn-1" }));
+    stops.unknownBrowserEffect("t1", "turn-1");
+    stops.note(event({ type: "turn.completed", turnId: "turn-1", ok: false, stopReason: "cancelled" }));
+    expect(blockingTurnStop(stops.read("t1", "turn-1"))?.outcome).toBe("provider_error");
+    expect(stops.mayContinue("t1", "turn-1", "observation")).toBe(false);
+  });
+
   it("keeps the runtime's error and the step cap's handoff for the turn that failed", () => {
     const stops = new TurnStops();
     stops.note(event({ type: "turn.started", turnId: "turn-1" }));
@@ -25,6 +47,27 @@ describe("TurnStops", () => {
     expect(stops.read("t1", "turn-1")).toBeUndefined();
   });
 
+  it("clears a browser wait only after that same turn and session make progress", () => {
+    const stops = new TurnStops();
+    stops.waitForBrowser("t1", "turn-1", "browser-a");
+    stops.browserContinued("t1", "old-turn", "browser-a");
+    stops.browserContinued("t1", "turn-1", "browser-b");
+    expect(stops.mayContinue("t1", "turn-1")).toBe(false);
+    stops.browserContinued("t1", "turn-1", "browser-a");
+    expect(stops.read("t1", "turn-1")?.browserWait).toBeUndefined();
+    expect(stops.mayContinue("t1", "turn-1")).toBe(true);
+  });
+
+  it.each(["denied", "unknown"])("does not treat browser hand-back as proof for a %s effect", (blocked) => {
+    const stops = new TurnStops();
+    stops.waitForBrowser("t1", "turn-1", "browser-a");
+    if (blocked === "denied") stops.note(event({ type: "request.resolved", turnId: "turn-1", behavior: "deny", source: "user" }));
+    else stops.unknownBrowserEffect("t1", "turn-1");
+    stops.browserContinued("t1", "turn-1", "browser-a");
+    expect(stops.read("t1", "turn-1")?.browserWait).toBeUndefined();
+    expect(stops.mayContinue("t1", "turn-1", "observation")).toBe(false);
+  });
+
   it("keeps the engine's own flags on the turn's error, which decide whether a retry could help", () => {
     const stops = new TurnStops();
     stops.note(event({ type: "turn.started", turnId: "turn-1" }));
@@ -32,6 +75,20 @@ describe("TurnStops", () => {
     expect(stops.read("t1", "turn-1")?.flags).toEqual({ setup: true, trialCredit: "used_up" });
     stops.note(event({ type: "turn.started", turnId: "turn-2" }));
     expect(stops.read("t1", "turn-2")).toBeUndefined();
+  });
+
+  it.each([
+    { type: "request.resolved", requestId: "permission", behavior: "deny", source: "user" },
+    { type: "request.resolved", requestId: "permission", behavior: "deny", source: "timeout" },
+    { type: "item.completed", itemType: "tool", itemId: "write", ok: false },
+  ])("blocks automatic replay from trusted denial/failure provenance: %j", (failed) => {
+    const stops = new TurnStops();
+    stops.note(event({ type: "turn.started", turnId: "turn-1" }));
+    stops.note(event({ ...failed, turnId: "turn-1" }));
+    stops.note(event({ type: "runtime.error", turnId: "turn-1", message: "connection closed", stalled: true }));
+    expect(classifyRoutineFailure("connection closed", { ...stops.read("t1", "turn-1")?.flags, stopReason: "rpc_error" })).toEqual({ kind: "final" });
+    stops.note(event({ type: "turn.started", turnId: "turn-2" }));
+    expect(classifyRoutineFailure("connection closed", { ...stops.read("t1", "turn-2")?.flags, stopReason: "rpc_error" })).toEqual({ kind: "retry", cause: "failed" });
   });
 
   // Claude reports a usage limit or an overload as a reply its client wrote: that text is the cause, a model's words are not.

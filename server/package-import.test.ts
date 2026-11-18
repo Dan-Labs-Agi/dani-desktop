@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PackageDocument } from "../shared/package-format.ts";
+import { downgradeToV1 } from "../shared/package-format.ts";
+import { parseBotPackage, renderBotPackageMarkdown } from "./bot-package.ts";
 
 const FIXTURES = join(import.meta.dirname, "..", "shared", "package-fixtures");
 const fixture = (name: string): any => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
@@ -61,6 +63,34 @@ afterEach(async () => {
 });
 
 describe("importing a whole team", () => {
+  it.each(["legacy-team.v1.json", "legacy-botmrr.v1.md"])("imports and round-trips historical routines from %s without changing their schedule or authority", async (name) => {
+    const app = await installation();
+    const text = readFileSync(join(FIXTURES, name), "utf8");
+    const input: unknown = name.endsWith(".md") ? text : JSON.parse(text);
+    const document = app.parsePackageDocument(input);
+    const older = downgradeToV1(document);
+    if ("error" in older) throw new Error(older.error);
+    expect(older.document.package.routines?.[0]?.runOn).toBe("maus");
+    const markdown = renderBotPackageMarkdown(older.document);
+    expect(parseBotPackage(markdown).package.routines?.[0]?.runOn).toBe("maus");
+    expect(app.parsePackageDocument(markdown)).toEqual(document);
+    const result = app.importer.importPackageDocument(app.parsePackageDocument(markdown), { trust: "file", mode: "add" }, app.deps);
+    if (result.alreadyAdded) throw new Error("unexpected");
+    const scout = result.bots.find((bot) => bot.installedPackage?.agentKey === "scout")!;
+    expect(result.routines).toEqual([expect.objectContaining({
+      botId: scout.id,
+      prompt: "Prepare the approved morning signal brief.",
+      runOn: "dani",
+      schedule: { type: "daily", time: "09:00", weekdays: [1, 2, 3, 4, 5] },
+      durationMinutes: 30,
+      enabled: false,
+      nextRunAt: null,
+    })]);
+    expect(app.skills.listSkills(scout.id)).toEqual([expect.objectContaining({ name: "source-check", enabled: false })]);
+    expect(app.store.bot(scout.id)).not.toHaveProperty("approvalMode");
+    expect(readFileSync(join(FIXTURES, name), "utf8")).toBe(text);
+  });
+
   it("adds every part from a file: persona, picture, brief, Chief, rooms, paused routines, skills off, valueless connections, notes", async () => {
     const app = await installation({ servers: { crm: { type: "http", url: "https://existing.example.com", headers: { Authorization: "Bearer mine" }, enabled: true } } });
     const document: PackageDocument = app.parsePackageDocument(fixture("full-team.v2.json"));

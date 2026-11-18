@@ -21,6 +21,7 @@ export interface RoutineFailureFacts {
   stopReason?: string | null;
   setup?: boolean;
   stalled?: boolean;
+  toolError?: boolean;
   trialCredit?: string;
   limitResetsAt?: number;
   /** A usage limit refused it (the runtime error's `limit`). */
@@ -55,7 +56,10 @@ const BUSY_CODES = new Set(["thread_busy", "thread_limit", "workspace_busy", "se
 /** Stop reasons of a turn someone ended on purpose (Stop, a typed "stop", a settings change that cut it short), the AI
  * declined, or a tool call the person denied or that failed after its corrective rounds: a second start would undo or
  * repeat it. */
-const NOT_RETRIED_STOPS = new Set(["cancelled", "interrupted", "refusal", "tool_error"]);
+const NOT_RETRIED_STOPS: Record<string, true> = {
+  cancelled: true, interrupted: true, refusal: true, tool_error: true, incomplete_action: true,
+  max_tokens: true, max_turn_requests: true,
+};
 /** What the provider answered for a reason a second start would meet again. */
 const REFUSED_KINDS = new Set(["refused", "tool_schema", "tool_count"]);
 const OWNER_CAUSES = new Set<RoutineOwnerCause>(["signed_out", "credits", "usage_limit", "setup"]);
@@ -78,9 +82,10 @@ const FIRST_START: Record<RoutineRetryCause, string> = {
 /** Any failure gets one automatic retry, except a stall the turn watchdog stopped (its Chief hears instead), a
  * stop someone pressed or typed, a refusal, and a spent cap. Routine runs and teammate threads both judge by this. */
 export function classifyRoutineFailure(failure: string, facts: RoutineFailureFacts = {}): RoutineFailureClass {
+  if (facts.toolError) return { kind: "final" };
   if (facts.cause === "busy") return { kind: "busy" };
   if (facts.cause === "stalled" || facts.cause === "cap") return { kind: "final" };
-  if (facts.stopReason && NOT_RETRIED_STOPS.has(facts.stopReason)) return { kind: "final" };
+  if (facts.stopReason && Object.hasOwn(NOT_RETRIED_STOPS, facts.stopReason)) return { kind: "final" };
   if (classifyContinuable(facts.stopReason, failure) === "cap") return { kind: "final" };
   if (facts.stalled) return { kind: "retry", cause: "stalled" };
   const engine = engineFailureKind(failure);

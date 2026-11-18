@@ -23,16 +23,14 @@ import {
   previewStreamModifiers,
   uploadPreviewStreamFiles,
   type PreviewStreamClient,
-  type PreviewStreamControl,
   type PreviewStreamDownload,
   type PreviewStreamEvents,
   type PreviewStreamFileChooser,
   type PreviewStreamHostSetup,
-  type PreviewStreamInput,
-  type PreviewStreamMouseButton,
   type PreviewStreamPointer,
   type PreviewStreamViewport,
 } from "@/lib/browser-stream-client";
+import type { PreviewStreamControl, PreviewStreamInput, PreviewStreamMouseButton } from "../../../shared/browser-stream";
 import { copyText } from "@/lib/copy-text";
 import { AgentCursor } from "./AgentCursor";
 import { AuthPrompt } from "./AuthPrompt";
@@ -105,8 +103,13 @@ interface SelectState {
 type NoticeInput =
   | { kind: "download"; download: PreviewStreamDownload }
   | { kind: "clipboard"; text: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; recovery?: true };
 type Notice = NoticeInput & { id: number };
+
+function withoutRecoveryNotice(notices: Notice[]): Notice[] {
+  if (!notices.some((notice) => notice.kind === "error" && notice.recovery)) return notices;
+  return notices.filter((notice) => notice.kind !== "error" || !notice.recovery);
+}
 
 const buttonOf = (button: number): PreviewStreamMouseButton =>
   button === 0 ? "left" : button === 1 ? "middle" : button === 2 ? "right" : "none";
@@ -408,6 +411,9 @@ export function StreamSurface(props: {
             setAuthPrompt({ tabId: message.tabId, id: message.id, origin: message.origin, realm: typeof message.realm === "string" ? message.realm : "" });
           } else if (message.type === "authPromptClosed") {
             setAuthPrompt((shown) => (shown && shown.id !== message.id ? shown : null));
+          } else if (message.type === "recovery") {
+            setNotices(withoutRecoveryNotice);
+            if (typeof message.message === "string" && message.message) notify({ kind: "error", message: message.message, recovery: true });
           } else if (message.type === "notice" && typeof message.message === "string") {
             notify({ kind: "error", message: message.message });
           }
@@ -415,6 +421,7 @@ export function StreamSurface(props: {
         },
         onConnectedChange: (next) => {
           setConnected(next);
+          if (next) setNotices(withoutRecoveryNotice);
           propsRef.current.onConnectedChange?.(next);
           if (next) return;
           setFileChooser(null);

@@ -279,7 +279,7 @@ export async function fill(context: ActionContext, target: Exclude<Target, Point
   const kind = await focusEditable(context, handle);
   // Date and time fields take no typed text: set them like a picker would (the events are untrusted).
   if (kind === "value") {
-    await callOnNode(context.frames, handle, SET_VALUE, [text]);
+    await callOnNode(context.frames, handle, SET_VALUE, [text], { effect: true });
     return;
   }
   await context.keyboard.press("ControlOrMeta+A");
@@ -362,7 +362,7 @@ export async function select(context: ActionContext, target: Exclude<Target, Poi
     }
   }
   // Several choices, or a label typing cannot reach: set from the isolated world (the input and change events are untrusted).
-  return { selected: await callOnNode<string[]>(context.frames, handle, SELECT_VALUES, [chosen.map((option) => option.value)]) };
+  return { selected: await callOnNode<string[]>(context.frames, handle, SELECT_VALUES, [chosen.map((option) => option.value)], { effect: true }) };
 }
 
 const CHECK_STATE = `function () {

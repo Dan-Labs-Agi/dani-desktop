@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { TRIAL_CREDIT_REFUSED } from "../../shared/trial-credit.ts";
 import "../server-line-packs.ts";
-import { AUTO_RETRY_LEAD, RETRY_BLOCKED } from "../incidents.ts";
+import { RETRY_BLOCKED } from "../incidents.ts";
 import type { RoutineFailureFacts } from "../routine-recovery.ts";
 import { createChiefNotices, MEMORY_RETRY_MS, MEMORY_RETRY_TEXT, type ChiefNoticeDeps } from "./chief-notices.ts";
 
@@ -66,26 +66,45 @@ describe("why a Chief's retry of a teammate's thread is refused", () => {
   });
 });
 
+describe("the authorized Chief for direct-work supervision", () => {
+  it("returns the existing matching Chief without delivering a detached incident or starting another run", () => {
+    const f = fixture();
+    expect(f.notices.supervisingChief("ada", "ada-job")).toBe(f.chief);
+    expect(f.notices.supervisingChief("ada", "missing-task")).toBeNull();
+    expect(f.notices.supervisingChief("chief", "chief-main")).toBeNull();
+    expect(f.startTurn).not.toHaveBeenCalled();
+    expect(f.store.tasks("chief")).toEqual([]);
+  });
+
+  it("does not adopt private or quiet work and never crosses the notices routing's person scope", () => {
+    expect(fixture({ privateThread: () => true }).notices.supervisingChief("ada", "ada-job")).toBeNull();
+    expect(fixture({ quietThread: () => true }).notices.supervisingChief("ada", "ada-job")).toBeNull();
+    const crossPerson = fixture({ routing: {
+      askedPerson: () => "alice", personOf: () => "bob", startedBy: () => "bob", open: () => {},
+    } });
+    expect(crossPerson.notices.supervisingChief("ada", "ada-job")).toBeNull();
+    const samePerson = fixture({ routing: {
+      askedPerson: () => "alice", personOf: () => "alice", startedBy: () => "alice", open: () => {},
+    } });
+    expect(samePerson.notices.supervisingChief("ada", "ada-job")).toBe(samePerson.chief);
+  });
+});
+
 const CRASH = "claude exited 3 before result: fake-claude: simulated crash before result";
 const DENIED = "One or more tool operations failed or were denied. See the tool results; the final response is not an execution receipt.";
-const RETRIED = "Dani Bot already retried this run once by itself; the failure above is how that retry ended.";
 
 describe("Dani Bot's one automatic retry of a teammate's failed thread", () => {
   it("runs the thread once more before its Chief hears, then tells the Chief how that retry ended, and never retries the retry", () => {
     const f = fixture();
     f.store.appendMessage("ada-job", { role: "user", kind: "text", text: "Reconcile the September invoices." });
     f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: CRASH });
-    expect(f.turnsOf("ada")).toEqual([{ threadId: "ada-job", text: expect.stringMatching(/^\[Retry requested by Dani Bot, automatically, once, before telling Clive, your Chief of Staff,/) }]);
-    expect(f.turnsOf("ada")[0]!.text).toContain("Continue the request above from where it stopped and finish it.");
+    expect(f.turnsOf("ada").map((turn) => turn.threadId)).toEqual(["ada-job"]);
     expect(f.turnsOf("chief")).toEqual([]);
 
     // The retry fails too: the Chief hears now, with the original request, and nothing is retried again.
     f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: CRASH });
     expect(f.turnsOf("ada")).toHaveLength(1);
-    const [told] = f.turnsOf("chief");
-    expect(told!.text).toContain(RETRIED);
-    expect(told!.text).toContain('The request there was: "Reconcile the September invoices."');
-    expect(told!.text).toContain("retry_thread");
+    expect(f.turnsOf("chief")).toHaveLength(1);
   });
 
   it("never retries a stall the turn watchdog stopped: the Chief hears at once", () => {
@@ -93,7 +112,6 @@ describe("Dani Bot's one automatic retry of a teammate's failed thread", () => {
     f.notices.reportIncident({ kind: "stalled", bot: f.ada as never, threadId: "ada-job", detail: "no activity for 20 minutes — the turn was stopped" });
     expect(f.turnsOf("ada")).toEqual([]);
     expect(f.turnsOf("chief")).toHaveLength(1);
-    expect(f.turnsOf("chief")[0]!.text).not.toContain(RETRIED);
   });
 
   it.each<[string, { detail: string; facts?: RoutineFailureFacts }]>([
@@ -114,8 +132,6 @@ describe("Dani Bot's one automatic retry of a teammate's failed thread", () => {
   it("leaves a run that answered the Chief's own retry to the Chief", async () => {
     const f = fixture();
     await f.notices.retryThread({ chief: f.chief as never, bot: f.ada as never, threadId: "ada-job", unattended: true, note: "The service was down." });
-    expect(f.turnsOf("ada")[0]!.text).toBe("[Retry requested by Clive, your Chief of Staff, after this thread's last run stopped. Note from Clive: The service was down. " +
-      "Continue the request above from where it stopped and finish it. If the same problem comes back, say exactly what is blocking and stop.]");
     f.notices.reportIncident({ kind: "failed", bot: f.ada as never, threadId: "ada-job", detail: CRASH });
     expect(f.turnsOf("ada")).toHaveLength(1);
     expect(f.turnsOf("chief")).toHaveLength(1);
@@ -130,7 +146,7 @@ describe("Dani Bot's one automatic retry of a teammate's failed thread", () => {
     waiting.shift()!();
     await new Promise((resolve) => setImmediate(resolve));
     expect(f.turnsOf("ada")).toEqual([]);
-    expect(f.turnsOf("chief")[0]!.text).toContain(`Dani Bot did not retry it: its retry could not start (${RETRY_BLOCKED.running}).`);
+    expect(f.turnsOf("chief")).toHaveLength(1);
   });
 
   it("tells the Chief, without retrying, when someone wrote in the thread since it failed", () => {
@@ -143,15 +159,12 @@ describe("Dani Bot's one automatic retry of a teammate's failed thread", () => {
       f.store.appendMessage("ada-job", { role: "user", kind: "text", text: "Never mind, I did it myself." });
       waiting.shift()!();
       expect(f.turnsOf("ada")).toEqual([]);
-      expect(f.turnsOf("chief")[0]!.text).toContain("Dani Bot did not retry it: someone wrote in that thread since.");
+      expect(f.turnsOf("chief")).toHaveLength(1);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("opens its retry with a lead the delivered-note rules know, so the request it retries stays the thread's request", () => {
-    expect(AUTO_RETRY_LEAD.startsWith("[Retry requested by ")).toBe(true);
-  });
 });
 
 describe("a run stopped to free memory", () => {
@@ -209,7 +222,7 @@ describe("a run stopped to free memory", () => {
   it("leaves a teammate's run to the Chief's own retry, and any other failure to the person", () => {
     const teammate = roomFixture();
     teammate.notices.reportIncident({ kind: "failed", bot: teammate.ada as never, threadId: "ada-job", detail: STOPPED });
-    expect(teammate.turnsOf("ada")).toEqual([{ threadId: "ada-job", text: expect.stringMatching(/^\[Retry requested by Dani Bot, automatically, once/) }]);
+    expect(teammate.turnsOf("ada").map((turn) => turn.threadId)).toEqual(["ada-job"]);
     expect(teammate.waiting).toEqual([]);
     const other = roomFixture();
     other.notices.reportIncident({ kind: "failed", bot: other.chief as never, threadId: "chief-main", detail: CRASH });

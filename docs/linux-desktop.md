@@ -30,14 +30,14 @@ CUA supply-chain work is tracked in [issue #113](https://github.com/milind-soni/
 
 ## Download packages
 
-Get the [latest release](https://github.com/somdipto/dani-desktop/releases/latest) and choose one Ubuntu 24.04 x86_64 package:
+Get a complete [Dani desktop release](https://github.com/Dan-Labs-Agi/dani-desktop/releases) and choose one Ubuntu 24.04 x86_64 package. Auxiliary browser-engine releases are not desktop installers:
 
 - **Debian package** (`.deb`) — recommended; APT installs its desktop dependencies and configures the bundled bot browser's sandbox.
 - **Portable AppImage** — does not install system files.
-- **SHA-256 checksums** accompany every release.
+- **Update metadata** (`latest-linux.yml`) pins versioned downloads by size and SHA-512. The standalone Ubuntu packaging workflow also emits SHA-256 checksums.
 
 Versioned packages and previous releases remain available on the
-[releases page](https://github.com/somdipto/dani-desktop/releases).
+[releases page](https://github.com/Dan-Labs-Agi/dani-desktop/releases).
 
 ## Build packages
 
@@ -48,8 +48,8 @@ Requirements for building from source:
 - pnpm 10.33.0 (Corepack can install the version declared by the project)
 
 ```sh
-git clone https://github.com/somdipto/dani-desktop.git
-cd Dani Desktop
+git clone https://github.com/Dan-Labs-Agi/dani-desktop.git
+cd dani-desktop
 corepack enable
 pnpm install --frozen-lockfile
 pnpm package:linux
@@ -57,8 +57,9 @@ pnpm package:linux
 
 The build creates:
 
-- `release/Dani Desktop-<version>-amd64.deb`
-- `release/Dani Desktop-<version>-x86_64.AppImage`
+- `release/DaniBot-<version>-amd64.deb`
+- `release/DaniBot-<version>-x86_64.AppImage`
+- `release/latest-linux.yml`
 
 The AppImage uses a static runtime and does not require the legacy `libfuse2` package.
 

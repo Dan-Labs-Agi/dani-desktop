@@ -172,6 +172,16 @@ refuse version 2 files with their existing "not supported" message; Admin can
 produce a version 1 download for them. A file is at most 4 MB. Example files
 and their expected hashes live in `shared/package-fixtures/`.
 
+Historical version 1 and version 2 packages can spell a routine's local
+execution target as `maus`. Package import converts that target to the
+current `dani` value; current runtime requests and the canonical version 2
+schema still use only `dani` or `cloud`. Version 1 downloads and BotMRR
+Markdown exports retain `maus` so older apps can read them. The version 1
+reader also accepts `dani` from files written during the branding transition.
+Schedules and prompts are preserved, and imported routines remain paused.
+Conversion does not rewrite the source file or an organization's downloaded
+release bytes: catalog hashes are checked against those original bytes.
+
 The HTTP route is `POST /api/teams/export` with
 `{"format":"package","version":2,"team":"Sales desk"}` (admin scope). Optional
 fields: `name`, `tagline`, `summary`, `release`, `notes`, `skills` (`"all"` or

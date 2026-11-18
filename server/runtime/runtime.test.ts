@@ -89,6 +89,82 @@ type EnqueueResult = ReturnType<Runtime["enqueue"]>;
 const invariants = (w: World) => expect(checkInvariants(w.store, w.runner.live())).toEqual([]);
 
 describe("Runtime: one tree, one lane", () => {
+  it("persists accepted person-answer IDs only on their original nonterminal direct root", () => {
+    const w = world();
+    const root = w.runtime.begin(beginReq({
+      requester: { kind: "person", botId: "builder", threadId: "builder-work", messageId: "source" },
+      assignee: { botId: "builder", destination: { kind: "standing_thread", threadId: "builder-work" } },
+    }));
+    expect(w.runtime.acceptRequestAnswer(root.id, "fabricated-source", "answer")).toBe(false);
+    expect(w.runtime.acceptRequestAnswer(root.id, "source", "answer")).toBe(true);
+    expect(w.runtime.acceptRequestAnswer(root.id, "source", "answer")).toBe(true);
+    expect(w.store.get(root.id)?.acceptedAnswerIds).toEqual(["answer"]);
+    const reopened = world(undefined, {}, w.store);
+    expect(reopened.store.get(root.id)?.acceptedAnswerIds).toEqual(["answer"]);
+    const row = reopened.store.get(root.id)!;
+    reopened.store.update({ ...row, status: "cancelled", outcome: "stopped" });
+    expect(reopened.runtime.acceptRequestAnswer(root.id, "source", "later-answer")).toBe(false);
+    expect(reopened.store.get(root.id)?.acceptedAnswerIds).toEqual(["answer"]);
+  });
+
+  it("atomically readmits only first pending verification and preserves the original receipt and budget window", () => {
+    const w = world();
+    const root = w.runtime.begin(beginReq({
+      requester: { kind: "person", botId: "builder", threadId: "builder-work" },
+      assignee: { botId: "builder", destination: { kind: "standing_thread", threadId: "builder-work" } },
+    }));
+    w.runtime.end(root.id, { ok: true, text: "Which public website?", evidence: { toolCalls: 1, okToolCalls: 1 },
+      needsInput: { question: "Authorized Chief unavailable", needsVerification: true } });
+    const before = w.store.get(root.id)!;
+    let selections = 0;
+    const select = () => { selections += 1; return { assignee: chief, level: "ask" as const }; };
+    expect(w.runtime.readmitVerification(root.id, select)).toBe(true);
+    const current = w.store.get(root.id)!;
+    expect(current).toMatchObject({
+      id: before.id, rootId: before.rootId, status: "waiting", needsVerification: true,
+      brief: before.brief, result: before.result, evidence: before.evidence, executions: before.executions,
+      budgets: { ...before.budgets, requests: before.budgets!.requests + 1 },
+    });
+    expect(current.question).toBeUndefined();
+    expect(current.answer).toBeUndefined();
+    expect(w.store.events(root.id).map(event => event.kind)).not.toContain("answered");
+    expect(w.store.children(root.id)).toHaveLength(1);
+    expect(w.store.children(root.id)[0]?.supervisionReceipt).toEqual({ kind: "unverified", text: before.result, evidence: before.evidence });
+    expect(w.runtime.readmitVerification(root.id, select)).toBe(false);
+    expect(selections).toBe(1);
+    expect(w.runner.runs).toEqual([]);
+    invariants(w);
+  });
+
+  it.each(["executions", "requests", "wakes", "failed review", "denied", "unknown stale outcome", "card", "outside", "Chief", "goal run"] as const)(
+    "does not select or create a Chief review for parked verification blocked by %s", blocker => {
+      const w = world();
+      const root = w.runtime.begin(beginReq({
+        requester: { kind: "person", botId: "builder", threadId: "builder-work" },
+        assignee: { botId: "builder", destination: { kind: "standing_thread", threadId: "builder-work" } },
+      }));
+      if (blocker === "failed review") {
+        const review = ok(w.runtime.enqueue(toBot("reviewer", root.id, "Review original work", { supervisionOf: root.id })));
+        w.store.update({ ...review, status: "failed", outcome: "provider_error" });
+      }
+      w.runtime.end(root.id, { ok: true, text: "Which public website?",
+        needsInput: { question: "Authorized Chief unavailable", needsVerification: true } });
+      const parked = w.store.get(root.id)!;
+      if (blocker === "executions" || blocker === "requests" || blocker === "wakes") parked.budgets![blocker] = w.runtime.limits[blocker];
+      if (blocker === "denied") parked.outcome = "denied";
+      if (blocker === "unknown stale outcome") parked.outcome = "provider_error";
+      if (blocker === "card") parked.cards = ["resume-data"];
+      if (blocker === "outside") parked.origin = { kind: "outside", source: "api" };
+      if (blocker === "Chief") parked.requester.chief = true;
+      if (blocker === "goal run") parked.goalRunId = "separate-owner";
+      w.store.update(parked);
+      let selections = 0;
+      expect(w.runtime.readmitVerification(root.id, () => { selections += 1; return { assignee: chief, level: "ask" }; })).toBe(false);
+      expect(selections).toBe(0);
+      expect(w.store.get(root.id)).toEqual(parked);
+      expect(w.runner.runs).toEqual([]);
+    });
+
   it("runs a child, reports it once, then wakes the root with the settled children in one resume turn", async () => {
     const w = world();
     const root = w.runtime.begin(beginReq());
@@ -217,7 +293,8 @@ describe("Runtime: one tree, one lane", () => {
     expect(w.store.get(root.id)?.status).toBe("running");
     expect(w.runner.runs.at(-1)?.a.id).toBe(root.id);
     await flush();
-    expect(w.store.get(root.id)?.status).toBe("completed");
+    expect(w.store.get(root.id)).toMatchObject({ status: "needs_input", outcome: "interrupted" });
+    expect(w.store.get(b.id)).toMatchObject({ status: "failed", outcome: "budget" });
     invariants(w);
   });
 
@@ -282,6 +359,25 @@ describe("Runtime: one tree, one lane", () => {
     invariants(w);
   });
 
+  it.each([{ kind: "bot", botId: "chief" }, { kind: "default" }] as const)("does not let a $kind answer reopen a denied operation", async (by) => {
+    const w = world(a => a.assignee.botId === "builder"
+      ? { kind: "needs_input", question: "The push was denied.", text: "PUSH-RESULT: not pushed.",
+        blocked: { outcome: "denied", reason: "The person denied permission." } }
+      : "hold");
+    const root = w.runtime.begin(beginReq());
+    const child = ok(w.runtime.enqueue(toBot("builder", root.id, "Push the branch.")));
+    w.runtime.tick(); await flush();
+    expect(w.store.get(child.id)).toMatchObject({ status: "needs_input", outcome: "denied", executions: 1, result: "PUSH-RESULT: not pushed." });
+
+    expect(w.runtime.answer(child.id, "Run the independently authorized tests.", by)).toBe(false);
+    w.runtime.tick(); await flush();
+    expect(w.store.get(child.id)).toMatchObject({ status: "needs_input", outcome: "denied", executions: 1,
+      question: "The push was denied.", result: "PUSH-RESULT: not pushed." });
+    expect(w.store.get(child.id)?.answer).toBeUndefined();
+    expect(w.runner.runs.filter(run => run.a.id === child.id)).toHaveLength(1);
+    invariants(w);
+  });
+
   it("stalls a turn with no activity on the monotonic clock, and a tree with no progress, but never a parked tree", async () => {
     const w = world(() => "hold", { turnStallMs: 1_000, stallMs: 10_000 });
     const root = w.runtime.begin(beginReq());
@@ -317,6 +413,53 @@ describe("Runtime: one tree, one lane", () => {
     expect(w.store.events(root.id).some(e => e.kind === "stalled")).toBe(true);
     expect(w.runner.reports.map(r => r.a.id)).toEqual([a.id, b.id, root.id]);
     invariants(w);
+  });
+
+  it.each(["root", "worker"] as const)("keeps a %s cancelled by shutdown eligible for restart reconciliation", async (lane) => {
+    for (const acted of [false, true]) {
+      const store = openRuntimeStore(":memory:");
+      const first = world(() => "hold", {}, store);
+      const root = first.runtime.begin(beginReq());
+      const target = lane === "root" ? root : ok(first.runtime.enqueue(toBot("builder", root.id)));
+      if (lane === "worker") {
+        first.runtime.tick();
+        first.runtime.end(root.id, { ok: true, text: "Delegated inspection" });
+      }
+      first.runtime.close();
+      const blocked = { outcome: "interrupted" as const, reason: "Native cancellation during shutdown" };
+      if (lane === "root") first.runtime.end(target.id, { ok: false, text: blocked.reason, needsInput: { question: blocked.reason, blocked } });
+      else await first.runner.release(target.id, { kind: "needs_input", question: blocked.reason, blocked });
+      expect(store.get(target.id)).toMatchObject({ status: "running", executions: 1 });
+      expect(first.runner.parks).toEqual([]);
+      const second = world(() => "hold", {}, store, { outward: () => acted ? ["GMAIL_SEND_EMAIL"] : [] });
+      expect(store.get(target.id)).toMatchObject(acted
+        ? { status: "failed", outcome: "interrupted", executions: 1, restarts: 0 }
+        : { status: "queued", restart: "rerun", executions: 1, restarts: 1 });
+      second.runtime.tick();
+      expect(second.runner.runs.filter(run => run.a.id === target.id)).toHaveLength(acted ? 0 : 1);
+      second.runtime.close();
+      store.close();
+    }
+  });
+
+  it("preserves denial and known uncertain effects during shutdown instead of granting restart retries", async () => {
+    const store = openRuntimeStore(":memory:");
+    const first = world(() => "hold", {}, store);
+    const root = first.runtime.begin(beginReq());
+    const denied = ok(first.runtime.enqueue(toBot("builder", root.id)));
+    first.runtime.tick();
+    first.runtime.close();
+    const denial = { outcome: "denied" as const, reason: "The person denied the operation" };
+    await first.runner.release(denied.id, { kind: "needs_input", question: denial.reason, blocked: denial });
+    const unknown = { outcome: "provider_error" as const, reason: "The accepted external operation has no receipt" };
+    first.runtime.end(root.id, { ok: false, text: unknown.reason, needsInput: { question: unknown.reason, blocked: unknown } });
+    const second = world(() => "hold", {}, store);
+    expect(store.get(denied.id)).toMatchObject({ status: "needs_input", outcome: "denied", executions: 1, restarts: 0 });
+    expect(store.get(root.id)).toMatchObject({ status: "needs_input", outcome: "provider_error", executions: 1, restarts: 0 });
+    second.runtime.tick();
+    expect(second.runner.runs).toEqual([]);
+    second.runtime.close();
+    store.close();
   });
 
   it("reconciles a restart from stored data: rerun once, cut after handing out work, re-park, fail a rerun cut again", async () => {
@@ -390,7 +533,8 @@ describe("Runtime: one tree, one lane", () => {
     fifth.runtime.tick();
     expect(fifth.runner.runs[0]!.input.restartNote).toMatch(/cut again while resuming/);
     await flush();
-    expect(store.get(root2.id)?.status).toBe("completed");
+    expect(store.get(root2.id)).toMatchObject({ status: "needs_input", outcome: "interrupted" });
+    expect(store.get(twice.id)).toMatchObject({ status: "failed", outcome: "interrupted" });
     invariants(fifth);
     store.close();
   });
@@ -845,7 +989,8 @@ describe("Runtime: a root's later executions (every turn a root)", () => {
     expect(store.inbox({ threadId: "chief-chat" })).toEqual([]);
     second.runtime.tick();
     expect(second.runner.runs.map(r => r.a.id)).toEqual(["root-cut"]);
-    expect(second.runner.runs[0]!.input).toMatchObject({ turn: "rerun", resumed: true, restartNote: expect.stringMatching(/^Dani Bot restarted while your previous turn here was running/) });
+    expect(second.runner.runs[0]!.input).toMatchObject({ turn: "rerun", resumed: true });
+    expect(second.runner.runs[0]!.input.restartNote).toContain("check what that turn already did");
     expect(store.get("root-cut")).toMatchObject({ status: "running", executions: 2 });
     second.runtime.close();
 
@@ -910,7 +1055,8 @@ describe("Runtime: a cut turn that already acted outward (contract §5)", () => 
     expect(resume.input.settled?.map(s => [s.id, s.outcome])).toEqual([[sender.id, "interrupted"], [quiet.id, "done"]]);
     expect(resume.input.restartNote).toBe("A restart cut these teammates' turns: sender (cut after an outward action, not resumed: see its result); quiet (resumed once in place and told to check what it had already done). Check their results as usual.\n");
     await flush();
-    expect(store.get(root.id)?.status).toBe("completed");
+    expect(store.get(root.id)).toMatchObject({ status: "needs_input", outcome: "interrupted" });
+    expect(second.runner.runs.filter(r => r.a.id === sender.id)).toEqual([]);
     invariants(second);
     store.close();
   });
@@ -932,14 +1078,17 @@ describe("Runtime: a cut turn that already acted outward (contract §5)", () => 
 });
 
 describe("tree.ts: the outward wording and the loop guard", () => {
-  it("outwardDetail dedupes, trims and clips the labels, names at most four as verb phrases, and keeps the exact prefix and close", () => {
-    expect(outwardDetail(["git push", "git push", "  GMAIL_SEND_EMAIL  "]))
-      .toBe("Interrupted by a Dani Bot restart after it already pushed (git push), sent an email (GMAIL_SEND_EMAIL); not resumed, so nothing is done twice.");
-    expect(outwardDetail(["git commit", "STRIPE_CREATE_REFUND", "SLACK_SEND_MESSAGE", "TWITTER_CREATION_OF_A_POST", "COMPOSIO_PROXY_EXECUTE", "x"]))
-      .toBe(`${INTERRUPTED_OUTWARD} committed (git commit), made a payment (STRIPE_CREATE_REFUND), sent a message (SLACK_SEND_MESSAGE), posted (TWITTER_CREATION_OF_A_POST) and 2 more; not resumed, so nothing is done twice.`);
+  it("outwardDetail dedupes, trims and clips labels and shows at most four actions", () => {
+    const deduped = outwardDetail(["git push", "git push", "  GMAIL_SEND_EMAIL  "]);
+    expect(deduped.match(/pushed \(git push\)/g)).toHaveLength(1);
+    expect(deduped).toContain("sent an email (GMAIL_SEND_EMAIL)");
+    const many = outwardDetail(["git commit", "STRIPE_CREATE_REFUND", "SLACK_SEND_MESSAGE", "TWITTER_CREATION_OF_A_POST", "COMPOSIO_PROXY_EXECUTE", "x"]);
+    for (const action of ["committed", "made a payment", "sent a message", "posted", "2 more"]) expect(many).toContain(action);
+    expect(many).not.toContain("COMPOSIO_PROXY_EXECUTE");
     expect(outwardDetail(["COMPOSIO_PROXY_EXECUTE"])).toContain("completed an outward action (COMPOSIO_PROXY_EXECUTE)");
     const long = outwardDetail([`git push ${"origin/".repeat(20)}`, "", "   "]);
-    expect(long).toMatch(/^Interrupted by a Dani Bot restart after it already pushed \(git push [^)]{0,40}\); not resumed, so nothing is done twice\.$/);
+    expect(long).toMatch(/pushed \(git push [^)]{0,40}\)/);
+    expect(long).not.toContain("origin/".repeat(20));
     expect(long.length).toBeLessThan(200);
     expect(outwardDetail(["a\nb\tc"])).toContain("(a b c)");
   });

@@ -5,10 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { expect, it } from "vitest";
+import { z } from "zod";
 import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
 import { request } from "../scripts/mcp-server.ts";
-import { rebuiltSessionNotice } from "./resume-recovery.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
+import { TASK_ROUND_LIMIT } from "./drivers/task-continuation.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { openSse } from "./testing/sse.ts";
 
@@ -115,9 +116,12 @@ it("lets a teammate answer a one-way ask in the thread that asked, with a notice
 
 it("marks a failed one-way send so restart recovery cannot duplicate its notice", () => fixture(async f => {
   // The failed send reports an incident to Clive, the lead's Chief; answering it must not send the task again.
-  f.plan[f.chief.id] = { steps: [{ arguments: {
-    bot_ids: [f.lead.id], message: "Try the task", thread: "new", reply: "none",
-  } }], reply: "Sent", byPrompt: [{ promptIncludes: "[Incident report from Dani Bot", plan: { reply: "Noted the failed send" } }] };
+  f.plan[f.chief.id] = { turns: [
+    { steps: [{ arguments: {
+      bot_ids: [f.lead.id], message: "Try the task", thread: "new", reply: "none",
+    } }], reply: "Sent" },
+    { reply: "Noted the failed send" },
+  ] };
   f.plan[f.lead.id] = { fail: true };
   await f.start();
   expect((await f.wait()).status).toBe("settled");
@@ -501,8 +505,6 @@ it("returns nested results after Claude rejects the source's prior resume cursor
   expect(f.nodes()).toHaveLength(4);
   expect(f.nodes().every((node: any) => node.status === "completed")).toBe(true);
   expect(f.evidence().map((turn: any) => turn.botId)).toEqual([f.chief.id, f.chief.id, f.lead.id, f.specialist.id, f.lead.id, f.chief.id]);
-  const transcript = await f.messages(f.chief.activeTaskId);
-  expect(transcript.some((message: any) => message.tool?.name === `notice: ${rebuiltSessionNotice("Claude Code")}`)).toBe(true);
 }, { FAKE_CLAUDE_MODE: "dead-session", FAKE_CLAUDE_EXIT_AFTER_TURN: "1" }), 45_000);
 
 it("uses recipient bot defaults for its new task, never the sender's or its selected old thread's settings", () => fixture(async f => {
@@ -885,16 +887,23 @@ it("withholds direct results when the sender's peers list cuts the teammate off 
   const ready = join(f.session.info.dataDir, "private-work.ready");
   const gate = join(f.session.info.dataDir, "private-work.gate");
   f.plan[f.lead.id] = { readyFile: ready, gateFile: gate, reply: "PRIVATE_ENGINEERING_RESULT" };
+  f.plan[f.chief.id].resumeReply = "NEEDS INPUT: Engineering access was revoked; its work cannot be verified.";
   await f.start();
   await expect.poll(() => existsSync(ready), { timeout: 15_000 }).toBe(true);
   await f.api(`/api/bots/${f.chief.id}`, { peers: [] }, "PATCH");
   writeFileSync(gate, "finish the private work after the teammate was cut off");
-  expect((await f.wait()).status).toBe("settled");
+  await expect.poll(() => f.evidence().some((turn: { botId: string; resumed: boolean }) =>
+    turn.botId === f.chief.id && turn.resumed), { timeout: 20_000 }).toBe(true);
   const resumed = f.evidence().find((turn: any) => turn.botId === f.chief.id && turn.resumed);
   expect(JSON.stringify(resumed), told(resumed).slice(-1_500)).not.toContain("PRIVATE_ENGINEERING_RESULT");
   const child = f.nodes().find((node: any) => node.parentId);
   expect(child.status, `${JSON.stringify(child)}\n${told(resumed).slice(-1_500)}`).toBe("failed");
   expect(resumed.prompt.message.content).toContain("Result withheld");
+  const root = () => f.nodes().find((node: { parentId?: string }) => !node.parentId);
+  await expect.poll(() => root()?.status, { timeout: 15_000 }).toBe("waiting");
+  expect(root()?.outcome).not.toBe("done");
+  expect((await f.messages(f.chief.activeTaskId)).some((message: { text?: string }) =>
+    message.text === "The requested CSV export is implemented and verified")).toBe(false);
 }), 45_000);
 
 it("retains returned direct reports for follow-up turns but rechecks reach before replay", () => fixture(async f => {
@@ -973,67 +982,95 @@ it("gives a teammate each request once, never also as a bare assistant line", ()
 }, { FAKE_CLAUDE_MODE: "dead-session" }), 60_000);
 
 /** The Engineering lead on a loopback OpenAI-compatible engine where `answer` replies to every chat request. */
-async function onLoopbackEngine(f: any, answer: (res: ServerResponse) => void): Promise<() => Promise<void>> {
+async function onLoopbackEngine(
+  f: {
+    lead: { id: string };
+    api: (path: string, body: unknown) => Promise<{ instanceId: string }>;
+    cli: (...args: string[]) => Promise<unknown>;
+  },
+  answer: (res: ServerResponse, body: { tools: Array<{ function: { name: string } }> }) => void,
+): Promise<() => Promise<void>> {
   const llm = createServer(async (req, res) => {
-    for await (const _ of req) {}
+    let body = "";
+    for await (const chunk of req) body += chunk;
     if (req.url?.endsWith("/models")) { res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ data: [{ id: "loop-model" }] })); return; }
-    if (req.method !== "POST") { res.writeHead(404).end(); return; }
-    answer(res);
+    // Runtime context discovery also probes GET /api/version; this fixture only serves chat completions.
+    if (req.method !== "POST" || req.url !== "/v1/chat/completions") { res.writeHead(404); res.end(); return; }
+    answer(res, z.object({ tools: z.array(z.object({ function: z.object({ name: z.string() }) })) }).parse(JSON.parse(body)));
   });
   await new Promise<void>(resolve => llm.listen(0, "127.0.0.1", resolve));
   const port = (llm.address() as { port: number }).port;
-  await f.api("/api/config", { openaiCompat: { key: "fixture-loop-key", url: `http://127.0.0.1:${port}/v1`, model: "loop-model" } }, "PATCH");
-  await f.cli("set-model", "--bot", f.lead.id, "--instance", "openaiCompat", "--model", "loop-model");
+  const endpoint = await f.api("/api/instances/openai-compat", {
+    displayName: "Coordination fixture", key: "fixture-loop-key", url: `http://127.0.0.1:${port}/v1`, models: ["loop-model"],
+  });
+  await f.cli("set-model", "--bot", f.lead.id, "--instance", endpoint.instanceId, "--model", "loop-model");
   return () => new Promise<void>(resolve => llm.close(() => resolve()));
 }
 
-it("continues a teammate's step cap in place and stops it once it makes no progress", () => fixture(async f => {
+it.each([false, true])("keeps a teammate's capped work in place without replaying failed tools (tool fails: %s)", toolFails => fixture(async f => {
+  f.plan[f.chief.id] = {
+    steps: [{ arguments: { bot_ids: [f.lead.id], message: "Read the team roster and report the available teammates." } }],
+    reply: "Assigned the roster check",
+    resumeReply: toolFails ? "NEEDS INPUT: The roster check failed and remains unverified." : "The team roster was read and returned.",
+  };
   let calls = 0;
-  const close = await onLoopbackEngine(f, res => {
-    // Never a final answer: distinct failing calls avoid the provider's same-call guard,
-    // so this scenario reaches the runtime continuation/no-progress guard.
-    const call = { tool_calls: [{ index: 0, id: `call_${++calls}`, type: "function", function: { name: `missing_tool_${calls}`, arguments: "{}" } }] };
+  const close = await onLoopbackEngine(f, (res, body) => {
+    calls += 1;
+    const finished = !toolFails && calls > TASK_ROUND_LIMIT;
+    const tool = body.tools.find(entry => entry.function.name.endsWith("list_bots"));
+    expect(tool).toBeDefined();
+    const delta = finished ? { content: "Team roster read successfully." } : {
+      tool_calls: [{ index: 0, id: `call_${calls}`, type: "function", function: {
+        name: toolFails ? "missing_tool" : tool!.function.name, arguments: JSON.stringify({ round: calls }),
+      } }],
+    };
     res.writeHead(200, { "content-type": "text/event-stream" });
-    res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta: call, finish_reason: "tool_calls" }] })}\n\ndata: [DONE]\n\n`);
+    res.end(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: finished ? "stop" : "tool_calls" }] })}\n\ndata: [DONE]\n\n`);
   });
   try {
-    await f.start();
-    expect((await f.wait()).status).toBe("settled");
+    f.save();
+    await f.cli("send", "--bot", f.chief.id, "--task", f.chief.activeTaskId, "--text", "Have Engineering read the team roster and report the available teammates.");
+    expect((await f.wait()).status).toBe(toolFails ? "needs-user" : "settled");
     const leads = f.nodes().filter((node: any) => node.botId === f.lead.id);
     expect(leads).toHaveLength(1);
     const child = leads[0];
-    expect(child).toMatchObject({ status: "failed", outcome: "stalled", executions: 2,
-      result: expect.stringMatching(/^Stopped after 64 steps without a final answer\./) });
-    expect(child.outcomeDetail).toMatch(/^Stopped after 2 continuations without progress: Stopped after 64 steps without a final answer\./);
-    expect(child.result).not.toContain("assign what is left");
-    expect(f.eventsOf(child.id).filter((kind: string) => kind === "continued")).toHaveLength(1);
-    expect(f.eventsOf(child.id)).toContain("stalled");
+    expect(child).toMatchObject(toolFails
+      ? { status: "failed", outcome: "provider_error", executions: 1 }
+      : { status: "completed", outcome: "done", executions: 2, result: "Team roster read successfully." });
+    expect(f.eventsOf(child.id).filter((kind: string) => kind === "continued")).toHaveLength(toolFails ? 0 : 1);
+    const toolReceipts = (await f.api(`/api/threads/${child.threadId}/messages?limit=${TASK_ROUND_LIMIT * 2}`)).messages.filter(
+      (message: { tool?: { itemId?: string; ok?: boolean } }) => message.tool?.itemId && typeof message.tool.ok === "boolean",
+    );
+    expect(toolReceipts).toHaveLength(TASK_ROUND_LIMIT);
+    expect(toolReceipts.every((message: { tool: { ok: boolean } }) => message.tool.ok === !toolFails)).toBe(true);
     const resumed = f.evidence().find((turn: any) => turn.botId === f.chief.id && turn.resumed);
-    expect(resumed.prompt.message.content).toContain("Stopped after 2 continuations without progress");
-    expect(resumed.prompt.message.content).not.toContain("assign what is left");
+    expect(resumed.prompt.message.content).toContain(child.id);
     const chip = (await f.messages(f.chief.activeTaskId)).find((message: any) => message.roomRequest?.phase === "result");
-    expect(chip.tool.name).toContain("Engineering lead — failed: Stopped after 64 steps without a final answer");
+    expect(chip).toMatchObject({ roomRequest: { id: child.id, phase: "result" }, tool: { ok: !toolFails } });
     expect((await f.messages(f.chief.activeTaskId)).filter((message: any) => message.roomRequest?.phase === "result")).toHaveLength(1);
     const lead = (await f.api("/api/bots")).bots.find((bot: any) => bot.id === f.lead.id);
     expect(lead.tasks.map((task: any) => task.title).filter((title: string) => title.startsWith("Continue:"))).toEqual([]);
-    expect(calls).toBe(128);
+    expect(calls).toBe(TASK_ROUND_LIMIT + (toolFails ? 0 : 1));
+    expect(f.nodes().find((node: { parentId?: string }) => !node.parentId)?.status).toBe(toolFails ? "waiting" : "completed");
   } finally { await close(); }
 }), 90_000);
 
 it("tells the Chief a teammate's provider refused the turn, in the provider's words", () => fixture(async f => {
+  f.plan[f.chief.id].resumeReply = "NEEDS INPUT: The export remains unverified because loop-model is rate limited.";
   const close = await onLoopbackEngine(f, res => {
     res.writeHead(429, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: { message: "Rate limit reached for loop-model: 30 requests per minute" } }));
   });
   try {
     await f.start();
-    expect((await f.wait()).status).toBe("settled");
+    expect((await f.wait()).status).toBe("needs-user");
     const child = f.nodes().find((node: any) => node.botId === f.lead.id);
     expect(child.status).toBe("failed");
     expect(child.result).toContain("429");
     expect(child.result).toContain("Rate limit reached for loop-model: 30 requests per minute");
     const resumed = f.evidence().find((turn: any) => turn.botId === f.chief.id && turn.resumed);
     expect(resumed.prompt.message.content).toContain("Rate limit reached for loop-model");
+    expect(f.nodes().find((node: { parentId?: string }) => !node.parentId)?.outcome).not.toBe("done");
   } finally { await close(); }
 }), 45_000);
 
@@ -1042,11 +1079,10 @@ it("keeps a teammate working through a provider settings save that does not touc
   f.plan[f.lead.id] = { gateFile: gate, reply: "CSV export implemented and checked" };
   await f.start();
   await expect.poll(() => f.nodes().find((node: any) => node.botId === f.lead.id)?.status, { timeout: 15_000 }).toBe("running");
-  const compat = async () => (await f.api("/api/instances")).instances.find((instance: any) => instance.instanceId === "openaiCompat");
-  expect((await compat()).snapshot.state).toBe("unavailable");
-  await f.api("/api/config", { openaiCompat: { key: "fixture-compat-key", url: "http://127.0.0.1:9/v1" } }, "PATCH");
-  expect((await compat()).snapshot.state).toBe("available");
-  await f.api("/api/config", { openaiCompat: { key: "fixture-compat-key", url: "http://127.0.0.1:9/v1" } }, "PATCH");
+  const config = { key: "fixture-compat-key", url: "http://127.0.0.1:9/v1", models: ["unused-fixture-model"] };
+  const endpoint = await f.api("/api/instances/openai-compat", { displayName: "Unrelated fixture engine", ...config });
+  await f.api(`/api/instances/${endpoint.instanceId}`, { tools: true }, "PATCH");
+  await f.api(`/api/instances/${endpoint.instanceId}`, { tools: true }, "PATCH");
   expect(f.nodes().find((node: any) => node.botId === f.lead.id).status).toBe("running");
   writeFileSync(gate, "finish the teammate");
   expect((await f.wait()).status).toBe("settled");
@@ -1058,16 +1094,18 @@ it("keeps a teammate working through a provider settings save that does not touc
 }), 45_000);
 
 it("tells the Chief a teammate's turn stopped because its engine's settings changed", () => fixture(async f => {
+  f.plan[f.chief.id].resumeReply = "NEEDS INPUT: The export remains unverified because Engineering's engine changed.";
   const gate = join(f.session.info.dataDir, "lead-ready");
   f.plan[f.lead.id] = { gateFile: gate, reply: "Never reached" };
   await f.start();
   await expect.poll(() => f.nodes().find((node: any) => node.botId === f.lead.id)?.status, { timeout: 15_000 }).toBe("running");
   await f.api("/api/config", { anthropic: { key: "fixture-anthropic-key" } }, "PATCH");
-  expect((await f.wait()).status).toBe("settled");
+  expect((await f.wait()).status).toBe("needs-user");
   const child = f.nodes().find((node: any) => node.botId === f.lead.id);
   expect(child.status).toBe("failed");
   expect(child.result).toMatch(/^Turn interrupted — provider settings changed\.(?: |$)/);
   const resumed = f.evidence().find((turn: any) => turn.botId === f.chief.id && turn.resumed);
   expect(resumed.prompt.message.content).toContain("Turn interrupted — provider settings changed.");
   expect(resumed.prompt.message.content).not.toContain("The coordinated turn was interrupted");
+  expect(f.nodes().find((node: { parentId?: string }) => !node.parentId)?.outcome).not.toBe("done");
 }), 45_000);

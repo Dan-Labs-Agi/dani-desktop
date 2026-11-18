@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ENGINE_KINDS, engineCapabilities } from "./capabilities.ts";
-import { assignmentLevel, type LevelInput } from "./level.ts";
+import { assignmentLevel, recoveryLevel, type LevelInput } from "./level.ts";
 import type { Level, LevelSource } from "./types.ts";
 
 const input = (over: Partial<LevelInput>): LevelInput =>
@@ -90,5 +90,23 @@ describe("assignmentLevel", () => {
     const frozen = Object.freeze(input({ own: "edits", chief: "full", driverKind: "geminiAgent" }));
     expect(assignmentLevel(frozen)).toEqual(assignmentLevel(frozen));
     expect(frozen).toEqual(input({ own: "edits", chief: "full", driverKind: "geminiAgent" }));
+  });
+});
+
+describe("original-worker recovery ceiling", () => {
+  it("intersects original and current worker authority without using the reviewer's level", () => {
+    for (const original of TRAVELS) {
+      for (const current of TRAVELS) {
+        expect(recoveryLevel(original, current, "claudeAgent")).toBe(TRAVELS[Math.min(TRAVELS.indexOf(original), TRAVELS.indexOf(current))]);
+      }
+    }
+  });
+
+  it("retains native engine caps and never reconstructs provider-specific Custom rules from a label", () => {
+    expect(recoveryLevel("edits", "full", "hermesAgent")).toBe("ask");
+    expect(recoveryLevel("auto", "full", "antigravityAgent")).toBe("edits");
+    expect(recoveryLevel("custom", "full", "codex")).toBe("ask");
+    expect(recoveryLevel("custom", "custom", "codex")).toBe("ask");
+    expect(recoveryLevel("full", "custom", "codex")).toBe("ask");
   });
 });

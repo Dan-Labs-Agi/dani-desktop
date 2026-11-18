@@ -28,6 +28,38 @@ describe("SessionControl", () => {
     expect(events).toEqual(["navigation committed", "next action"]);
   });
 
+  it("reports agent availability only after queued and tracked work drains, never after close", async () => {
+    const control = new SessionControl("agent");
+    expect(control.agentAvailable("agent")).toBe(true);
+    expect(control.agentAvailable("other")).toBe(false);
+    const finish = withResolvers<void>();
+    const committed = withResolvers<void>();
+    const action = control.agent("agent", async () => {
+      control.track(committed.promise);
+      await finish.promise;
+    });
+    expect(control.agentAvailable("agent")).toBe(false);
+    finish.resolve();
+    await action;
+    expect(control.agentAvailable("agent")).toBe(false);
+    const after = control.system(async () => {});
+    expect(control.agentAvailable("agent")).toBe(false);
+    committed.resolve();
+    await after;
+    expect(control.agentAvailable("agent")).toBe(true);
+    await control.take("person");
+    expect(control.agentAvailable("agent")).toBe(false);
+    const releaseInput = withResolvers<void>();
+    const releasing = control.release("person", () => releaseInput.promise);
+    expect(control.controller).toBeNull();
+    expect(control.agentAvailable("agent")).toBe(false);
+    releaseInput.resolve();
+    await releasing;
+    expect(control.agentAvailable("agent")).toBe(true);
+    await control.close();
+    expect(control.agentAvailable("agent")).toBe(false);
+  });
+
   it("handles tracked navigation failures without poisoning the next action", async () => {
     const control = new SessionControl("agent");
     const committed = withResolvers<void>();

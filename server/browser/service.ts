@@ -11,12 +11,13 @@ import { join } from "node:path";
 
 import { scrubHeldSecrets } from "../../shared/redact.ts";
 import { BrowserLanes } from "../browser-lane.ts";
-import { BROWSER_CALL_DEFAULTS, type BrowserTiming } from "../browser-runtime.ts";
+import { BROWSER_CALL_DEFAULTS, BrowserAbortError, type BrowserTiming } from "../browser-runtime.ts";
 import { SecretHolds, type SecretHold } from "../browser-secret-hold.ts";
 import { scrubBrowserResult } from "../browser-tool-shape.ts";
 import type { FillLoginDeps } from "../login-fill.ts";
 import type { Backend, OpenedBrowser } from "./backends.ts";
 import type { CdpBrowser } from "./cdp/browser.ts";
+import type { DispatchScope, SendOptions } from "./cdp/connection.ts";
 import type { Download } from "./cdp/downloads.ts";
 import { isUnanswered } from "./cdp/errors.ts";
 import type { CdpPage } from "./cdp/page.ts";
@@ -38,6 +39,7 @@ export interface BrowserTarget {
 
 export const LANE_BUSY = "Your previous browser call is still running; wait for it to finish, then call again.";
 export const BROWSER_STUCK = `The browser engine is stuck. Press Restart in the Browser panel, or call ${RESTART_TOOL}, before using browser tools again.`;
+const BROWSER_CLEANUP_UNPROVED = "Browser cleanup was not confirmed. Restart this browser connection before continuing.";
 const RESTART_COST = "a restart closes every tab and loses page state such as form input";
 const PROBE_MS = 5_000;
 const CAPACITY_WAIT_MS = 30_000;
@@ -75,6 +77,7 @@ type Reopened = { kind: "idle" | "restart" | "crash"; pages: string[] } | null;
 export class ProfileState {
   readonly key: string;
   readonly session: string;
+  readonly sessions = new Set<string>();
   readonly tabs = new TabRegistry();
   readonly control: ProfileControl<Tab>;
   readonly hub: ViewerHub;
@@ -85,6 +88,8 @@ export class ProfileState {
   /** The Chrome the pending start is opening; a stop waits for it. */
   opening: Promise<Running> | null = null;
   stopping: Promise<void> | null = null;
+  /** Failed cleanup retains the backend handle; an attached backend owns only its connection, never the person's Chrome. */
+  readonly retiring = new Set<OpenedBrowser>();
   /** Bumped by every stop: a start begun before it closes what it opened. */
   epoch = 0;
   lastUsed = Date.now();
@@ -96,6 +101,7 @@ export class ProfileState {
   constructor(target: BrowserTarget, dataDir: string, hub: (profile: ProfileState) => ViewerHub, takeoverMs: number) {
     this.key = target.key;
     this.session = target.session;
+    this.sessions.add(target.session);
     this.control = new ProfileControl<Tab>(() => this.tabs.list(), { takeoverMs });
     this.downloadDir = join(browserRoot(dataDir), "downloads", profileHash(workspaceId(dataDir), target.key));
     this.hub = hub(this);
@@ -136,6 +142,58 @@ function reopenedNote(reopened: NonNullable<Reopened>, temporary: boolean): stri
   return `Your browser sat unused and was closed to free memory; this call opened it again.${temporary ? " It is a temporary browser, so its sign-ins are gone too." : pages}${refs}`;
 }
 
+const NATIVE_EFFECT_METHODS: Readonly<Record<string, true | undefined>> = {
+  "Page.navigate": true,
+  "Page.navigateToHistoryEntry": true,
+  "Page.reload": true,
+  "Page.handleJavaScriptDialog": true,
+  "Page.close": true,
+  "DOM.focus": true,
+  "DOM.setFileInputFiles": true,
+  "Target.createTarget": true,
+  "Target.closeTarget": true,
+  "Browser.close": true,
+};
+
+class NativeCall implements DispatchScope {
+  accepted = false;
+  dispatchFailure: unknown;
+  readonly pending = new Set<Promise<unknown>>();
+  readonly signal: AbortSignal | undefined;
+  readonly authorize: (() => void) | undefined;
+
+  constructor(signal: AbortSignal | undefined, authorize: (() => void) | undefined) {
+    this.signal = signal;
+    this.authorize = authorize;
+  }
+
+  abortError(): BrowserAbortError {
+    const error = new BrowserAbortError();
+    if (this.accepted) error.message = "Browser call cancelled. An already sent action may have taken effect; its outcome is uncertain. Do not automatically replay it. Native CDP cannot prove that page effects stopped. This browser stays blocked until pending work drains and it is explicitly restarted.";
+    return error;
+  }
+
+  check(): void {
+    if (this.signal?.aborted) throw this.abortError();
+  }
+
+  beforeSend(method: string, options: SendOptions): void {
+    this.check();
+    try { this.authorize?.(); } catch (error) { this.dispatchFailure = error; throw error; }
+    this.check();
+    if (options.effect || method.startsWith("Input.") || NATIVE_EFFECT_METHODS[method]) this.accepted = true;
+  }
+
+  track(work: Promise<unknown>): void {
+    this.pending.add(work);
+    void work.finally(() => this.pending.delete(work)).catch(() => undefined);
+  }
+
+  async drain(): Promise<void> {
+    while (this.pending.size) await Promise.allSettled(this.pending);
+  }
+}
+
 export class BrowserService {
   readonly #options: Required<Pick<BrowserServiceOptions, "callBudgetMs" | "laneWaitMs" | "takeoverMs" | "capacityWaitMs">> & BrowserServiceOptions;
   readonly #profiles = new Map<string, ProfileState>();
@@ -157,6 +215,8 @@ export class BrowserService {
     if (!profile) {
       profile = new ProfileState(target, this.#options.dataDir, (state) => new ViewerHub(this.#hubHost(state)), this.#options.takeoverMs);
       this.#profiles.set(target.key, profile);
+    } else {
+      profile.sessions.add(target.session);
     }
     return profile;
   }
@@ -174,6 +234,7 @@ export class BrowserService {
 
   /** The profile's running browser, started if it is not. */
   running(profile: ProfileState): Promise<Running> {
+    if (profile.retiring.size && !profile.stopping) return Promise.reject(new Error(BROWSER_CLEANUP_UNPROVED));
     if (profile.run && !profile.run.closing && profile.run.browser.connected) return Promise.resolve(profile.run);
     if (profile.starting) return profile.starting;
     const epoch = profile.epoch;
@@ -246,7 +307,7 @@ export class BrowserService {
     } catch (error) {
       run.closing = true;
       for (const off of run.offs) off();
-      await opened.close().catch(() => undefined);
+      if (!await this.#retire(profile, opened)) throw new Error(BROWSER_CLEANUP_UNPROVED);
       throw error;
     }
     profile.run = run;
@@ -279,12 +340,27 @@ export class BrowserService {
     profile.hub.stopped("crashed");
   }
 
+  async #retire(profile: ProfileState, opened: OpenedBrowser): Promise<boolean> {
+    profile.retiring.add(opened);
+    try {
+      await Promise.race([opened.exited, opened.close()]);
+      profile.retiring.delete(opened);
+      return true;
+    } catch {
+      profile.control.uncertain = true;
+      profile.control.lostCall = null;
+      profile.control.changed();
+      return false;
+    }
+  }
+
   /** Graceful: Chrome's own quit, so its next start reopens the tabs and keeps session cookies. */
   async #stop(profile: ProfileState, reopened: Reopened, { erase = false }: { erase?: boolean } = {}): Promise<void> {
     if (profile.stopping) return profile.stopping;
     profile.epoch++;
     const run = profile.run;
     const opening = profile.opening;
+    const retained = profile.retiring.size ? [...profile.retiring] : null;
     const stopping = (async () => {
       profile.control.closing = true;
       profile.control.changed();
@@ -293,17 +369,26 @@ export class BrowserService {
           run.closing = true;
           for (const off of run.offs) off();
           profile.hub.stopped(reopened?.kind === "idle" ? "asleep" : "closed");
-          await run.opened.close().catch(() => undefined);
+          await this.#retire(profile, run.opened);
+        }
+        if (retained) {
+          for (const opened of retained) if (opened !== run?.opened) await this.#retire(profile, opened);
         }
         await opening?.catch(() => undefined);
       } finally {
         if (profile.run === run) profile.run = null;
         profile.tabs.clear();
-        if (reopened) profile.reopened = reopened;
-        if (profile.temporary || erase) this.#erase(profile);
-        profile.control.closing = false;
-        profile.control.settle();
+        if (profile.retiring.size === 0) {
+          if (reopened) profile.reopened = reopened;
+          if (profile.temporary || erase) this.#erase(profile);
+          profile.control.closing = false;
+          profile.control.settle();
+        } else {
+          profile.control.closing = false;
+          profile.control.changed();
+        }
       }
+      if (profile.retiring.size) throw new Error(BROWSER_CLEANUP_UNPROVED);
     })().finally(() => { if (profile.stopping === stopping) profile.stopping = null; });
     profile.stopping = stopping;
     return stopping;
@@ -329,7 +414,7 @@ export class BrowserService {
   async #capacity(profile: ProfileState): Promise<void> {
     const until = Date.now() + this.#options.capacityWaitMs;
     for (;;) {
-      const others = this.profiles().filter((other) => other !== profile && (other.run || other.starting));
+      const others = this.profiles().filter((other) => other !== profile && (other.run || other.starting || other.retiring.size));
       if (others.length < this.#options.maxRunning) return;
       const candidate = others.filter((other) => other.hub.size === 0 && this.#unused(other, 0)).sort((a, b) => a.lastUsed - b.lastUsed)[0];
       if (candidate) {
@@ -390,23 +475,56 @@ export class BrowserService {
 
   // Bot calls.
 
-  async agentRpc(target: BrowserTarget, method: "tools/list" | "tools/call", params: unknown, beforeDispatch?: () => void): Promise<unknown> {
+  async agentRpc(target: BrowserTarget, method: "tools/list" | "tools/call", params: unknown, beforeDispatch?: () => void, signal?: AbortSignal): Promise<unknown> {
+    const cancellation = new NativeCall(signal, beforeDispatch);
+    cancellation.check();
     if (method === "tools/list") return { tools: TOOL_LIST.map((tool) => ({ ...tool })) };
     if (method !== "tools/call") throw new Error("Unsupported browser method.");
     const profile = this.profile(target);
-    for (let stopping = profile.stopping; stopping; stopping = profile.stopping) await stopping;
     profile.calls++;
     const name = toolNameOf(params) ?? "browser";
     const deadline = Date.now() + this.#options.callBudgetMs;
     const started = performance.now();
     let result: ToolResult | null;
+    let work: Promise<ToolResult | null> | undefined;
+    let epoch = profile.epoch;
+    let rejectAbort!: (error: Error) => void;
+    const aborted = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+    const abort = () => {
+      if (cancellation.accepted && profile.epoch === epoch) {
+        profile.control.uncertain = true;
+        profile.control.lostCall = null;
+        profile.control.changed();
+      }
+      rejectAbort(cancellation.abortError());
+    };
+    signal?.addEventListener("abort", abort, { once: true });
     try {
-      const work = () => this.#call(profile, params, deadline, beforeDispatch);
-      const call = name === RESTART_TOOL || profile.control.uncertain ? work() : this.#lanes.run(profile.key, work, this.#options.laneWaitMs);
-      result = await this.#withinBudget(profile, name, call, deadline);
+      const request = async () => {
+        for (let stopping = profile.stopping; stopping; stopping = profile.stopping) await stopping;
+        cancellation.check();
+        epoch = profile.epoch;
+        return this.#call(profile, params, deadline, cancellation);
+      };
+      work = (name === RESTART_TOOL || profile.control.uncertain ? request() : this.#lanes.run(profile.key, request, this.#options.laneWaitMs))
+        .finally(() => cancellation.drain());
+      if (signal?.aborted) abort();
+      result = await Promise.race([this.#withinBudget(profile, name, work, deadline, cancellation), aborted]);
     } finally {
-      profile.calls--;
-      profile.lastUsed = Date.now();
+      const release = () => {
+        if (signal && cancellation.accepted && profile.control.uncertain && profile.epoch === epoch && !signal.aborted) {
+          const recovered = () => {
+            if (profile.control.uncertain && profile.epoch === epoch && !signal.aborted) return;
+            signal.removeEventListener("abort", abort);
+            off();
+          };
+          const off = profile.control.onChange(recovered);
+        } else signal?.removeEventListener("abort", abort);
+        profile.calls--;
+        profile.lastUsed = Date.now();
+      };
+      if (work) void work.finally(release).catch(() => undefined);
+      else release();
     }
     const final = result ?? errorResult(LANE_BUSY);
     this.#options.onTiming?.({ session: profile.session, tool: name, outcome: final.isError ? "error" : "ok", totalMs: performance.now() - started, inFlight: profile.control.agents, chars: final.content.reduce((sum, part) => sum + (part.type === "text" ? part.text.length : 0), 0) });
@@ -419,30 +537,36 @@ export class BrowserService {
   }
 
   /** Work that outlasts the budget goes on, so its outcome is unknown: the call counts as lost until a probe answers. */
-  async #withinBudget(profile: ProfileState, call: string, work: Promise<ToolResult | null>, deadline: number): Promise<ToolResult | null> {
+  async #withinBudget(profile: ProfileState, call: string, work: Promise<ToolResult | null>, deadline: number, cancellation: NativeCall): Promise<ToolResult | null> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const late = new Promise<"late">((resolve) => { timer = setTimeout(() => resolve("late"), Math.max(0, deadline - Date.now())); timer.unref?.(); });
     let outcome: ToolResult | null | "late";
     try { outcome = await Promise.race([work, late]); } finally { clearTimeout(timer); }
     if (outcome !== "late") return outcome;
     work.catch(() => undefined);
+    cancellation.check();
     profile.control.latch(call);
     return profile.control.lostCall === null ? errorResult(BROWSER_STUCK) : lostCallResult(call);
   }
 
-  async #call(profile: ProfileState, params: unknown, deadline: number, beforeDispatch?: () => void): Promise<ToolResult> {
+  async #call(profile: ProfileState, params: unknown, deadline: number, cancellation: NativeCall): Promise<ToolResult> {
+    cancellation.check();
     const name = toolNameOf(params);
     const control = profile.control;
     if (name === RESTART_TOOL) {
-      beforeDispatch?.();
-      await this.#agentRestart(profile);
+      cancellation.authorize?.();
+      cancellation.check();
+      const connection = profile.run?.browser.connection;
+      if (connection) await connection.withDispatchScope(cancellation, () => this.#agentRestart(profile));
+      else await this.#agentRestart(profile);
       return textResult("Browser restarted. Open pages were closed back to one blank tab; sign-ins are kept. Open the page you need again and check whether the interrupted action already happened before repeating it.");
     }
     if (control.uncertain) {
       if (control.owner !== null) throw new Error(BROWSER_CONTROL_REFUSAL);
       const lost = control.lostCall;
       if (lost === null) return errorResult(BROWSER_STUCK);
-      beforeDispatch?.();
+      cancellation.authorize?.();
+      cancellation.check();
       const url = await this.#probe(profile);
       return url === null ? stillBusyResult(lost) : recoveredResult(lost, url);
     }
@@ -454,14 +578,18 @@ export class BrowserService {
     } catch (error) {
       return errorResult(`The browser could not start: ${error instanceof Error ? error.message : String(error)}`);
     }
-    beforeDispatch?.();
+    cancellation.check();
+    cancellation.authorize?.();
+    cancellation.check();
     if (control.owner !== null) throw new Error(BROWSER_CONTROL_REFUSAL);
     control.call = parsed.call.name;
     try {
-      const result = await executeTool(this.#context(profile, run, deadline), parsed.call);
-      beforeDispatch?.();
+      const result = await run.browser.connection.withDispatchScope(cancellation, () => executeTool(this.#context(profile, run, deadline), parsed.call));
+      cancellation.check();
       return shapeResult(result, parsed.call.name);
     } catch (error) {
+      if (cancellation.signal?.aborted) throw cancellation.abortError();
+      if (cancellation.dispatchFailure !== undefined && error === cancellation.dispatchFailure) throw error;
       if (isUnanswered(error)) {
         control.latch(parsed.call.name);
         return lostCallResult(parsed.call.name);
@@ -534,16 +662,19 @@ export class BrowserService {
   /** A read that answers proves the call that did not has ended; it is never replayed. */
   async #probe(profile: ProfileState): Promise<string | null> {
     const control = profile.control;
-    if (control.agents > 0) return null;
+    if (control.lostCall === null || control.agents > 0 || profile.calls > 1) return null;
     const run = profile.run;
+    const epoch = profile.epoch;
     if (!run) {
       control.settle();
       return "about:blank";
     }
     try {
       await run.browser.connection.root.send("Target.getTargets", {}, { timeoutMs: PROBE_MS });
+      if (control.lostCall === null || profile.epoch !== epoch) return null;
       const tab = profile.active();
       if (tab) await tab.page.session.send("Page.getNavigationHistory", {}, { timeoutMs: PROBE_MS });
+      if (control.lostCall === null || profile.epoch !== epoch) return null;
       control.settle();
       return tab ? tab.page.url().slice(0, 500) : "about:blank";
     } catch {
@@ -554,7 +685,7 @@ export class BrowserService {
   async #agentRestart(profile: ProfileState): Promise<void> {
     const control = profile.control;
     if (control.owner !== null) throw new Error(BROWSER_CONTROL_REFUSAL);
-    if (control.closing || control.releasing || control.agents > 0 || control.humans > 0) throw new Error("The browser is busy. Wait for current work to finish before restarting.");
+    if (profile.calls > 1 || control.closing || control.releasing || control.agents > 0 || control.humans > 0) throw new Error("The browser is busy. Wait for current work to finish before restarting.");
     profile.fresh = true;
     await this.#stop(profile, null);
     profile.reopened = null;
@@ -625,6 +756,17 @@ export class BrowserService {
     return this.#bySession(session)?.control.owner ?? null;
   }
 
+  /** Pure admission metadata across current and historical profile bindings; no page reads or recovery probes. */
+  agentAvailable(session: string, key?: string): boolean {
+    for (const profile of this.#profiles.values()) {
+      if (!profile.sessions.has(session) && profile.key !== key) continue;
+      if (profile.calls !== 0 || profile.starting || profile.opening || profile.stopping ||
+          profile.retiring.size || profile.run?.closing || (profile.run && !profile.run.browser.connected) ||
+          this.#lanes.held(profile.key) || !profile.control.agentAvailable()) return false;
+    }
+    return true;
+  }
+
   /** Whether the page's open picker was offered to `owner`'s view as `chooserId`: an upload for any other is refused unread. */
   fileChooserOffered(session: string, owner: string, chooserId: string): boolean {
     return this.#bySession(session)?.hub.fileChooserOffered(owner, chooserId) ?? false;
@@ -659,7 +801,7 @@ export class BrowserService {
     const profile = this.#bySession(session);
     if (!profile) return;
     const control = profile.control;
-    if (control.closing || control.releasing || control.agents > 0 || control.humans > 0) throw new Error("The browser is busy. Wait for current work to finish before restarting.");
+    if (profile.calls > 0 || control.closing || control.releasing || control.agents > 0 || control.humans > 0) throw new Error("The browser is busy. Wait for current work to finish before restarting.");
     if (control.owner !== null && control.owner !== owner) throw new Error("Another person controls this browser.");
     profile.fresh = true;
     await this.#stop(profile, { kind: "restart", pages: [] });
@@ -681,10 +823,14 @@ export class BrowserService {
       running: async () => { await this.running(profile); },
       used: () => { profile.lastUsed = Date.now(); },
       pageLimit: () => (profile.run && !profile.run.closing ? profile.run.opened.pageLimit ?? null : null),
-      take: async (owner: string): Promise<TakeResult> => {
+      take: async (owner: string, current?: () => boolean): Promise<TakeResult> => {
         await this.running(profile);
+        if (current && !current()) throw new Error("Browser control request was cancelled.");
         const taken = await profile.control.take(owner);
-        for (const tab of profile.tabs.list()) await tab.page.releaseInput().catch(() => undefined);
+        for (const tab of profile.tabs.list()) {
+          if (current && !current()) return taken;
+          await tab.page.releaseInput().catch(() => undefined);
+        }
         return taken;
       },
       release: (owner: string, releaseInput: (tab: Tab) => Promise<boolean>) => profile.control.release(owner, releaseInput),

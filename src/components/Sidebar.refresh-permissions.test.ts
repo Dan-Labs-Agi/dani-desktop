@@ -21,7 +21,8 @@ vi.mock("@/lib/interface-mode", async (original) => ({
 }));
 
 const { initialState } = await import("@/state/store");
-const { BotThreadList, botRowProps } = await import("./Sidebar");
+const { BotThreadList } = await import("./Sidebar");
+import { botRowProps } from "@/lib/sidebar-selection";
 
 const bot = (fields: Partial<Bot>): Bot => ({
   id: "pepper", name: "Pepper", threadId: "current", title: "", description: "", color: "green", unread: false,

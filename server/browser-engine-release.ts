@@ -1,6 +1,6 @@
-// Digests computed from the official GitHub assets on 2026-09-08, except the versioned Windows vendor build; update pins
-// only through a reviewed native end-to-end run. The Dockerfile keeps the official Linux version.
-export const AGENT_BROWSER_VERSION = "0.37.0";
+// Official release executables hashed against GitHub's asset metadata on 2026-11-12.
+// Keep Docker's version aligned and qualify packaged binaries on each native target.
+export const AGENT_BROWSER_VERSION = "0.41.2";
 
 export interface AgentBrowserReleaseAsset {
   /** `<platform>-<arch>`; Linux adds `-musl` on Alpine-style systems. */
@@ -17,27 +17,27 @@ export interface AgentBrowserReleaseAsset {
 const RELEASES = new Map<string, AgentBrowserReleaseAsset>([
   [
     "darwin-arm64",
-    { target: "darwin-arm64", asset: "agent-browser-darwin-arm64", sha256: "da5a2b4ef7be8ba279b1258c542c33877f480b1951d0d94de607fc1528edd380", bytes: 12429360 },
+    { target: "darwin-arm64", asset: "agent-browser-darwin-arm64", sha256: "19680f06cf87d0095c318a2e80bea6b71523d95d3b651cd18d81885cd182477a", bytes: 16068000 },
   ],
   [
     "darwin-x64",
-    { target: "darwin-x64", asset: "agent-browser-darwin-x64", sha256: "f402c96350ffd2adc68d0e5e4d83aa49cf7735fef29882a8866be36cc2fc67e9", bytes: 13588296 },
+    { target: "darwin-x64", asset: "agent-browser-darwin-x64", sha256: "fc55608c2222650e6e0d0154f9edebd203b63bf853b85d22240bfbddbb006ea1", bytes: 17761648 },
   ],
   [
     "linux-arm64",
-    { target: "linux-arm64", asset: "agent-browser-linux-arm64", sha256: "0315a8c4f7bf167cc5fd5eeaea79009b0e6b5d2ae8b3057bf6f96be978483426", bytes: 12507840 },
+    { target: "linux-arm64", asset: "agent-browser-linux-arm64", sha256: "00d291f45e1c4d527b3aa08c70c54c7c3030fde0794f8d4575aaa3ca1680f728", bytes: 16108464 },
   ],
   [
     "linux-musl-arm64",
-    { target: "linux-musl-arm64", asset: "agent-browser-linux-musl-arm64", sha256: "db67c0e84e0668c052c2cbdca325c57f896e309c3723755dcdd65b700f8a2b52", bytes: 12369352 },
+    { target: "linux-musl-arm64", asset: "agent-browser-linux-musl-arm64", sha256: "730a5168153e27ad1243ebe960157e69de0f24531fbbac9a040856a491bf491f", bytes: 15924440 },
   ],
   [
     "linux-musl-x64",
-    { target: "linux-musl-x64", asset: "agent-browser-linux-musl-x64", sha256: "5cff3bc7b2486867aba2901f92c9ce6029bd2a37951630d9feec1c5b3fee402e", bytes: 14092888 },
+    { target: "linux-musl-x64", asset: "agent-browser-linux-musl-x64", sha256: "5d452d57772330fe4cef9b7aeb5e7137890dde20bbb65e82b990e0bc0b35d9cd", bytes: 18434688 },
   ],
   [
     "linux-x64",
-    { target: "linux-x64", asset: "agent-browser-linux-x64", sha256: "78e0c5a14a7fa1f3d1ae2acdbdcc94a047b435b998a8c505fcc49d7fa4935a49", bytes: 14253776 },
+    { target: "linux-x64", asset: "agent-browser-linux-x64", sha256: "c4351f3802ffa5254d8c69f20a52e2fcf56925c6016fcf4203db25a07d811379", bytes: 18626776 },
   ],
   [
     "win32-x64",

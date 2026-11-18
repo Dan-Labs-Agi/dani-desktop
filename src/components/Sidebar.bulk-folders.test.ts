@@ -21,7 +21,8 @@ vi.mock("./BulkSelectBar", async (original) => {
 vi.mock("./DesktopCapabilities", () => ({ useDesktopCapabilities: () => ({}) }));
 vi.mock("@/lib/interface-mode", async (original) => ({ ...await original<typeof import("@/lib/interface-mode")>(), useAdvancedMode: () => true }));
 
-const { BotThreadList, botRowProps } = await import("./Sidebar");
+const { BotThreadList } = await import("./Sidebar");
+import { botRowProps } from "@/lib/sidebar-selection";
 
 const bot: Bot = {
   id: "dani", threadId: "loose", name: "Dani", title: "", description: "", notifications: true,

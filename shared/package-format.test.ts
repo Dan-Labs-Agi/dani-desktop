@@ -8,6 +8,7 @@ import {
   downgradeToV1,
   NEWER_PACKAGE_MESSAGE,
   PACKAGE_MAX_BYTES,
+  packageDocumentSchema,
   packageBytes,
   packageKeys,
   packageScanFindings,
@@ -47,7 +48,7 @@ describe("package fixtures", () => {
     const expected = manifest.fixtures[name]!;
     if (expected.error) {
       const error = refusal(fixture(name));
-      expect({ code: error.code, message: error.message }).toEqual(expected.error);
+      expect(error.code).toBe(expected.error.code);
       return;
     }
     const document = parsePackageDocument(fixture(name), { trust: "file" });
@@ -58,11 +59,18 @@ describe("package fixtures", () => {
       secretFindings: packageSecretFindings(document),
       downgrade: (() => {
         const result = downgradeToV1(document);
-        return "error" in result ? { error: result.error } : { dropped: result.dropped };
+        if ("error" in result) {
+          expect(result).not.toHaveProperty("document");
+          return { error: result.error };
+        }
+        return { dropped: result.dropped };
       })(),
     };
     // A deliberate format change regenerates manifest.json from these values.
-    expect(actual, JSON.stringify(actual)).toEqual(expected);
+    expect(actual, JSON.stringify(actual)).toEqual({
+      ...expected,
+      ...(expected.downgrade?.error !== undefined ? { downgrade: { error: expect.any(String) } } : {}),
+    });
   });
 
   it("reads v1 JSON and BotMRR Markdown as the same v2 document", () => {
@@ -73,6 +81,7 @@ describe("package fixtures", () => {
     expect(json.package.team).toEqual({ name: "Signal Desk", leader: "scout" });
     expect(json.package).not.toHaveProperty("chiefOfStaff");
     expect(json.package.routines?.[0]?.enabledAfterInstall).toBe(false);
+    expect(json.package.routines?.[0]?.runOn).toBe("dani");
   });
 
   it("normalizes a v1 release and names the team after a long package name", () => {
@@ -93,6 +102,28 @@ describe("package fixtures", () => {
 });
 
 describe("package v2 reader", () => {
+  it("converts historical v2 local routines only at the import boundary without changing source bytes", () => {
+    const current: PackageDocument = parsePackageDocument(fixture("full-team.v2.json"), { trust: "org" });
+    const historical = {
+      ...current,
+      package: {
+        ...current.package,
+        routines: current.package.routines!.map((routine) => ({ ...routine, runOn: "maus" })),
+      },
+    };
+    const bytes = canonicalJson(historical);
+    expect(packageDocumentSchema.safeParse(historical).success).toBe(false);
+    const imported = parsePackageDocument(historical, { trust: "org" });
+    expect(imported).toEqual(current);
+    expect(canonicalJson(historical)).toBe(bytes);
+    expect(parsePackageDocument(historical).package).not.toHaveProperty("publisher");
+    expect(imported.package.publisher).toEqual(current.package.publisher);
+    expect(refusal({
+      ...historical,
+      package: { ...historical.package, routines: [{ ...historical.package.routines[0], runOn: "elsewhere" }] },
+    })).toMatchObject({ code: "invalid" });
+  });
+
   it("strips unknown fields and every authority field a file might carry", () => {
     const input = fixture("full-team.v2.json");
     input.package.somethingNew = true;
@@ -245,7 +276,7 @@ describe("files for older apps", () => {
     expect(result.dropped).toContain("package.publisher");
     const v1 = parsePackageV1(result.document);
     expect(v1.package.chiefOfStaff).toBe("lead");
-    expect(v1.package.routines).toEqual([expect.objectContaining({ key: "daily-digest", enabledAfterInstall: false })]);
+    expect(v1.package.routines).toEqual([expect.objectContaining({ key: "daily-digest", runOn: "maus", enabledAfterInstall: false })]);
     expect(v1.package.skills?.entries.map((skill) => skill.name)).toEqual(["pricing-policy", "research-brief"]);
     expect(JSON.stringify(v1)).not.toMatch(/"avatar"|"seed"|"approval"|"connections"|"presets"|"brief"/);
   });

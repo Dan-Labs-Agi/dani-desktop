@@ -197,7 +197,7 @@ export function createBotPackageExport(input: {
       name: routine.name,
       agent,
       prompt: routine.prompt,
-      runOn: routine.runOn,
+      runOn: routine.runOn === "dani" ? "maus" as const : routine.runOn,
       schedule: portableSchedule(routine.schedule),
       durationMinutes: routine.durationMinutes,
       ...(routine.timeoutMinutes === undefined ? {} : { timeoutMinutes: routine.timeoutMinutes }),

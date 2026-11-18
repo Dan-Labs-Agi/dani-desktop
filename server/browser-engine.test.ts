@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +24,7 @@ import {
   browserSessionId,
   clearBrowserSessionState,
   closeBrowserSession,
+  interruptBrowserSession,
   ensureChrome,
   inRunningBrowser,
   installAgentBrowserBinary,
@@ -318,7 +319,8 @@ describe("deleting one browser session's saved logins", () => {
 
 describe("a browser daemon that will not close (#2603)", () => {
   it.each([
-    [{ AGENT_BROWSER_SOCKET_DIR: "/s", XDG_RUNTIME_DIR: "/x", AGENT_BROWSER_NAMESPACE: "ns" }, "/s/work.pid"],
+    [{ AGENT_BROWSER_SOCKET_DIR: "/s", XDG_RUNTIME_DIR: "/x", AGENT_BROWSER_NAMESPACE: "ns" }, "/s/namespaces/ns/run/work.pid"],
+    [{ AGENT_BROWSER_SOCKET_DIR: "/s", XDG_RUNTIME_DIR: "/x" }, "/s/work.pid"],
     [{ XDG_RUNTIME_DIR: "/x" }, "/x/agent-browser/work.pid"],
     [{ XDG_RUNTIME_DIR: "/x", AGENT_BROWSER_NAMESPACE: "ns" }, "/x/agent-browser/namespaces/ns/run/work.pid"],
     [{ AGENT_BROWSER_NAMESPACE: "ns" }, "/h/.agent-browser/namespaces/ns/run/work.pid"],
@@ -326,6 +328,7 @@ describe("a browser daemon that will not close (#2603)", () => {
   ])("finds the daemon's pid file where agent-browser writes it (%j)", (extra, expected) => {
     if (!posix) return;
     expect(browserDaemonFile({ HOME: "/h", USERPROFILE: "/h", AGENT_BROWSER_SESSION: "work", ...extra }, ".pid")).toBe(expected);
+    expect(browserDaemonFile({ HOME: "/h", USERPROFILE: "/h", AGENT_BROWSER_SESSION: "work", ...extra }, ".stream")).toBe(expected.replace(/\.pid$/, ".stream"));
   });
 
   // A symlink to node stands in for the agent-browser binary: `ps` shows the
@@ -367,12 +370,16 @@ describe("a browser daemon that will not close (#2603)", () => {
     scratch.push(home);
     const binaryPath = join(home, "agent-browser");
     symlinkSync(process.execPath, binaryPath);
-    const env = { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", AGENT_BROWSER_SESSION: "work" };
+    const env = {
+      ...(process.env.XDG_RUNTIME_DIR ? { XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR } : {}),
+      HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", AGENT_BROWSER_SESSION: "work",
+      OMB_BROWSER_PROCESS_SCOPE: createHash("sha256").update(home).digest("hex"),
+    };
     mkdirSync(join(home, ".agent-browser"), { recursive: true });
     const files = { BROWSER_PID: join(home, "browser.pid"), HELPER_PID: join(home, "helper.pid"), PROFILE_DIR: join(home, `agent-browser-chrome-${randomUUID()}`) };
     mkdirSync(join(files.PROFILE_DIR, "Default"), { recursive: true });
     // What agent-browser hands each daemon, and its Chrome inherits.
-    const daemonEnv = { ...process.env, ...files, AGENT_BROWSER_DAEMON: "1", AGENT_BROWSER_SESSION: "work" };
+    const daemonEnv = { ...process.env, ...env, ...files, AGENT_BROWSER_DAEMON: "1" };
     let daemon: number;
     if (options.via === "unreaped") {
       // No init: the daemon's parent never collects it, so once killed it stays a zombie.
@@ -405,6 +412,74 @@ describe("a browser daemon that will not close (#2603)", () => {
     }) as unknown as typeof spawn);
     return { actual, binaryPath, env, pids, profile: files.PROFILE_DIR, lateHelper: () => Number(readFileSync(`${files.HELPER_PID}.late`, "utf8")) };
   }
+
+  it.skipIf(!posix)("interrupts a verified daemon and its detached Chrome without sending a queued close command", async () => {
+    const { actual, binaryPath, env, pids } = await engine({ close: () => { throw new Error("close must not be queued"); } });
+    const saved = join(env.HOME, "persistent-profile", "Default", "Cookies");
+    mkdirSync(join(env.HOME, "persistent-profile", "Default"), { recursive: true });
+    writeFileSync(saved, "saved sign-ins");
+    vi.mocked(spawn).mockClear();
+    expect(await interruptBrowserSession(binaryPath, env)).toBe(true);
+    for (const pid of Object.values(pids)) expect(gone(actual, pid), String(pid)).toBe(true);
+    expect(vi.mocked(spawn).mock.calls.some((call) => call[1]?.[0] === "close" || call[1]?.[0] === "session")).toBe(false);
+    expect(readFileSync(saved, "utf8")).toBe("saved sign-ins");
+    // Proof remains valid after daemon exit, including a stale pid file.
+    expect(await interruptBrowserSession(binaryPath, env)).toBe(true);
+  });
+
+  it.skipIf(!posix)("finds and stops an owned launch even before its daemon pid file is present", async () => {
+    const { actual, binaryPath, env, pids } = await engine({ close: () => 1 });
+    unlinkSync(browserDaemonFile(env, ".pid"));
+    expect(await interruptBrowserSession(binaryPath, env)).toBe(true);
+    for (const pid of Object.values(pids)) expect(gone(actual, pid), String(pid)).toBe(true);
+  });
+
+  it.skipIf(!posix)("does not interrupt another session named by a stale pid file", async () => {
+    const { actual, binaryPath, env, pids } = await engine({ close: () => 1 });
+    const other = actual.spawn(binaryPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true, stdio: "ignore", env: { PATH: process.env.PATH, AGENT_BROWSER_DAEMON: "1", AGENT_BROWSER_SESSION: "other" },
+    });
+    groups.push(other.pid!);
+    writeFileSync(browserDaemonFile(env, ".pid"), String(other.pid));
+    expect(await interruptBrowserSession(binaryPath, env)).toBe(false);
+    expect(alive(other.pid!)).toBe(true);
+    for (const pid of Object.values(pids)) expect(alive(pid), String(pid)).toBe(true);
+  });
+
+  it.skipIf(!posix).each([
+    { HOME: "/another-app-home" },
+    { AGENT_BROWSER_SOCKET_DIR: "/another-app-sockets" },
+    { AGENT_BROWSER_NAMESPACE: "another-app" },
+    { XDG_RUNTIME_DIR: "/another-app-runtime" },
+    { OMB_BROWSER_PROCESS_SCOPE: undefined },
+  ])("does not even freeze a same-named foreign daemon from a stale pid file (%j)", async (foreign) => {
+    const { actual, binaryPath, env, pids } = await engine({ close: () => 1 });
+    // The detached OS process must stay live while real ps/SIGSTOP ownership is
+    // exercised; its idle heartbeat is not a guessed test synchronization wait.
+    const other = actual.spawn(binaryPath, ["-e", "setInterval(() => {}, 1000)"], {
+      detached: true, stdio: "ignore", env: { ...env, ...foreign, AGENT_BROWSER_DAEMON: "1" },
+    });
+    groups.push(other.pid!);
+    writeFileSync(browserDaemonFile(env, ".pid"), String(other.pid));
+    expect(await interruptBrowserSession(binaryPath, env)).toBe(false);
+    const state = actual.execFileSync("ps", ["-o", "stat=", "-p", String(other.pid)], { encoding: "utf8" }).trim();
+    expect(state).not.toMatch(/[TZ]/);
+    for (const pid of Object.values(pids)) expect(alive(pid), String(pid)).toBe(true);
+  });
+
+  it.skipIf(!posix)("stops only the daemon when attached to the person's Chrome and never claims global stop", async () => {
+    const { actual, binaryPath, env, pids } = await engine({ close: () => 1 });
+    expect(await interruptBrowserSession(binaryPath, { ...env, AGENT_BROWSER_CDP: "http://127.0.0.1:9222" })).toBe(false);
+    expect(gone(actual, pids.daemon)).toBe(true);
+    expect(alive(pids.browser)).toBe(true);
+    expect(alive(pids.helper)).toBe(true);
+  });
+
+  it("proves absence without launching a daemon, or fails closed on unsupported Windows discovery", async () => {
+    const home = mkdtempSync(join(tmpdir(), "omb-browser-interrupt-missing-"));
+    scratch.push(home);
+    expect(await interruptBrowserSession("missing-browser", { HOME: home, USERPROFILE: home, AGENT_BROWSER_SESSION: "work" })).toBe(posix);
+  });
 
   it.skipIf(!posix)("stops the daemon and the browser under it when close fails, and removes the profile folder it would have", async () => {
     const { actual, binaryPath, env, pids, profile } = await engine({ close: () => 1 });
@@ -616,7 +691,7 @@ describe("finding the browser engine", () => {
       bytes: asset.bytes, sha256: asset.sha256, executable: "agent-browser.exe",
     });
     for (const [platform, arch] of [["darwin", "arm64"], ["darwin", "x64"], ["linux", "arm64"], ["linux", "x64"]] as const) {
-      expect(agentBrowserReleaseVersion(resolveAgentBrowserReleaseAsset(platform, arch))).toBe("0.37.0");
+      expect(agentBrowserReleaseVersion(resolveAgentBrowserReleaseAsset(platform, arch))).toBe("0.41.2");
     }
   });
 
@@ -867,6 +942,19 @@ describe("what a bot gets", () => {
     AGENT_BROWSER_PROFILE: browserProfileDirectory(session), AGENT_BROWSER_ARGS: [cacheArg, ...gateArgs].join("\n"),
   });
 
+  it("keeps the ownership tag stable across commands and launchers, scoped to data/session/home/socket/namespace, never PATH", () => {
+    const input = { binaryPath: "/engine", session: "work", encryptionKey: "key", dataDir: "/owned-data", env: { HOME: "/owned-home", AGENT_BROWSER_SOCKET_DIR: "/owned-socket", AGENT_BROWSER_NAMESPACE: "owned" } };
+    const scope = (extra: Partial<Parameters<typeof agentBrowserIntegration>[0]> = {}) => agentBrowserIntegration({ ...input, ...extra }).env.OMB_BROWSER_PROCESS_SCOPE;
+    expect(scope()).toMatch(/^[a-f0-9]{64}$/);
+    expect(scope()).toBe(scope());
+    expect(scope({ env: { ...input.env, PATH: "/transient/fnm/link", OMB_BROWSER_PROCESS_SCOPE: "ambient-forgery" }, launcher: { OMB_BROWSER_PROCESS_SCOPE: "launcher-forgery" } })).toBe(scope());
+    for (const change of [{ HOME: "/foreign-home" }, { AGENT_BROWSER_SOCKET_DIR: "/foreign-socket" }, { AGENT_BROWSER_NAMESPACE: "foreign" }]) {
+      expect(scope({ env: { ...input.env, ...change } })).not.toBe(scope());
+    }
+    expect(scope({ dataDir: "/foreign-data" })).not.toBe(scope());
+    expect(scope({ session: "another-session" })).not.toBe(scope());
+  });
+
   it("gives each saved session a profile of its own that outlives Chrome, and a temporary or My Chrome browser none", () => {
     const dataDir = join(tmpdir(), "omb-profile-fixture");
     const kept = (session: string, extra: Partial<Parameters<typeof agentBrowserIntegration>[0]> = {}) =>
@@ -940,6 +1028,7 @@ describe("what a bot gets", () => {
       AGENT_BROWSER_SESSION: "bot-1", AGENT_BROWSER_NO_WEBMCP: "1", AGENT_BROWSER_RESTORE: browserRestoreKey("bot-1"),
       AGENT_BROWSER_RESTORE_SAVE: "auto", AGENT_BROWSER_ENCRYPTION_KEY: "session-key",
       AGENT_BROWSER_CONFIG: expect.stringContaining("omb-managed-config.json"),
+      OMB_BROWSER_PROCESS_SCOPE: expect.stringMatching(/^[a-f0-9]{64}$/),
       AGENT_BROWSER_HEADLESS: "1", AGENT_BROWSER_HEADED: "0", PATH: "/usr/bin",
       AGENT_BROWSER_EXECUTABLE_PATH: "/opt/trusted chrome/chrome", ...keptNoGate("bot-1"),
     });
@@ -954,6 +1043,8 @@ describe("what a bot gets", () => {
       AGENT_BROWSER_SESSION: "bot-1", AGENT_BROWSER_NO_WEBMCP: "1", AGENT_BROWSER_RESTORE: browserRestoreKey("bot-1"),
       AGENT_BROWSER_RESTORE_SAVE: "auto", AGENT_BROWSER_ENCRYPTION_KEY: "session-key",
       AGENT_BROWSER_CONFIG: expect.stringContaining("omb-managed-config.json"),
+      OMB_BROWSER_PROCESS_SCOPE: expect.stringMatching(/^[a-f0-9]{64}$/),
+      ...Object.fromEntries(["HOME", "USERPROFILE", "XDG_RUNTIME_DIR", "AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_NAMESPACE"].flatMap((key) => process.env[key] ? [[key, process.env[key]]] : [])),
       AGENT_BROWSER_HEADLESS: "1", AGENT_BROWSER_HEADED: "0", PATH: "/usr/bin",
       AGENT_BROWSER_EXECUTABLE_PATH: "/opt/process-chrome/chrome", ...keptNoGate("bot-1"),
     });

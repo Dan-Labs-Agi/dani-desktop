@@ -22,6 +22,7 @@ import {
   prepareBrowserSessionState,
   clearBrowserSessionState,
   closeBrowserSession,
+  interruptBrowserSession,
   browserEngineStatus,
   inRunningBrowser,
   browserSessionId, isTemporaryBrowserSession, browserProfileDirectory,
@@ -101,6 +102,10 @@ export function createBrowserHost(deps: BrowserHostDeps) {
 
   const agentBrowserRuntime = new BrowserRuntime({
     closeBrowser: (session, spec) => closeBrowserSession(spec.command, browserRuntimeEnv({ ...spec.env, AGENT_BROWSER_SESSION: session })),
+    interruptBrowser: (session, spec) => {
+      agentBrowserLive.closeForSession(session);
+      return interruptBrowserSession(spec.command, browserRuntimeEnv({ ...spec.env, AGENT_BROWSER_SESSION: session }));
+    },
     applyViewport: (spec, size) => setBrowserViewport(spec.command, spec.env, size),
     launch: chromeLauncher,
     relayCommand: (spec, session, command, timeoutMs) => relayCommand(spec, session, command, timeoutMs).catch((error: unknown) => {

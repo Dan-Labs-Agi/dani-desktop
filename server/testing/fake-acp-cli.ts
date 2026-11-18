@@ -23,6 +23,8 @@
 //       grok 1.0.25's initialize, or FAKE_ACP_MCP_HANDSHAKE; FAKE_ACP_MCP_SCHEMA_BYTES=1 adds each schema's length)
 //     | lend-question (list_shared_computers around a question)
 //     | list-peers (list_bots through the agents MCP; keeps the first agents server it is offered, like Hermes)
+//     | workflow-plan (FAKE_ACP_WORKFLOW_PLAN JSON {stages:[{steps:[{server,tool,arguments}],reply?,pendingPlan?}],reply?};
+//       one stage per native prompt, real MCP calls, per-session cursor; FAKE_ACP_WORKFLOW_TRACE appends JSONL evidence)
 //   FAKE_ACP_MCP_TRANSPORTS  remote MCP transports advertised in initialize, e.g. "http,sse"
 //   FAKE_ACP_PERMISSION_OPTIONS  JSON options override in permission mode
 //   FAKE_ACP_DUMP  path for {argv, env}; with FAKE_ACP_MODES or FAKE_ACP_MODELS also <dump>.prompts.jsonl
@@ -499,13 +501,21 @@ function failRpc(msg: { method: string; id: unknown }): boolean {
   return true;
 }
 
-function driveMcp(entry: McpEntry, calls: Array<{ name: string | (() => string); args: (prev: string) => object }>, strict = false): Promise<string> {
+function driveMcp(entry: McpEntry, calls: Array<{ name: string | (() => string); args: (prev: string) => object }>, strict = false, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     const env = { ...process.env };
     for (const { name, value } of entry.env ?? []) env[name] = value;
     const child = spawn(entry.command, entry.args ?? [], { env, stdio: ["pipe", "pipe", "inherit"] });
     child.on("error", reject);
     const timer = setTimeout(() => (child.kill(), reject(new Error("mcp timeout"))), 60_000);
+    const abort = () => {
+      clearTimeout(timer);
+      child.kill();
+      reject(new Error("Fixture MCP request cancelled"));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    child.once("exit", () => signal?.removeEventListener("abort", abort));
+    if (signal?.aborted) { abort(); return; }
     let step = -1; // -1 = initialize in flight
     let last = "";
     const write = (obj: unknown) => child.stdin.write(JSON.stringify(obj) + "\n");
@@ -522,6 +532,7 @@ function driveMcp(entry: McpEntry, calls: Array<{ name: string | (() => string);
     };
     let buf = "";
     child.stdout.on("data", (c) => {
+      if (signal?.aborted) return;
       buf += c;
       let nl;
       while ((nl = buf.indexOf("\n")) !== -1) {
@@ -552,6 +563,83 @@ function driveMcp(entry: McpEntry, calls: Array<{ name: string | (() => string);
     });
     write({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05" } });
   });
+}
+
+type WorkflowStep = { server: string; tool: string; arguments: Record<string, unknown> };
+type WorkflowStage = { steps: WorkflowStep[]; reply?: string; pendingPlan?: boolean; errorReply?: string };
+type WorkflowPlan = { stages: WorkflowStage[]; reply?: string };
+const workflowStages = new Map<string, number>();
+const workflowPrompts = new Map<string, { id: unknown; controller: AbortController }>();
+const workflowModels = new Map<string, string>();
+
+function workflowTrace(sessionId: string, event: Record<string, unknown>): void {
+  const path = process.env.FAKE_ACP_WORKFLOW_TRACE;
+  if (path) appendFileSync(path, JSON.stringify({ pid: process.pid, sessionId, ...event }) + "\n");
+}
+
+async function playWorkflowPrompt(msg: { id: unknown; params: { sessionId: string } }): Promise<void> {
+  const sessionId = msg.params.sessionId;
+  const stageIndex = workflowStages.get(sessionId) ?? 0;
+  const controller = new AbortController();
+  workflowPrompts.set(sessionId, { id: msg.id, controller });
+  let toolCallId: string | undefined;
+  let stage: WorkflowStage | undefined;
+  const update = (value: Record<string, unknown>) => out({
+    jsonrpc: "2.0", method: "session/update", params: { sessionId, update: value },
+  });
+  try {
+    const plan: WorkflowPlan = JSON.parse(readFileSync(process.env.FAKE_ACP_WORKFLOW_PLAN!, "utf8"));
+    stage = plan.stages[stageIndex];
+    if (!stage) throw new Error(`Workflow received an unexpected prompt after ${stageIndex} stages`);
+    workflowTrace(sessionId, {
+      event: "prompt", stage: stageIndex, provider: "deterministic-local-fixture",
+      model: workflowModels.get(sessionId) ?? currentModel,
+    });
+    const listed = new Map<string, string[]>();
+    for (const [index, step] of stage.steps.entries()) {
+      controller.signal.throwIfAborted();
+      const entry = sessionMcp.find((server) => server.name === step.server);
+      if (!entry?.command) throw new Error(`Workflow requires stdio MCP server ${step.server}`);
+      if (!listed.has(step.server)) listed.set(step.server, await listMcpTools(entry, GROK_MCP_HANDSHAKE));
+      controller.signal.throwIfAborted();
+      if (!listed.get(step.server)!.includes(step.tool)) throw new Error(`Workflow tool not listed: ${step.tool}`);
+      toolCallId = `workflow-tool-${index}`;
+      update({ sessionUpdate: "tool_call", toolCallId, title: step.tool, kind: "other", status: "pending", rawInput: step.arguments });
+      workflowTrace(sessionId, { event: "tool", stage: stageIndex, toolCallId, tool: step.tool, status: "pending" });
+      const output = await driveMcp({ command: entry.command, args: entry.args, env: entry.env }, [
+        { name: step.tool, args: () => step.arguments },
+      ], true, controller.signal);
+      controller.signal.throwIfAborted();
+      update({ sessionUpdate: "tool_call_update", toolCallId, status: "completed", rawOutput: { output } });
+      workflowTrace(sessionId, { event: "tool", stage: stageIndex, toolCallId, tool: step.tool, status: "completed", output });
+      toolCallId = undefined;
+    }
+    const final = stageIndex === plan.stages.length - 1;
+    update({ sessionUpdate: "plan", entries: [{
+      content: final ? "All workflow stages verified" : `Complete stage ${stageIndex + 2}`,
+      priority: "medium", status: final ? "completed" : stage.pendingPlan ? "pending" : "completed",
+    }] });
+    update({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: stage.reply
+      ?? (final ? plan.reply ?? "All workflow stages are verified." : `I'll complete stage ${stageIndex + 2} next.`) } });
+    workflowStages.set(sessionId, stageIndex + 1);
+    workflowTrace(sessionId, { event: "result", stage: stageIndex, stopReason: "end_turn", final });
+    result(msg.id, { stopReason: "end_turn", _meta: { inputTokens: 10, outputTokens: 5 } });
+  } catch (error) {
+    if (controller.signal.aborted) return;
+    const message = error instanceof Error ? error.message : String(error);
+    if (toolCallId) {
+      const status = stage?.errorReply ? "completed" : "failed";
+      update({ sessionUpdate: "tool_call_update", toolCallId, status, rawOutput: { error: message } });
+      workflowTrace(sessionId, { event: "tool", stage: stageIndex, toolCallId, status, error: message });
+    }
+    workflowTrace(sessionId, { event: "error", stage: stageIndex, toolCallId, error: message });
+    if (stage?.errorReply) {
+      update({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: stage.errorReply } });
+      result(msg.id, { stopReason: "end_turn" });
+    } else out({ jsonrpc: "2.0", id: msg.id, error: { code: -32000, message } });
+  } finally {
+    if (workflowPrompts.get(sessionId)?.controller === controller) workflowPrompts.delete(sessionId);
+  }
 }
 
 function playTurn() {
@@ -792,6 +880,7 @@ function handle(msg: any) {
         break;
       }
       configCalls.push({ method: msg.method, params: msg.params });
+      if (mode === "workflow-plan" && msg.method === "session/set_model") workflowModels.set(msg.params.sessionId, msg.params.modelId);
       if (process.env.FAKE_ACP_DUMP) {
         writeFileSync(`${process.env.FAKE_ACP_DUMP}.config.json`, JSON.stringify(configCalls, null, 2));
       }
@@ -874,6 +963,10 @@ function handle(msg: any) {
         writeFileSync(`${process.env.FAKE_ACP_DUMP}.prompt.json`, JSON.stringify(msg.params?.prompt ?? null, null, 2));
       }
       if (failRpc(msg)) return;
+      if (mode === "workflow-plan") {
+        void playWorkflowPrompt(msg);
+        return;
+      }
       if (process.env.FAKE_ACP_TOOL_LIMIT) {
         const limit = Number(process.env.FAKE_ACP_TOOL_LIMIT);
         const handshake = process.env.FAKE_ACP_MCP_HANDSHAKE ? JSON.parse(process.env.FAKE_ACP_MCP_HANDSHAKE) : GROK_MCP_HANDSHAKE;
@@ -1376,6 +1469,14 @@ function handle(msg: any) {
       break;
     }
     case "session/cancel":
+      if (mode === "workflow-plan") {
+        const pending = workflowPrompts.get(msg.params?.sessionId);
+        if (pending) {
+          pending.controller.abort();
+          workflowTrace(msg.params.sessionId, { event: "cancel" });
+          result(pending.id, { stopReason: "cancelled", _meta: {} });
+        }
+      }
       if (hangingPromptId !== null && process.env.FAKE_ACP_IGNORE_CANCEL !== "1") {
         result(hangingPromptId, { stopReason: process.env.FAKE_ACP_CANCEL_STOP_REASON ?? "cancelled", _meta: {} });
         if (hangKeepAlive) clearInterval(hangKeepAlive);

@@ -4,12 +4,10 @@ One plan, one kit. Every area of the Dani desktop recovery has a numbered spec i
 directory. Any engineer can pick up any spec and execute it without asking for context.
 
 - Audience: the founder and incoming engineers.
-- Repo: `somdipto/dani-desktop`. Canonical integration and release branch: `main` only. Historical `prod` references are provenance, not current instructions.
-- Source epics: GitHub issues #9-#14, tracker #15. Specs 010-050 and 100 restate those
-  epics with landed/remaining ledgers; specs 060-090 are new and fill the gaps the
-  epics do not cover (proactive experience, model-only picker, first-run install,
-  demo script).
-- Master sequencing: `000-master-plan.md`.
+- Repo: `Dan-Labs-Agi/dani-desktop`. Canonical integration and release branch: `main` only. Historical `prod` references are provenance, not current instructions.
+- Source epics #9–#14 and tracker #15 are historical; [tracker #21](https://github.com/Dan-Labs-Agi/dani-desktop/issues/21) carries the product completion ledger.
+- For current pending work, direction corrections and implementation dependencies, read the [160 desktop completion proposal](160-desktop-completion/plan.md) and its [evidence/traceability ledger](160-desktop-completion/traceability.md). It does not mark historical criteria complete or authorize implementation/publication.
+- Historical master sequencing: `000-master-plan.md`; reconcile its dated implementation claims against the current serving path before executing them.
 
 ## Spec anatomy
 
@@ -29,7 +27,7 @@ Every spec has the same sections:
 - **Commit identity:** all commits authored and committed as
   `Somdipto Nandy <somdiptonandy@gmail.com>`.
 - **Delivery:** until a push-capable code route exists, each slice ships as a verified
-  git bundle with SHA-256 and prerequisite recorded in tracker issue #15. A user-side
+  git bundle with SHA-256 and prerequisite recorded in tracker issue #21. A user-side
   engineer imports and pushes the named branch; the PR follows immediately.
 - **Additive first:** new capability lands as new modules behind existing seams.
   Shared serving-path files are edited only inside the slice's declared map.

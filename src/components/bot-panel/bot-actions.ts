@@ -5,9 +5,9 @@ import { useCopyFeedback } from "@/lib/copy-text";
 import { botUnreadThreadIds, markBotRead } from "@/lib/folder-read";
 import { useShowThreads } from "@/lib/thread-preferences";
 import { api, useStore, type Bot } from "@/state/store";
-import { announceArchiveNotice, archiveBotWithNotice } from "../bot-archive";
+import { announceArchiveNotice, archiveBotWithNotice, currentArchivableBot } from "../bot-archive";
 import { moveBotsToSection } from "../bot-sections";
-import { currentArchivableBot, type BotConfirmKind } from "../Sidebar";
+import type { BotConfirmKind } from "../ArchivedBotsPanel";
 
 export function useBotActions(bot: Bot) {
   const { state, dispatch } = useStore();

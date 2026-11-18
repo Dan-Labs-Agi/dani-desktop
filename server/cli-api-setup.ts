@@ -1,3 +1,18 @@
+import { isLoopback } from "./provider-key-check.ts";
+
+export interface SetupModelsOptions { anonymous?: true; fetch?: typeof fetch; apiMode?: "anthropic_messages"; headers?: Readonly<Record<string, string>> }
+export interface SetupModel {
+  id: string;
+  label: string;
+  tools?: boolean;
+  imageInput?: boolean;
+  contextWindow?: number;
+  orgBlocked?: true;
+  privacyNotice?: string;
+  mayTrainOnYourPrompts?: boolean;
+  free?: boolean;
+}
+
 // Stateless onboarding probes: the caller owns consent for the metered call; credentials and replies are never logged.
 export const API_ENDPOINTS = [
   { id: "openai", label: "OpenAI API", url: "https://api.openai.com/v1", keyUrl: "https://platform.openai.com/api-keys" },
@@ -36,13 +51,28 @@ function httpFailure(status: number, completion: boolean): SetupApiError {
   return new SetupApiError(`${prefix} Check the API URL and provider settings, then try again.`);
 }
 
-async function setupJson(url: string, key: string, body?: Record<string, unknown>): Promise<unknown> {
-  const base = normalizeApiUrl(url);
+export function apiSetupHeaders(key: string, configured: Readonly<Record<string, string>> = {}, anthropic = false): Record<string, string> {
+  const headers = new Headers(key ? anthropic
+    ? { "x-api-key": key, "anthropic-version": "2023-06-01" }
+    : { authorization: `Bearer ${key}` } : {});
+  for (const [name, value] of Object.entries(configured)) headers.set(name, value);
+  return Object.fromEntries(headers);
+}
+
+async function setupJson(url: string, key: string, body?: Record<string, unknown>, options: SetupModelsOptions = {}): Promise<unknown> {
+  const normalized = normalizeApiUrl(url);
+  const base = options.apiMode === "anthropic_messages" && !normalized.endsWith("/v1") ? `${normalized}/v1` : normalized;
   // Existing credentials are tested exactly as the runtime sends them, never silently repaired only here.
   const token = key;
+  const anonymous = options.anonymous === true && body === undefined && isLoopback(new URL(base).hostname);
+  const headerCredential = Object.entries(options.headers ?? {}).some(([name, value]) => /^(?:authorization|x-api-key)$/i.test(name) && value.length > 0);
+  for (const [name, value] of Object.entries(options.headers ?? {})) {
+    // eslint-disable-next-line no-control-regex
+    if (!/^[\w-]+$/.test(name) || /[\u0000-\u001f\u007f]/u.test(value)) throw new SetupApiError("The configured API headers are invalid.");
+  }
   // Header credentials must not contain control characters or whitespace.
   // eslint-disable-next-line no-control-regex
-  if (!token || /[\u0000-\u0020\u007f]/u.test(token)) throw new SetupApiError("Enter a non-empty API key without spaces or line breaks.");
+  if ((!token && !anonymous && !headerCredential) || /[\u0000-\u0020\u007f]/u.test(token)) throw new SetupApiError("Enter a non-empty API key without spaces or line breaks.");
   const completion = body !== undefined;
   const operation = completion ? "The test reply" : "The model list";
   const timeoutMs = completion ? 30_000 : 8_000;
@@ -51,19 +81,39 @@ async function setupJson(url: string, key: string, body?: Record<string, unknown
   try {
     return await Promise.race([
       (async () => {
-        const response = await fetch(`${base}${completion ? "/chat/completions" : "/models"}`, {
-          method: completion ? "POST" : "GET",
-          headers: { authorization: `Bearer ${token}`, ...(completion ? { "content-type": "application/json" } : {}) },
-          ...(completion ? { body: JSON.stringify(body) } : {}),
-          signal: abort.signal,
-          redirect: "error",
-        });
-        if (!response.ok) {
-          void response.body?.cancel().catch(() => {});
-          throw httpFailure(response.status, completion);
+        // Anthropic defaults to 20 models per page; keep every page inside the same deadline.
+        const paginated = !completion && options.apiMode === "anthropic_messages";
+        let endpoint = `${base}${completion ? "/chat/completions" : "/models"}${paginated ? "?limit=1000" : ""}`;
+        const rows: unknown[] | undefined = paginated ? [] : undefined;
+        const cursors = paginated ? new Set<string>() : undefined;
+        for (;;) {
+          abort.signal.throwIfAborted();
+          const response = await (options.fetch ?? fetch)(endpoint, {
+            method: completion ? "POST" : "GET",
+            headers: { ...apiSetupHeaders(token, options.headers, options.apiMode === "anthropic_messages"), ...(completion ? { "content-type": "application/json" } : {}) },
+            ...(completion ? { body: JSON.stringify(body) } : {}),
+            signal: abort.signal,
+            redirect: "error",
+          });
+          if (!response.ok) {
+            void response.body?.cancel().catch(() => {});
+            throw httpFailure(response.status, completion);
+          }
+          let payload: unknown;
+          try { payload = await response.json(); }
+          catch { throw new SetupApiError(`${operation} returned invalid JSON. Check that the API URL supports the OpenAI-compatible API.`); }
+          if (!rows || !cursors) return payload;
+          const page = record(payload);
+          if (!Array.isArray(page?.data)) throw new SetupApiError("The model list returned invalid pagination data.");
+          for (const row of page.data) rows.push(row);
+          if (page.has_more !== true) return { ...page, data: rows };
+          const cursor = page.last_id;
+          if (typeof cursor !== "string" || !cursor.trim() || cursors.has(cursor)) {
+            throw new SetupApiError("The model list returned an invalid or repeated pagination cursor.");
+          }
+          cursors.add(cursor);
+          endpoint = `${base}/models?limit=1000&after_id=${encodeURIComponent(cursor)}`;
         }
-        try { return await response.json(); }
-        catch { throw new SetupApiError(`${operation} returned invalid JSON. Check that the API URL supports the OpenAI-compatible API.`); }
       })(),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
@@ -84,9 +134,9 @@ async function setupJson(url: string, key: string, body?: Record<string, unknown
 const record = (value: unknown): Record<string, unknown> | undefined =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 
-export async function fetchSetupModels(url: string, key: string): Promise<Array<{ id: string; label: string }>> {
-  const json = record(await setupJson(url, key));
-  const models = new Map<string, { id: string; label: string }>();
+export async function fetchSetupModels(url: string, key: string, options: SetupModelsOptions = {}): Promise<SetupModel[]> {
+  const json = record(await setupJson(url, key, undefined, options));
+  const models = new Map<string, SetupModel>();
   for (const entry of Array.isArray(json?.data) ? json.data : []) {
     const item = record(entry);
     const id = typeof item?.id === "string" ? item.id.trim() : "";
@@ -95,7 +145,28 @@ export async function fetchSetupModels(url: string, key: string): Promise<Array<
     if (!id || /[\u0000-\u001f\u007f]/u.test(id) || models.has(id)) continue;
     // eslint-disable-next-line no-control-regex
     const name = typeof item?.name === "string" ? item.name.replace(/[\u0000-\u001f\u007f]/gu, "").trim() : "";
-    models.set(id, { id, label: name || id });
+    const capabilities = record(item?.capabilities);
+    const supportedParameters = item?.supported_parameters;
+    const explicitTools = typeof item?.tool_call === "boolean" ? item.tool_call
+      : typeof item?.supports_tools === "boolean" ? item.supports_tools
+      : typeof record(capabilities?.tools)?.supported === "boolean" ? record(capabilities?.tools)?.supported
+      : Array.isArray(supportedParameters) ? supportedParameters.includes("tools") : undefined;
+    const modalities = record(item?.modalities)?.input ?? record(item?.architecture)?.input_modalities;
+    const contextWindow = item?.context_length ?? item?.context_window ?? record(item?.limit)?.context;
+    const cost = record(item?.cost);
+    const textCost = record(cost?.text);
+    const prices = [record(item?.pricing)?.prompt ?? record(textCost?.input)?.price ?? cost?.input,
+      record(item?.pricing)?.completion ?? record(textCost?.output)?.price ?? cost?.output];
+    const knownPrices = prices.every(value => (typeof value === "number" || (typeof value === "string" && value.trim() !== "")) && Number.isFinite(Number(value)));
+    models.set(id, { id, label: name || id,
+      ...(typeof explicitTools === "boolean" ? { tools: explicitTools } : {}),
+      ...(Array.isArray(modalities) ? { imageInput: modalities.includes("image") } : {}),
+      ...(typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0 ? { contextWindow } : {}),
+      ...(item?.orgBlocked === true || item?.org_blocked === true || item?.disabled === true ? { orgBlocked: true as const } : {}),
+      ...(typeof item?.privacyNotice === "string" ? { privacyNotice: item.privacyNotice } : {}),
+      ...(typeof item?.mayTrainOnYourPrompts === "boolean" ? { mayTrainOnYourPrompts: item.mayTrainOnYourPrompts } : {}),
+      ...(typeof item?.isFree === "boolean" ? { free: item.isFree } : knownPrices ? { free: prices.every(value => Number(value) === 0) } : {}),
+    });
   }
   if (!models.size) throw new SetupApiError("The API returned no usable models. Check the API URL and model access, or enter a model ID from your provider manually.");
   return [...models.values()];

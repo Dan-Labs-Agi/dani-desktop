@@ -12,7 +12,8 @@ import { StreamSurface, type StreamSurfaceHandle, type SurfaceConnect } from "./
 import { createBrowserControl, streamTransport, type BrowserControl, type BrowserTakeStatus } from "@/lib/browser-control";
 import { resolveAddressBarInput } from "@/lib/browser-address";
 import { closeBrowserPictureInPicture, openBrowserPictureInPicture, supportsBrowserPictureInPicture, useBrowserPictureInPicture } from "@/lib/browser-pip";
-import { browserStreamAccess, createPreviewStreamClient, type PreviewStreamClient, type PreviewStreamControl, type PreviewStreamInput, type PreviewViewportSetting } from "@/lib/browser-stream-client";
+import { browserStreamAccess, createPreviewStreamClient, type PreviewStreamClient } from "@/lib/browser-stream-client";
+import type { PreviewStreamControl, PreviewStreamInput, PreviewViewportSetting } from "../../shared/browser-stream";
 import { createLiveStreamClient, type LiveResume, type LiveStreamClient } from "@/lib/browser-stream-v1";
 import { BROWSER_HELD_ELSEWHERE } from "../../shared/browser-held";
 import { passkeyWallAt } from "../../shared/passkey-wall";
@@ -89,6 +90,8 @@ export function LiveBrowser({ bot, signIn, page }: { bot: Bot; signIn?: BrowserS
     browserControl.current?.hold(showTyping);
     if (showTyping) typingDialog.current?.showModal(); else typingDialog.current?.close();
   }, [showTyping]);
+  // Leaving the panel is not a transport reconnect: only a quiet, unkept hold is handed back before its client closes.
+  useEffect(() => () => { browserControl.current?.leave(); }, []);
 
   const reconnect = useCallback(() => {
     setGone(false);

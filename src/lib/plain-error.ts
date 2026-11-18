@@ -42,6 +42,10 @@ const STATUS_PREFIX = /^(?:[\w-]+ ){0,2}(?:API Error|HTTP|status(?: code)?)[:\s]
 const REASON_PHRASE = /^(?:[A-Z][a-z]+ ?){1,4}\.?$/;
 
 export function plainErrorLine(raw: string): string | undefined {
+  if (/\b(?:run|use)\s+[`'"]?hermes\s+setup\b/i.test(raw)) return t("error.plain.providerSetup");
+  if (/^(?:The selected model (?:could not complete native tool qualification\.|has no qualified native API runtime\.)|This model did not execute and consume the native qualification tool result\.|Native model resolution changed the selected provider or model\.|This route cannot preserve the selected native model and tool execution\.)/.test(raw.trim())) {
+    return t("error.plain.modelToolCheck");
+  }
   const tooLargeFor = requestTooLargeModel(raw);
   if (tooLargeFor) return t("chat.error.requestTooLarge", { model: tooLargeFor });
   if (!isTechnicalError(raw)) return undefined;

@@ -131,7 +131,7 @@ describe("the refs a bot holds", () => {
 });
 
 /** `clock`: time moves only when the steps wait, or when a test moves it. */
-async function setup(options: { record?: boolean; stopped?: () => boolean; clock?: boolean } = {}) {
+async function setup(options: { record?: boolean; stopped?: () => boolean; alive?: () => boolean; clock?: boolean } = {}) {
   const daemon = await new FakeRelay("bot-steps").start();
   const root = join(mkdtempSync(join(tmpdir(), "omb-steps-")), "evidence");
   const evidence = new BrowserEvidence({ root, statfs: async () => ({ bavail: 1e9, bsize: 4096 }) });
@@ -142,7 +142,7 @@ async function setup(options: { record?: boolean; stopped?: () => boolean; clock
   const ctx: StepContext = { botId: "bot-1", botName: "Ava", threadId: "thread-1", generation: "6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b", turnId: () => "turn-9", record: options.record ?? false };
   const call = (tool: string, args: Record<string, unknown> = {}): StepCall => ({
     session: daemon.session, spec: daemon.spec, tool: `agent_browser_${tool}`, args, ctx,
-    stopped: options.stopped ?? (() => false), alive: () => true, resize,
+    stopped: options.stopped ?? (() => false), alive: options.alive ?? (() => true), resize,
   });
   const run = async (tool: string, args: Record<string, unknown> = {}, during?: () => void, result: unknown = { content: [{ type: "text", text: "ok" }] }) => {
     const state = await steps.before(call(tool, args));
@@ -214,6 +214,130 @@ describe("around every bot's browser call", () => {
     expect(evidence.list("thread-1").steps.map((step) => step.imageSkipped)).toEqual(["secret-on-screen"]);
     expect(held.evidence.list("thread-1").steps.map((step) => step.imageSkipped)).toEqual(["person-took-control"]);
     for (const value of [daemon, held.daemon]) expect(value.actions()).not.toContain("screenshot");
+  });
+
+  it.each(["person-took-control", "turn-ended"].flatMap((reason) =>
+    ["before", "after"].map((phase) => ({ reason, phase })),
+  ))("does no port discovery when $reason precedes $phase", async ({ reason, phase }) => {
+    let cancelled = false;
+    const { daemon, evidence, steps, call } = await setup({
+      record: true,
+      stopped: () => cancelled && reason === "person-took-control",
+      alive: () => !(cancelled && reason === "turn-ended"),
+    });
+    const browserCall = call("click", { selector: "#go" });
+    const state = phase === "after" ? await steps.before(browserCall) : null;
+    const discover = vi.spyOn(steps.ports, "port");
+    const dispatched = daemon.commands.length;
+    cancelled = true;
+    if (state) {
+      expect(await steps.after(browserCall, { content: [] }, state)).toEqual({ parts: [], launched: false });
+      expect(evidence.list("thread-1").steps).toMatchObject([{ image: null, imageSkipped: reason, page: null }]);
+    } else {
+      expect(await steps.before(browserCall)).toMatchObject({ aliveBefore: null, noDaemon: false, geometry: null, box: null, late: null });
+    }
+    expect(discover).not.toHaveBeenCalled();
+    expect(daemon.commands).toHaveLength(dispatched);
+  });
+
+  it.each(["person-took-control", "turn-ended"].flatMap((reason) => [
+    ...["session", "probe", "console", "errors", "requests", "clear", "geometry"].map((boundary) => ({ reason, phase: "before", boundary })),
+    ...["session", "probe", "settle", "frame", "geometry", "console", "errors", "requests"].map((boundary) => ({ reason, phase: "after", boundary })),
+  ]))("dispatches nothing after $reason during the actual $phase $boundary read", async ({ reason, phase, boundary }) => {
+    let cancelled = false;
+    const { daemon, evidence, steps, call, resize } = await setup({
+      record: true, clock: true,
+      stopped: () => cancelled && reason === "person-took-control",
+      alive: () => !(cancelled && reason === "turn-ended"),
+    });
+    const browserCall = call("click", { selector: "#go" });
+    const state = phase === "after" ? await steps.before(browserCall) : null;
+    if (phase === "after" && boundary === "session") steps.ports.forget(daemon.session);
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const matches: Record<string, (command: Record<string, unknown>) => boolean> = {
+      session: (command) => command.action === "session_info",
+      probe: (command) => command.action === "stream_status",
+      console: (command) => command.action === "console" && !command.clear,
+      errors: (command) => command.action === "errors",
+      requests: (command) => command.action === "requests" && command.status === "400-599",
+      clear: (command) => command.action === "console" && command.clear === true,
+      geometry: (command) => command.action === "evaluate" && command.script === GEOMETRY_SCRIPT,
+      settle: (command) => command.action === "requests" && Boolean(command.type),
+      frame: (command) => command.action === "evaluate" && String(command.script).includes("requestAnimationFrame"),
+    };
+    daemon.onCommand = async (command) => {
+      if (!matches[boundary]!(command)) return;
+      entered.resolve();
+      await release.promise;
+    };
+    const pending = state ? steps.after(browserCall, { content: [] }, state) : steps.before(browserCall);
+    await entered.promise;
+    const dispatched = daemon.commands.length;
+    cancelled = true;
+    release.resolve();
+    const outcome = await pending;
+    expect(daemon.commands).toHaveLength(dispatched);
+    expect(daemon.actions()).not.toContain("screenshot");
+    expect(resize).not.toHaveBeenCalled();
+    if (state) {
+      expect(outcome).toEqual({ parts: [], launched: false });
+      expect(evidence.list("thread-1").steps).toMatchObject([{ image: null, imageSkipped: reason, page: null }]);
+    } else {
+      expect(outcome).toMatchObject({ geometry: null, box: null });
+      if (["session", "probe"].includes(boundary)) expect(outcome).toMatchObject({ aliveBefore: null, noDaemon: false });
+      if (["session", "probe", "console", "errors", "requests"].includes(boundary)) expect(outcome).toMatchObject({ late: null });
+    }
+  });
+
+  it.each(["person-took-control", "turn-ended"])("drops a non-recording page read after $reason without reading health", async (reason) => {
+    let cancelled = false;
+    const { daemon, steps, call } = await setup({
+      stopped: () => cancelled && reason === "person-took-control",
+      alive: () => !(cancelled && reason === "turn-ended"),
+    });
+    const browserCall = call("snapshot");
+    const state = await steps.before(browserCall);
+    let dispatched = 0;
+    daemon.onCommand = (command) => {
+      if (command.action === "evaluate") {
+        dispatched = daemon.commands.length;
+        cancelled = true;
+      }
+    };
+    expect(await steps.after(browserCall, { content: [] }, state)).toEqual({ parts: [], launched: false });
+    expect(dispatched).toBeGreaterThan(0);
+    expect(daemon.commands).toHaveLength(dispatched);
+    expect(daemon.actions()).not.toContain("console");
+  });
+
+  it.each(["person-took-control", "turn-ended"])("checks $reason again at screenshot dispatch", async (reason) => {
+    let cancelled = false;
+    const { daemon, evidence, run } = await setup({
+      record: true,
+      stopped: () => cancelled && reason === "person-took-control",
+      alive: () => !(cancelled && reason === "turn-ended"),
+    });
+    const imageTarget = evidence.imageTarget.bind(evidence);
+    vi.spyOn(evidence, "imageTarget").mockImplementation((...args) => {
+      const slot = imageTarget(...args);
+      cancelled = true;
+      return slot;
+    });
+    await run("click", { selector: "#go" });
+    expect(daemon.actions()).not.toContain("screenshot");
+    expect(evidence.list("thread-1").steps).toMatchObject([{ image: null, imageSkipped: reason }]);
+  });
+
+  it("drops a screenshot whose result arrives after its turn ended", async () => {
+    let alive = true;
+    const { daemon, evidence, steps, run } = await setup({ record: true, alive: () => alive });
+    daemon.onCommand = (command) => { if (command.action === "screenshot") alive = false; };
+    await run("click", { selector: "#go" });
+    const [step] = evidence.list("thread-1").steps;
+    expect(step).toMatchObject({ image: null, imageSkipped: "turn-ended" });
+    expect(steps.recentFrame(daemon.session)).toBeNull();
+    expect(readdirSync(join(evidence.root, "thread-1", step!.generation)).filter((name) => name.endsWith(".jpg"))).toEqual([]);
   });
 
   it("deletes a picture a person's takeover overlapped, and keeps the step without it", async () => {

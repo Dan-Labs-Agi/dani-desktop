@@ -76,6 +76,86 @@ describe("the engine's loopback command relay", () => {
     expect(daemon.actions().filter((action) => action === "screenshot" || action === "keyboard")).toEqual([]);
   });
 
+  it.each(["port", "probe"] as const)("does no port discovery for a pre-cancelled %s consumer", async (method) => {
+    const daemon = await fake();
+    let reads = 0;
+    const ports = new RelayPorts({ readFile: () => { reads++; return String(daemon.port); } });
+    expect(await ports[method](daemon.target, () => false)).toBeNull();
+    expect(reads).toBe(0);
+    expect(daemon.commands).toEqual([]);
+  });
+
+  it("checks ownership again immediately before session discovery dispatch", async () => {
+    const daemon = await fake();
+    let active = true;
+    const ports = new RelayPorts({ readFile: () => { active = false; return String(daemon.port); } });
+    expect(await ports.port(daemon.target, () => active)).toBeNull();
+    expect(daemon.commands).toEqual([]);
+    expect(ports.daemonPid(daemon.session)).toBeNull();
+  });
+
+  it("does not cache a session identity received after its port consumer ended", async () => {
+    const daemon = await fake();
+    const ports = new RelayPorts();
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let active = true;
+    daemon.onCommand = async (command) => {
+      if (command.action !== "session_info") return;
+      entered.resolve();
+      await release.promise;
+    };
+    const pending = ports.port(daemon.target, () => active);
+    await entered.promise;
+    active = false;
+    release.resolve();
+    expect(await pending).toBeNull();
+    expect(ports.daemonPid(daemon.session)).toBeNull();
+    daemon.onCommand = undefined;
+    expect(await ports.port(daemon.target)).toBe(daemon.port);
+    expect(daemon.actions()).toEqual(["session_info", "session_info"]);
+  });
+
+  it.each(["session_info", "stream_status"])("discards a late %s probe response without dispatching or resetting the breaker", async (boundary) => {
+    const daemon = await fake();
+    const ports = new RelayPorts();
+    ports.trip(daemon.session);
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let active = true;
+    daemon.onCommand = async (command) => {
+      if (command.action !== boundary) return;
+      entered.resolve();
+      await release.promise;
+    };
+    const pending = ports.probe(daemon.target, () => active);
+    await entered.promise;
+    const dispatched = daemon.commands.length;
+    active = false;
+    release.resolve();
+    expect(await pending).toBeNull();
+    expect(daemon.commands).toHaveLength(dispatched);
+    expect(ports.isTripped(daemon.session)).toBe(true);
+    if (boundary === "session_info") {
+      expect(daemon.actions()).toEqual(["session_info"]);
+      expect(ports.daemonPid(daemon.session)).toBeNull();
+    }
+    daemon.onCommand = undefined;
+    expect(await ports.probe(daemon.target)).toEqual({ port: daemon.port, connected: true });
+    expect(ports.isTripped(daemon.session)).toBe(false);
+  });
+
+  it.each(["session_info", "stream_status"])("still trips on a timed-out %s already sent before cancellation", async (boundary) => {
+    const daemon = await fake();
+    const ports = new RelayPorts();
+    let active = true;
+    daemon.hang.add(boundary);
+    daemon.onCommand = (command) => { if (command.action === boundary) active = false; };
+    expect(await ports.probe(daemon.target, () => active)).toBeNull();
+    expect(ports.isTripped(daemon.session)).toBe(true);
+    expect(daemon.actions()).toEqual(boundary === "session_info" ? ["session_info"] : ["session_info", "stream_status"]);
+  });
+
   it("takes a daemon too busy to confirm its session as unknown, not absent", async () => {
     const daemon = await fake();
     daemon.hang.add("session_info");

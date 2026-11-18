@@ -6,6 +6,21 @@ import { errorReplyFailure, type ErrorReplyFailure } from "../engine-errors.ts";
 import type { AcpConfig } from "./core.ts";
 import type { AcpHost, AcpLink } from "./host.ts";
 
+export interface AcpContinuationState {
+  round: number;
+  pendingPlan: boolean;
+  blocked: boolean;
+  completedTools: number;
+  toolIds: Set<string>;
+  observationTools: Set<string>;
+  failedObservation: boolean;
+  observationRecovery: boolean;
+  unknownWork: boolean;
+  producedItem: boolean;
+  repliedText: boolean;
+  usage: { input: number; output: number; cachedInput?: number };
+}
+
 export type AcpAskFinish = (
   behavior: string,
   source?: "user" | "timeout" | "system",
@@ -18,6 +33,7 @@ export interface AcpTurn {
   turn: SendTurnInput;
   turnConfig: AcpConfig;
   controlsHost: boolean;
+  continuation?: AcpContinuationState;
   state: {
     settled: boolean; promptSent: boolean; text: string; textMessageId: string | null; producedItem: boolean; repliedText: boolean; startupActivity: boolean; stopped: boolean;
     usagePeak: number | null;
@@ -83,13 +99,13 @@ export interface AcpTurnEnd {
  * nothing to show is a lost turn: a provider may cut a reasoning-only stream and still answer end_turn. */
 export function endTurn(current: AcpTurn, ok: boolean, stopReason: string | null, ai: string): AcpTurnEnd {
   const ended = ok && stopReason === null;
-  const errorReply = ended && !current.state.stopped && !current.state.repliedText ? errorReplyFailure(ai, current.state.text) : null;
+  const errorReply = ended && !current.state.stopped && !(current.continuation?.repliedText ?? current.state.repliedText) ? errorReplyFailure(ai, current.state.text) : null;
   if (!errorReply) current.flushAssistantText();
-  if (ended && current.state.stopped) return { ok, stopReason: "cancelled" };
+  if (stopReason === "cancelled" || (ended && current.state.stopped)) return { ok: false, stopReason: "cancelled" };
   if (errorReply) {
     const { stopReason: failed, ...error } = errorReply;
     return { ok: false, stopReason: failed, error };
   }
-  if (ended && !current.state.producedItem) return { ok: false, stopReason: "empty_turn", error: { message: `${ai} finished without replying.` } };
+  if (ended && !(current.continuation?.producedItem ?? current.state.producedItem)) return { ok: false, stopReason: "empty_turn", error: { message: `${ai} finished without replying.` } };
   return { ok, stopReason };
 }

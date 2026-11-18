@@ -19,6 +19,17 @@ describe("guarded request ancestry", () => {
     const resumed = { ...reply, id: "resumed", parentId: reply.id, turnId: "turn-two" };
     expect(path([source, reply, resumed])).toEqual([source, reply, resumed]);
   });
+  it("keeps accepted person answers under their original guarded source without accepting an unrelated newer request", () => {
+    const answer: WireMessage = { ...source, id: "answer", parentId: reply.id, sendId: undefined, text: "eu", requestMessageId: source.id };
+    const resumed = { ...reply, id: "resumed", parentId: answer.id, turnId: "turn-two" };
+    const messages = [source, reply, answer, resumed];
+    const accepted = new Set([answer.id]);
+    expect(guardedRequestPath(messages, resumed.id, source.sendId!, accepted)).toEqual(messages);
+    expect(() => guardedRequestPath(messages, resumed.id, source.sendId!)).toThrow();
+    expect(() => guardedRequestPath([source, reply, { ...answer, requestMessageId: "other-source" }, resumed], resumed.id, source.sendId!, accepted)).toThrow();
+    const newer: WireMessage = { ...source, id: "newer", parentId: resumed.id, sendId: "another-request", requestMessageId: source.id };
+    expect(() => guardedRequestPath([...messages, newer], newer.id, source.sendId!, accepted)).toThrow();
+  });
   it.each([
     [source, reply, { ...source, id: "later", parentId: reply.id, sendId: "different-send-id" }],
     [source, reply, { ...reply, id: "sibling", parentId: source.id }],

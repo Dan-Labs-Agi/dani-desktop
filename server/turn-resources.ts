@@ -1,6 +1,9 @@
+import type { ApprovalMode } from "../shared/approval-mode.ts";
+
 export type TurnOwner = {
   threadId: string;
   generation: string;
+  approvalCeiling?: ApprovalMode;
   /** Already reported: Claude settles the follow-up interrupt as exit_before_result, which must not read as a second failure. */
   lazyClaimFailureReported?: boolean;
   computerParkedOn?: string;

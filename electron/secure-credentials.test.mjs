@@ -18,6 +18,13 @@ const deps = (over = {}) => ({
 });
 
 describe("readSecureCredentials", () => {
+  it("reports configured unavailability without touching files or the operating-system store", async () => {
+    const forbidden = vi.fn(() => { throw new Error("must not access the store"); });
+    const result = await readSecureCredentials({ disabled: true, exists: forbidden,
+      isAvailable: forbidden, readFile: forbidden, decrypt: forbidden, sleep: forbidden });
+    expect(result).toMatchObject({ status: "unavailable", credentials: {} });
+    expect(forbidden).not.toHaveBeenCalled();
+  });
   it("reports an empty store when no file was ever written", async () => {
     const result = await readSecureCredentials(deps({ exists: () => false }));
     expect(result).toEqual({ status: "empty", credentials: {} });

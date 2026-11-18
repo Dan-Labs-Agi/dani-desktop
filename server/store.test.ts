@@ -25,6 +25,7 @@ import type { TeamSetupRequest } from "../shared/team-setup.ts";
 import { SECTION_CONTEXTS_FILE, readSectionContext, writeSectionContext } from "./section-context.ts";
 import { TeamComputers } from "./team-computers.ts";
 import { allowsTool } from "../shared/tool-scope.ts";
+import { hermesModelSelection } from "../shared/hermes-harness.ts";
 
 const selection = (): ModelSelection => ({ instanceId: "claude", model: "claude-sonnet-5" });
 
@@ -33,6 +34,53 @@ describe("Store", () => {
     rmSync(DATA_DIR, { recursive: true, force: true });
   });
 
+
+  it("migrates bot defaults, pinned conversations and backups without changing models or files", () => {
+    const configs = { codex: { driver: "codex" }, hermes: { driver: "hermesAgent" } };
+    const normalize = (selected: ModelSelection | undefined) => hermesModelSelection(selected, configs);
+    const store = new Store(() => ({ instanceId: "codex", model: "openai:gpt-fixture" }));
+    const bot = store.createBot({ name: "Research", soul: "Keep the source." });
+    const pinned = store.createTask(bot.id, "Pinned model", false)!;
+    const following = store.createTask(bot.id, "Following", false)!;
+    store.patchTask(bot.id, pinned.threadId, { modelSelection: { instanceId: "codex", model: "openrouter:qwen/fixture" } });
+    store.patchBot(bot.id, { approvalMode: "custom", alwaysAllow: ["Bash(*)"],
+      fallback: [{ instanceId: "codex", model: "ollama::backup" }] });
+    store.appendMessage(bot.threadId, { role: "user", kind: "text", text: "Retain this conversation." });
+    const loaded = new Store(selection, undefined, (id) => configs[id as keyof typeof configs]?.driver, "en");
+    expect(loaded.migrateModelSelections(normalize)).toBe(1);
+    expect(loaded.bot(bot.id)).toMatchObject({
+      name: "Research", soul: "Keep the source.", approvalMode: "ask", alwaysAllow: [],
+      modelSelection: { instanceId: "hermes", model: "openai:gpt-fixture" },
+      fallback: [{ instanceId: "hermes", model: "ollama::backup" }],
+    });
+    expect(loaded.projectBotForTask(bot.id, pinned.threadId)!.modelSelection)
+      .toEqual({ instanceId: "hermes", model: "openrouter:qwen/fixture" });
+    expect(loaded.taskByThread(bot.id, following.threadId)!.modelSelection).toBeUndefined();
+    expect(loaded.projectBotForTask(bot.id, following.threadId)!.modelSelection)
+      .toEqual({ instanceId: "hermes", model: "openai:gpt-fixture" });
+    const saved = readFileSync(join(DATA_DIR, "bots.json"), "utf8");
+    expect(loaded.migrateModelSelections(normalize)).toBe(0);
+    expect(readFileSync(join(DATA_DIR, "bots.json"), "utf8")).toBe(saved);
+    const restarted = new Store(selection);
+    expect(restarted.projectBotForTask(bot.id, pinned.threadId)!.modelSelection)
+      .toEqual({ instanceId: "hermes", model: "openrouter:qwen/fixture" });
+    expect(restarted.messagesFor(bot.threadId).some((message) => message.text === "Retain this conversation.")).toBe(true);
+  });
+
+  it("does not publish a harness migration that failed to persist", () => {
+    const store = new Store(selection);
+    const bot = store.createBot();
+    const save = vi.spyOn(store as unknown as { saveBots(): void }, "saveBots")
+      .mockImplementationOnce(() => { throw new Error("disk full"); });
+    try {
+      expect(() => store.migrateModelSelections((selected) =>
+        hermesModelSelection(selected, { hermes: { driver: "hermesAgent" } }))).toThrow("disk full");
+      expect(store.bot(bot.id)!.modelSelection).toEqual(selection());
+    } finally {
+      save.mockRestore();
+    }
+    expect(new Store(selection).bot(bot.id)!.modelSelection).toEqual(selection());
+  });
   it("retains tool selection across restarts and distinguishes clearing from no tools", () => {
     const store = new Store(selection);
     const bot = store.createBot({ name: "Scoped drafter" });

@@ -17,19 +17,19 @@ type Run = {
 type Commit = { tree: string; parents: string[]; files: string[] };
 
 const started: Step[] = [{ status: "completed", conclusion: "success" }];
-const SHARDS: Record<string, number> = { "macos-latest": 4, "ubuntu-latest": 8, "windows-latest": 8 };
-const platformJobs = (os: string, conclusion: string | null, steps: Step[] = started): Job[] =>
-  Array.from({ length: SHARDS[os]! }, (_, i) => ({ name: `vitest (${os}, shard ${i + 1}/${SHARDS[os]})`, conclusion, steps }));
-const platformJob = (os: string, conclusion: string | null, steps: Step[] = started): Job => platformJobs(os, conclusion, steps)[0]!;
+const shardCounts = { "ubuntu-latest": 8, "windows-latest": 8, "macos-latest": 4 };
+const platformJob = (os: string, conclusion: string | null, steps: Step[] = started, shard = 1): Job =>
+  ({ name: `vitest (${os}, shard ${shard}/${os === "macos-latest" ? 4 : 8})`, conclusion, steps });
 const gate = (conclusion: string | null): Job => ({ name: "package + smoke (Ubuntu 24.04 x64)", conclusion, steps: started });
 const green = (): Job[] => [
   gate("success"),
-  ...["ubuntu-latest", "macos-latest", "windows-latest"].flatMap((os) => platformJobs(os, "success")),
+  ...Object.entries(shardCounts).flatMap(([os, count]) =>
+    Array.from({ length: count }, (_, index) => platformJob(os, "success", started, index + 1))),
   { name: "control-plane check + workerd tests + dry run", conclusion: "success", steps: started },
   { name: "Detect optional jobs", conclusion: "success", steps: started },
 ];
 const mainLane = (): Job[] => [gate("success"), platformJob("ubuntu-latest", "success")];
-const scoped = (): Job[] => [gate("success"), { name: "typecheck + test (${{ matrix.os }})", conclusion: "skipped", steps: [] }];
+const scoped = (): Job[] => [gate("success"), { name: "vitest (${{ matrix.os }}, shard ${{ matrix.shard }}/${{ matrix.shards }})", conclusion: "skipped", steps: [] }];
 const red = (): Job[] => [gate("failure"), platformJob("ubuntu-latest", "failure", [{ status: "completed", conclusion: "success" }, { status: "completed", conclusion: "failure" }])];
 const runnerLost = (): Job[] => [gate("success"), platformJob("ubuntu-latest", "success"), platformJob("macos-latest", "failure", [])];
 const cancelled = (): Job[] => [];
@@ -94,7 +94,7 @@ describe("what a CI run proves", () => {
 
   it("is partial when only some platforms ran", () => {
     expect(judgeRun(mainLane())).toBe("partial");
-    expect(judgeRun(green().filter((job) => job.name !== "vitest (macos-latest, shard 1/4)"))).toBe("partial");
+    expect(judgeRun(green().filter((job) => !job.name.startsWith("vitest (macos-latest,")))).toBe("partial");
     expect(judgeRun([...mainLane(), platformJob("windows-latest", "success")])).toBe("partial");
   });
 
@@ -146,6 +146,35 @@ describe("release CI gate", () => {
     const { calls, options } = fakeGitHub([{ runs: [run(1, "push", "completed")], jobs: { 1: red() } }]);
     expect(await waitForReleaseCi(options)).toMatchObject({ ok: false, reason: expect.stringContaining("failed: run 1") });
     expect(calls).toEqual([]);
+  });
+
+  it.each(["older commit run", "identical tree", "version-only parent"])("does not let green %s evidence override the candidate's failed tests", async (source) => {
+    const previous = source === "older commit run"
+      ? run(5, "push", "completed")
+      : run(5, "push", "completed", "main", 0, source === "identical tree"
+        ? { head_sha: OTHER, head_commit: { tree_id: TREE } }
+        : { head_sha: PARENT });
+    const { calls, options } = fakeGitHub([{
+      runs: [run(1, "push", "completed", "main", 5), previous],
+      jobs: { 1: red(), 5: green() },
+    }], source === "version-only parent" ? versionBump : {});
+    expect(await waitForReleaseCi(options)).toMatchObject({ ok: false, reason: expect.stringContaining("failed: run 1") });
+    expect(calls).toEqual([]);
+  });
+
+  it("does not let newly available inherited CI hide a failed release-lane run", async () => {
+    const { calls, options } = fakeGitHub([
+      { runs: [] },
+      {
+        runs: [
+          run(2, "workflow_dispatch", "completed", "release-ci/v0.1.94", 5),
+          run(5, "push", "completed", "main", 0, { head_sha: PARENT }),
+        ],
+        jobs: { 2: red(), 5: green() },
+      },
+    ], versionBump);
+    expect(await waitForReleaseCi(options)).toMatchObject({ ok: false, reason: expect.stringContaining("release lane did not pass (red)") });
+    expect(calls).toEqual(LANE);
   });
 
   it("ignores pull-request runs, which test a merge ref rather than this commit", async () => {

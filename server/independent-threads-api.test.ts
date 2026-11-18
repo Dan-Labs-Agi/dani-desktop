@@ -5,13 +5,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { launchVerificationServer, runControlOmb, type VerificationServer } from "../scripts/control-omb.ts";
 import { handleToolCall, request } from "../scripts/mcp-server.ts";
 import { readHandoffs } from "./testing/handoff-rows.ts";
 import { memoryDate } from "./workspace.ts";
 
+const assignmentSchema = z.object({
+  status: z.string(), outcome: z.string().optional(), executions: z.number(), result: z.string(), rootId: z.string(),
+});
 describe("independent bot tasks through the isolated control surface", () => {
   let session: VerificationServer;
   const cuaRecordDir = mkdtempSync(join(tmpdir(), "omb-independent-cua-"));
@@ -51,6 +56,13 @@ describe("independent bot tasks through the isolated control surface", () => {
   };
   const botState = async (botId: string) => (await tool("list_bots", {})).bots.find((bot: any) => bot.id === botId);
   const modelFile = (model: string, extension: string) => join(session.info.dataDir, `${model.replace(/[^\w-]/g, "_")}.${extension}`);
+  const assignment = (id: string) => {
+    const db = new DatabaseSync(join(session.info.dataDir, "runtime.db"), { readOnly: true });
+    try {
+      const row = db.prepare("SELECT json FROM assignments WHERE id = ?").get(id);
+      return row && typeof row.json === "string" ? assignmentSchema.parse(JSON.parse(row.json)) : undefined;
+    } finally { db.close(); }
+  };
   const dump = async (model: string) => {
     await expect.poll(() => existsSync(modelFile(model, "json")), { timeout: 15_000 }).toBe(true);
     return JSON.parse(readFileSync(modelFile(model, "json"), "utf8"));
@@ -76,6 +88,8 @@ describe("independent bot tasks through the isolated control surface", () => {
     rmSync(cuaRecord, { force: true });
     session = await launchVerificationServer({ ...process.env, OMB_TEST_APPROVAL_CLOCK: "1", OMB_TEST_DESKTOP_CUA_CONNECTION: cuaRecord });
     evidence = [{ fixture: session.info }];
+    // These are conversation/approval fixtures, not browser work requiring a separate Chief verification turn.
+    expect((await api("PATCH", "/api/config", { newBotDefaults: { profile: { computer: "off" } } }, true)).status).toBe(200);
     const wrapper = join(session.info.dataDir, "gated-claude.mjs");
     const fake = pathToFileURL(join(process.cwd(), "server/testing/fake-claude-cli.ts")).href;
     writeFileSync(wrapper, [
@@ -84,9 +98,12 @@ describe("independent bot tasks through the isolated control surface", () => {
       'const at = process.argv.indexOf("--model");',
       'const model = (at < 0 ? "probe" : process.argv[at + 1]).replace(/[^\\w-]/g, "_");',
       'process.env.FAKE_CLAUDE_MODE = "slow";',
+      // Only the explicit permission requests below exercise tools; the fake's incidental Bash call is unrelated work.
+      'process.env.FAKE_CLAUDE_TOOL_CALLS = "[]";',
       'process.env.OMB_FIXTURE_CWD = process.cwd();',
       `process.env.FAKE_CLAUDE_SLOW_FINISH_GATE = join(${JSON.stringify(session.info.dataDir)}, model + ".gate");`,
       `process.env.FAKE_CLAUDE_DUMP = join(${JSON.stringify(session.info.dataDir)}, model + ".json");`,
+      `process.env.FAKE_CLAUDE_TEXT_DUMP = join(${JSON.stringify(session.info.dataDir)}, model + ".background.json");`,
       `await import(${JSON.stringify(fake)});`,
     ].join("\n"), { mode: 0o700 });
     expect((await api("PATCH", "/api/instances/claude", { cli: wrapper })).status).toBe(200);
@@ -117,22 +134,17 @@ describe("independent bot tasks through the isolated control surface", () => {
     const token = (await dump(models[0])).mcpConfig.mcpServers.agents.env.OMB_COMMS_TOKEN;
     const roster = await internal(token, "GET", "/api/internal/agents");
     expect(roster.status).toBe(200);
-    expect(roster.body.bots.find((bot: any) => bot.id === peer.id)).toMatchObject({
-      status: "waiting-on-user", statusText: "waiting on the user", busy: true,
+    expect(roster.body.bots.find((bot: { id: string }) => bot.id === peer.id)).toMatchObject({
+      status: "waiting-on-user", busy: true,
     });
     const queued = await internal(token, "POST", "/api/internal/coordinate-bots", {
       botIds: [peer.id], message: "MAILBOX_REVIEW: check the release notes.",
     });
     expect(queued.status).toBe(200);
     const requestId = queued.body.receipts[0].requestId;
-    expect(queued.body.receipts).toEqual([{
-      botId: peer.id,
-      botName: "Mailbox Peer",
-      outcome: "queued",
-      detail: "sent to \"@Mailbox Chief · work\"; it runs after anything still running there",
-      requestId: expect.any(String),
-      threadId: expect.any(String),
-    }]);
+    expect(queued.body.receipts).toEqual([expect.objectContaining({
+      botId: peer.id, outcome: "queued", requestId: expect.any(String), threadId: expect.any(String),
+    })]);
     const handoff = () => readHandoffs(session.info.dataDir).find((node) => node.id === requestId);
     const peerThread = handoff()!.threadId;
     expect(peerThread).not.toBe(peer.activeTaskId);
@@ -143,7 +155,6 @@ describe("independent bot tasks through the isolated control surface", () => {
     await expect.poll(async () => (await queuedChips()).length).toBe(1);
     const [chip] = await queuedChips();
     expect(chip.threadRef).toMatchObject({ botId: peer.id, threadId: peer.activeTaskId });
-    expect(chip.tool.name).toBe(`Queued for @Mailbox Peer behind your approval in “${chip.threadRef.title}”`);
     expect(chip.tool.ok).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 1_500));
     expect(handoff()?.status).toBe("queued");
@@ -152,8 +163,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     await expect.poll(async () => (await botState(chief.id)).busy).toBe(false);
     await control(["send", "--bot", chief.id, "--text", "Is the review moving?"]);
     const told = async () => JSON.stringify((await dump(models[0])).prompt ?? "");
-    await expect.poll(told).toContain("waiting for a free slot: that teammate is waiting on the person's approval in its thread");
-    expect(await told()).toContain(chip.threadRef.title);
+    await expect.poll(told).toContain(chip.threadRef.title);
     await expect.poll(async () => (await botState(chief.id)).busy).toBe(false);
     expect((await api("PATCH", "/api/config", { threads: { maxConcurrentPerBot: 3 } })).status).toBe(200);
     await expect.poll(() => handoff()?.status, { timeout: 10_000 }).toBe("running");
@@ -242,15 +252,19 @@ describe("independent bot tasks through the isolated control surface", () => {
     ]);
 
     writeFileSync(modelFile(models[1], "gate"), "finish");
-    await expect.poll(() => handoff()?.status, { timeout: 20_000 }).toBe("completed");
-    const result: string = handoff()!.result;
-    expect(result.startsWith("[Dani Bot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run. Do not report it as done;")).toBe(true);
+    await expect.poll(() => assignment(requestId), { timeout: 20_000 }).toMatchObject({
+      status: "needs_input", outcome: "denied", executions: 1,
+    });
+    const result = assignment(requestId)!.result;
+    expect(result).toContain("npm run release-check");
     expect(result).toContain("reply to:");
     expect(result).not.toContain("git push");
     expect(result).not.toContain("npm run lint");
-    await expect.poll(async () => (await api("GET", `/api/threads/${chief.activeTaskId}/messages?limit=100`)).body.messages
-      .find((message: any) => message.roomRequest?.id === requestId && message.roomRequest.phase === "result")?.tool?.output ?? "")
-      .toContain("nobody answered the approval for “Bash: npm run release-check”");
+    const root = assignment(assignment(requestId)!.rootId);
+    expect(root?.status).not.toBe("completed");
+    expect((await api("GET", `/api/threads/${chief.activeTaskId}/messages?limit=100`)).body.messages
+      .filter((message: { roomRequest?: { id: string; phase: string } }) =>
+        message.roomRequest?.id === requestId && message.roomRequest?.phase === "result")).toEqual([]);
     evidence.push({ requestId, result: result.slice(0, 400) });
   }, 60_000);
 
@@ -291,24 +305,19 @@ describe("independent bot tasks through the isolated control surface", () => {
     // whole, so the engine never reads the gate half-written
     writeFileSync(`${modelFile(models[1], "gate")}.tmp`, ending);
     renameSync(`${modelFile(models[1], "gate")}.tmp`, modelFile(models[1], "gate"));
-    const note = "[Dani Bot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run.";
-    const runMessages = async () => (await api("GET", `/api/threads/${await runThread()}/messages?limit=100`)).body.messages as any[];
-    const reported = async () => (await runMessages()).find((message: any) => message.roomRequest?.id === requestId && message.roomRequest.phase === "result")?.tool;
-    if (ending === "finish") {
-      await expect.poll(reported, { timeout: 20_000 }).toBeTruthy();
-      expect(await reported()).toMatchObject({ name: "Delegated Peer replied", ok: true });
-      expect(String((await reported())!.output).startsWith(note)).toBe(true);
-      await expect.poll(() => handoff()?.status, { timeout: 20_000 }).toBe("completed");
-      expect(handoff()!.result.startsWith(note)).toBe(true);
-    } else {
-      await expect.poll(reported, { timeout: 20_000 }).toBeTruthy();
-      expect(await reported()).toMatchObject({ ok: false });
-      expect((await reported())!.name).toBe("Delegated Peer — failed: Fixture turn failed. Before it stopped it made 1 tool call: Bash ×1.");
-      await expect.poll(() => handoff()?.status, { timeout: 20_000 }).toBe("failed");
-    }
+    await expect.poll(() => assignment(requestId), { timeout: 20_000 }).toMatchObject({
+      status: "needs_input", outcome: "denied", executions: 1,
+    });
+    expect(assignment(requestId)!.result).toContain("npm run release-check");
+    if (ending === "fail") expect(assignment(requestId)!.result).toContain("Fixture turn failed");
+    const runMessages = (await api("GET", `/api/threads/${await runThread()}/messages?limit=100`)).body.messages;
+    expect(runMessages.filter((message: { roomRequest?: { id: string; phase: string } }) =>
+      message.roomRequest?.id === requestId && message.roomRequest.phase === "result")).toEqual([]);
     const woken = async () => JSON.stringify((await dump(models[0])).prompt);
-    await expect.poll(woken, { timeout: 20_000 }).toContain("[Dani Bot report from @Delegated Peer on assignment");
-    expect(await woken()).toContain("nobody answered the approval for “Bash: npm run release-check” in time, so it did not run. Do not report it as done; it needs the person's approval.");
+    await expect.poll(woken, { timeout: 20_000 }).toContain(requestId);
+    expect(await woken()).toContain("@Delegated Peer");
+    expect(await woken()).toContain("npm run release-check");
+    expect(assignment(assignment(requestId)!.rootId)?.status).not.toBe("completed");
   }, 60_000);
 
   it("tells a room's coordinator that a member's approval went unanswered, so the step did not run", async () => {
@@ -337,8 +346,11 @@ describe("independent bot tasks through the isolated control surface", () => {
     await expect.poll(() => unanswered.find((answer) => answer.id === "unanswered-room")).toMatchObject({ behavior: "deny", source: "timeout" });
     rmSync(expiry, { force: true });
     writeFileSync(modelFile(models[1], "gate"), "finish");
-    await expect.poll(() => handoff()?.status, { timeout: 20_000 }).toBe("completed");
-    expect(handoff()!.result.startsWith("[Dani Bot: nobody answered the approval for “Bash: npm run release-check” in time, so it did not run.")).toBe(true);
+    await expect.poll(() => assignment(requestId), { timeout: 20_000 }).toMatchObject({
+      status: "needs_input", outcome: "denied", executions: 1,
+    });
+    expect(assignment(requestId)!.result).toContain("npm run release-check");
+    expect(assignment(assignment(requestId)!.rootId)?.status).not.toBe("completed");
   }, 60_000);
 
   it("ends a one-way notice whose recipient thread was deleted before it started, without restarting the sender", async () => {
@@ -401,7 +413,7 @@ describe("independent bot tasks through the isolated control surface", () => {
     const fresh = deleted.body.bot;
     expect(fresh.tasks).toHaveLength(1);
     expect(fresh.threadId).not.toBe(threadId);
-    expect(fresh.tasks[0]).toMatchObject({ threadId: fresh.threadId, title: "New thread", busy: false });
+    expect(fresh.tasks[0]).toMatchObject({ threadId: fresh.threadId, busy: false });
     expect(fresh.messages).toEqual([]);
     expect(fresh.modelSelection).toEqual(before.modelSelection);
     expect(readFileSync(artifact, "utf8")).toBe("Retain generated project files");

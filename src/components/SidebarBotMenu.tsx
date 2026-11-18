@@ -19,7 +19,7 @@ import { submenuPosition } from "./SidebarPopoverMenu";
 import { submenuIntent, type SubmenuIntent } from "@/lib/submenu-intent";
 import { useAdvancedMode } from "@/lib/interface-mode";
 import { useMoveToTeam } from "./MoveToTeam";
-import type { MenuState } from "./Sidebar";
+import type { MenuState } from "@/lib/sidebar-selection";
 import { departmentNames, moveBotsToSection, useMayMoveBots } from "./bot-sections";
 
 type Flyout = "more" | "move";

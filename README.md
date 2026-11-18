@@ -26,11 +26,11 @@
 
 ## One assistant in one box is the wrong shape for agents.
 
-Dani Bot is a messaging app for agents. Every bot in the sidebar is a real agent, running on the CLIs and models you already have or the built-in free model route, with its own personality, model, computer, and connected apps.
+Dani Bot is a messaging app for agents. Every bot in the sidebar runs through Hermes Agent, with its own personality, model, computer, and connected apps.
 
 **Talk to them like contacts. Watch them work. Approve what matters.**
 
-- **Bring your own agents.** Bots run on the `claude`, `codex`, and `grok` CLIs on your own machine, with your existing logins and subscriptions. No new accounts, no proxy in the middle. Point any engine at a custom binary in **Settings → Engines**.
+- **One harness, your choice of model.** Hermes Agent runs every bot. Choose models from Hermes' configured providers or discovered local endpoints; choosing a different model does not choose a different agent CLI.
 - **Local first.** One small harness server on `127.0.0.1` owns every agent process. Transcripts, keys, and events live in `~/.danibot`, not a cloud.
 - **Agents with hands.** A bot can use a cloud Linux desktop, an isolated Local VM, or your own computer where the platform's safety boundary is certified, plus 500+ apps through Composio.
 
@@ -46,7 +46,9 @@ Right-click any bot to pin it, mark it unread, edit its profile, duplicate it, c
 
 ### A different brain for every bot
 
-Each bot starts with Dani free models. Installed agents, your provider accounts, and discovered local models remain optional choices in the model picker. Switch mid-conversation.
+Every bot uses Hermes Agent, but its model is independent. Choose a configured hosted or local model per bot, or pin a different model to one conversation. If Hermes or the chosen model is unavailable, Dani does not silently switch to another harness.
+
+Saved bot, conversation, and backup selections migrate to Hermes on restart without changing their model IDs. Legacy unscoped model IDs must be reselected from Hermes' catalog rather than guessed or replaced with another provider. Conversations and bot instructions are retained; engine-specific effort and variant controls reset when changing harnesses.
 
 <img src="docs/assets/readme/models.webp" width="100%" alt="The per-bot model picker open over a chat with Dani, listing the models available to its engine.">
 
@@ -70,7 +72,7 @@ A one-click marketplace over Composio Sessions: Gmail, Slack, GitHub, Notion, Li
 
 ### Keys once, everything lights up
 
-Paste credentials in App Settings. They persist locally and the provider fleet hot-reloads instantly. Secrets are write-only: the UI only ever sees "configured" flags.
+Credentials persist locally and are write-only: the UI sees status, never the key. Hermes uses its own configured model providers; a login or API key saved for another agent CLI is not automatically exported to Hermes.
 
 <img src="docs/assets/readme/keys.webp" width="100%" alt="AI settings listing each provider with a single Set up button, plus an API keys section.">
 
@@ -107,9 +109,9 @@ Paste credentials in App Settings. They persist locally and the provider fleet h
 
 ## How it works
 
-<img src="docs/assets/readme/architecture.webp" width="100%" alt="Architecture: the app sends HTTP commands to a harness server on 127.0.0.1:8799 and folds one SSE stream back. The harness spawns local agent CLIs, brokers their permission requests, and optionally talks to a Box cloud computer and Composio connected apps.">
+<img src="docs/assets/readme/architecture.webp" width="100%" alt="Architecture: the app sends HTTP commands to a local server and folds one SSE stream back. Hermes Agent executes bot turns through ACP, while the server brokers permission requests and connected tools.">
 
-Two processes. The app holds no transports of its own: it sends typed commands over HTTP and folds one SSE stream into state. The harness owns every agent process and normalizes each provider's native protocol into one canonical event stream, logged per thread as NDJSON.
+Two processes. The app holds no transports of its own: it sends typed commands over HTTP and folds one SSE stream into state. The server owns Hermes sessions and normalizes ACP events into one canonical event stream, logged per thread as NDJSON.
 
 <details>
 <summary><b>Where everything lives</b></summary>
@@ -118,7 +120,7 @@ Two processes. The app holds no transports of its own: it sends typed commands o
 
 | Layer | Where | What it does |
 | :-- | :-- | :-- |
-| **Drivers** | `server/drivers/` | One per provider: Claude, Codex, and Grok over their local CLIs (stream-JSON / JSON-RPC / ACP), a cloud-computer agent, and drivers for Gemini, Kimi, Droid, Cursor, OpenCode, Qwen, Hermes, Cline, Copilot, Pi, and more. Unknown drivers degrade to "unavailable" and never crash the fleet. |
+| **Drivers** | `server/drivers/` | Hermes ACP executes production bot turns. Other provider integrations remain internal and in isolated protocol fixtures, not alternative bot harnesses. Unknown drivers degrade to "unavailable" rather than crashing the fleet. |
 | **Harness** | `server/harness/` | Registry (configs → live instances) and the fan-in event bus every client folds. |
 | **API** | `server/index.ts` | Bots, turns, approvals, model catalog, computer lifecycle, connectors, config, over HTTP + SSE. |
 | **Voice** | `server/tts/` | ElevenLabs, bring your own key. Runs on the harness so the key never reaches the UI. |

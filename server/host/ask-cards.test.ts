@@ -54,8 +54,10 @@ function world(options: { inboxThread?: string; live?: string[] } = {}) {
     answerCard: vi.fn(async (input) => {
       if (refuse) return { ok: false as const, ...refuse };
       answers.push({ threadId: input.threadId, requestId: input.requestId, message: input.message });
+      input.onAnswered?.();
       return { ok: true as const };
     }),
+    bindAcceptedAnswer: (_threadId, answer) => answer,
     answeredIn: (threadId, requestId) => (threadId === "inbox" && requestId.startsWith("req") ? "work" : threadId),
     answerNode: (id, text) => {
       const parked = nodes.get(id);

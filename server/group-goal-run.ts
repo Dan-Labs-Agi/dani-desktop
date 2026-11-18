@@ -1,4 +1,5 @@
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
+import type { BlockedTurn } from "./runtime/types.ts";
 import type { GroupDefaultResponder } from "./store.ts";
 
 // Odd so the final bounded turn always falls to the coordinator for the completion decision.
@@ -7,6 +8,14 @@ export const GROUP_GOAL_WAIT_MAX_MS = Math.max(1_000, Number(process.env.OMB_GOA
 const GROUP_GOAL_MAX_WAIT_EXHAUSTIONS = 3;
 export const GROUP_GOAL_CONTROL_OPEN = "<openmaus-goal>";
 export const GROUP_GOAL_CONTROL_CLOSE = "</openmaus-goal>";
+
+/** Browser admission restores availability, not authority to replay previous effects. */
+export const BROWSER_HAND_BACK_INSTRUCTION =
+  "The browser is available again. Inspect the current browser state before acting. " +
+  "Continue the original goal from the actual state, doing only the remaining work. " +
+  "Do not repeat actions or consequential effects that already committed. " +
+  "If a prior consequential effect is uncertain, verify its receipt or report a blocker instead of replaying it. " +
+  "Browser hand-back does not grant any new permission.";
 
 export type GroupGoalDecision =
   | { status: "continue"; next: string; instruction: string; detail?: string }
@@ -178,6 +187,8 @@ export interface GoalStepResult {
   replyText: string;
   outcome?: GoalStepOutcome;
   stopReason?: string | null;
+  waitingOnBrowser?: string;
+  blocked?: BlockedTurn;
 }
 
 export type GoalRunEnd = Exclude<GroupGoalRunStatus, "working">;
@@ -192,6 +203,8 @@ export interface GoalRunDeps<Bot extends GoalRunMember> {
   current(botId: string): Bot | undefined;
   /** One member turn; a step counts against the run's turns once its member is claimed. */
   step(bot: Bot, coordinator: boolean, instructions: string): Promise<GoalStepResult>;
+  /** Waits for authoritative browser admission without dispatching another member turn. */
+  waitForBrowser?(session: string, cancelled: () => boolean): Promise<boolean>;
   finish(status: GoalRunEnd, detail: string): void;
   progress(detail: string): void;
   /** An activity row in the conversation, from the coordinator. */
@@ -202,10 +215,24 @@ export interface GoalRunDeps<Bot extends GoalRunMember> {
 const TRANSIENT_STEP: ReadonlySet<GoalStepOutcome | undefined> = new Set(["provider_failed", "dispatch_failed", "stalled", "timed_out"]);
 
 async function stepOnceRetried<Bot extends GoalRunMember>(deps: GoalRunDeps<Bot>, bot: Bot, coordinator: boolean, instructions: string): Promise<GoalStepResult> {
-  const first = await deps.step(bot, coordinator, instructions);
-  if (!TRANSIENT_STEP.has(first.outcome) || deps.cancelled()) return first;
-  deps.progress(`${bot.name}'s turn did not settle (${first.outcome!.replace("_", " ")}) — retrying once.`);
-  return deps.step(bot, coordinator, instructions);
+  let result = await deps.step(bot, coordinator, instructions);
+  let retried = false;
+  let nextInstructions = instructions;
+  for (;;) {
+    if (result.blocked || deps.cancelled() || deps.run.turnCount >= deps.run.maxTurns) return result;
+    if (result.waitingOnBrowser) {
+      if (!deps.waitForBrowser) return result;
+      deps.progress(`${bot.name} is waiting for browser hand-back. The same goal will resume when it is available.`);
+      const ready = await deps.waitForBrowser(result.waitingOnBrowser, deps.cancelled);
+      if (!ready || deps.cancelled()) return result;
+      nextInstructions = `${instructions}\n${BROWSER_HAND_BACK_INSTRUCTION}`;
+    } else {
+      if (retried || !TRANSIENT_STEP.has(result.outcome)) return result;
+      retried = true;
+      deps.progress(`${bot.name}'s turn did not settle (${result.outcome!.replace("_", " ")}) — retrying once.`);
+    }
+    result = await deps.step(bot, coordinator, nextInstructions);
+  }
 }
 
 /** The goal run loop, the same for a room and a one-on-one chat (a room of one). */
@@ -235,6 +262,15 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       solo: deps.solo,
     }));
     if (deps.cancelled()) return;
+    if (coordinatorResult.blocked) {
+      deps.finish("blocked", coordinatorResult.blocked.reason);
+      return;
+    }
+    if (coordinatorResult.waitingOnBrowser) {
+      if (run.turnCount >= run.maxTurns) break;
+      deps.finish("blocked", coordinatorResult.stopReason ?? `${coordinator.name} could not regain the browser to continue the goal.`);
+      return;
+    }
     if (coordinatorResult.outcome === "unavailable") {
       deps.finish("blocked", `${coordinator.name} is not available.`);
       return;
@@ -302,6 +338,15 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       maxTurns: run.maxTurns,
     }));
     if (deps.cancelled()) return;
+    if (workerResult.blocked) {
+      deps.finish("blocked", workerResult.blocked.reason);
+      return;
+    }
+    if (workerResult.waitingOnBrowser) {
+      if (run.turnCount >= run.maxTurns) break;
+      deps.finish("blocked", workerResult.stopReason ?? `${workerBot.name} could not regain the browser to continue the goal.`);
+      return;
+    }
     if (workerResult.outcome === "unavailable") {
       deps.finish("blocked", `${workerBot.name} is not available.`);
       return;

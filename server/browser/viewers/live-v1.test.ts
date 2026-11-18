@@ -122,7 +122,7 @@ describe("the v1 live view on the new browser", () => {
     expect(service.heldBy("a")).toBe("local-owner");
     const reopened = await open();
     const control = () => [...reopened.sse.events].reverse().find((event) => event.type === "control")?.data;
-    expect(control()).toEqual({ held: true, owned: true, controlling: true });
+    expect(control()).toMatchObject({ held: true, owned: true, controlling: true });
     expect(await reopened.action({ type: "input_keyboard", eventType: "char", text: "x" })).toEqual({ ok: true });
     reopened.sse.destroy();
     await sleep(60);
@@ -146,6 +146,19 @@ describe("the v1 live view on the new browser", () => {
     await phone.action({ type: "release" });
     expect(service.heldBy("a")).toBeNull();
     expect(control(laptop)).toEqual({ held: false, owned: false, controlling: false });
+  });
+
+  it("keeps a newer view's hold when an older reservation is cleaned up over HTTP", async () => {
+    const { service, open } = setup();
+    const failed = await open();
+    const active = await open();
+    await failed.action({ type: "take", attempt: "failed-reservation" });
+    await active.action({ type: "take", attempt: "kept-reservation" });
+    await failed.action({ type: "release", attempt: "failed-reservation" });
+    expect(service.heldBy("a")).toBe("local-owner");
+    await expect(active.action({ type: "input_keyboard", eventType: "char", text: "still mine" })).resolves.toEqual({ ok: true });
+    await active.action({ type: "release", attempt: "kept-reservation" });
+    expect(service.heldBy("a")).toBeNull();
   });
 
   it("turns a phone's keys into real key events, with Enter's text from the US layout", async () => {

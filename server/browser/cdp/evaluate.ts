@@ -82,7 +82,7 @@ export async function evaluate(frames: FrameTree, expression: string, options: E
   if (!frame) throw new DriverError("not-found", "That frame is gone.");
   const result = world === "isolated"
     ? await frames.inWorld(frameId, (session, contextId) =>
-      withDeadline(session, session.send<EvaluationResult>("Runtime.evaluate", { expression, contextId, awaitPromise, returnByValue: true }, { timeoutMs: timeoutMs + SETTLE_MS }), timeoutMs))
+      withDeadline(session, session.send<EvaluationResult>("Runtime.evaluate", { expression, contextId, awaitPromise, returnByValue: true }, { timeoutMs: timeoutMs + SETTLE_MS, effect: true }), timeoutMs))
     : await evaluateInPageWorld(frames, frameId, expression, awaitPromise, timeoutMs);
   if (result.exceptionDetails) throw new DriverError("execution", exceptionText(result.exceptionDetails));
   return checkSize(valueOf(result.result));
@@ -92,7 +92,7 @@ async function evaluateInPageWorld(frames: FrameTree, frameId: string, expressio
   const frame = frames.get(frameId)!;
   const session = frame.session;
   if (frames.rootOf(session) === frameId) {
-    return withDeadline(session, session.send<EvaluationResult>("Runtime.evaluate", { expression, awaitPromise, returnByValue: true }, { timeoutMs: timeoutMs + SETTLE_MS, pageWorld: true }), timeoutMs);
+    return withDeadline(session, session.send<EvaluationResult>("Runtime.evaluate", { expression, awaitPromise, returnByValue: true }, { timeoutMs: timeoutMs + SETTLE_MS, pageWorld: true, effect: true }), timeoutMs);
   }
   // A frame that shares its renderer with its parent: run in that document's own world through the node itself.
   const documentId = await frames.inWorld(frameId, async (worldSession, contextId) => {
@@ -112,7 +112,7 @@ async function evaluateInPageWorld(frames: FrameTree, frameId: string, expressio
       arguments: [{ value: expression }],
       awaitPromise,
       returnByValue: true,
-    }, { timeoutMs: timeoutMs + SETTLE_MS }), timeoutMs);
+    }, { timeoutMs: timeoutMs + SETTLE_MS, effect: true }), timeoutMs);
   } finally {
     void session.send("Runtime.releaseObject", { objectId: object.objectId }).catch(() => {});
   }
@@ -124,7 +124,7 @@ export async function callOnNode<T>(
   handle: NodeHandle,
   fn: string,
   args: readonly unknown[] = [],
-  { awaitPromise = false }: { awaitPromise?: boolean } = {},
+  { awaitPromise = false, effect = false }: { awaitPromise?: boolean; effect?: boolean } = {},
 ): Promise<T> {
   return frames.inWorld(handle.frameId, async (session, contextId) => {
     const objectId = await resolveInWorld(session, handle.backendNodeId, contextId);
@@ -135,7 +135,7 @@ export async function callOnNode<T>(
         arguments: args.map((value) => ({ value })),
         returnByValue: true,
         awaitPromise,
-      });
+      }, { effect });
       if (result.exceptionDetails) throw new DriverError("execution", exceptionText(result.exceptionDetails));
       return valueOf(result.result) as T;
     } finally {

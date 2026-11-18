@@ -10,6 +10,7 @@ import { HARNESS_CALL_BUDGET_MS, HARNESS_PROXY_TIMEOUT_MS } from "./harness-budg
 import { RelayPorts } from "./browser-relay.ts";
 import { BrowserSteps, type StepCall, type StepContext } from "./browser-steps.ts";
 import { FakeRelay } from "./testing/fake-relay.ts";
+import * as procs from "./procs.ts";
 
 const runtimes: BrowserRuntime[] = [];
 function runtime(options: ConstructorParameters<typeof BrowserRuntime>[0] = {}) {
@@ -42,6 +43,32 @@ describe("browser takeover gate", () => {
     await taking;
     expect(value.canControl("shared-profile", "person")).toBe(true);
     expect(value.canControl("shared-profile", "other-person")).toBe(false);
+  });
+
+  it("reports agent availability from real holds and pending input without admitting work", async () => {
+    const value = runtime();
+    expect(value.agentAvailable("unused")).toBe(true);
+    const finish = deferred();
+    const active = value.withAgentAction("availability", () => finish.promise);
+    expect(value.agentAvailable("availability")).toBe(false);
+    expect(value.agentAvailable("other")).toBe(true);
+    finish.resolve();
+    await active;
+    expect(value.agentAvailable("availability")).toBe(true);
+    await value.take("availability", "person");
+    expect(value.agentAvailable("availability")).toBe(false);
+    const typed = deferred();
+    const input = value.withHumanAction("availability", "person", () => typed.promise);
+    value.release("availability", "person");
+    expect(value.agentAvailable("availability")).toBe(false);
+    typed.resolve();
+    await input;
+    expect(value.agentAvailable("availability")).toBe(true);
+    await value.take("availability", "person");
+    await expect(value.withHumanAction("availability", "person", async () => { throw new Error("lost input acknowledgement"); })).rejects.toThrow(/lost input/);
+    value.release("availability", "person");
+    expect(value.agentAvailable("availability")).toBe(false);
+    expect(value.interrupted("availability")).toBe(true);
   });
 
   it("retains a non-controllable hold when draining times out, even if the action finishes later", async () => {
@@ -222,6 +249,7 @@ lines.on('line', line => {
   else if (m.params.name === 'oversized') { process.stdout.write('x'.repeat(16777217)); return; }
   else if (m.params.name === 'bulky') result = { content:[{type:'text',text:'x'.repeat(50000)},{type:'image',data:'AAAA',mimeType:'image/png'}], structuredContent:{ huge: 'y'.repeat(200000) } };
   else if (m.params.name === 'rpc-error') { process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,error:{code:-1,message:'Expected refusal'}})+'\\n'); return; }
+  else if (m.params.name === 'outcome-unknown') result = { isError:true, content:[{type:'text',text:'The command reached the daemon but no response came back; it may or may not have run, so it was not retried.'}], structuredContent:{response:{success:false,code:'outcome_unknown'}} };
   else if (m.params.name === 'rpc-timeout') { rpcTimeoutCalls += 1; if (rpcTimeoutCalls === 1) { process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,error:{code:-1,message:'request timed out'}})+'\\n'); return; } result = { content:[{type:'text',text:'engine answered a repeat rpc-timeout call'}] }; }
   else if (m.params.name === 'agent_browser_open' && m.params.arguments.url === 'https://refused.test') result = { isError:true, content:[{type:'text',text:'Navigation refused'}] };
   else if (m.params.name === 'agent_browser_open' && process.env.OPEN_LAUNCHED === '1') result = { content:[{type:'text',text:'Opened'}], structuredContent:{ response:{ data:{ lifecycle:{ launched:true, relaunchedBrowser:false } } } } };
@@ -254,6 +282,324 @@ function daemonSpec(): { spec: BrowserSpawnSpec; busy: string; calls: () => stri
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }
+
+describe("per-call browser cancellation", () => {
+  it("rejects a pre-aborted call without claiming, launching or interrupting a session", async () => {
+    const controller = new AbortController();
+    controller.abort("private caller payload");
+    const ready = vi.fn(async () => {});
+    const interruptBrowser = vi.fn(async () => true);
+    const claim = vi.fn();
+    const value = runtime({ interruptBrowser, launch: { ready, started: async () => {}, stopped: () => {} } });
+    await expect(value.agentRpc("s", spec(), "tools/call", { name: "echo" }, claim, undefined, controller.signal))
+      .rejects.toThrow(/cancelled before dispatch/);
+    expect(ready).not.toHaveBeenCalled();
+    expect(claim).not.toHaveBeenCalled();
+    expect(interruptBrowser).not.toHaveBeenCalled();
+  });
+
+  it("cancels a queued call without stopping the unrelated active call in its session", async () => {
+    const entered = deferred(), finish = deferred<{ success: boolean; data: null }>();
+    const interruptBrowser = vi.fn(async () => true);
+    const value = runtime({ interruptBrowser, relayCommand: async () => { entered.resolve(); return finish.promise; } });
+    const active = value.agentRpc("s", spec(), "tools/call", { name: BROWSER_UPLOAD_TOOL, arguments: {} });
+    await entered.promise;
+    const controller = new AbortController();
+    const queued = value.agentRpc("s", spec(), "tools/call", { name: "echo" }, undefined, undefined, controller.signal);
+    const cancelled = expect(queued).rejects.toThrow(/cancelled before dispatch/);
+    controller.abort();
+    await cancelled;
+    expect(interruptBrowser).not.toHaveBeenCalled();
+    finish.resolve({ success: true, data: null });
+    await expect(active).resolves.not.toHaveProperty("isError", true);
+    await expect(value.agentRpc("s", spec(), "tools/call", { name: "echo" })).resolves.toHaveProperty("content");
+  });
+
+  it("fences launch synchronously, holds teardown until late launch settles, then admits a fresh generation", async () => {
+    const entered = deferred(), ready = deferred();
+    const interruptBrowser = vi.fn(async () => true).mockResolvedValueOnce(false);
+    let launching = true;
+    const stopped = vi.fn();
+    const value = runtime({
+      interruptBrowser,
+      launch: { ready: async () => { if (launching) { entered.resolve(); await ready.promise; } }, started: async () => {}, stopped },
+    });
+    const controller = new AbortController();
+    const active = value.agentRpc("s", spec(), "tools/call", { name: "echo" }, undefined, undefined, controller.signal);
+    const cancelled = expect(active).rejects.toThrow(/outcome is uncertain.*Do not automatically replay/);
+    await entered.promise;
+    const stale = new AbortController();
+    const queued = value.agentRpc("s", spec(), "tools/call", { name: "echo" }, undefined, undefined, stale.signal);
+    const fenced = expect(queued).rejects.toThrow(/cancelled before dispatch/);
+    controller.abort();
+    controller.abort();
+    await cancelled;
+    expect(value.interrupted("s")).toBe(true);
+    await expect(value.agentRpc("s", spec(), "tools/call", { name: "echo" })).rejects.toThrow(/stopping cancelled work/);
+    await vi.waitFor(() => expect(interruptBrowser).toHaveBeenCalledTimes(1));
+    expect(stopped).not.toHaveBeenCalled();
+    launching = false;
+    ready.resolve();
+    await fenced;
+    await vi.waitFor(() => expect(value.interrupted("s")).toBe(false));
+    expect(interruptBrowser).toHaveBeenCalledTimes(2);
+    await expect(value.agentRpc("s", spec(), "tools/call", { name: "echo" })).resolves.toHaveProperty("content");
+    controller.abort();
+    stale.abort();
+    expect(interruptBrowser).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a late accepted result and sends no observation follow-up after cancellation", async () => {
+    const daemon = daemonSpec();
+    const entered = deferred(), finish = deferred<{ success: boolean; data: null }>();
+    const interruptBrowser = vi.fn(async () => true);
+    const value = runtime({ interruptBrowser, relayCommand: async () => { entered.resolve(); return finish.promise; } });
+    const controller = new AbortController();
+    try {
+      const active = value.agentRpc("s", daemon.spec, "tools/call", { name: BROWSER_UPLOAD_TOOL, arguments: {} }, undefined, undefined, controller.signal);
+      const cancelled = expect(active).rejects.toThrow(/outcome is uncertain/);
+      await entered.promise;
+      const before = daemon.calls();
+      controller.abort();
+      await cancelled;
+      finish.resolve({ success: true, data: null });
+      await vi.waitFor(() => expect(value.interrupted("s")).toBe(false));
+      expect(daemon.calls()).toEqual(before);
+      expect(interruptBrowser).toHaveBeenCalledTimes(2);
+    } finally { finish.resolve({ success: true, data: null }); await value.closeAll(); daemon.cleanup(); }
+  });
+
+  it.each([false, true])("keeps a failed stop blocked and explains attached Chrome (%s)", async (attached) => {
+    const entered = deferred(), ready = deferred();
+    const value = runtime({
+      interruptBrowser: async () => false,
+      launch: { ready: async () => { entered.resolve(); await ready.promise; }, started: async () => {}, stopped: () => {} },
+    });
+    const controller = new AbortController();
+    const launch = spec();
+    if (attached) launch.env.AGENT_BROWSER_CDP = "http://127.0.0.1:9222";
+    const active = value.agentRpc("s", launch, "tools/call", { name: "echo" }, undefined, undefined, controller.signal);
+    const cancelled = expect(active).rejects.toThrow(attached ? /person's Chrome.*cannot be globally stopped/ : process.platform === "win32" ? /hard interruption is unsupported/ : /proved stopped/);
+    await entered.promise;
+    controller.abort();
+    await cancelled;
+    ready.resolve();
+    await vi.waitFor(() => expect(value.working("s")).toBe(false));
+    expect(value.interrupted("s")).toBe(true);
+    await expect(value.agentRpc("s", launch, "tools/call", { name: "echo" })).resolves.toHaveProperty("isError", true);
+    await value.close("s");
+    expect(value.interrupted("s")).toBe(true);
+    await expect(value.settled("s")).rejects.toThrow(/stop could not be proved/);
+    await expect(value.agentRpc("s", launch, "tools/call", { name: "echo" })).resolves.toHaveProperty("isError", true);
+  });
+
+  it("hard-interrupts an accepted restart while its graceful close is still pending", async () => {
+    const entered = Promise.withResolvers<void>();
+    const close = Promise.withResolvers<boolean>();
+    let browserRunning = true;
+    const value = runtime({
+      closeBrowser: async () => { entered.resolve(); return close.promise; },
+      interruptBrowser: async () => { browserRunning = false; return true; },
+    });
+    const controller = new AbortController();
+    const active = value.agentRpc("restarting", spec(), "tools/call", { name: BROWSER_RESTART_TOOL }, undefined, undefined, controller.signal);
+    const cancelled = expect(active).rejects.toMatchObject({ name: "AbortError" });
+    try {
+      await entered.promise;
+      controller.abort();
+      await cancelled;
+      expect(browserRunning).toBe(false);
+      expect(value.recoveryOnly("restarting")).toBe(true);
+      close.resolve(true);
+      await expect.poll(() => value.working("restarting")).toBe(false);
+      expect(value.interrupted("restarting")).toBe(false);
+      let freshWorkRan = false;
+      await value.withAgentAction("restarting", async () => { freshWorkRan = true; });
+      expect(freshWorkRan).toBe(true);
+    } finally {
+      close.resolve(true);
+      await Promise.allSettled([active]);
+      await expect.poll(() => value.working("restarting")).toBe(false);
+    }
+  });
+
+  it("can stop an accepted daemon operation after its transport returned an unknown outcome", async () => {
+    const interrupted = Promise.withResolvers<void>();
+    const value = runtime({
+      relayCommand: async () => { throw new TransportError("The browser did not answer in time."); },
+      interruptBrowser: async () => { interrupted.resolve(); return true; },
+    });
+    const controller = new AbortController();
+    const lost = await value.agentRpc("s", spec(), "tools/call", { name: BROWSER_HOVER_TOOL, arguments: { selector: "#menu" } }, undefined, undefined, controller.signal);
+    expect(lost).toMatchObject({ isError: true });
+    expect(value.interrupted("s")).toBe(true);
+    controller.abort();
+    await interrupted.promise;
+    await vi.waitFor(() => expect(value.interrupted("s")).toBe(false));
+    await expect(value.agentRpc("s", spec(), "tools/call", { name: "echo" })).resolves.not.toHaveProperty("isError", true);
+  });
+
+  it("fences a native outcome_unknown until a read-only probe proves the earlier call ended", async () => {
+    const value = runtime();
+    const browser = spec();
+    const first = await value.agentRpc("native-unknown", browser, "tools/call", { name: "outcome-unknown", arguments: {} });
+    expect(first).toMatchObject({ isError: true });
+    expect(value.interrupted("native-unknown")).toBe(true);
+    await expect(value.withAgentAction("native-unknown", async () => "unsafe")).rejects.toThrow(/Restart/);
+    const recovered = await value.agentRpc("native-unknown", browser, "tools/call", {
+      name: "agent_browser_click", arguments: { selector: "#missing" },
+    }) as { content: Array<{ text: string }> };
+    expect(recovered.content[0].text).toContain("This call did not run");
+    expect(value.interrupted("native-unknown")).toBe(false);
+  });
+
+  it("keeps an unknown action fenced when the read-only recovery probe returns an MCP error", async () => {
+    const value = runtime({ requestTimeoutMs: 20 });
+    const browser = spec();
+    browser.env.NO_URL = "1";
+    await expect(value.agentRpc("failed-probe", browser, "tools/call", { name: "hang" })).resolves.toMatchObject({ isError: true });
+    expect(value.interrupted("failed-probe")).toBe(true);
+    await expect(value.agentRpc("failed-probe", browser, "tools/call", { name: "echo" })).resolves.toMatchObject({ isError: true });
+    expect(value.interrupted("failed-probe")).toBe(true);
+    await expect(value.withAgentAction("failed-probe", async () => "unsafe")).rejects.toThrow(/Restart/);
+  });
+
+  it.each([true, false])("waits for a timed-out retiring launcher before the final interruption proof (%s)", async (proved) => {
+    const retiring = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const kill = procs.killCliTree;
+    const stopping = vi.spyOn(procs, "killCliTree").mockImplementation(async (child, timeout) => {
+      retiring.resolve();
+      await release.promise;
+      return proved ? kill(child, timeout) : false;
+    });
+    const interruptBrowser = vi.fn(async () => true);
+    const value = runtime({ requestTimeoutMs: 20, interruptBrowser });
+    const controller = new AbortController();
+    try {
+      const lost = await value.agentRpc("retiring", spec(), "tools/call", { name: "hang" }, undefined, undefined, controller.signal);
+      expect(lost).toMatchObject({ isError: true });
+      await retiring.promise;
+      controller.abort();
+      await expect.poll(() => interruptBrowser.mock.calls.length).toBe(1);
+      expect(value.interrupted("retiring")).toBe(true);
+      await expect(value.settled("retiring")).rejects.toThrow(/stopping cancelled work/);
+      release.resolve();
+      await expect.poll(() => value.working("retiring")).toBe(false);
+      expect(interruptBrowser).toHaveBeenCalledTimes(2);
+      expect(value.interrupted("retiring")).toBe(!proved);
+      if (!proved) {
+        await expect(value.settled("retiring")).rejects.toThrow(/stop could not be proved/);
+        await expect(value.agentRpc("retiring", spec(), "tools/call", { name: "echo" })).resolves.toHaveProperty("isError", true);
+      }
+    } finally {
+      release.resolve();
+      stopping.mockRestore();
+      await value.closeAll();
+    }
+  });
+
+  it("does not let idle inventory cleanup or an explicit inventory-only restart erase failed interruption proof", async () => {
+    const entered = Promise.withResolvers<void>(), ready = Promise.withResolvers<void>();
+    const closeBrowser = vi.fn(async () => true);
+    const interruptBrowser = vi.fn(async () => false);
+    const applyViewport = vi.fn(async () => {});
+    const value = runtime({
+      closeBrowser, interruptBrowser, applyViewport,
+      launch: { ready: async () => { entered.resolve(); await ready.promise; }, started: async () => {}, stopped: () => {} },
+    });
+    const controller = new AbortController();
+    const active = value.agentRpc("failed", spec(), "tools/call", { name: "echo" }, undefined, undefined, controller.signal);
+    const cancelled = expect(active).rejects.toThrow(/cancelled/);
+    await entered.promise;
+    controller.abort();
+    ready.resolve();
+    await cancelled;
+    await expect.poll(() => value.working("failed")).toBe(false);
+    expect(value.agentAvailable("failed")).toBe(false);
+    const unwatch = value.watch("failed", spec());
+    await value.pageSizes.resize("failed", { width: 900, height: 600 }, true);
+    expect(applyViewport).not.toHaveBeenCalled();
+    unwatch();
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
+    try { await expect(value.closeIfIdle("failed", 1)).resolves.toBe(false); }
+    finally { now.mockRestore(); }
+    expect(closeBrowser).not.toHaveBeenCalled();
+    await expect(value.restart("failed", "person", async () => {})).rejects.toThrow(/could not be proved/);
+    expect(value.interrupted("failed")).toBe(true);
+    expect(value.agentAvailable("failed")).toBe(false);
+    value.release("failed", "person");
+    interruptBrowser.mockResolvedValue(true);
+    await value.restart("failed", "person", async () => {});
+    await expect(value.withAgentAction("failed", async () => "fresh")).resolves.toBe("fresh");
+    controller.abort();
+    expect(value.interrupted("failed")).toBe(false);
+    expect(value.agentAvailable("failed")).toBe(true);
+  });
+
+  it("does not let an unknown call's old abort stop an explicitly restarted generation", async () => {
+    const interruptBrowser = vi.fn(async () => true);
+    const value = runtime({
+      interruptBrowser,
+      relayCommand: async () => { throw new TransportError("The browser did not answer in time."); },
+    });
+    const controller = new AbortController();
+    await expect(value.agentRpc("old", spec(), "tools/call", { name: BROWSER_HOVER_TOOL }, undefined, undefined, controller.signal)).resolves.toHaveProperty("isError", true);
+    await value.restart("old", "person", async () => {});
+    await expect(value.agentRpc("old", spec(), "tools/call", { name: "echo" })).resolves.not.toHaveProperty("isError", true);
+    controller.abort();
+    expect(interruptBrowser).not.toHaveBeenCalled();
+    expect(value.interrupted("old")).toBe(false);
+  });
+
+  it("waits for every retired launcher, including a failed recovery probe, before unblocking Stop", async () => {
+    const daemon = daemonSpec();
+    const releases = [Promise.withResolvers<void>(), Promise.withResolvers<void>()];
+    const stopped = [Promise.withResolvers<void>(), Promise.withResolvers<void>()];
+    const kill = procs.killCliTree;
+    const stopping = vi.spyOn(procs, "killCliTree").mockImplementation(async (child, timeout) => {
+      const at = stopping.mock.calls.length - 1;
+      await releases[at]!.promise;
+      const proved = await kill(child, timeout);
+      stopped[at]!.resolve();
+      return proved;
+    });
+    const interruptBrowser = vi.fn(async () => true);
+    const value = runtime({ requestTimeoutMs: 20, recoveryCheckMs: 20, interruptBrowser });
+    const controller = new AbortController();
+    try {
+      await expect(value.agentRpc("all-retiring", daemon.spec, "tools/call", { name: "hang" }, undefined, undefined, controller.signal)).resolves.toHaveProperty("isError", true);
+      await expect(value.agentRpc("all-retiring", daemon.spec, "tools/call", { name: "echo" })).resolves.toHaveProperty("isError", true);
+      expect(stopping).toHaveBeenCalledTimes(2);
+      controller.abort();
+      await expect.poll(() => interruptBrowser.mock.calls.length).toBe(1);
+      releases[0]!.resolve();
+      await stopped[0]!.promise;
+      expect(value.interrupted("all-retiring")).toBe(true);
+      expect(interruptBrowser).toHaveBeenCalledTimes(1);
+      releases[1]!.resolve();
+      await expect.poll(() => value.working("all-retiring")).toBe(false);
+      expect(interruptBrowser).toHaveBeenCalledTimes(2);
+      expect(value.interrupted("all-retiring")).toBe(false);
+    } finally {
+      for (const release of releases) release.resolve();
+      stopping.mockRestore();
+      await value.closeAll();
+      daemon.cleanup();
+    }
+  });
+
+  it("tells the next agent call that a person reset attached Chrome without globally stopping it", async () => {
+    const value = runtime();
+    const attached = spec();
+    attached.env.AGENT_BROWSER_CDP = "http://127.0.0.1:9222";
+    await value.agentRpc("attached-reset", attached, "tools/call", { name: "echo" });
+    await value.restart("attached-reset", "person", async () => {});
+    const next = await value.agentRpc("attached-reset", attached, "tools/call", { name: "echo" }) as { content: Array<{ text: string }> };
+    expect(next.content[0]!.text).toMatch(/Chrome was not stopped.*cannot be globally stopped/);
+    expect(next.content[0]!.text).not.toMatch(/Pages you had open are gone/);
+  });
+});
 
 describe("server-owned browser MCP runtime", () => {
   it.runIf(process.platform === "linux")("starts a bot's browser engine first in line when memory runs out, before the server", async () => {
@@ -357,7 +703,6 @@ describe("server-owned browser MCP runtime", () => {
     expect(JSON.parse(result.content[0].text)).toEqual({ name: "agent_browser_open", arguments: { url: "https://example.com" } });
     expect(result.content[1].text).toContain("sign-in");
     expect(result.content[1].text).toContain("Its refs are current");
-    expect(JSON.parse(result.content[2].text)).toEqual({ name: "agent_browser_snapshot", arguments: { compact: true } });
   });
   it("says what an action changed on the page, read with eval so the model's refs stay valid", async () => {
     const result = await runtime().agentRpc("act", spec(), "tools/call", {

@@ -100,6 +100,14 @@ afterEach(async () => {
 });
 
 describe.skipIf(process.platform !== "darwin")("async standalone CUA launch (isolated commands)", () => {
+  it("keeps configured computer control disabled through startup and a later retry", async () => {
+    vi.stubEnv("DANI_DISABLE_CUA", "1");
+    expect(cua.resolveDriverBinary()).toBeNull();
+    await expect(cua.startCua()).resolves.toMatchObject({ mode: "unavailable" });
+    await expect(cua.requestComputerUse()).resolves.toMatchObject({ enabled: false, status: "error" });
+    expect(fixture.calls).toEqual([]);
+    expect(fixture.hosts).toEqual([]);
+  });
   it("keeps the event loop responsive and publishes the existing descriptor shape", async () => {
     let ticks = 0;
     const timer = setInterval(() => ticks++, 10);

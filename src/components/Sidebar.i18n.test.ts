@@ -10,7 +10,8 @@ vi.mock("./DesktopCapabilities", () => ({
 }));
 
 import { ConfirmDialogCard } from "./ConfirmDialog";
-import { BotListItem, BotThreadList, botConfirmCopy, botRowProps, roomDeleteCopy } from "./Sidebar";
+import { BotListItem, BotThreadList, botConfirmCopy, roomDeleteCopy } from "./Sidebar";
+import { botRowProps } from "@/lib/sidebar-selection";
 
 const bot = (overrides: Partial<Bot> = {}): Bot => ({
   id: "atlas",

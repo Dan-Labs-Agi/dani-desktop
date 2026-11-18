@@ -78,6 +78,7 @@ beforeEach(() => {
     watch: vi.fn(() => () => {}),
     onIdleClose: vi.fn(),
     settled: vi.fn(async () => {}),
+    recoveryOnly: vi.fn(() => false),
     working: vi.fn(() => true),
     launchReady: vi.fn(async () => {}),
     launched: vi.fn(async () => {}),
@@ -149,6 +150,57 @@ describe("browser viewer protocol boundary", () => {
 });
 
 describe("authenticated browser viewer relay", () => {
+  it.each([false, true])("reopens a failed-stop browser as an authenticated restart-only view (attached: %s)", async (attached) => {
+    const entered = Promise.withResolvers<void>(), launch = Promise.withResolvers<void>();
+    const interruptBrowser = vi.fn(async () => false);
+    const launchReady = vi.fn(async () => { entered.resolve(); await launch.promise; });
+    runtime = new BrowserRuntime({
+      interruptBrowser,
+      launch: { ready: launchReady, started: async () => {}, stopped: () => {} },
+    });
+    live = new BrowserLive({ runtime });
+    const controller = new AbortController();
+    const active = runtime.agentRpc("profile-a", {
+      command: "/trusted/agent-browser", args: ["mcp"], env: attached ? { AGENT_BROWSER_CDP: "http://127.0.0.1:9222" } : {},
+    }, "tools/call", { name: "echo" }, undefined, undefined, controller.signal);
+    const cancelled = expect(active).rejects.toThrow(/cancelled/);
+    await entered.promise;
+    controller.abort();
+    launch.resolve();
+    await cancelled;
+    await expect.poll(() => runtime.working("profile-a")).toBe(false);
+    launchReady.mockClear();
+    const res = new ResponseFixture();
+    await live.open({
+      botId: "bot-a", session: "profile-a", owner: "admin-a", isCurrent: () => true,
+      res: res as unknown as ServerResponse,
+      spec: { command: "/trusted/agent-browser", env: attached ? { AGENT_BROWSER_CDP: "http://127.0.0.1:9222" } : {} },
+      size: { width: 900, height: 600 },
+    });
+    const action = (body: unknown, owner = "admin-a") => live.action({ viewerId: res.id, botId: "bot-a", owner, body });
+    expect(res.events("ready")).toEqual([{ viewerId: res.id, recoveryOnly: true, message: expect.stringContaining("Restart browser") }]);
+    expect(res.events("control").at(-1)).toMatchObject({ controlling: false });
+    expect(launchReady).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    expect(SocketFixture.instances).toHaveLength(0);
+    expect(nativeInput).not.toHaveBeenCalled();
+    await expect(action({ type: "take" })).rejects.toThrow(/Restart browser/);
+    await expect(action({ type: "navigate", url: "https://fixture.test/" })).rejects.toThrow(/Restart browser/);
+    await expect(action({ type: "input_keyboard", eventType: "char", text: "no" })).rejects.toThrow(/Restart browser/);
+    await expect(action({ type: "restart" }, "other-owner")).rejects.toThrow(/no longer available/);
+    expect(nativeClose).not.toHaveBeenCalled();
+    if (!attached) {
+      await expect(action({ type: "restart" })).rejects.toThrow(/could not restart/);
+      expect(runtime.interrupted("profile-a")).toBe(true);
+      interruptBrowser.mockResolvedValue(true);
+    }
+    const restarted = await action({ type: "restart" });
+    expect(restarted).toEqual({ ok: true, ...(attached ? { notice: expect.stringContaining("cannot be globally stopped") } : {}) });
+    expect(runtime.interrupted("profile-a")).toBe(false);
+    await expect(runtime.withAgentAction("profile-a", async () => "fresh")).resolves.toBe("fresh");
+    await expect(action({ type: "restart" })).rejects.toThrow(/no longer available/);
+    await runtime.closeAll();
+  });
   it("fences a late stream startup when that owner is closed during discovery", async () => {
     let finish!: (value: ReturnType<typeof output>) => void;
     execute.mockImplementationOnce(() => new Promise((resolve) => finish = resolve));
@@ -266,6 +318,30 @@ describe("authenticated browser viewer relay", () => {
     const refused = action({ type: "navigate", url: "https://example.com/" });
     await expect(refused).rejects.not.toHaveProperty("settled");
     await expect(refused).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("keeps a native outcome_unknown from human navigation unsettled and fenced after hand-back", async () => {
+    runtime = new BrowserRuntime();
+    live = new BrowserLive({ runtime });
+    const a = await open();
+    try {
+      await a.action({ type: "take" });
+      execute.mockRejectedValueOnce(Object.assign(new Error("Command failed"), {
+        code: 1, stdout: JSON.stringify({
+          success: false, code: "outcome_unknown",
+          error: "The command reached the daemon but no response came back; it was not retried.",
+        }), stderr: "",
+      }));
+      const action = a.action({ type: "navigate", url: "https://fixture.test/" });
+      await expect(action).rejects.not.toHaveProperty("settled");
+      await expect(action).rejects.toThrow(/may already have taken effect/);
+      expect(runtime.interrupted("profile-a")).toBe(true);
+      await a.action({ type: "release" });
+      await expect(runtime.withAgentAction("profile-a", async () => "unsafe")).rejects.toThrow(/Restart/);
+    } finally {
+      live.closeAll();
+      await runtime.closeAll();
+    }
   });
 
   it("resets a daemon stuck on a failed launch so reconnecting starts a fresh session (#1383)", async () => {
@@ -475,6 +551,57 @@ describe("authenticated browser viewer relay", () => {
   ])("refuses a batch with %s", (_name, events) => {
     expect(() => parseBrowserLiveAction({ type: "input_batch", events })).toThrow("Invalid browser action.");
   });
+  it("does not let an expired reservation release a newer same-person takeover", async () => {
+    const failed = await open();
+    const active = await open({ botId: "bot-b" });
+    vi.mocked(runtime.take).mockImplementationOnce(async (session: string, person: string) => {
+      held.set(session, person);
+      throw new Error("take timed out");
+    });
+    await expect(failed.action({ type: "take", attempt: "failed-reservation" })).rejects.toThrow();
+    await active.action({ type: "take", attempt: "kept-reservation" });
+    await failed.action({ type: "release", attempt: "failed-reservation" });
+    expect(held.get("profile-a")).toBe("admin-a");
+    expect(active.res.events("control").at(-1)).toMatchObject({ controlling: true });
+    await active.action({ type: "release", attempt: "kept-reservation" });
+    expect(held.has("profile-a")).toBe(false);
+  });
+
+  it("refreshes a carried hold so only the reconnected view's reservation hands it back", async () => {
+    const before = await open();
+    await before.action({ type: "take", attempt: "before-reconnect" });
+    const reopened = await open({ resume: before.res.id });
+    const carried = reopened.res.events("control").at(-1);
+    expect(carried).toMatchObject({ owned: true, controlling: true, attempt: expect.any(String) });
+    expect(carried.attempt).not.toBe("before-reconnect");
+    await reopened.action({ type: "release", attempt: "before-reconnect" });
+    await before.action({ type: "release", attempt: "before-reconnect" }).catch((error: unknown) => {
+      expect(error).toMatchObject({ status: 404 });
+    });
+    expect(held.get("profile-a")).toBe("admin-a");
+    await reopened.action({ type: "release", attempt: carried.attempt });
+    expect(held.has("profile-a")).toBe(false);
+  });
+
+  it("fences a late take completion after a newer view takes over", async () => {
+    const late = await open();
+    const active = await open({ botId: "bot-b" });
+    const { promise, resolve: finish } = Promise.withResolvers<void>();
+    vi.mocked(runtime.take).mockImplementationOnce(async (session: string, person: string) => {
+      held.set(session, person);
+      await promise;
+      return false;
+    });
+    const taking = late.action({ type: "take", attempt: "late-reservation" });
+    await active.action({ type: "take", attempt: "active-reservation" });
+    finish();
+    await taking;
+    expect(active.res.events("control").at(-1)).toMatchObject({ controlling: true });
+    await late.action({ type: "release", attempt: "late-reservation" });
+    expect(held.get("profile-a")).toBe("admin-a");
+    expect(active.res.events("control").at(-1)).toMatchObject({ controlling: true });
+  });
+
   it("requires the person's own human lease and releases only theirs on disconnect", async () => {
     const a = await open(); const b = await open({ botId: "bot-b", owner: "admin-b" });
     await expect(a.action({ type: "navigate", url: "https://example.com" })).rejects.toThrow("Browser control changed");
@@ -665,6 +792,36 @@ describe("authenticated browser viewer relay", () => {
     await new Promise((resolve) => setTimeout(resolve, 15));
     expect(await runtime.closeIfIdle("profile-a", 10)).toBe(true);
     expect(a.res.writableEnded).toBe(true);
+  });
+
+  it.each([false, true])("expires a failed takeover reservation without clearing uncertain input (%s)", async (uncertain) => {
+    runtime = new BrowserRuntime({ takeoverTimeoutMs: 10 });
+    live = new BrowserLive({ runtime, holdLimits: { idleMs: 100, graceMs: 50 } });
+    const a = await open();
+    vi.useFakeTimers();
+    const finish = Promise.withResolvers<void>();
+    const active = runtime.withAgentAction("profile-a", () => finish.promise);
+    const paused = expect(active).rejects.toThrow(/paused/);
+    try {
+      const takeover = expect(a.action({ type: "take" })).rejects.toThrow(/Try again/);
+      await vi.advanceTimersByTimeAsync(11);
+      await takeover;
+      expect(runtime.heldBy("profile-a")).toBe("admin-a");
+      expect(runtime.canControl("profile-a", "admin-a")).toBe(false);
+      if (uncertain) runtime.abandonHumanInput("profile-a", "admin-a");
+      finish.resolve();
+      await paused;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(runtime.heldBy("profile-a")).toBeNull();
+      expect(runtime.interrupted("profile-a")).toBe(uncertain);
+      if (uncertain) await expect(runtime.withAgentAction("profile-a", async () => "unsafe")).rejects.toThrow(/Restart/);
+      else await expect(runtime.withAgentAction("profile-a", async () => "available")).resolves.toBe("available");
+    } finally {
+      finish.resolve();
+      await active.catch(() => undefined);
+      live.closeAll();
+      await runtime.closeAll();
+    }
   });
   it("waits out an idle close in progress before starting a view", async () => {
     let finish!: (closed: boolean) => void;
@@ -936,6 +1093,26 @@ describe("authenticated browser viewer relay", () => {
     await a.action({ type: "restart" });
     await expect(runtime.withAgentAction("profile-a", async () => true)).resolves.toBe(true);
   });
+
+  it("expires a failed first restart reservation while keeping the restart safety fence", async () => {
+    runtime = new BrowserRuntime();
+    live = new BrowserLive({ runtime, holdLimits: { idleMs: 100, graceMs: 50 } });
+    const a = await open();
+    vi.useFakeTimers();
+    nativeClose.mockResolvedValueOnce(false);
+    try {
+      await expect(a.action({ type: "restart" })).rejects.toThrow(/could not restart/);
+      expect(runtime.heldBy("profile-a")).toBe("admin-a");
+      expect(runtime.interrupted("profile-a")).toBe(true);
+      await vi.advanceTimersByTimeAsync(101);
+      expect(runtime.heldBy("profile-a")).toBeNull();
+      expect(runtime.interrupted("profile-a")).toBe(true);
+      await expect(runtime.withAgentAction("profile-a", async () => "unsafe")).rejects.toThrow(/Restart/);
+    } finally {
+      live.closeAll();
+      await runtime.closeAll();
+    }
+  });
 });
 
 describe("a person's view whose stream drops while they hold the browser", () => {
@@ -950,7 +1127,7 @@ describe("a person's view whose stream drops while they hold the browser", () =>
     a.res.destroy();
     await expect(botWorks()).rejects.toThrow("paused while a person controls");
     const b = await open({ resume: a.res.id });
-    expect(b.res.events("control").at(-1)).toEqual({ held: true, owned: true, controlling: true });
+    expect(b.res.events("control").at(-1)).toMatchObject({ held: true, owned: true, controlling: true });
     nativeInput.mockClear();
     await b.action({ type: "input_keyboard", eventType: "char", text: "typed after reconnecting" });
     expect(bodies()).toEqual([{ action: "keyboard", subaction: "insertText", text: "typed after reconnecting" }]);
@@ -959,12 +1136,49 @@ describe("a person's view whose stream drops while they hold the browser", () =>
     expect(runtime.interrupted("profile-a")).toBe(false);
   });
 
+  it("keeps a fresh same-person observer from taking an active controller's hold", async () => {
+    const controller = await open();
+    await controller.action({ type: "take" });
+    const observer = await open();
+    expect(observer.res.events("control").at(-1)).toEqual({ held: true, owned: true, controlling: false });
+    observer.res.destroy();
+    const reconnected = await open({ resume: observer.res.id });
+    expect(reconnected.res.events("control").at(-1)).toEqual({ held: true, owned: true, controlling: false });
+    await expect(reconnected.action({ type: "input_keyboard", eventType: "char", text: "not authorized" })).rejects.toThrow("Browser control changed");
+    await controller.action({ type: "input_keyboard", eventType: "char", text: "still the controller" });
+    await expect(botWorks()).rejects.toThrow("paused while a person controls");
+  });
+
+  it("does not reacquire a hold explicitly handed back before reconnect", async () => {
+    const before = await open();
+    await before.action({ type: "take" });
+    await before.action({ type: "release" });
+    before.res.destroy();
+    const resumed = await open({ resume: before.res.id });
+    expect(resumed.res.events("control").at(-1)).toEqual({ held: false, owned: false, controlling: false });
+    await expect(resumed.action({ type: "input_keyboard", eventType: "char", text: "not authorized" })).rejects.toThrow();
+    await expect(botWorks()).resolves.toBe(true);
+  });
+
+  it.each(["disconnect", "idle"] as const)("does not resurrect an expired %s hold when its old viewer resumes", async (expiry) => {
+    vi.useFakeTimers();
+    const before = await open();
+    await before.action({ type: "take" });
+    if (expiry === "disconnect") before.res.destroy();
+    await vi.advanceTimersByTimeAsync(expiry === "disconnect" ? HOLD_LIMITS.graceMs : HOLD_LIMITS.idleMs);
+    expect(runtime.heldBy("profile-a")).toBeNull();
+    const resumed = await open({ resume: before.res.id });
+    expect(resumed.res.events("control").at(-1)).toEqual({ held: false, owned: false, controlling: false });
+    await expect(resumed.action({ type: "input_keyboard", eventType: "char", text: "not authorized" })).rejects.toThrow();
+    await expect(botWorks()).resolves.toBe(true);
+  });
+
   it("gives the hold to the same person's next view, which can hand it back, though it never named the view that dropped", async () => {
     const phone = await open(); await phone.action({ type: "take" });
     // The phone leaves the browser, or the app is closed: its stream ends.
     phone.res.destroy();
     const reopened = await open();
-    expect(reopened.res.events("control").at(-1)).toEqual({ held: true, owned: true, controlling: true });
+    expect(reopened.res.events("control").at(-1)).toMatchObject({ held: true, owned: true, controlling: true });
     await reopened.action({ type: "release" });
     await expect(botWorks()).resolves.toBe(true);
   });
@@ -982,7 +1196,7 @@ describe("a person's view whose stream drops while they hold the browser", () =>
       { action: "input_mouse", type: "mouseReleased", x: 12, y: 20, button: "left", clickCount: 1, modifiers: 0, deltaX: 0, deltaY: 0 },
     ]);
     const b = await open({ resume: a.res.id });
-    expect(b.res.events("control").at(-1)).toEqual({ held: true, owned: true, controlling: true });
+    expect(b.res.events("control").at(-1)).toMatchObject({ held: true, owned: true, controlling: true });
     await b.action({ type: "release" });
     await expect(botWorks()).resolves.toBe(true);
   });
@@ -1012,7 +1226,7 @@ describe("a person's view whose stream drops while they hold the browser", () =>
     finish(Response.json({ success: true })); await typing;
     const b = await reopening;
     expect(bodies().at(-1)).toEqual({ action: "input_keyboard", type: "keyUp", key: "m", code: "KeyM" });
-    expect(b.res.events("control").at(-1)).toEqual({ held: true, owned: true, controlling: true });
+    expect(b.res.events("control").at(-1)).toMatchObject({ held: true, owned: true, controlling: true });
   });
 
   it("hands back when the sign-in card's Done is pressed before the panel reconnects", async () => {
@@ -1053,7 +1267,7 @@ describe("a person's view whose stream drops while they hold the browser", () =>
     await expect(stranger.action({ type: "release" })).resolves.toEqual({ ok: true });
     await expect(botWorks()).rejects.toThrow("paused while a person controls");
     const reloaded = await open({ botId: "bot-a" });
-    expect(reloaded.res.events("control").at(-1)).toEqual({ held: true, owned: true, controlling: true });
+    expect(reloaded.res.events("control").at(-1)).toMatchObject({ held: true, owned: true, controlling: true });
     await expect(reloaded.action({ type: "take" })).resolves.toEqual({ ok: true, waited: false });
     expect(runtime.canControl("profile-a", "admin-a")).toBe(true);
   });
@@ -1219,17 +1433,23 @@ describe("opening a view while the bot holds the browser", () => {
     expect(SocketFixture.instances).toHaveLength(0);
   });
 
-  it("gives up after a bounded wait with a reason, not an install hint and no automatic retry", async () => {
+  it("keeps bounded busy waits retryable and reconnects once the browser is free", async () => {
     vi.useFakeTimers();
     execute.mockRejectedValue(busy());
     const { res, opening } = start();
     await vi.advanceTimersByTimeAsync(11 * 60_000);
     await opening;
-    expect(res.events("error")).toEqual([{ retryable: false, message: "The bot is still using this browser. Reconnect when it has finished." }]);
+    expect(res.events("error")).toEqual([{ retryable: true, message: "The bot is still using this browser. The live view will reconnect when it is free." }]);
     expect(res.writableEnded).toBe(true);
     const delays = execute.mock.calls.length;
     await vi.advanceTimersByTimeAsync(60_000);
     expect(execute).toHaveBeenCalledTimes(delays);
+    execute.mockResolvedValue(output(ready));
+    const again = start();
+    await again.opening;
+    expect(again.res.events("ready")).toHaveLength(1);
+    expect(nativeClose).not.toHaveBeenCalled();
+    expect(runtime.take).not.toHaveBeenCalled();
   });
 
   it("reports a busy browser to a person's action without blaming the installation", async () => {

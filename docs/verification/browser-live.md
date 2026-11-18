@@ -34,6 +34,16 @@ UI and harness, then removes its temporary data; the server log remains.
    the page; keyboard-only users must still be able to reach the toolbar.
    Tabbing through the panel passes over the live page without taking it;
    only clicking or typing in the page sends Tab there.
+   A takeover that times out while bot work drains reserves the person's hold
+   without admitting input. That reservation follows the same server idle and
+   disconnect expiry as a successful hold; it must not pause the bot forever
+   just because the first take or restart failed. Expiring ownership never
+   clears an uncertain-input or failed-interruption safety fence.
+   The preview's busy observation wait is bounded, but remains retryable:
+   it reconnects without taking control or replaying input once the browser
+   becomes free. If native navigation returns an unknown outcome, its error
+   warns that it may already have taken effect; Hand back must not clear the
+   restart safety fence or turn that uncertainty into another submission.
 3. Stop for 8 seconds: control returns to the bot and the pill disappears.
    A Cmd shortcut such as Cmd+C must not delay that. Keep **Type or paste
    text…** open past 8 seconds: control stays yours until it closes. Press
@@ -175,11 +185,63 @@ The runtime regression also models a browser descendant that must outlive its
 MCP parent, including an MCP parent that ignores EOF. Run those tests on Windows
 as well: native macOS acceptance alone does not prove Windows process behavior.
 
+### Five-phase default-engine acceptance
+
+The existing fixtures below cover the five phases with real loopback pages and
+the selected native agent-browser executable. These are executable acceptance
+criteria, **not a record that the current source or 0.41.2 has passed**. Use the
+reviewed 0.41.2 asset and Chrome paths; retain command output with the fixture's
+printed server log and preview screenshot.
+
+```sh
+OMB_VERIFY_BROWSER_BINARY="$BROWSER_BINARY" \
+OMB_VERIFY_BROWSER_CHROME="$CHROME_BINARY" \
+OMB_VERIFY_PLAYWRIGHT="$PLAYWRIGHT_MODULE" \
+node --experimental-strip-types scripts/verify-browser-live.ts --recovery
+
+OMB_AGENT_BROWSER_PATH="$BROWSER_BINARY" \
+AGENT_BROWSER_EXECUTABLE_PATH="$CHROME_BINARY" \
+pnpm exec vitest run scripts/testing/browser-evidence.e2e.test.ts \
+  -t 'qualified core browser schema|real local authentication|removed reference|daemon acknowledgement'
+
+OMB_AGENT_BROWSER_PATH="$BROWSER_BINARY" \
+AGENT_BROWSER_EXECUTABLE_PATH="$CHROME_BINARY" \
+pnpm exec vitest run scripts/testing/browser-safety.e2e.test.ts \
+  -t 'Stop terminates an accepted delayed submission'
+```
+
+| Phase | Actual effect and required assertion |
+| --- | --- |
+| Observer reconnect | `--recovery` interrupts the real panel's EventSource. A replacement stream paints the retained page without taking a human lease or replaying navigation/input. The separate native document and unsaved form survive 65 seconds idle, then produce the requested greeting. |
+| Human handback | The native evidence fixture takes runtime ownership for a person. An agent click is refused while held; real daemon input signs into the disposable page. Release removes ownership, then the agent saves exactly once. |
+| Stale reference | The fixture replaces a previously snapshotted button with two different draft controls. Clicking the removed ref must error and commit nothing. A fresh model-visible snapshot supplies Ada's current ref; only Ada's receipt is committed. |
+| Authentication prerequisite | The local target returns 401 for unauthenticated writes and initially shows Sign in needed. Real form submission establishes an HttpOnly fixture cookie; only the authenticated browser can obtain the saved receipt. No personal login or credential is used. |
+| Interruption / unknown effect | The POSIX socket fault forwards the real Save click but drops its daemon acknowledgement. Exactly one command and one POST are accepted; uncertainty is latched. An attempted duplicate click must return “This call did not run”, not submit again. The separate serving-path Stop fixture prevents a delayed POST while allowing another browser's POST and a later authorized recovery. |
+
+The evidence suite prints `browser authentication and handback receipts`,
+`browser stale-reference receipts`, and `browser lost-acknowledgement receipts`.
+The authentication and stale-reference receipt IDs come from the target HTTP
+server's committed-write ledger and must also appear in a real browser
+snapshot; the lost-acknowledgement case records accepted-command and POST
+counts. Model prose is not the oracle. Each new native case has a 120-second
+test deadline. The Stop case has a 150-second deadline and waits beyond the
+page's real delayed-write timer.
+
+Scope limits: the authentication case qualifies native cookie/form and
+ownership behavior, **not** Hermes deciding to call `request_sign_in` or the
+sign-in card's resume path. `server/sign-in-request.e2e.test.ts` covers that
+server/card path with a fake browser; it cannot substitute for native proof.
+The serving-path Stop fixture uses a scripted model, not real-model goal
+supervision. The lost-acknowledgement socket fault and process-identity checks
+are POSIX-specific; Windows hard-stop and named-pipe lost-ack qualification
+remain native-platform gates. None of these default-engine tests qualifies
+the alternate browser backend, installed desktop bundle, or updater.
+
 ### Lifecycle references
 
-- [agent-browser's MCP loop](https://github.com/vercel-labs/agent-browser/blob/v0.37.0/cli/src/mcp.rs)
+- [agent-browser's pinned MCP loop](https://github.com/vercel-labs/agent-browser/blob/v0.41.2/cli/src/mcp.rs)
   exits on stdin EOF; idle transport retirement must not kill the profile's daemon.
-- [agent-browser daemon startup](https://github.com/vercel-labs/agent-browser/blob/v0.37.0/cli/src/connection.rs)
+- [agent-browser's pinned daemon startup](https://github.com/vercel-labs/agent-browser/blob/v0.41.2/cli/src/connection.rs)
   detaches the daemon. Losing the MCP transport does not prove an accepted
   browser action stopped; interruption still requires an explicit restart.
 - [Pi author's browser tools](https://github.com/badlogic/agent-tools/blob/main/browser-tools/browser-nav.js)

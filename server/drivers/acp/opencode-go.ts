@@ -688,7 +688,7 @@ export function openCodeOwnedDirectories(botId?: string, cwd?: string): string[]
 }
 
 /** JSON with comments and trailing commas, as OpenCode reads its config. */
-function parseJsonc(text: string): unknown {
+export function parseJsonc(text: string): unknown {
   let plain = "";
   let inString = false;
   for (let index = 0; index < text.length; index += 1) {

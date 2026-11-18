@@ -9,6 +9,7 @@ import { configuredModelInstances } from "@/lib/engine-rail";
 import { useModalDialog } from "@/hooks/use-modal-dialog";
 import { api, useStore, type InstanceInfo } from "@/state/store";
 import { DANI_FREE_INSTANCE_ID, DANI_FREE_CLIENT_INSTANCE_ID, DANI_FREE_INSTANCE_IDS } from "../../../shared/dani-free";
+import { isHermesHarness } from "../../../shared/hermes-harness";
 import { OrganisationRow } from "./beats/OrganisationRow";
 
 type Preparation = "idle" | "preparing" | "ready" | "failed";
@@ -127,6 +128,15 @@ export function ConnectAi({ hosted = false }: { hosted?: boolean }) {
   const { state, dispatch } = useStore();
   const organisation = organisationSignIn(window.ogb, { hosted });
   const [open, setOpen] = useState<string | null>(null);
+  const hermes = state.instances.find(isHermesHarness);
+  if (hermes) return <div data-hermes-setup className="flex w-full flex-col gap-3 rounded-2xl bg-card p-4 text-left">
+    <h3 className="text-[14px] font-medium text-ink">Hermes</h3>
+    {hermes.snapshot.state === "available" && hermes.models.options.length > 0
+      ? <p role="status" className="text-[13px] text-ink-secondary">
+        {t("model.chooseHint")}
+      </p>
+      : <EngineSetup instance={hermes} intent="inject" />}
+  </div>;
   const installed = configuredModelInstances(state.instances).filter((instance) => DANI_FREE_INSTANCE_IDS[instance.instanceId] !== true && instance.snapshot.state === "available" && instance.install && instance.access !== "api");
   return <div className="flex w-full flex-col gap-3">
     <DaniSetup />

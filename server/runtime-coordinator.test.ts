@@ -220,7 +220,7 @@ describe("RuntimeCoordinator: the requesting turn and its tree", () => {
     expect(resume.node).toMatchObject({ id: "gen-1", status: "running", executions: 2 });
     expect(resume.resumed).toBe(true);
     expect(resume.text.startsWith('Your downstream room requests have settled. Review the results against the request: "Ship the CSV export".')).toBe(true);
-    expect(resume.text).toContain(`[Dani Bot report from @builder on assignment ${node.id}: done]`);
+    expect(resume.text).toContain(`report from @builder on assignment ${node.id}: done]`);
     expect(resume.text).toContain('What @builder said: "Built it on branch csv-export."');
     expect(resume.text).not.toContain(ENVELOPE_MARK);
     await flush();
@@ -320,7 +320,7 @@ describe("RuntimeCoordinator: the requesting turn and its tree", () => {
     const resume = w.host.runs.at(-1)!;
     expect(resume.node.id).toBe(builderNode.id);
     expect(resume.text.startsWith('Your downstream room requests have settled. Review the results against your assignment: "Build it".')).toBe(true);
-    expect(resume.text).toContain(`[Dani Bot report from @tester on assignment ${testerNode.id}: done]`);
+    expect(resume.text).toContain(`report from @tester on assignment ${testerNode.id}: done]`);
   });
 });
 
@@ -639,7 +639,8 @@ describe("RuntimeCoordinator: the run adapter", () => {
     const resumes = w.host.runs.filter(run => run.node.id === "gen-1");
     expect(resumes.map(run => run.resumed)).toEqual([true]);
     expect(resumes[0]!.text).toMatch(/^A teammate you are waiting on stopped on a question for Milind or for you; the rest of your requests are still open/);
-    expect(resumes[0]!.text).toContain(`\n\n[Dani Bot question from @builder on assignment ${built.id}: waiting on Milind]\nIt asks Milind: "Which region should I deploy to?".`);
+    expect(resumes[0]!.text).toContain(`question from @builder on assignment ${built.id}: waiting on Milind]`);
+    expect(resumes[0]!.text).toContain('It asks Milind: "Which region should I deploy to?".');
     expect(w.coordinator.node("gen-1")?.status).toBe("waiting");
     expect(w.coordinator.node(tested.id)?.status).toBe("running");
   });
@@ -866,13 +867,17 @@ describe("RuntimeCoordinator: restarts", () => {
       after.coordinator.tick();
       expect(after.host.runs).toHaveLength(1);
       expect(after.host.runs[0]!.resumed).toBe(false);
-      expect(after.host.runs[0]!.text).toMatch(/^Dani Bot restarted while your previous turn here was running and cut it off;.*\n\[Dani Bot assignment /);
+      expect(after.host.runs[0]!.composed.turn).toBe("rerun");
+      expect(after.host.runs[0]!.text).toContain("check what that turn already did");
+      expect(after.host.runs[0]!.text).toContain(ENVELOPE_MARK);
       await flush();
       expect(after.coordinator.node(node.id)).toMatchObject({ status: "completed", restarts: 1 });
       after.coordinator.tick();
       const resume = after.host.runs[1]!;
       expect(resume.node.id).toBe("gen-1");
-      expect(resume.text).toMatch(/^Dani Bot restarted before your previous turn here finished, after it sent work to teammates\..*A restart cut these teammates' turns: builder \(resumed once in place and told to check what it had already done\)\. Check their results as usual\.\nYour downstream room requests have settled\./);
+      expect(resume.composed.turn).toBe("resume");
+      expect(resume.composed.restartNote).toContain("builder");
+      expect(resume.composed.restartNote).toContain("check what it had already done");
       await flush();
       expect(after.coordinator.node("gen-1")?.status).toBe("completed");
       after.coordinator.close();
@@ -914,7 +919,7 @@ describe("RuntimeCoordinator: modes and openers", () => {
     const resume = w.host.runs[1]!;
     expect(resume.node.id).toBe("gen-1");
     expect(resume.resumed).toBe(true);
-    expect(resume.text).toContain(`[Dani Bot report from @tester on assignment ${node.id}: done]`);
+    expect(resume.text).toContain(`report from @tester on assignment ${node.id}: done]`);
     expect(resume.text).toContain('What @tester said: "Use the staging bucket."');
     await flush();
     expect(w.coordinator.node("gen-1")?.status).toBe("completed");
@@ -1176,7 +1181,7 @@ describe("RuntimeCoordinator: every turn a root (beginTurn, endTurn, answerRoot,
       expect(run.node).toMatchObject({ id: "gen-1", status: "running", executions: 2, restarts: 1, restart: "rerun" });
       expect(run.resumed).toBe(false);
       expect(run.composed.turn).toBe("rerun");
-      expect(run.composed.restartNote).toMatch(/^Dani Bot restarted while your previous turn here was running and cut it off; this turn continues it\./);
+      expect(run.composed.restartNote).toContain("check what that turn already did");
       expect(run.text.startsWith(run.composed.restartNote)).toBe(true);
       expect(run.text.endsWith('Continue the request you were working on: "Ship the CSV export".')).toBe(true);
       expect(run.text).not.toContain(ENVELOPE_MARK);
@@ -1259,7 +1264,7 @@ describe("RuntimeCoordinator: every turn a root (beginTurn, endTurn, answerRoot,
     const resume = w.host.runs[2]!;
     expect(resume).toMatchObject({ node: { id: "gen-1" }, resumed: true });
     expect(resume.composed.turn).toBe("resume");
-    expect(resume.text).toContain(`[Dani Bot report from @builder on assignment ${node.id}: done]`);
+    expect(resume.text).toContain(`report from @builder on assignment ${node.id}: done]`);
     expect(resume.text).toContain('What @builder said: "builder done"');
     expect(resume.text).not.toContain("half built");
     await flush();
@@ -1390,7 +1395,7 @@ describe("RuntimeCoordinator: outward restart policy, answerNode, continuation o
       const asked: string[] = [];
       after.host.outward = node => { asked.push(node.id); return node.id === "gen-1" ? ["GMAIL_SEND_EMAIL", "git push"] : []; };
       expect(after.coordinator.node("gen-1")).toMatchObject({ status: "failed", outcome: "interrupted", restarts: 0, executions: 1,
-        outcomeDetail: "Interrupted by a Dani Bot restart after it already sent an email (GMAIL_SEND_EMAIL), pushed (git push); not resumed, so nothing is done twice." });
+        outcomeDetail: expect.stringContaining("sent an email (GMAIL_SEND_EMAIL), pushed (git push)") });
       expect(asked).toEqual(["gen-1"]);
       expect("restart" in after.coordinator.node("gen-1")!).toBe(false);
       expect(after.host.reports).toEqual([{ child: expect.objectContaining({ id: "gen-1", status: "failed", outcome: "interrupted" }) }]);
@@ -1409,7 +1414,7 @@ describe("RuntimeCoordinator: outward restart policy, answerNode, continuation o
       const last = world(undefined, {}, dir);
       last.host.outward = n => n.id === node.id ? ["SLACK_SEND_MESSAGE"] : [];
       expect(last.coordinator.node(node.id)).toMatchObject({ status: "failed", outcome: "interrupted", restarts: 0, reported: true,
-        outcomeDetail: "Interrupted by a Dani Bot restart after it already sent a message (SLACK_SEND_MESSAGE); not resumed, so nothing is done twice." });
+        outcomeDetail: expect.stringContaining("sent a message (SLACK_SEND_MESSAGE)") });
       expect(last.host.reports.map(r => [r.child.id, r.parent?.id])).toEqual([[node.id, "gen-2"]]);
       expect(last.coordinator.node("gen-2")).toMatchObject({ status: "waiting", restart: "teammates" });
       last.coordinator.tick();
@@ -1417,7 +1422,8 @@ describe("RuntimeCoordinator: outward restart policy, answerNode, continuation o
       expect(resume.node.id).toBe("gen-2");
       expect(resume.composed.turn).toBe("resume");
       expect(resume.composed.restartNote).toBe("A restart cut these teammates' turns: builder (cut after an outward action, not resumed: see its result). Check their results as usual.\n");
-      expect(resume.text).toContain(`[Dani Bot report from @builder on assignment ${node.id}: failed (interrupted): Interrupted by a Dani Bot restart after it already sent a message (SLACK_SEND_MESSAGE)`);
+      expect(resume.text).toContain(`report from @builder on assignment ${node.id}: failed (interrupted)`);
+      expect(resume.text).toContain("sent a message (SLACK_SEND_MESSAGE)");
       await flush();
       expect(last.coordinator.node("gen-2")?.status).toBe("completed");
       expect(last.host.runs).toHaveLength(1);
@@ -1538,7 +1544,8 @@ describe("RuntimeCoordinator: who answers a teammate's question", () => {
     expect(w.host.parks.map(p => p.node.decide)).toEqual([{ default: "CSV" }]);
     w.coordinator.tick(); await flush();
     const resume = w.host.runs.find(run => run.node.id === "gen-1")!;
-    expect(resume.text).toContain(`[Dani Bot question from @builder on assignment ${node.id}: yours to answer]\nIt asks: "CSV or Excel?". Its default: "CSV".`);
+    expect(resume.text).toContain(`question from @builder on assignment ${node.id}: yours to answer]`);
+    expect(resume.text).toContain('It asks: "CSV or Excel?". Its default: "CSV".');
     expect(resume.text).not.toContain("waiting on Milind");
     w.coordinator.tick(); await flush();
     const answered = w.host.runs.filter(run => run.node.id === node.id).at(-1)!;
@@ -1630,5 +1637,492 @@ describe("pace: how soon the host must tick", () => {
     w.coordinator.tick(); await flush();
     expect(w.coordinator.node("gen-1")).toMatchObject({ status: "completed" });
     expect(w.coordinator.pace()).toBe("idle");
+  });
+});
+
+describe("ordinary Chief task supervision", () => {
+  it("does not settle failed delegated work on a promise; re-admits only remaining work and waits for its receipt", async () => {
+    let reviews = 0;
+    let completedExports = 0;
+    const w = world((node, text) => {
+      if (node.botId === "builder") {
+        if (node.text.includes("REMAINING")) return "hold";
+        completedExports += 1;
+        return { ok: false, stalled: true, text: "Export written; observation stopped before the receipt was checked", evidence: {
+          toolCalls: 2, okToolCalls: 1, outward: ["export CSV"], errors: ["snapshot unavailable"],
+        } };
+      }
+      reviews += 1;
+      if (reviews === 1) return { ok: true, text: "I will tell the person the worker stalled." };
+      expect(text).toContain("Dani supervision");
+      expect(text).toContain("Ship the CSV export");
+      expect(text).toContain("receipt exists exactly once");
+      expect(text).toContain("snapshot unavailable");
+      w.coordinator.enqueue(chief, node.id, undefined, builder, "REMAINING: inspect the receipt; do not repeat the completed export", { rework: true });
+      return { ok: true, text: "The worker is verifying only the remaining receipt." };
+    });
+    w.host.chiefs.add(chief.threadId);
+    begun(w, chief, "supervised");
+    const first = w.coordinator.enqueue(chief, "supervised", undefined, builder, "Write the export and inspect the receipt", { doneWhen: "receipt exists exactly once" }).node;
+    ended(w, "supervised");
+    w.coordinator.tick(); await flush();
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("supervised")).toMatchObject({ status: "queued", result: "I will tell the person the worker stalled." });
+    expect(w.host.reports.filter(report => !report.parent)).toEqual([]);
+    w.coordinator.tick(); await flush();
+    const remaining = w.coordinator.children("supervised").find(child => child.id !== first.id)!;
+    expect(remaining.text).toContain("REMAINING");
+    expect(w.coordinator.status(remaining.id)!.assignment.doneWhen).toBe("receipt exists exactly once");
+    let unavailable = true;
+    w.host.busyAnswer = node => node.id === remaining.id && unavailable;
+    w.coordinator.tick(); w.coordinator.tick(); await flush();
+    expect(w.host.runs.filter(run => run.node.id === remaining.id)).toHaveLength(0);
+    expect(w.coordinator.node("supervised")?.status).toBe("waiting");
+    unavailable = false;
+    w.coordinator.tick(); await flush();
+    expect(w.host.runs.filter(run => run.node.id === remaining.id)).toHaveLength(1);
+    w.host.script = () => ({ ok: true, text: "Verified receipt exists exactly once." });
+    await w.host.release(remaining.id, { ok: true, text: "RECEIPT: one export", evidence: { toolCalls: 1, okToolCalls: 1, summary: "receipt exists exactly once" } });
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("supervised")).toMatchObject({ status: "completed", outcome: "done" });
+    expect(w.host.runs.filter(run => run.node.id === first.id)).toHaveLength(1);
+    expect(completedExports).toBe(1);
+    expect(w.coordinator.status(first.id)!.assignment.doneWhen).toBe("receipt exists exactly once");
+    w.coordinator.close();
+  });
+
+  it("bounds repeated Chief promises and preserves an explicit resumable blocker rather than success", async () => {
+    const w = world(node => node.botId === "builder"
+      ? { ok: false, stalled: true, text: "snapshot unavailable" }
+      : { ok: true, text: "I will tell the person." });
+    w.host.chiefs.add(chief.threadId);
+    send(w, chief, "bounded", undefined, builder, "Inspect the remaining receipt");
+    ended(w, "bounded");
+    for (let tick = 0; tick < 8; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.coordinator.node("bounded")).toMatchObject({ status: "waiting", outcome: "stalled" });
+    expect(w.host.runs.filter(run => run.node.id === "bounded")).toHaveLength(2);
+    expect(w.host.parks.at(-1)?.question).toContain("without concrete remaining work");
+    expect(w.coordinator.answerRoot("bounded", "The prerequisite is fixed; inspect the receipt again.")).toBe(true);
+    w.coordinator.close();
+  });
+
+  it("parks at the existing execution budget and renews recovery only after the person's explicit answer", async () => {
+    const w = world(node => node.botId === "builder" ? { ok: false, stalled: true, text: "snapshot unavailable" } : { ok: true, text: "I will tell the person." }, { executions: 2 });
+    w.host.chiefs.add(chief.threadId);
+    send(w, chief, "budgeted", undefined, builder, "Inspect the receipt");
+    ended(w, "budgeted");
+    w.coordinator.tick(); await flush();
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("budgeted")).toMatchObject({ status: "waiting", outcome: "budget" });
+    w.host.script = node => {
+      if (node.botId === "builder") return { ok: true, text: "RECEIPT: inspected once" };
+      if (node.executions === 3) {
+        w.coordinator.enqueue(chief, node.id, undefined, builder, "Inspect only the remaining receipt", { rework: true });
+        return { ok: true, text: "The worker is inspecting the receipt." };
+      }
+      return { ok: true, text: "Verified RECEIPT: inspected once" };
+    };
+    expect(w.coordinator.answerRoot("budgeted", "The prerequisite is fixed; resume the remaining inspection.")).toBe(true);
+    for (let tick = 0; tick < 5; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.coordinator.node("budgeted")).toMatchObject({ status: "completed", outcome: "done", executions: 4 });
+    w.coordinator.close();
+  });
+
+  it.each(["consult", "autonomous", "worker without a matching Chief"] as const)("does not turn %s into automatic Chief supervision", async kind => {
+    const w = world(node => node.botId === "builder" ? { ok: false, stalled: true, text: "failed" } : { ok: true, text: "Here is the answer." });
+    if (kind !== "worker without a matching Chief") w.host.chiefs.add(chief.threadId);
+    begun(w, chief, "one-shot", "What happened?", kind === "autonomous" ? { origin: { kind: "outside" } } : {});
+    w.coordinator.enqueue(chief, "one-shot", undefined, builder, "Explain the result", { mode: kind === "consult" ? "consult" : "work" });
+    ended(w, "one-shot");
+    w.coordinator.tick(); await flush();
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("one-shot")).toMatchObject({ status: "completed", result: "Here is the answer." });
+    expect(w.host.runs.filter(run => run.node.id === "one-shot")).toHaveLength(1);
+    w.coordinator.close();
+  });
+
+  it("Stop cancels a queued supervision before the next tick and never repeats the worker", async () => {
+    const w = world(node => node.botId === "builder" ? { ok: false, stalled: true, text: "snapshot unavailable" } : { ok: true, text: "I will tell the person." });
+    w.host.chiefs.add(chief.threadId);
+    send(w, chief, "stop-supervision", undefined, builder, "Inspect the receipt");
+    ended(w, "stop-supervision");
+    w.coordinator.tick(); await flush();
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("stop-supervision")?.status).toBe("queued");
+    w.coordinator.stopAwaitingDirect(chief.threadId);
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("stop-supervision")).toMatchObject({ status: "cancelled", outcome: "stopped" });
+    expect(w.host.runs.filter(run => run.node.botId === "builder")).toHaveLength(1);
+    expect(w.host.runs.filter(run => run.node.id === "stop-supervision")).toHaveLength(1);
+    w.coordinator.close();
+  });
+
+  it.each(["denied", "interrupted", "provider_error"] as const)("keeps a trusted %s prerequisite parked instead of retrying it as successful work", async outcome => {
+    const w = world(node => node.botId === "builder"
+      ? { ok: false, text: "A trusted prerequisite prevents remaining work", blocked: { outcome, reason: "Waiting for the person to resolve the prerequisite" } }
+      : { ok: true, text: "I will tell the person." });
+    w.host.chiefs.add(chief.threadId);
+    const first = send(w, chief, "blocked-supervision", undefined, builder, "Inspect and finish the receipt").node;
+    ended(w, "blocked-supervision");
+    for (let tick = 0; tick < 5; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.coordinator.node(first.id)).toMatchObject({ status: "waiting", outcome, question: "Waiting for the person to resolve the prerequisite" });
+    expect(w.coordinator.node("blocked-supervision")?.status).not.toBe("completed");
+    expect(w.host.runs.filter(run => run.node.id === first.id)).toHaveLength(1);
+    expect(w.coordinator.status(first.id)!.assignment.result).toBe("A trusted prerequisite prevents remaining work");
+    w.coordinator.close();
+  });
+});
+
+describe("direct teammate task adoption", () => {
+  it("persists the host's exact person source binding across restart without adding it to outside roots", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "runtime-verification-source-"));
+    try {
+      const w = world(undefined, {}, dir);
+      begun(w, builder, "bound-browser", "Research public listings", { sourceMessageId: "person-line" });
+      w.coordinator.endTurn("bound-browser", { ok: true, text: "Which website?", needsVerification: true });
+      begun(w, tester, "outside-browser", "Research public listings", { sourceMessageId: "not-person", origin: { kind: "outside" } });
+      w.coordinator.endTurn("outside-browser", { ok: true, text: "Which website?", needsVerification: true });
+      w.coordinator.close();
+      const reopened = world(undefined, {}, dir);
+      expect(reopened.coordinator.status("bound-browser")!.assignment.requester.messageId).toBe("person-line");
+      expect(reopened.coordinator.status("outside-browser")!.assignment.requester.messageId).toBeUndefined();
+      reopened.coordinator.close();
+    } finally { await removeTempDir(dir); }
+  });
+
+  it.each([false, true])("parks a structured unfinished native failure without a Chief and adopts its original failed receipt once after restart (stalled=%s)", async stalled => {
+    const dir = mkdtempSync(join(tmpdir(), "runtime-pending-native-"));
+    try {
+      const w = world(() => "hold", {}, dir);
+      begun(w, builder, "pending-native", "Process the file and verify every record", { sourceMessageId: "original-person" });
+      w.coordinator.endTurn("pending-native", {
+        ok: false, stalled, needsVerification: true, text: "Native plan still has pending entries",
+        evidence: { toolCalls: 2, okToolCalls: 1 },
+      });
+      expect(w.coordinator.status("pending-native")!.assignment).toMatchObject({
+        status: "needs_input", needsVerification: true, outcome: stalled ? "stalled" : "provider_error", executions: 1,
+      });
+      expect(w.coordinator.children("pending-native")).toEqual([]);
+      w.coordinator.close();
+      const reopened = world(() => "hold", {}, dir);
+      reopened.host.supervisor = () => ({ address: chief, level: "ask" });
+      for (let tick = 0; tick < 3; tick += 1) { reopened.coordinator.tick(); await flush(); }
+      const review = reopened.coordinator.children("pending-native");
+      expect(review).toHaveLength(1);
+      expect(reopened.coordinator.status(review[0]!.id)!.assignment.supervisionReceipt).toEqual({
+        kind: "failed", outcome: stalled ? "stalled" : "provider_error",
+        text: "Native plan still has pending entries", evidence: { toolCalls: 2, okToolCalls: 1 },
+      });
+      expect(reopened.coordinator.status("pending-native")!.assignment).toMatchObject({ status: "waiting", executions: 1 });
+      expect(reopened.host.runs.filter(run => run.node.id === "pending-native")).toEqual([]);
+      reopened.coordinator.close();
+    } finally { await removeTempDir(dir); }
+  });
+
+  it("readmits parked verification once when an authorized Chief becomes available without answering or rerunning the worker", async () => {
+    let available = false;
+    const w = world(node => {
+      if (node.botId === "chief" && node.executions === 1) {
+        w.coordinator.enqueue(chief, node.id, node.id, builder,
+          "RESEARCH-REMAINING: inspect public job listings and draft a sourced shortlist; do not apply or invent resume facts", { rework: true });
+        return { ok: true, text: "I will inspect the public listings." };
+      }
+      if (node.botId === "chief") return { ok: true, text: "RESEARCH-RECEIPT: sourced shortlist verified; no applications submitted." };
+      return node.id === "parked-browser" ? { ok: true, text: "RESEARCH-FINAL: sourced shortlist verified." } : "hold";
+    });
+    w.host.chiefs.add(chief.threadId);
+    w.host.supervisor = vi.fn(() => available ? { address: chief, level: "ask" as const } : undefined);
+    const goal = "Research public job listings and draft a sourced shortlist. Do not submit applications.";
+    const result = "Which website should I use?";
+    begun(w, builder, "parked-browser", goal);
+    w.coordinator.endTurn("parked-browser", { ok: true, needsVerification: true, text: result,
+      evidence: { toolCalls: 1, okToolCalls: 1, summary: "One public search; no shortlist verified" } });
+    for (let tick = 0; tick < 3; tick += 1) w.coordinator.tick();
+    const parked = w.coordinator.status("parked-browser")!.assignment;
+    expect(parked).toMatchObject({ status: "needs_input", needsVerification: true, result, executions: 1 });
+    expect(w.coordinator.children(parked.id)).toEqual([]);
+    expect(w.host.runs).toEqual([]);
+    available = true;
+    w.coordinator.tick(); await flush();
+    const reviewer = w.coordinator.children(parked.id)[0];
+    expect(reviewer).toMatchObject({ botId: "chief", supervisionOf: parked.id, rootId: parked.id });
+    const review = w.coordinator.status(reviewer!.id)!.assignment;
+    expect(review.supervisionReceipt).toEqual({ kind: "unverified", text: result, evidence: parked.evidence });
+    expect(review.brief).toBe(goal);
+    expect(w.coordinator.status(parked.id)!.assignment).toMatchObject({ status: "waiting", needsVerification: true, executions: 1, result });
+    expect(w.coordinator.node(parked.id)?.question).toBeUndefined();
+    expect(w.coordinator.status(parked.id)!.assignment.answer).toBeUndefined();
+    expect(w.coordinator.status(parked.id)!.assignment.answeredBy).toBeUndefined();
+    expect(w.coordinator.awaitingTeammateThreads().has(builder.threadId)).toBe(true);
+    for (let tick = 0; tick < 3; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.coordinator.children(parked.id)).toHaveLength(1);
+    expect(w.host.runs.filter(run => run.node.id === parked.id)).toEqual([]);
+    const remaining = w.coordinator.children(reviewer!.id)[0]!;
+    expect(remaining).toMatchObject({ botId: builder.botId, threadId: builder.threadId, rootId: parked.id });
+    await w.host.release(remaining.id, { ok: true, text: "RESEARCH-RECEIPT: three public listing URLs checked; shortlist drafted; no applications submitted.",
+      evidence: { toolCalls: 3, okToolCalls: 3 } });
+    for (let tick = 0; tick < 5; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.coordinator.node(parked.id)).toMatchObject({ status: "completed", outcome: "done", result: "RESEARCH-FINAL: sourced shortlist verified." });
+    expect(w.coordinator.children(parked.id)).toHaveLength(1);
+    w.coordinator.close();
+  });
+
+  it.each(["stopped", "newer request", "denied", "unknown effect", "card", "budget", "human question"] as const)(
+    "does not readmit parked verification past %s", async blocker => {
+      let available = false;
+      const w = world();
+      w.host.supervisor = vi.fn(() => available && blocker !== "newer request" ? { address: chief, level: "ask" as const } : undefined);
+      begun(w, builder, "fenced-browser", "Research public listings without submitting applications");
+      w.coordinator.endTurn("fenced-browser", { ok: true, text: "Which website should I use?",
+        ...(blocker !== "human question" ? { needsVerification: true as const } : {}),
+        ...(blocker === "denied" ? { blocked: { outcome: "denied" as const, reason: "Permission denied" } } : {}),
+        ...(blocker === "unknown effect" ? { blocked: { outcome: "provider_error" as const, reason: "Accepted action result unknown" } } : {}),
+        ...(blocker === "budget" ? { blocked: { outcome: "budget" as const, reason: "Execution budget exhausted" } } : {}),
+        ...(blocker === "card" ? { cards: { question: "Provide your resume", ids: ["resume-card"] } } : {}) });
+      if (blocker === "stopped") w.coordinator.stopAwaitingDirect(builder.threadId);
+      available = true;
+      for (let tick = 0; tick < 3; tick += 1) { w.coordinator.tick(); await flush(); }
+      expect(w.coordinator.children("fenced-browser")).toEqual([]);
+      expect(w.host.runs).toEqual([]);
+      w.coordinator.close();
+    });
+
+  it("keeps an ordinary direct worker's failed goal owned until its authorized Chief obtains a remaining-work receipt", async () => {
+    const w = world(node => {
+      if (node.botId === "chief") {
+        if (node.executions === 1) return { ok: true, text: "I will tell the person it stalled." };
+        if (node.executions === 2) {
+          expect(() => w.coordinator.enqueue(chief, node.id, node.id, { ...builder, threadId: "unrelated-worker-chat" }, "Wrong conversation", { rework: true }))
+            .toThrow("Cannot assign work back to an ancestor");
+          expect(() => w.coordinator.enqueue(chief, node.id, node.id, builder, "Blind original replay"))
+            .toThrow("Cannot assign work back to an ancestor");
+          w.coordinator.enqueue(chief, node.id, node.id, builder, "DIRECT-REMAINING: inspect only the outstanding export receipt", { rework: true });
+          return { ok: true, text: "Checking the remaining receipt." };
+        }
+        return { ok: true, text: "DIRECT-RECEIPT: exactly one export verified." };
+      }
+      return node.id === "direct-worker" ? { ok: true, text: "DIRECT-FINAL: exactly one export verified." } : "hold";
+    });
+    w.host.chiefs.add(chief.threadId);
+    w.host.supervisor = node => node.id === "direct-worker" ? { address: chief, level: "ask" } : undefined;
+    begun(w, builder, "direct-worker", "Write the export and verify exactly one receipt");
+    w.coordinator.endTurn("direct-worker", { ok: false, stalled: true, text: "Export written; receipt snapshot unavailable",
+      evidence: { toolCalls: 2, okToolCalls: 1, outward: ["export CSV"], errors: ["snapshot unavailable"] } });
+    expect(w.coordinator.node("direct-worker")).toMatchObject({ status: "waiting", outcome: "stalled" });
+    const reviewer = w.coordinator.children("direct-worker")[0]!;
+    expect(reviewer).toMatchObject({ botId: "chief", supervisionOf: "direct-worker", rootId: "direct-worker" });
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node(reviewer.id)?.status).toBe("queued");
+    w.coordinator.tick(); await flush();
+    const remaining = w.coordinator.children(reviewer.id)[0]!;
+    expect(remaining).toMatchObject({ botId: "builder", threadId: builder.threadId, rootId: "direct-worker" });
+    let unavailable = true;
+    w.host.busyAnswer = node => node.id === remaining.id && unavailable;
+    for (let tick = 0; tick < 3; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.host.runs.filter(run => run.node.id === remaining.id)).toHaveLength(0);
+    expect(w.coordinator.node("direct-worker")?.status).toBe("waiting");
+    unavailable = false;
+    w.coordinator.tick(); await flush();
+    await w.host.release(remaining.id, { ok: true, text: "DIRECT-RECEIPT: exactly one export verified.", evidence: { okToolCalls: 1, summary: "Existing export checked, not written again" } });
+    for (let tick = 0; tick < 3; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.coordinator.node("direct-worker")).toMatchObject({ status: "completed", outcome: "done", result: "DIRECT-FINAL: exactly one export verified." });
+    expect(w.host.runs.filter(run => run.node.id === remaining.id)).toHaveLength(1);
+    expect(w.coordinator.status("direct-worker")!.assignment.brief).toBe("Write the export and verify exactly one receipt");
+    expect(w.coordinator.status(reviewer.id)!.assignment.supervisionReceipt).toMatchObject({
+      kind: "failed", outcome: "stalled", text: "Export written; receipt snapshot unavailable",
+      evidence: { outward: ["export CSV"], errors: ["snapshot unavailable"] },
+    });
+    w.coordinator.close();
+  });
+
+  it.each(["denied", "interrupted", "provider_error"] as const)("does not adopt a direct task past its trusted %s blocker", outcome => {
+    const w = world();
+    w.host.supervisor = vi.fn(() => ({ address: chief, level: "ask" as const }));
+    begun(w, builder, "blocked-direct", "Finish the export");
+    w.coordinator.endTurn("blocked-direct", { ok: false, text: "The prerequisite is not resolved",
+      blocked: { outcome, reason: "Waiting for the person" } });
+    expect(w.host.supervisor).not.toHaveBeenCalled();
+    expect(w.coordinator.node("blocked-direct")).toMatchObject({ status: "waiting", outcome });
+    expect(w.coordinator.children("blocked-direct")).toEqual([]);
+    w.coordinator.close();
+  });
+
+  it("cancels queued direct supervision on Stop without dispatching Chief or worker", async () => {
+    const w = world();
+    w.host.supervisor = () => ({ address: chief, level: "ask" });
+    begun(w, builder, "stop-direct", "Finish the export");
+    w.coordinator.endTurn("stop-direct", { ok: false, stalled: true, text: "snapshot unavailable" });
+    expect(w.coordinator.node("stop-direct")?.status).toBe("waiting");
+    w.coordinator.stopAwaitingDirect(builder.threadId);
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("stop-direct")).toMatchObject({ status: "cancelled", outcome: "stopped" });
+    expect(w.coordinator.children("stop-direct").map(node => node.status)).toEqual(["cancelled"]);
+    expect(w.host.runs).toEqual([]);
+    w.coordinator.close();
+  });
+
+  it("adopts a trusted multi-step partial success for verification without fabricating a worker failure", async () => {
+    const w = world(node => node.botId === "chief" ? { ok: true, text: "I will tell the person about the first 480 records." } : "hold");
+    w.host.supervisor = () => ({ address: chief, level: "ask" });
+    begun(w, builder, "partial-direct", "Process every record and verify the final count");
+    w.coordinator.endTurn("partial-direct", { ok: true, needsVerification: true, text: "The first 480 records are processed; the rest remain.",
+      evidence: { toolCalls: 3, okToolCalls: 3, outward: ["480 records updated"] } });
+    expect(w.coordinator.node("partial-direct")).toMatchObject({ status: "waiting", needsVerification: true });
+    expect(w.coordinator.node("partial-direct")?.outcome).toBeUndefined();
+    const reviewer = w.coordinator.children("partial-direct")[0]!;
+    expect(w.coordinator.status(reviewer.id)!.assignment.supervisionReceipt).toMatchObject({
+      kind: "unverified", text: "The first 480 records are processed; the rest remain.",
+      evidence: { outward: ["480 records updated"] },
+    });
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node(reviewer.id)?.status).toBe("queued");
+    expect(w.coordinator.node("partial-direct")?.status).toBe("waiting");
+    expect(w.coordinator.status(reviewer.id)!.assignment.supervisionReceipt?.outcome).toBeUndefined();
+    w.coordinator.close();
+  });
+
+  it("retains pending verification when an adopted Chief fails and the worker only reports that review failed", async () => {
+    const w = world(node => node.botId === "chief"
+      ? { ok: false, text: "Chief review failed before obtaining the receipt." }
+      : { ok: true, text: "The review failed; no receipt has been verified." });
+    w.host.supervisor = () => ({ address: chief, level: "ask" });
+    begun(w, builder, "failed-review-direct", "Finish every record and verify the final receipt");
+    w.coordinator.endTurn("failed-review-direct", { ok: true, needsVerification: true, text: "480 records processed",
+      evidence: { toolCalls: 2, okToolCalls: 2 } });
+    for (let tick = 0; tick < 12; tick += 1) { w.coordinator.tick(); await flush(); }
+    expect(w.coordinator.node("failed-review-direct")).toMatchObject({ status: "waiting", needsVerification: true });
+    expect(w.coordinator.node("failed-review-direct")?.outcome).not.toBe("done");
+    const review = w.coordinator.children("failed-review-direct")[0]!;
+    expect(w.coordinator.node(review.id)).toMatchObject({ status: "waiting", question: expect.stringMatching(/incomplete|verification/i) });
+    expect(w.host.runs.filter(run => run.node.id === review.id).length).toBeLessThanOrEqual(3);
+    expect(w.host.runs.some(run => run.node.id === "failed-review-direct")).toBe(true);
+    w.coordinator.close();
+  });
+
+  it("leaves an ordinary successful direct result unchanged without trusted verification scope", () => {
+    const w = world();
+    w.host.supervisor = vi.fn(() => ({ address: chief, level: "ask" as const }));
+    begun(w, builder, "plain-success", "What is the current count?");
+    w.coordinator.endTurn("plain-success", { ok: true, text: "480" });
+    expect(w.coordinator.node("plain-success")).toMatchObject({ status: "completed", outcome: "done", result: "480" });
+    expect(w.host.supervisor).not.toHaveBeenCalled();
+    expect(w.coordinator.children("plain-success")).toEqual([]);
+    w.coordinator.close();
+  });
+
+  it("aborts an active adopted Chief on original Stop and refuses stale MCP rework immediately", async () => {
+    const w = world(() => "hold");
+    w.host.supervisor = () => ({ address: chief, level: "ask" });
+    begun(w, builder, "active-stop-direct", "Finish the export and verify its receipt");
+    w.coordinator.endTurn("active-stop-direct", { ok: false, stalled: true, text: "snapshot unavailable" });
+    w.coordinator.tick(); await flush();
+    const reviewer = w.coordinator.children("active-stop-direct")[0]!;
+    const run = w.host.runs.find(turn => turn.node.id === reviewer.id)!;
+    expect(run.signal.aborted).toBe(false);
+    w.coordinator.stopAwaitingDirect(builder.threadId);
+    expect(run.signal.aborted).toBe(true);
+    expect(w.coordinator.node(reviewer.id)).toMatchObject({ status: "cancelled", outcome: "stopped" });
+    expect(() => w.coordinator.enqueue(chief, reviewer.id, reviewer.id, builder, "Stale remaining work", { rework: true }))
+      .toThrow("The originating room task is no longer running");
+    await flush();
+    w.coordinator.tick(); await flush();
+    expect(w.coordinator.node("active-stop-direct")).toMatchObject({ status: "cancelled", outcome: "stopped" });
+    expect(w.coordinator.children(reviewer.id)).toEqual([]);
+    w.coordinator.close();
+  });
+
+  it("cancels an active adopted Chief and its already-running derived worker together", async () => {
+    const w = world(node => {
+      if (node.botId === "chief") {
+        w.coordinator.enqueue(chief, node.id, node.id, builder, "Remaining receipt inspection", { rework: true });
+      }
+      return "hold";
+    });
+    w.host.supervisor = () => ({ address: chief, level: "ask" });
+    begun(w, builder, "stop-derived", "Finish the export and verify its receipt");
+    w.coordinator.endTurn("stop-derived", { ok: false, stalled: true, text: "snapshot unavailable" });
+    w.coordinator.tick(); await flush();
+    w.coordinator.tick(); await flush();
+    expect(w.host.runs).toHaveLength(2);
+    expect(w.host.runs.every(run => !run.signal.aborted)).toBe(true);
+    w.coordinator.stopAwaitingDirect(builder.threadId);
+    expect(w.host.runs.every(run => run.signal.aborted)).toBe(true);
+    expect(w.coordinator.all().map(node => node.status)).toEqual(["cancelled", "cancelled", "cancelled"]);
+    await flush();
+    w.coordinator.tick(); await flush();
+    expect(w.host.runs).toHaveLength(2);
+    w.coordinator.close();
+  });
+
+  it.each(["denied", "interrupted"] as const)("does not let successful partial progress override trusted %s state", outcome => {
+    const w = world();
+    w.host.supervisor = vi.fn(() => ({ address: chief, level: "ask" as const }));
+    begun(w, builder, "blocked-partial", "Finish the records and verify the count");
+    w.coordinator.endTurn("blocked-partial", { ok: true, needsVerification: true, text: "480 records processed",
+      blocked: { outcome, reason: "Waiting for the person's explicit resolution" }, evidence: { toolCalls: 3, okToolCalls: 2 } });
+    expect(w.coordinator.node("blocked-partial")).toMatchObject({ status: "waiting", outcome });
+    expect(w.host.supervisor).not.toHaveBeenCalled();
+    expect(w.coordinator.children("blocked-partial")).toEqual([]);
+    w.coordinator.close();
+  });
+
+  it("parks trusted pending verification when the authorized Chief can no longer be admitted", () => {
+    const w = world();
+    w.host.supervisor = () => undefined;
+    begun(w, builder, "verification-unavailable", "Finish every record and verify the final receipt");
+    w.coordinator.endTurn("verification-unavailable", { ok: true, needsVerification: true, text: "480 records processed",
+      evidence: { toolCalls: 2, okToolCalls: 2 } });
+    expect(w.coordinator.node("verification-unavailable")).toMatchObject({ status: "waiting", needsVerification: true });
+    expect(w.coordinator.node("verification-unavailable")?.outcome).toBeUndefined();
+    expect(w.host.parks.at(-1)?.question).toContain("verification");
+    expect(w.coordinator.children("verification-unavailable")).toEqual([]);
+    w.coordinator.close();
+  });
+
+  it("does not complete unverified success when dispatch-time Chief authorization refuses adoption", () => {
+    const w = world();
+    w.host.supervisor = () => ({ address: chief, level: "ask" });
+    w.host.validate = node => node.supervisionOf ? "Chief scope was revoked" : undefined;
+    begun(w, builder, "verification-refused", "Finish every record and verify the final receipt");
+    w.coordinator.endTurn("verification-refused", { ok: true, needsVerification: true, text: "480 records processed" });
+    expect(w.coordinator.node("verification-refused")).toMatchObject({ status: "waiting", needsVerification: true });
+    expect(w.coordinator.node("verification-refused")?.outcome).toBeUndefined();
+    expect(w.host.parks.at(-1)?.question).toContain("Chief scope was revoked");
+    expect(w.coordinator.children("verification-refused")).toEqual([]);
+    w.coordinator.close();
+  });
+
+  it.each([
+    { original: "full", current: "full", review: "ask", expected: "full" },
+    { original: "ask", current: "full", review: "full", expected: "ask" },
+    { original: "full", current: "ask", review: "full", expected: "ask" },
+  ] as const)("keeps exact worker recovery within original $original and current $current authority, not reviewer $review", async levels => {
+    let current: Level = levels.original;
+    const w = world(node => {
+      if (node.botId === "chief") {
+        w.coordinator.enqueue(chief, node.id, node.id, builder, "Inspect only the original remaining receipt", { rework: true });
+      }
+      return "hold";
+    });
+    const sourceIds: Array<string | undefined> = [];
+    w.host.chiefs.add(chief.threadId);
+    w.host.levelOf = (target, source) => {
+      if (target.botId !== builder.botId) return { level: levels.review, driverKind: "claudeAgent" };
+      sourceIds.push(source?.id);
+      return source?.botId === chief.botId
+        ? { level: levels.review, chief: levels.review, driverKind: "claudeAgent" }
+        : { level: current, driverKind: "claudeAgent" };
+    };
+    w.host.supervisor = () => ({ address: chief, level: levels.review, driverKind: "claudeAgent" });
+    begun(w, builder, "level-direct", "Finish the original export and verify its receipt");
+    current = levels.current;
+    w.coordinator.endTurn("level-direct", { ok: false, stalled: true, text: "snapshot unavailable" });
+    w.coordinator.tick(); await flush();
+    const reviewer = w.coordinator.children("level-direct")[0]!;
+    const remaining = w.coordinator.children(reviewer.id)[0]!;
+    expect(w.coordinator.status(reviewer.id)!.assignment.level).toBe(levels.review);
+    expect(w.coordinator.status(remaining.id)!.assignment.level).toBe(levels.expected);
+    expect(sourceIds.at(-1)).toBe("level-direct");
+    w.coordinator.close();
   });
 });

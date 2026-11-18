@@ -35,3 +35,10 @@ export function assignmentLevel(input: LevelInput): { level: Level; source: Leve
   if (rank(capped) <= rank(own)) return { level: own, source: "engine_cap" };
   return { level: capped, source: capped === inherited ? "chief" : "engine_cap" };
 }
+
+/** A direct task's exact original-worker recovery retains only its existing, still-current authority.
+ * A provider-specific Custom policy is not reconstructible from this level label and must be granted explicitly. */
+export function recoveryLevel(original: Level, current: Level, driverKind?: string): Level {
+  if (original === "custom" || current === "custom") return "ask";
+  return engineCap(TRAVELS[Math.min(rank(original), rank(current))]!, driverKind);
+}

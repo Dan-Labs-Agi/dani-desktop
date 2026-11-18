@@ -1,5 +1,6 @@
 import { freeFallback, rankAis } from "../shared/ai-ranking.ts";
 import { isDaniFreeInstance } from "../shared/dani-free.ts";
+import { isHermesHarness } from "../shared/hermes-harness.ts";
 import type { EffortLevel, EngineAccess, InstanceConfigMap, ModelCatalog, ModelSelection, ProviderSnapshot } from "./contracts.ts";
 
 export interface SelectableInstance {
@@ -47,13 +48,20 @@ export function readyToRun(instance: SelectableInstance, context: DefaultSelecti
 }
 
 export function automaticModelCandidates(instances: readonly SelectableInstance[]): readonly SelectableInstance[] {
+  const harnesses = instances.filter(isHermesHarness);
+  if (harnesses.length) return harnesses;
   const dani = instances.filter(isDaniFreeInstance);
   return dani.length ? dani : instances;
 }
 
-const defaultModel = (instance: SelectableInstance) => instance.models.default.trim()
-  ? instance.models.default
-  : instance.models.options.find((model) => model.id.trim())?.id ?? "";
+const defaultModel = (instance: SelectableInstance): string => {
+  if (isHermesHarness(instance)) {
+    const option = instance.models.options.find((model) => model.id === instance.models.default);
+    return option && !option.orgBlocked && option.availability !== "unavailable" && option.availability !== "preparing" ? option.id : "";
+  }
+  return instance.models.default.trim() ? instance.models.default
+    : instance.models.options.find((model) => model.id.trim())?.id ?? "";
+};
 
 /** A saved choice is intentional: an unavailable provider sends new bots to setup, never silently to another provider. On
  * an enrolled desktop a working personal engine beats a Company one, so billing stays the person's choice. */
@@ -64,6 +72,9 @@ export function selectDefaultModelSelection(
 ): ModelSelection {
   if (preferred && (preferred.instanceId || preferred.model)) {
     const instance = instances.find((candidate) => candidate.instanceId === preferred.instanceId);
+    const modelId = instance && isHermesHarness(instance) && preferred.model === "hermes-default"
+      ? instance.models.default : preferred.model;
+    const option = instance?.models.options.find((model) => model.id === modelId);
     if (
       instance?.snapshot.state !== "available" ||
       instance.enabled === false ||
@@ -72,7 +83,8 @@ export function selectDefaultModelSelection(
       // A disallowed saved engine is unusable like an unavailable one: setup, never another provider.
       context.refusal?.(instance) !== undefined ||
       (preferred.variant !== undefined && !instance.capabilities?.modelVariants) ||
-      !(instance.models.default === preferred.model || instance.models.options.some((model) => model.id === preferred.model))
+      !(instance.models.default === modelId || option) ||
+      (isHermesHarness(instance) && (!option || option.orgBlocked || option.availability === "unavailable" || option.availability === "preparing"))
     ) {
       return { instanceId: "", model: "" };
     }

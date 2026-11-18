@@ -36,7 +36,8 @@ vi.mock("@/lib/live-call-media", async (original) => {
   const actual = await original<typeof import("@/lib/live-call-media")>();
   return { ...actual, useLiveMedia: actual.liveMedia };
 });
-import { BotListItem, botRowProps, type BotRowProps } from "./Sidebar";
+import { BotListItem } from "./Sidebar";
+import { botRowProps, type BotRowProps } from "@/lib/sidebar-selection";
 import { forgetSearchDisclosuresForTests } from "@/lib/search-disclosure";
 
 const bot: Bot = {

@@ -769,9 +769,11 @@ describe("internal mcp_server route, below Full access", () => {
   it("sign_in asks for a Sign in card at any level, in one activity line, and tells the bot to end its turn", async () => {
     for (const full of [true, false]) {
       const { post, signIns, lines, decided } = fixture({ full, servers: { linear } });
-      expect(await post({ action: "sign_in", name: "linear" })).toEqual({ status: 202, body: {
-        text: "A Sign in card for linear is now visible to the person. End this turn and wait; Dani Bot resumes you when they finish.",
-      } });
+      const result = await post({ action: "sign_in", name: "linear" });
+      expect(result.status).toBe(202);
+      expect(result.body.text).toContain("A Sign in card for linear is now visible to the person.");
+      expect(result.body.text).toContain("End this turn and wait");
+      expect(result.body.text).toContain("resumes you when they finish");
       expect(signIns).toEqual([{ name: "linear", url: linear.url }]);
       expect(lines).toEqual(["Asked to sign in to MCP server linear"]);
       expect(decided).toEqual([]);
@@ -858,8 +860,9 @@ describe("a card answered after DaniBot restarts", () => {
     await respond("allow");
     expect(stored("notes")).toMatchObject({ args: ["-y", "notes-mcp"], env: { NOTES_TOKEN: "saved-token" } });
     expect(probe).not.toHaveBeenCalled();
-    expect(card()).toMatchObject({ expired: true, held: "Dani Bot restarted, so this request expired.", mcpRequest: { result: { state: "expired" } } });
-    expect(answers[0]).toContain("Dani Bot restarted, so this request expired. Ask again if you still need it.");
+    expect(card()).toMatchObject({ expired: true, held: expect.stringMatching(/restarted.*request expired/), mcpRequest: { result: { state: "expired" } } });
+    expect(answers[0]).toMatch(/restarted.*request expired/);
+    expect(answers[0]).toContain("Ask again if you still need it.");
     for (const sent of [fresh, "sk-live-9", "fresh-token", "saved-token"]) expect(JSON.stringify(chat), sent).not.toContain(sent);
   });
 

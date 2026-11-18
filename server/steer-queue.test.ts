@@ -6,6 +6,8 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 
 import { saveChatFollowup } from "./message-db.ts";
 import { killCliTree } from "./procs.ts";
@@ -759,8 +761,8 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
       '  return publish.call(this, event);',
       '};',
       'const load = ProviderRegistry.prototype.load;',
-      'ProviderRegistry.prototype.load = async function(configs) {',
-      '  await load.call(this, configs);',
+      'ProviderRegistry.prototype.load = async function(...args) {',
+      '  await load.apply(this, args);',
       '  const instance = this.get("steerEarly");',
       '  if (!instance) return;',
       '  const send = instance.adapter.sendTurn;',
@@ -791,7 +793,11 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
+        features: { smartSetupChoices: false },
         instances: {
+          ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+            id, { driver: "not-a-real-driver", enabled: false },
+          ])),
           steer: {
             driver: "grokAgent",
             environment: { FAKE_ACP_MODE: "echo-gated", FAKE_ACP_GATE_FILE: drainGate },
@@ -830,14 +836,11 @@ describe("steer-queue e2e (fake ACP fleet)", () => {
     const port = await freePortBlock([0, 1]);
     base = `http://127.0.0.1:${port}`;
     const env: NodeJS.ProcessEnv = {
+      ...verificationServerEnvironment({}, join(home, ".danibot"), port),
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(port),
     };
-    if (process.env.PATH) env.PATH = process.env.PATH;
-    // Without SystemRoot, winsock fails to initialize in the child.
-    if (process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
-    child = spawn(process.execPath, ["--import", pathToFileURL(prelude).href, join(SERVER_DIR, "index.ts")], {
+    child = spawn(process.execPath, ["--import", pathToFileURL(prelude).href, ...verificationServerArgs(env)], {
       cwd: join(SERVER_DIR, ".."),
       env,
       stdio: ["ignore", "pipe", "pipe"],

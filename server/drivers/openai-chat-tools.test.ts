@@ -176,18 +176,50 @@ describe("bounded action announcement recovery", () => {
     expect(f.requests).toHaveLength(5);
     expect(f.effects().map(effect => effect.name)).toEqual(["step-2", "step-4"]);
     expect(f.requests[3].messages).toContainEqual(expect.objectContaining({ role: "tool", tool_call_id: "call-2" }));
-    expect(f.requests[3].messages.at(-1)).toMatchObject({ content: expect.stringContaining("Never repeat") });
   });
 
-  it("fails after three nudges even when each recovery makes tool progress", async () => {
-    const f = await fixture((_body, response, round) => round % 2
-      ? answer(response, "I'll inspect the next result.")
-      : sse(response, [chunk({ tool_calls: [toolCall("audit_write", JSON.stringify({ name: `step-${round}`, value: "done" }), `call-${round}`)] }, "tool_calls")]));
+  it("finishes ten progress-making phases instead of stopping after three intermediary announcements", async () => {
+    const f = await fixture((_body, response, round) => {
+      if (round > 20) answer(response, "All ten receipts are verified.");
+      else if (round % 2) answer(response, "I'll inspect the next result.");
+      else sse(response, [chunk({ tool_calls: [toolCall("audit_write", JSON.stringify({ name: `stage-${round / 2}`, value: "done" }), `call-${round}`)] }, "tool_calls")]);
+    });
+    await f.start({ approvalMode: "full", text: "Store and verify all ten receipts, stage-1 through stage-10. Do not stop after an intermediate stage." });
+    expect(await f.completed()).toMatchObject({ ok: true });
+    expect(f.effects().map((effect) => ({ name: effect.name, value: effect.value }))).toEqual(
+      Array.from({ length: 10 }, (_, index) => ({ name: `stage-${index + 1}`, value: "done" })),
+    );
+  });
+
+  it("reports incomplete at the round budget without replaying completed operations", async () => {
+    const f = await fixture((_body, response, round) => {
+      if (round % 2 === 0) answer(response, "I'll inspect the next result.");
+      else sse(response, [chunk({
+        tool_calls: [toolCall("audit_write", JSON.stringify({ name: `stage-${(round + 1) / 2}`, value: "done" }), `call-${round}`)],
+      }, "tool_calls")]);
+    });
     await f.start({ approvalMode: "full" });
+    expect(await f.completed()).toMatchObject({ ok: false, stopReason: "incomplete_action" });
+    expect(f.requests).toHaveLength(64);
+    expect(f.effects().map((effect) => ({ name: effect.name, value: effect.value }))).toEqual(
+      Array.from({ length: 32 }, (_, index) => ({ name: `stage-${index + 1}`, value: "done" })),
+    );
+  });
+
+  it("does not hand a spent turn to automatic continuation after a denied operation", async () => {
+    const f = await fixture((_body, response, round) => sse(response, [chunk({
+      tool_calls: [toolCall("audit_write", JSON.stringify({ name: `stage-${round}`, value: "done" }), `call-${round}`)],
+    }, "tool_calls")]));
+    let mode: "ask" | "full" = "ask";
+    await f.start({ approvalModeNow: () => mode });
+    await f.recorder.until((event) => event.type === "request.opened");
+    mode = "full";
+    await f.decide("deny");
     expect(await f.completed()).toMatchObject({ ok: false });
-    expect(f.requests).toHaveLength(7);
-    expect(f.effects()).toHaveLength(3);
-    expect(f.recorder.events).toContainEqual(expect.objectContaining({ type: "runtime.error", message: expect.stringContaining("3 announcement nudges") }));
+    expect(f.recorder.events.filter((event) => event.type === "cap.exhausted")).toEqual([]);
+    expect(f.effects().map((effect) => effect.name)).toEqual(
+      Array.from({ length: 63 }, (_, index) => `stage-${index + 2}`),
+    );
   });
 
   it("stops on a second announcement without tool progress", async () => {

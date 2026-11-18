@@ -5,15 +5,18 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { verificationServerArgs, verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 import { splitLaunchNote } from "./testing/launch-note.ts";
 import { withoutTurnClock } from "./testing/turn-clock-text.ts";
+import { freePortBlock } from "./testing/ports.ts";
+import type { Message } from "./store.ts";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const FAKE_CLAUDE = join(SERVER_DIR, "testing", "fake-claude-cli.ts");
 const FAKE_ACP = join(SERVER_DIR, "testing", "fake-acp-cli.ts");
 const FAKE_CODEX = join(SERVER_DIR, "testing", "fake-codex-app-server.ts");
-const PORT = 18800 + Math.floor(Math.random() * 10_000);
-const BASE = `http://127.0.0.1:${PORT}`;
+let BASE: string;
 const posixOnly = describe.skipIf(process.platform === "win32");
 
 posixOnly("mid-turn steering e2e", () => {
@@ -83,11 +86,21 @@ posixOnly("mid-turn steering e2e", () => {
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
+        features: { smartSetupChoices: false },
         instances: {
+          ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+            id, { driver: "not-a-real-driver", enabled: false },
+          ])),
           claude: { driver: "claudeAgent", environment: { FAKE_CLAUDE_MODE: "slow" }, config: { cli: FAKE_CLAUDE, permissionMode: "bypassPermissions" } },
           claudeSteer: {
             driver: "claudeAgent",
             environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: steerFinishGate },
+            config: { cli: FAKE_CLAUDE, permissionMode: "bypassPermissions" },
+          },
+          // Queue completion is conversation-only; incidental Bash work would require a separate Chief verification turn.
+          claudeQueue: {
+            driver: "claudeAgent",
+            environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_SLOW_FINISH_GATE: steerFinishGate, FAKE_CLAUDE_TOOL_CALLS: "[]" },
             config: { cli: FAKE_CLAUDE, permissionMode: "bypassPermissions" },
           },
           claudeRace: {
@@ -122,9 +135,16 @@ posixOnly("mid-turn steering e2e", () => {
         },
       }),
     );
-    child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
+    const port = await freePortBlock([0, 1]);
+    BASE = `http://127.0.0.1:${port}`;
+    const env = {
+      ...verificationServerEnvironment({}, join(home, ".danibot"), port),
+      HOME: home,
+      USERPROFILE: home,
+    };
+    child = spawn(process.execPath, verificationServerArgs(env), {
       cwd: join(SERVER_DIR, ".."),
-      env: { ...(process.env.PATH ? { PATH: process.env.PATH } : {}), HOME: home, USERPROFILE: home, OMB_PORT: String(PORT) },
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stderr!.on("data", (c) => (stderr += c));
@@ -196,9 +216,13 @@ posixOnly("mid-turn steering e2e", () => {
     let queued: Awaited<ReturnType<typeof api>>;
     const created = (await api("POST", "/api/bots")).body.bot;
     try {
-      await api("PATCH", `/api/bots/${created.id}`, { modelSelection: { instanceId: "claudeSteer", model: "claude-fake" } });
+      expect((await api("PATCH", `/api/bots/${created.id}`, {
+        modelSelection: { instanceId: "claudeQueue", model: "claude-fake" }, computer: "off",
+      })).status).toBe(200);
       expect((await api("POST", `/api/bots/${created.id}/messages`, { text: "first" })).status).toBe(202);
-      await waitFor(async () => (await getBot(created.id)).messages.some((m: any) => m.kind === "activity"), "the tool chip");
+      await waitFor(async () => (await getBot(created.id)).messages.some((m: Message) =>
+        m.role === "bot" && m.kind === "text" && typeof m.text === "string" && withoutTurnClock(m.text) === "hello from fake claude"),
+      "the first turn's streamed reply");
       queued = await api("POST", `/api/bots/${created.id}/messages`, { text: "a new task for later", followUp: "queue" });
       expect((await getBot(created.id)).busy).toBe(true);
     } finally {

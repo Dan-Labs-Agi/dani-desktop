@@ -6,13 +6,13 @@ import type { EffortLevel } from "../../shared/wire";
 import type { ModelVariantOption } from "../../shared/runtime-events";
 import { filterCustomModels, partitionCustomModels, suggestedModels } from "@/lib/custom-models";
 import { configuredModelInstances, isClaudeAccount, isCustomOnly, SIGN_IN_FAMILY_LABEL, signInFamily } from "@/lib/engine-rail";
-import { modelName, simpleModelMenu } from "@/lib/simple-model-menu";
-import { choiceIsSelected, daniModelLabel, modelChoices, modelSelectionForPick, takesTypedModels, withTypedModels, type ModelChoice } from "@/lib/model-choices";
+import { modelName, providerName, simpleModelMenu } from "@/lib/simple-model-menu";
+import { choiceIsSelected, daniModelLabel, modelChoices, modelOptionForId, modelSelectionForPick, takesTypedModels, withTypedModels, type ModelChoice } from "@/lib/model-choices";
 export { modelSelectionForPick } from "@/lib/model-choices";
 import { pickerPlacement, type PickerPlacement } from "@/lib/picker-placement";
 import type { Typeahead } from "@/lib/menu-keys";
 import { usePopoverDismiss } from "@/hooks/use-popover-dismiss";
-import { InstanceProviderMark } from "./ProviderIcons";
+import { ModelProviderMark } from "./ProviderIcons";
 import { ELEVATED_FLOAT, ELEVATED_HOVER } from "./elevated";
 import { ApiKeyHint, EngineSetup, EngineUpdateNotice, needsCli, needsSignIn, openKeysFor } from "./EngineSetup";
 import { offersLocalModels, probeLocalModels } from "./local-model-probe";
@@ -37,16 +37,17 @@ import { ThreadModelsLine } from "./ThreadModelsLine";
 import { Select } from "./Select";
 
 import { DANI_FREE_INSTANCE_IDS, isDaniFreeInstance } from "../../shared/dani-free";
+import { isHermesHarness } from "../../shared/hermes-harness";
 import { ConnectAiDialog, DaniSetup } from "./onboarding/ConnectAi";
 const COMPACT_MODEL_COUNT = 5;
 
 function modelLabel(instance: InstanceInfo | undefined, model: string): string {
-  return instance && isDaniFreeInstance(instance) ? modelName(instance, model) : instance?.models.options.find((option) => option.id === model)?.label ?? model;
+  return instance && (isDaniFreeInstance(instance) || isHermesHarness(instance)) ? modelName(instance, model) : instance?.models.options.find((option) => option.id === model)?.label ?? model;
 }
 
 function modelProvider(instance: InstanceInfo | undefined, model: string): string | undefined {
   if (instance && isDaniFreeInstance(instance)) return undefined;
-  return instance?.models.options.find((option) => option.id === model)?.provider;
+  return modelOptionForId(instance, model)?.provider;
 }
 
 export function effortLabel(level: EffortLevel): string {
@@ -272,6 +273,7 @@ export function ModelPicker({
   const inside = useRef({ contains: (target: unknown) => [rootRef.current, menuRef.current].some((node) => node?.contains(target as Node)) });
 
   const floating = typeof document !== "undefined";
+  const rootHarness = state.instances.some(isHermesHarness);
   const simpleView = !advanced && !fullView;
   const popoverWidth = simpleView ? SIMPLE_POPOVER_WIDTH : POPOVER_WIDTH;
   useLayoutEffect(() => {
@@ -315,10 +317,10 @@ export function ModelPicker({
   const instances = withTypedModels(state.instances, selection, query);
   const active = instances.find((instance) => instance.instanceId === selection.instanceId);
   const selectedModelLabel = active ? modelLabel(active, selection.model)
-    : DANI_FREE_INSTANCE_IDS[selection.instanceId] === true ? t("daniSetup.unavailableModel") : selection.model;
+    : DANI_FREE_INSTANCE_IDS[selection.instanceId] === true ? t("daniSetup.unavailableModel") : modelName(undefined, selection.model);
   const pickerInstances = configuredModelInstances(instances, selection.instanceId);
   const selectedVariantLabel = selection.variant === undefined ? undefined : variantLabel(
-    active?.models.options.find((option) => option.id === selection.model)?.variants?.find((option) => option.id === selection.variant)
+    modelOptionForId(active, selection.model)?.variants?.find((option) => option.id === selection.variant)
       ?? { id: selection.variant, label: selection.variant },
     active,
   );
@@ -327,7 +329,7 @@ export function ModelPicker({
   const openaiRailInstance = openaiAccounts.find((instance) => instance.instanceId === lastOpenaiIdRef.current)
     ?? openaiAccounts.find((instance) => instance.instanceId === selection.instanceId) ?? openaiAccounts[0];
   const multipleClaudeAccounts = state.instances.filter(isClaudeAccount).length > 1;
-  const showActiveAccount = (multipleClaudeAccounts && isClaudeAccount(active)) || Boolean(active?.snapshot.chatgptPlan);
+  const showActiveAccount = Boolean(active && !isHermesHarness(active) && ((multipleClaudeAccounts && isClaudeAccount(active)) || active.snapshot.chatgptPlan));
   const claudeRailInstance = claudeAccounts.find((instance) => instance.instanceId === lastClaudeIdRef.current)
     ?? claudeAccounts.find((instance) => instance.instanceId === selection.instanceId) ?? claudeAccounts[0];
   const railInstance =
@@ -464,9 +466,9 @@ export function ModelPicker({
   const follows = threadId ? profile.tasks?.find((task) => task.threadId === threadId)?.followsBotModel : undefined;
   const botModelInstance = state.instances.find((instance) => instance.instanceId === profile.modelSelection.instanceId);
   const botModelLabel = botModelInstance ? modelName(botModelInstance, profile.modelSelection.model)
-    : DANI_FREE_INSTANCE_IDS[profile.modelSelection.instanceId] === true ? t("daniSetup.unavailableModel") : profile.modelSelection.model;
+    : DANI_FREE_INSTANCE_IDS[profile.modelSelection.instanceId] === true ? t("daniSetup.unavailableModel") : modelName(undefined, profile.modelSelection.model);
   const botModelName = botModelInstance
-    ? `${DANI_FREE_INSTANCE_IDS[botModelInstance.instanceId] === true ? "Dani" : botModelInstance.displayName} · ${modelLabel(botModelInstance, profile.modelSelection.model)}`
+    ? `${isHermesHarness(botModelInstance) ? modelProvider(botModelInstance, profile.modelSelection.model) ?? providerName(botModelInstance) : isDaniFreeInstance(botModelInstance) ? providerName(botModelInstance) : botModelInstance.displayName} · ${modelLabel(botModelInstance, profile.modelSelection.model)}`
     : botModelLabel;
   const ownModelThreads = threadsOnOwnModel(profile.modelSelection, profile.tasks ?? []).length;
 
@@ -518,7 +520,7 @@ export function ModelPicker({
 
   const resetVariant = contained && selection.variant !== undefined ? () => {
     const { variant: _variant, ...nextSelection } = selection;
-    dispatch({ type: "setModel", botId: bot.id, threadId: threadId ?? bot.threadId, updateBotDefault: !threadId || simpleUpdatesBotDefault, selection: nextSelection });
+    dispatch({ type: "setModel", botId: bot.id, threadId: threadId ?? bot.threadId, updateBotDefault: !threadId || (simpleView ? simpleUpdatesBotDefault : scope === "bot"), selection: nextSelection });
     close(true);
   } : undefined;
 
@@ -550,15 +552,16 @@ export function ModelPicker({
   const remote = window.ogb?.remoteClient?.active === true;
 
   const levels = active?.capabilities?.effortLevels ?? [];
+  const updateThinkingDefault = Boolean(threadId) && (simpleView ? simpleUpdatesBotDefault : scope === "bot");
   const writeEffort = (effort: EffortLevel | undefined) => {
     const { effort: _effort, ...model } = selection;
-    dispatch({ type: "setModel", botId: bot.id, threadId, ...(threadId && simpleUpdatesBotDefault ? { updateBotDefault: true } : {}),
+    dispatch({ type: "setModel", botId: bot.id, threadId, ...(updateThinkingDefault ? { updateBotDefault: true } : {}),
       selection: effort ? { ...model, effort } : model });
   };
   const thinking: SimpleThinking | null = contained ? null
     : variantChoices(state, selection, threadId ?? bot.threadId) ? {
       variants: (
-        <ModelVariantRow compact quiet bot={shown} threadId={threadId} updateBotDefault={Boolean(threadId) && simpleUpdatesBotDefault} className="px-2 py-1"
+        <ModelVariantRow compact quiet bot={shown} threadId={threadId} updateBotDefault={updateThinkingDefault} className="px-2 py-1"
           label={<span className="shrink-0 text-[12px] font-medium leading-4 text-ink-tertiary">{t("botSettings.simple.thinking")}</span>} />
       ),
     }
@@ -590,14 +593,17 @@ export function ModelPicker({
     else close(true);
   };
 
-  const currentOption = active?.models.options.find((option) => option.id === selection.model);
+  const currentOption = modelOptionForId(active, selection.model);
   const attention = !active ? undefined
     : active.policy ? t("policy.managedBy", { organization: active.policy.organizationName })
       : needsCli(active) ? t("model.setupRequired")
-        : needsSignIn(active) && !isCustomOnly(active) && !currentOption?.custom ? t("model.signInRequired") : currentOption?.orgBlocked ? t("model.orgBlocked") : undefined;
+        : needsSignIn(active) && !isCustomOnly(active) && !currentOption?.custom ? t("model.signInRequired")
+          : currentOption?.orgBlocked ? t("model.orgBlocked")
+            : currentOption?.availability !== undefined && currentOption.availability !== "available"
+              ? currentOption.unavailableReason ?? t("model.simple.unavailable") : undefined;
   const summary = active
-    ? `${DANI_FREE_INSTANCE_IDS[active.instanceId] === true ? "Dani" : active.displayName} · ${selectedModelLabel}${
-        modelProvider(active, selection.model) ? ` · ${modelProvider(active, selection.model)}` : ""
+    ? `${isHermesHarness(active) ? modelProvider(active, selection.model) ?? providerName(active) : isDaniFreeInstance(active) ? providerName(active) : active.displayName} · ${selectedModelLabel}${
+        !isHermesHarness(active) && modelProvider(active, selection.model) ? ` · ${modelProvider(active, selection.model)}` : ""
       }${selectedVariantLabel ? ` · ${selectedVariantLabel}` : selection.effort
         ? ` · ${t(advanced ? "model.effort.summary" : "model.simple.thinkingSummary", { level: effortLabel(selection.effort) })}` : ""}`
     : selectedModelLabel;
@@ -639,8 +645,8 @@ export function ModelPicker({
       )}
     >
       {active && (contained
-        ? <InstanceProviderMark instance={active} size={14} subtle />
-        : <span className="flex shrink-0 group-disabled:opacity-50"><InstanceProviderMark instance={active} size={14} subtle /></span>)}
+        ? <ModelProviderMark instance={active} provider={modelProvider(active, selection.model)} size={14} subtle />
+        : <span className="flex shrink-0 group-disabled:opacity-50"><ModelProviderMark instance={active} provider={modelProvider(active, selection.model)} size={14} subtle /></span>)}
       {!contained && active && showActiveAccount && (
         <span data-model-account-compact className="hidden max-w-20 truncate @max-4xl/chathead:inline">{active.displayName}</span>
       )}
@@ -684,7 +690,7 @@ export function ModelPicker({
     >
       <span className="relative mr-1.5 flex shrink-0 group-disabled:opacity-50">
         {active
-          ? <InstanceProviderMark instance={active} size={14} subtle />
+          ? <ModelProviderMark instance={active} provider={modelProvider(active, selection.model)} size={14} subtle />
           : <span className="size-3.5 rounded-full bg-ink/[0.08]" aria-hidden="true" />}
         {attention && <span data-model-attention className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full bg-warning ring-[1.5px] ring-app" />}
       </span>
@@ -693,7 +699,7 @@ export function ModelPicker({
     </button>
   );
 
-  const simpleMenu = simpleView ? simpleModelMenu({
+  const simpleMenu = simpleView || rootHarness ? simpleModelMenu({
     instances,
     listed: pickerInstances,
     selection,
@@ -719,7 +725,7 @@ export function ModelPicker({
         <FollowBotModelRow name={profile.name} model={botModelName} follows={follows} onPick={pickBotModel} />
       )}
       <div className="flex min-h-0 min-w-0 flex-1">
-        {pickerInstances.length > 0 && <ModelEngineRail instances={pickerInstances} selectedInstance={railInstance} claudeInstance={claudeRailInstance} openaiInstance={openaiRailInstance} onSelect={selectRail}
+        {pickerInstances.length > 0 && !(pickerInstances.length === 1 && isHermesHarness(pickerInstances[0])) && <ModelEngineRail instances={pickerInstances} selectedInstance={railInstance} claudeInstance={claudeRailInstance} openaiInstance={openaiRailInstance} onSelect={selectRail}
           onAddApiKeys={remote ? undefined : openApiKeys} />}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
@@ -743,7 +749,7 @@ export function ModelPicker({
             <>
               <div className="shrink-0 px-3.5 pb-2 pt-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="truncate text-[14px] font-semibold leading-5 text-ink">{signInFamily(railInstance) ? SIGN_IN_FAMILY_LABEL[signInFamily(railInstance)!] : railInstance.displayName}</div>
+                  <div className="truncate text-[14px] font-semibold leading-5 text-ink">{isHermesHarness(railInstance) ? t("model.choose") : signInFamily(railInstance) ? SIGN_IN_FAMILY_LABEL[signInFamily(railInstance)!] : railInstance.displayName}</div>
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
@@ -770,7 +776,7 @@ export function ModelPicker({
                         blocked ? "bg-warning/10 text-warning" : "bg-success/10 text-success",
                       )}
                     >
-                      {pane === "custom" && !blocked && railInstance.access !== "api" ? t("model.localModels") : engineStatus(railInstance)}
+                      {pane === "custom" && !blocked && railInstance.access !== "api" && !isHermesHarness(railInstance) ? t("model.localModels") : engineStatus(railInstance)}
                     </span>
                   </div>
                 </div>
@@ -790,7 +796,7 @@ export function ModelPicker({
                 )}
                 {railInstance.access === "api"
                   ? <ApiKeyHint instance={railInstance} />
-                  : pane === "custom" && <div className="mt-0.5 text-[12px] leading-4 text-ink-tertiary">{t("model.localHint")}</div>}
+                  : pane === "custom" && <div className="mt-0.5 text-[12px] leading-4 text-ink-tertiary">{t(isHermesHarness(railInstance) ? "model.chooseHint" : "model.localHint")}</div>}
               </div>
 
               {pane === "custom" && canReturnToOfficial && (
@@ -829,7 +835,7 @@ export function ModelPicker({
                       ? official.length === 1
                         ? t("model.afterSetupOne")
                         : t("model.afterSetupMany", { count: official.length })
-                      : t("model.localSoon")}
+                      : t(isHermesHarness(railInstance) ? "model.chooseHint" : "model.localSoon")}
                   </p>
                 </div>
               ) : (
@@ -892,8 +898,8 @@ export function ModelPicker({
                         {rest.map(renderRow)}
                         {custom.length === 0 && (lookingForLocal ? lookingForLocalStatus : (
                           <div className="px-3 py-6 text-center">
-                            <div className="text-[13px] leading-[18px] text-ink">{t("model.noLocal")}</div>
-                            <div className="mt-1 text-[12px] leading-4 text-ink-tertiary">{t("model.noLocalHint")}</div>
+                            <div className="text-[13px] leading-[18px] text-ink">{t(isHermesHarness(railInstance) ? "model.noProviders" : "model.noLocal")}</div>
+                            <div className="mt-1 text-[12px] leading-4 text-ink-tertiary">{t(isHermesHarness(railInstance) ? "model.chooseHint" : "model.noLocalHint")}</div>
                           </div>
                         ))}
                         {custom.length > 0 && filteredCustom.length === 0 && (
@@ -987,6 +993,17 @@ export function ModelPicker({
       } : { width: popoverWidth }}
       className={cn("menu-surface z-[80] flex flex-col overflow-hidden", motion.className)}
     >
+      {rootHarness && advanced && threadId && (
+        <div role="group" aria-label={t("model.scope.label")} className="flex shrink-0 gap-1 border-b-[0.5px] border-ink/10 px-3.5 py-2">
+          {(["thread", "bot"] as const).map((value) => (
+            <button key={value} type="button" aria-pressed={scope === value} onClick={() => setScope(value)}
+              className={cn("h-6 rounded-full px-2.5 text-[12px] leading-4",
+                scope === value ? "bg-ink/[0.08] font-medium text-ink" : "text-ink-secondary hover:bg-ink/[0.06] hover:text-ink")}>
+              {value === "bot" ? t("model.scope.bot") : t("model.scope.thread")}
+            </button>
+          ))}
+        </div>
+      )}
       {simpleMenu ? (
         <SimpleModelMenu
           menu={simpleMenu}
@@ -999,18 +1016,20 @@ export function ModelPicker({
           onPick={pick}
           onPickCurrent={() => close(true)}
           onFollowBot={pickBotModel}
-          onToggle={(instance) => {
-            const opening = !expanded.has(instance.instanceId);
+          onToggle={(instance, provider) => {
+            const key = provider === undefined ? instance.instanceId : `${instance.instanceId}/${provider}`;
+            const opening = !expanded.has(key);
             setExpanded((current) => {
               const next = new Set(current);
-              if (opening) next.add(instance.instanceId);
-              else next.delete(instance.instanceId);
+              if (opening) next.add(key);
+              else next.delete(key);
               return next;
             });
-            if (opening) lookForLocalIn(instance);
+            if (opening && !isHermesHarness(instance)) lookForLocalIn(instance);
           }}
           onSetUp={(instance, keyboard) => {
-            if (DANI_FREE_INSTANCE_IDS[instance.instanceId] === true) { close(false); setFreeSetup(true); }
+            if (isHermesHarness(instance)) refreshModels(instance.instanceId);
+            else if (DANI_FREE_INSTANCE_IDS[instance.instanceId] === true) { close(false); setFreeSetup(true); }
             else openFull(instance, keyboard);
           }}
           onCheckAgain={(instance) => refreshModels(instance.instanceId)}

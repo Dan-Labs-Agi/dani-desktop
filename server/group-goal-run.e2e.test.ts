@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { verificationServerEnvironment } from "../scripts/control-omb.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { freePortBlock } from "./testing/ports.ts";
@@ -60,12 +62,17 @@ beforeAll(async () => {
   writeFileSync(stopScopedLeadFinishGate, "allow initial goal delegation");
   const data = join(home, ".danibot");
   const staticDir = join(home, "static");
-  mkdirSync(data, { recursive: true });
+  mkdirSync(join(data, "tmp"), { recursive: true });
   mkdirSync(join(staticDir, "assets"), { recursive: true });
   writeFileSync(join(staticDir, "index.html"), "<!doctype html><title>Goal run test</title>");
   writeFileSync(join(staticDir, "assets", "smoke.css"), "body{}");
   writeFileSync(join(data, "config.json"), JSON.stringify({
+    // Setup suggestions must not consume replies reserved for the room's scripted goal turns.
+    features: { smartSetupChoices: false },
     instances: {
+      ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
+        id, { driver: "not-a-real-driver", enabled: false },
+      ])),
       complete: {
         driver: "claudeAgent",
         displayName: "Completing fixture",
@@ -201,12 +208,9 @@ beforeAll(async () => {
   child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
     cwd: ROOT,
     env: {
-      ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
-      ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+      ...verificationServerEnvironment(process.env, data, port),
       HOME: home,
       USERPROFILE: home,
-      OMB_PORT: String(port),
-      OMB_WEBHOOK_PORT: String(port + 1),
       OMB_STATIC_DIR: staticDir,
     },
     stdio: ["ignore", "pipe", "pipe"],

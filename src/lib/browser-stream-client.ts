@@ -2,6 +2,7 @@
 // Copyright (c) 2026 T3 Tools Inc. (full text in third_party/t3-code/LICENSE); modified: Dani Bot's routes and
 // access, a viewer that may operate sizes the page while it only watches, a larger frame cap is sent in place and a
 // reconnect opens with the newest size and cap, and Dani Bot's own messages are passed on.
+import type { PreviewStreamControl, PreviewStreamInput } from "../../shared/browser-stream.ts";
 
 /** The browser's host cannot run Chrome until it is set up; the close reason names the fix. */
 export const PREVIEW_STREAM_HOST_SETUP_CLOSE_CODE = 4503;
@@ -12,9 +13,6 @@ export interface PreviewStreamHostSetup {
   readonly command: string;
 }
 
-export type PreviewViewportSetting =
-  | { readonly mode: "fill" }
-  | { readonly mode: "preset"; readonly preset: "desktop" | "tablet" | "phone"; readonly landscape?: boolean };
 
 /** Where a bot's browser is served: `httpBase` and `wsBase` end in `/api/bots/<id>/browser`. */
 export interface PreviewStreamAccess {
@@ -49,22 +47,6 @@ export interface PreviewStreamViewport {
   readonly height: number;
 }
 
-export type PreviewStreamMouseButton = "none" | "left" | "middle" | "right";
-
-export interface PreviewStreamControl {
-  readonly canOperate: boolean;
-  readonly controller: "agent" | "you" | "another-viewer" | "unclaimed";
-  readonly generation: number;
-  readonly dialog: null | {
-    readonly type: string;
-    readonly message: string;
-    readonly defaultValue: string;
-  };
-  /** The bot's work outlasted the person's takeover and was cut off. */
-  readonly stale?: boolean;
-  /** The person watching holds the browser, from this view or another of theirs: they may hand it back from here. */
-  readonly owned?: boolean;
-}
 
 /** Status line shown above a viewer; `null` control means the socket is not connected. */
 export const previewStreamControlLabel = (control: PreviewStreamControl | null): string =>
@@ -90,61 +72,6 @@ const isPreviewStreamDialog = (value: unknown): value is PreviewStreamControl["d
     "defaultValue" in value &&
     typeof value.defaultValue === "string");
 
-/** Client-to-server messages. Coordinates are page CSS px. */
-export type PreviewStreamInput =
-  | { readonly type: "takeControl" }
-  | { readonly type: "releaseControl" }
-  | { readonly type: "dialog"; readonly accept: boolean; readonly promptText?: string }
-  | { readonly type: "viewport"; readonly setting: PreviewViewportSetting }
-  | { readonly type: "zoom"; readonly factor: number }
-  | {
-      readonly type: "mouse";
-      readonly action: "move" | "down" | "up";
-      readonly x: number;
-      readonly y: number;
-      readonly button: PreviewStreamMouseButton;
-      /** Pressed buttons: left 1, right 2, middle 4. */
-      readonly buttons: number;
-      readonly clickCount: number;
-      readonly modifiers: number;
-    }
-  | {
-      readonly type: "wheel";
-      readonly x: number;
-      readonly y: number;
-      readonly deltaX: number;
-      readonly deltaY: number;
-      readonly modifiers: number;
-    }
-  | {
-      readonly type: "key";
-      readonly action: "down" | "up";
-      readonly key: string;
-      readonly code: string;
-      /** Windows virtual key code (DOM `keyCode`); Enter, Backspace, and arrows need it. */
-      readonly keyCode?: number;
-      /** Only for printable keys without Ctrl or Meta. */
-      readonly text?: string;
-      readonly modifiers: number;
-    }
-  | { readonly type: "text"; readonly text: string }
-  | { readonly type: "resize"; readonly width: number; readonly height: number }
-  /** The viewer can show larger frames now: the screencast restarts at the new cap without reconnecting. */
-  | { readonly type: "frameCap"; readonly maxWidth: number; readonly maxHeight: number }
-  | { readonly type: "navigate"; readonly url: string }
-  | { readonly type: "history"; readonly delta: -1 | 1 }
-  | { readonly type: "reload"; readonly ignoreCache?: boolean }
-  /** Asks whether the page point takes text. Touch viewers send it on touch start. */
-  | { readonly type: "probe"; readonly x: number; readonly y: number }
-  | { readonly type: "tabSelect"; readonly tabId: string }
-  | { readonly type: "tabNew"; readonly url?: string }
-  | { readonly type: "tabClose"; readonly tabId: string }
-  | { readonly type: "selectChoose"; readonly id: string; readonly index: number }
-  /** Answers the sign-in prompt `id` of tab `tabId`, as it was shown; without a username and password it cancels it. */
-  | { readonly type: "authAnswer"; readonly tabId: string; readonly id: string; readonly username?: string; readonly password?: string }
-  | { readonly type: "restart" }
-  /** Starts the browser again after it closed unused (the server sent `asleep`); `awake` follows once it runs. */
-  | { readonly type: "wake" };
 
 export interface PreviewStreamDownload {
   readonly fileName: string;
@@ -247,7 +174,7 @@ export interface PreviewStreamEvents {
   readonly onPopup?: (tabId: string) => void;
   /** The page opened a file picker (`null` once answered or replaced). */
   readonly onFileChooser?: (chooser: PreviewStreamFileChooser | null) => void;
-  /** Dani Bot's own messages: tabs, nav, selectPopup, cursor, authPrompt, starting, notice, asleep, awake. */
+  /** Dani Bot's own messages: tabs, nav, selectPopup, cursor, authPrompt, starting, notice, recovery, asleep, awake. */
   readonly onMessage?: (message: Readonly<Record<string, unknown>>) => void;
   /** Input sent while disconnected is dropped. */
   readonly onConnectedChange: (connected: boolean) => void;
@@ -340,6 +267,7 @@ export function createPreviewStreamClient(
         dialog,
         stale,
         owned,
+        attempt,
         text,
         id,
         fileName,
@@ -418,6 +346,7 @@ export function createPreviewStreamClient(
           dialog,
           ...(stale === true ? { stale: true } : {}),
           ...(owned === true ? { owned: true } : {}),
+          ...(typeof attempt === "string" ? { attempt } : {}),
         };
         const first = control === null;
         control = nextControl;

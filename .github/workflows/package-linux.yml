@@ -79,9 +79,29 @@ jobs:
           set -euo pipefail
           # Anonymous view, matching what electron-updater can see on a user
           # machine: drafts are invisible without auth.
-          count="$(curl -fsSL https://api.github.com/repos/somdipto/dani-desktop/releases | jq length)"
-          echo "published releases visible to the update feed: $count"
-          echo "has-release=$([ "$count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          status=$(curl -sS -o "$RUNNER_TEMP/dani-public-release.json" -w '%{http_code}' \
+            https://api.github.com/repos/Dan-Labs-Agi/dani-desktop/releases/latest)
+          case "$status" in
+            404)
+              echo "No public stable release exists yet."
+              echo "has-release=false" >> "$GITHUB_OUTPUT"
+              ;;
+            200)
+              jq -e '
+                .draft == false and .prerelease == false and
+                (.tag_name | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
+                ([.assets[].name] | index("latest-linux.yml") != null)
+              ' "$RUNNER_TEMP/dani-public-release.json" > /dev/null || {
+                echo "::error::Canonical latest release is not a desktop release with a Linux update feed."
+                exit 1
+              }
+              echo "has-release=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Public release lookup failed with HTTP $status."
+              exit 1
+              ;;
+          esac
       - name: Prove an AppImage update lands on the launched path
         # Installs the current published release over a copy named after a
         # version, which is the shape that used to orphan the launcher. Runs
@@ -154,5 +174,6 @@ jobs:
             release/DaniBot-amd64.deb
             release/DaniBot.AppImage
             release/SHA256SUMS-ubuntu-x64.txt
+            release/latest-linux.yml
           if-no-files-found: error
           retention-days: 14

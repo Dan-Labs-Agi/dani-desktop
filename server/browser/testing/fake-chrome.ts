@@ -428,10 +428,12 @@ export class FakeBackend implements Backend {
   readonly opened: OpenRequest[] = [];
   readonly #make: (request: OpenRequest) => FakeChrome;
   readonly #pageLimit: { width: number; height: number } | null;
+  readonly #timeoutMs: number | undefined;
 
-  constructor(make: (request: OpenRequest) => FakeChrome = () => new FakeChrome(), { pageLimit = null }: { pageLimit?: { width: number; height: number } | null } = {}) {
+  constructor(make: (request: OpenRequest) => FakeChrome = () => new FakeChrome(), { pageLimit = null, timeoutMs }: { pageLimit?: { width: number; height: number } | null; timeoutMs?: number } = {}) {
     this.#make = make;
     this.#pageLimit = pageLimit;
+    this.#timeoutMs = timeoutMs;
   }
 
   get chrome(): FakeChrome {
@@ -449,7 +451,7 @@ export class FakeBackend implements Backend {
     chrome.window.height = viewport.height + CHROME_HEIGHT;
     this.chromes.push(chrome);
     const screen = limit ? { width: limit.width, height: limit.height + CHROME_HEIGHT } : null;
-    const browser = await CdpBrowser.connect(chrome, { identity: FAKE_IDENTITY, headless: true, downloadDir: null, permissions: true, platform: "darwin", maxPages: 8, viewport, screen, handleAuth: true });
+    const browser = await CdpBrowser.connect(chrome, { identity: FAKE_IDENTITY, headless: true, downloadDir: null, permissions: true, platform: "darwin", maxPages: 8, viewport, screen, handleAuth: true, timeoutMs: this.#timeoutMs });
     let exited!: () => void;
     const done = new Promise<void>((resolve) => { exited = resolve; });
     chrome.onClose(() => exited());
