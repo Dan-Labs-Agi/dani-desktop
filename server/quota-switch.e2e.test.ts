@@ -86,7 +86,8 @@ async function withQuotaFixture(
         return instances.find((instance) => instance.instanceId === "codex")?.models.options.length > 0;
       }, { timeout: 30_000 }).toBe(true);
     }
-    const starter = (await api("GET", "/api/bots")).bots.find((bot: any) => bot.chiefOfStaff);
+    const { bots } = await api("GET", "/api/bots") as { bots: Array<{ id: string; chiefOfStaff?: boolean }> };
+    const starter = bots.find((bot) => bot.chiefOfStaff);
     if (starter) await api("PATCH", `/api/bots/${starter.id}`, { chiefOfStaff: false });
     // What the other AI was sent: the fake Claude logs each prompt; the fake Codex keeps its calls in one dump.
     const sent = () => {

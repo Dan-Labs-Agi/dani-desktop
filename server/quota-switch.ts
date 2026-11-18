@@ -171,7 +171,7 @@ export function createQuotaSwitch(deps: QuotaSwitchDeps): QuotaSwitch {
     const name = engine.instanceId === current.instanceId ? `${nameOf(engine)} ${checked.selection.model}` : nameOf(engine);
     const why = scope === "signed-out" ? `while ${nameOf(current)} is signed out` : "after hitting the usage limit";
     const rootId = rootOf(threadId, request);
-    const stop = deps.turnStops.read?.(threadId, request.turnId);
+    const stop = deps.turnStops.read?.(threadId, request.turnId ?? undefined);
     // A known account prerequisite has no uncertain effect. Release only this isolated blocked root, so the
     // original request can run once on the verified backup; denials, cards and live children stay parked.
     if (rootId && !stop?.unknownEffect && stop?.flags?.recovery !== "blocked" && !stop?.flags?.permissionDenied
