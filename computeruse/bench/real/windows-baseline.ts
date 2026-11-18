@@ -1,7 +1,7 @@
 // Runs the real Windows cua-driver, through the real computer service with the checks on, against a disposable window this
 // script opens itself, and records what the driver actually answered. It acts only on a window owned by that window's own
 // process, uses background delivery so the person's mouse and keyboard are not taken over, and stops everything it started.
-//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|all] [--out FOLDER]
+//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|foreground|all] [--out FOLDER]
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -59,7 +59,7 @@ async function startFixture(): Promise<void> {
 
 interface Session { call(name: string, args?: Record<string, unknown>, step?: string): Promise<Record<string, any>>; counters(): any; close(): Promise<void> }
 
-async function openSession(label: string, verifyEffects: boolean, guards: ComputerGuards, broker: (query: URLSearchParams) => unknown): Promise<Session> {
+async function openSession(label: string, verifyEffects: boolean, guards: ComputerGuards, broker: (query: URLSearchParams) => unknown, platform: "win32" | "linux" = "win32"): Promise<Session> {
   let evidence: any = null;
   const checks: URLSearchParams[] = [];
   const server = createServer((request, response) => {
@@ -76,7 +76,7 @@ async function openSession(label: string, verifyEffects: boolean, guards: Comput
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const connection = gatedLocalComputer(
-    { command: DRIVER, args: ["mcp"], env: driverEnv, platform: "win32", scope: "local-computer" },
+    { command: DRIVER, args: ["mcp"], env: driverEnv, platform, scope: "local-computer" },
     { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/control`, token: "a0-token" }, false, verifyEffects, guards);
   const child = spawn(connection.command, connection.args, { env: { ...process.env, ...connection.env }, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
   const replies = new Map<number, (value: any) => void>();
@@ -225,12 +225,62 @@ async function stalePhase() {
   }
 }
 
+/** Foreground delivery moves the person's real mouse and sends real keystrokes, so it runs only when asked for by name, never
+ * as part of `all`. The window shows a banner saying so, and every call is bounded to the fixture's own window. */
+async function foregroundPhase() {
+  const refused = "The person has not answered yet, so this call was NOT performed.";
+  const broker = (query: URLSearchParams) => (query.get("risk") === "final" ? { held: true, helpOpen: false, blockedReason: refused } : { held: false, helpOpen: false });
+  const tokenFor = (state: Record<string, any>, name: string) => elementNamed(state, name)?.element_token;
+  const bodyValue = (state: Record<string, any>) => elementNamed(state, "Body")?.value;
+  const rawSession = await openSession("foreground-raw", false, {}, broker, "linux");
+  let target: { pid: number; window_id: number };
+  try {
+    target = await findWindow(rawSession);
+    const read = (step: string) => rawSession.call("get_window_state", { ...target, include_screenshot: false }, step);
+    let state = await read("read before raw typing");
+    const typed = await rawSession.call("type_text", { ...target, element_token: tokenFor(state, "Body"), text: "hello", delivery_mode: "foreground" }, "type hello in the foreground, with no Windows pacing in front of the driver");
+    state = await read("read after raw typing");
+    note("raw foreground type_text 'hello' (driver burst, no pacing)", { isError: typed.isError === true, text: said(typed, 300), fieldNow: bodyValue(state) });
+    await rawSession.call("set_value", { ...target, element_token: tokenFor(state, "Body"), value: "" }, "clear the field through accessibility, no input");
+  } finally {
+    await rawSession.close();
+  }
+  const pacedSession = await openSession("foreground-paced", false, {}, broker, "win32");
+  try {
+    const read = (step: string) => pacedSession.call("get_window_state", { ...target, include_screenshot: false }, step);
+    let state = await read("read before paced typing with no other check");
+    const typed = await pacedSession.call("type_text", { ...target, element_token: tokenFor(state, "Body"), text: "hello", delivery_mode: "foreground" }, "type hello in the foreground with only the Windows pacing in front of the driver");
+    state = await read("read after paced typing");
+    note("paced foreground type_text 'hello', no other check (the pacing's own answer)", { isError: typed.isError === true, text: said(typed, 300), fieldNow: bodyValue(state) });
+    await pacedSession.call("set_value", { ...target, element_token: tokenFor(state, "Body"), value: "" }, "clear the field through accessibility, no input");
+  } finally {
+    await pacedSession.close();
+  }
+  const session = await openSession("foreground-checked", true, CHECKED, broker, "win32");
+  try {
+    const read = (step: string) => session.call("get_window_state", { ...target, include_screenshot: false }, step);
+    let state = await read("read before the foreground click");
+    const click = await session.call("click", { ...target, element_token: tokenFor(state, "Mark"), delivery_mode: "foreground" }, "foreground click on Mark");
+    state = await read("read after the foreground click");
+    note("foreground click on Mark", { isError: click.isError === true, text: said(click, 400), markNow: labelOf(elementNamed(state, "Mark") ?? (state.structuredContent?.elements ?? []).find((element: any) => /Mark/.test(labelOf(element) ?? ""))) });
+    const typed = await session.call("type_text", { ...target, element_token: tokenFor(state, "Body"), text: "hello", delivery_mode: "foreground" }, "type hello in the foreground, through the Windows pacing");
+    state = await read("read after paced typing");
+    note("paced foreground type_text 'hello'", { isError: typed.isError === true, text: said(typed, 400), fieldNow: bodyValue(state) });
+    const quit = await session.call("click", { ...target, element_token: tokenFor(state, "Quit"), delivery_mode: "foreground" }, "foreground click on Quit, which closes the window");
+    await delay(1_200);
+    note("foreground click on Quit, which closes the window", { isError: quit.isError === true, text: said(quit, 600), structured: quit.structuredContent, fixtureStillRunning: fixture?.exitCode === null && spawnSync("tasklist", ["/fi", `pid eq ${fixturePid}`], { encoding: "utf8" }).stdout.includes(String(fixturePid)) });
+  } finally {
+    await session.close();
+  }
+}
+
 try {
   await startFixture();
   console.log(`fixture window open, pid ${fixturePid}; phase: ${phase}`);
   if (phase === "read" || phase === "all") await readPhase();
   if (phase === "checked" || phase === "all") await checkedPhase();
   if (phase === "stale" || phase === "all") await stalePhase();
+  if (phase === "foreground") await foregroundPhase();
 } finally {
   if (fixture && fixture.exitCode === null) spawnSync("taskkill", ["/pid", String(fixture.pid), "/t", "/f"], { stdio: "ignore" });
   if (!daemonWasRunning && daemonRunning()) {

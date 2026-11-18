@@ -11,9 +11,10 @@ field and three buttons (one changes its own label, one writes a file, one write
 then drives it through the service:
 
 - It acts only on a window owned by the fixture's own process, and stops if the driver lists none.
-- It uses background delivery (`delivery_mode: "background"`), which the driver performs as a UIA Invoke: no mouse
-  movement, no keystrokes. The window shows without taking focus.
-- It never retries in foreground mode.
+- Its default phases use background delivery (`delivery_mode: "background"`), which the driver performs as a UIA Invoke:
+  no mouse movement, no keystrokes. The window shows without taking focus.
+- The `foreground` phase uses the person's real mouse and keyboard, so it runs only when named, never as part of `all`.
+  The window shows a banner saying so, the text typed is `hello`, and it never retries a refused call.
 - It stops everything it started. A driver daemon that was already running is left alone; one it started is stopped.
 - The final-action broker is a stub that holds the call back, so `Send` never runs.
 
@@ -22,7 +23,8 @@ pnpm build:cua:win
 node --experimental-strip-types computeruse/bench/real/windows-baseline.ts --phase all
 ```
 
-Phases are `read` (read only), `checked` (acts on the fixture), `stale` (a token from an earlier read), and `all`.
+Phases are `read` (read only), `checked` (acts on the fixture), `stale` (a token from an earlier read), `all` (those
+three), and `foreground` (real mouse and keyboard; run it deliberately).
 The report goes to `evals/reports/computer/windows-baseline.json`.
 
 ## What the real driver answered
@@ -43,6 +45,21 @@ Windows 11, cua-driver 0.28.2, one machine, one run, a window of 10 elements.
 | Shape of a read | Indexes start at 0; roles are `Edit`, `Button`, `TitleBar`; no window root element; top-level controls have depth 1 and no parent. `elements_complete` is false although 10 of 10 elements were returned. |
 | Secret field | No value returned by the driver. Its role is `Edit`, so only its label marks it. |
 
+## Foreground delivery
+
+Run separately (`--phase foreground`), against the same window with a banner and a Quit button that closes it.
+
+| Question | Answer |
+| --- | --- |
+| Foreground click | The driver did a `SendInput` click at the button's screen position and the label changed. |
+| Raw foreground `type_text "hello"` | The driver typed 5 characters and the field held `hello`. The one-burst problem the Windows pacing was written for (later characters landing in place of earlier ones) did not appear in this window. |
+| The same through the Windows pacing | The driver's answer was "Typed 5 char(s) … one character at a time" and the field held `hello`, so the stage engaged on 0.28.2. Raw typing worked here too, so this window cannot show that the pacing helps. The code attributes the fault to modern Notepad. |
+| Click that closes its window (`Quit`) | The window closed, and the driver gave the answer the sent-click stage exists for ("not foreground after the click"). The bot was told the click was sent and not confirmed, and the fixture really had closed. |
+
+It also showed that answer carrying a second note, "the window could not be read back … whether it landed is unknown",
+which contradicted the first. A click already reported as sent and unconfirmed now gets no second note, and its
+verdict is still counted.
+
 ## What it found in this repo
 
 - Typing verification looked the field up by element token, and every read mints new tokens, so a token-addressed
@@ -55,8 +72,9 @@ Windows 11, cua-driver 0.28.2, one machine, one run, a window of 10 elements.
 
 - One run, one machine, one driver version, one small window. A large window will cost more per read; a read is cut
   off at 4 seconds.
-- Background delivery only. Foreground delivery, and with it the Windows sent-click answer and one-character-at-a-time
-  typing, were not exercised.
+- Foreground delivery was run once, on the same small window. A text box in a WinForms window is not the app the
+  pacing was written for: modern Notepad, where the burst problem is reported, was not exercised, because launching it
+  can open a tab in a Notepad the person already has and type into their document.
 - macOS and Linux were not run.
 - The fixture is not a real app; a real app's tree, focus behaviour and dialogs will differ.
 - No model drove it. The calls were scripted.

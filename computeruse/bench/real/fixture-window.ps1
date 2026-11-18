@@ -38,10 +38,16 @@ $mark.Text = "Mark"
 $send = Add-Control (New-Object System.Windows.Forms.Button) "Send" 240 100 100 32
 $send.Text = "Send"
 
+$quit = Add-Control (New-Object System.Windows.Forms.Button) "Quit" 20 190 100 32
+$quit.Text = "Quit"
+$banner = Add-Control (New-Object System.Windows.Forms.Label) "Banner" 20 150 330 30
+$banner.Text = "Automated test: please do not use the mouse or keyboard for a few seconds."
+$banner.ForeColor = [System.Drawing.Color]::DarkRed
 $saved = 0
 $save.Add_Click({ $script:saved += 1; Set-Content -LiteralPath (Join-Path $Out "saved.txt") -Value $body.Text -NoNewline; Set-Content -LiteralPath (Join-Path $Out "saved.count") -Value $script:saved })
 $mark.Add_Click({ if ($mark.Text -eq "Mark") { $mark.Text = "Marked" } else { $mark.Text = "Mark" }; $mark.AccessibleName = $mark.Text })
 $send.Add_Click({ Set-Content -LiteralPath (Join-Path $Out "sent.txt") -Value "sent" })
+$quit.Add_Click({ $form.Close() })
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 600000

@@ -32,7 +32,7 @@ Last run: baseline 9 of 17, checked 17 of 17, gate ok, and no extra actions from
 
 | Item | Feature | Why |
 | --- | --- | --- |
-| A0 | Real-driver baseline | Done once, for Windows only: cua-driver 0.28.2 on one machine, background delivery, one disposable window (`bench/real/`, results in `docs/verification/computer-real-driver.md`). Not done: foreground delivery (so the Windows sent-click and paced-typing paths), macOS, Linux, a window with a large tree, a real app, a real model. |
+| A0 | Real-driver baseline | Done once, for Windows only: cua-driver 0.28.2 on one machine, one disposable window, background and foreground delivery (`bench/real/`, results in `docs/verification/computer-real-driver.md`). Not done: macOS, Linux, a window with a large tree, a real app (so modern Notepad, where the typing-burst fault is reported, is untested), a real model. |
 | B2 | Local VM and container worlds | Need a container runtime. The fixture world is the first world; the schema and runner take others. |
 | B3 | Screenshot or DOM scoring | Only for end states that cannot be inspected; none of the 17 needs it. |
 | B7 | Live-model tier | Needs real models and spend. No number from this benchmark may be quoted as a model's success rate. |
@@ -57,6 +57,9 @@ Last run: baseline 9 of 17, checked 17 of 17, gate ok, and no extra actions from
   - **A password field has no marker.** Its role is `Edit`, so the wrapper and the typing stage can only tell it from its label. This driver returned no value for the card-number field, so the driver itself held it back.
   - **The checks added about 150 ms per read** on a 10-element window (4 reads, 600 ms for 4 actions). A larger tree costs more; a read is cut off at 4 s.
   - **Worked as built:** background clicks (UIA Invoke, no mouse movement), the visible-effect verdict ("changed", no note), the no-change note for a click whose effect is a file, the final-action hold (the broker saw exactly one risk query, for `Send`, and the file was not written), and the pointer (cursor enabled, glide 400 ms, dwell 300 ms). The driver rejects its own `get_agent_cursor_state` output as invalid; the values are in the rejected payload.
+- **Real Windows driver, foreground:**
+  - Foreground clicks and typing work (a real `SendInput` click; `hello` typed into a field). The Windows pacing stage engaged ("one character at a time"), but raw typing was also correct in this window, so the run cannot show the pacing helps; the fault is reported for modern Notepad and was not tried there.
+  - A click that closes its window produced the driver's "not foreground after the click" answer, which the sent-click stage turns into "sent, not confirmed". That answer then carried a second, contradictory note ("could not be read back… unknown"). Fixed: a click already reported that way gets no second note, and its verdict still counts.
 - **Failures already on this branch's base**, none touched: `server/index.test.ts` "parks the turn at the wait ceiling…", "asks the person to sign in with one card…" and "brings a sign-in started in a browser…" fail on the commit this work started from; five tests in `scripts/ci-workflow.test.ts` assert a `ci.yml` shape that predates the sharding change.
 
 ## Verification

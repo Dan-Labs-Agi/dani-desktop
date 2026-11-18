@@ -63,13 +63,13 @@ pnpm exec vitest run server/computer-effect.test.ts server/local-computer-guidan
 
 The unit checks drive a fake child through the bridge's own relay seam, so they
 prove the loop's shape, its bounds and its words. One run on the real Windows
-driver (0.28.2, background delivery, one disposable window) showed the verdicts
-behaving as described and cost about 150 ms per read; see
-[`computer-real-driver.md`](computer-real-driver.md). Not run: foreground
-delivery, macOS, Linux, a large window. The latency on a large window is
+driver (0.28.2, one disposable window) showed the verdicts behaving as described
+and cost about 150 ms per read, for background and for foreground clicks; see
+[`computer-real-driver.md`](computer-real-driver.md). Not run: macOS, Linux, a
+large window, a real app. The latency on a large window is
 unmeasured; `pnpm bench:observation` is where that belongs before the switch
 defaults on.
 Per [`.claude/skills/dani-integration-cua`](../../.claude/skills/dani-integration-cua/SKILL.md),
 this feature is not done until it is demonstrated on an actual target platform,
-Windows first. Windows is demonstrated for background clicks only; foreground
-delivery is not.
+Windows first. Windows is demonstrated on one small window, for background and
+foreground clicks; macOS and Linux are not.
