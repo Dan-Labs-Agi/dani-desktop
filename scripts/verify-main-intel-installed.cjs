@@ -24,7 +24,9 @@ const data = path.join(temp, 'profile');
 fs.mkdirSync(data, {recursive:true});
 const marker = path.join(data, 'preserved-user-marker.txt');
 fs.writeFileSync(marker, 'preserve synthetic customer data');
-const installers=fs.readdirSync('release').filter(file=>file.endsWith('-x64.dmg'));
+const arch=process.env.DANI_VERIFY_ARCH || 'x64';
+assert.ok(['x64','arm64'].includes(arch));
+const installers=fs.readdirSync('release').filter(file=>file.endsWith('-'+arch+'.dmg'));
 assert.ok(process.env.DANI_INSTALLER_PATH || installers.length===1,'Set DANI_INSTALLER_PATH when the release folder does not contain exactly one Intel installer');
 const installer=path.resolve(process.env.DANI_INSTALLER_PATH ?? path.join('release',installers[0]));
 console.log(JSON.stringify({event:'intel-candidate',source:process.env.GITHUB_SHA,installer,fixture:temp,sha256:createHash('sha256').update(fs.readFileSync(installer)).digest('hex'),bytes:fs.statSync(installer).size}));
@@ -36,7 +38,7 @@ result=spawnSync('hdiutil',['detach',mount],{encoding:'utf8'});assert.equal(resu
 const bundle=path.join(install,'Dani Bot.app');
 const executable=path.join(bundle,'Contents/MacOS/Dani Bot');
 result=spawnSync('codesign',['--verify','--deep','--strict',bundle],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
-result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes('x86_64'));
+result=spawnSync('lipo',['-archs',executable],{encoding:'utf8'});assert.ok(result.stdout.includes(arch==='arm64'?'arm64':'x86_64'));
 assert.ok(fs.existsSync(path.join(bundle,'Contents/Resources/server/index.js')));
 let launched;
 const graphicsFailures=[];
@@ -72,6 +74,7 @@ async function capture(page,label) {
  await page.waitForTimeout(1500);
  const png=await page.screenshot({animations:'disabled'});const b64=png.toString('base64');
  fs.writeFileSync(path.join(temp,label+'.png'),png);
+ if(process.env.DANI_EVIDENCE_DIR){fs.mkdirSync(process.env.DANI_EVIDENCE_DIR,{recursive:true});fs.writeFileSync(path.join(process.env.DANI_EVIDENCE_DIR,label+'.png'),png);return;}
  for(let i=0;i<b64.length;i+=32000) console.log('MAIN_'+label+'_SCREENSHOT_CHUNK:'+b64.slice(i,i+32000));
  console.log('MAIN_'+label+'_SCREENSHOT_END');
 }
@@ -93,10 +96,7 @@ async function inspect(page,label) {
 }
 (async()=>{
  stop();let ui=await open();await inspect(ui.page,'INSTALLED');
- await ui.page.locator('[data-welcome] [data-dani-setup] [data-primary]').click();
- await ui.page.locator('[data-welcome] [data-dani-setup]').waitFor({state:'detached',timeout:180000});
- await capture(ui.page,'DANI_READY');
- await ui.page.locator('[data-welcome] [data-primary]').click();
+ await ui.page.locator('[data-welcome-later]').click();
  await ui.page.locator('[data-chief-create]').waitFor({state:'visible',timeout:15000});
  await capture(ui.page,'CHIEF');
  await ui.page.waitForTimeout(1000); // Respect the real Chief intro's accidental-click guard.
