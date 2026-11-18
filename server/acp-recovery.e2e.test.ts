@@ -58,11 +58,6 @@ it.each([false, true])("recovers the same conversation after an ACP internal err
       try { return (await fetch(url + "/api/health", { signal: AbortSignal.timeout(1_000) })).ok; } catch { return false; }
     }, { timeout: 20_000 }).toBe(true);
 
-    // Adapter coverage must not start unscripted supervision work.
-    const chiefs = (await api("GET", "/api/bots")).bots.filter((bot: any) => bot.chiefOfStaff);
-    for (const chief of chiefs) {
-      await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: false });
-    }
     const { bot } = await control("new-bot", "--name", "Recovery bot");
     const threadId = bot.activeTaskId;
     await api("PATCH", `/api/bots/${bot.id}/tasks/${threadId}`, { modelSelection: { instanceId: "opencodeGo", model: "fixture/recovery" } });
@@ -80,7 +75,6 @@ it.each([false, true])("recovers the same conversation after an ACP internal err
     expect(prompts()).toHaveLength(1);
     const firstProcess = prompts()[0].pid;
 
-    for (const chief of chiefs) await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true });
     writeFileSync(failureFile, JSON.stringify({ code: -32603, message: "Internal error", data: { details: "OpenCode service failure" } }));
     await send(failedText);
     // DaniBot retries the failed run once by itself, on a replacement process that loads the same session; the fake
@@ -99,7 +93,6 @@ it.each([false, true])("recovers the same conversation after an ACP internal err
 
     // The fake keeps the error cached in its process even after removal.
     // Only a replacement process can answer this explicit next user message.
-    for (const chief of chiefs) await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: false });
     rmSync(failureFile);
     await send(retryText);
     expect((await wait()).status).toBe("settled");

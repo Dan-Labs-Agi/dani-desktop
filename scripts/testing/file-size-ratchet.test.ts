@@ -16,6 +16,11 @@ const HARD_CAP = 2000;
 const LISTED_FROM = 1000;
 
 const LINES: Record<string, number> = {
+  // Existing browser lifecycle owners remain under HARD_CAP. Pin their current
+  // sizes so further growth requires extracting cohesive modules.
+  "server/browser-live.ts": 1043,
+  "server/browser-runtime.ts": 1203,
+  "server/browser/viewers/core.ts": 1003,
   "server/index.ts": 15809,
   "src/state/store.tsx": 3375,
   "electron/main.mjs": 3251,

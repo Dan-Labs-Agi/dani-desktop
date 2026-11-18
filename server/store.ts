@@ -1,3 +1,4 @@
+import { isMentionBoundary, isMentionNameContinuation } from "../shared/mention-boundary.ts";
 import { chmodSync, existsSync, readFileSync, mkdirSync, rmSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path"; import { isDeepStrictEqual } from "node:util";
 
@@ -27,7 +28,6 @@ import { lastChangeRequestUrl } from "../shared/thread-link.ts";
 import { REMOVED_COMPUTER_DRIVER, type ComputerEngineMove } from "./computer-engine-removal.ts";
 import type { TeamSetupRequest, TeamSetupResult } from "../shared/team-setup.ts";
 import type { GroupGoalRunCardData } from "../shared/group-goal-run.ts";
-import { isMentionBoundary, isMentionNameContinuation } from "../shared/mention-boundary.ts";
 import type { HandedState } from "./delta-context.ts";
 import type { AgentPart, PartPair, RoomPart } from "./package-parts.ts";
 import type {
@@ -136,34 +136,8 @@ export type StoreChange =
   | { type: "group"; groupId: string }
   | { type: "group.deleted"; groupId: string };
 
-export const UNTITLED_TASK = "New task";
-export const UNTITLED_THREAD = "New thread";
-
-/** Every title (a bot's or a person's) passes through here, so equality tells a machine-made title from a rename. */
-const TASK_TITLE_MAX = 80;
-export function threadTitleFrom(title?: string): string {
-  return title?.trim().slice(0, TASK_TITLE_MAX) || UNTITLED_THREAD;
-}
-
-export function titleFromMessage(text: string): string {
-  const line = text.trim().split("\n")[0]!.trim();
-  return line.length > 48 ? `${line.slice(0, 47)}…` : line || UNTITLED_TASK;
-}
-
-export function titleFromLlm(raw: string): string | null {
-  const line = raw
-    .trim()
-    .split("\n")[0]!
-    .replace(/^[#*\-\u2022]+/, "")
-    .replace(/^["'\u201C\u201D\u2018\u2019\u0060]+/, "")
-    .replace(/["'\u201C\u201D\u2018\u2019\u0060]+$/, "")
-    .replace(/^[#*\-\u2022]+/, "")
-    .replace(/[#*]+$/, "")
-    .replace(/[.\u3002]+$/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return line.length >= 1 && line.length <= 48 ? line : null;
-}
+import { UNTITLED_TASK, UNTITLED_THREAD, threadTitleFrom, titleFromMessage } from "./store-labels.ts";
+export { UNTITLED_TASK, UNTITLED_THREAD, threadTitleFrom, titleFromMessage, titleFromLlm } from "./store-labels.ts";
 
 export interface BotRecord extends Omit<WireBot, "avatarUrl" | "tasks"> {
   tasks?: TaskRecord[];
@@ -205,28 +179,8 @@ function tightenRegistryFile(file: string): void {
 }
 const messagesFile = (threadId: string) => join(DATA_DIR, `messages-${threadId}.json`);
 
-export const sectionKey = (section?: string | null): string => section?.trim() || "";
-
-export function mentionedBots<T extends { name: string; hidden?: boolean }>(text: string, peers: T[]): T[] {
-  const candidates = peers
-    .filter((p) => !p.hidden && p.name.trim())
-    .sort((a, b) => b.name.length - a.name.length);
-  const lower = text.toLowerCase();
-  const found: T[] = [];
-  let at = -1;
-  while ((at = lower.indexOf("@", at + 1)) !== -1) {
-    if (!isMentionBoundary(text, at)) continue;
-    const rest = lower.slice(at + 1);
-    const hit = candidates.find((p) => {
-      const name = p.name.toLowerCase();
-      if (!rest.startsWith(name)) return false;
-      const after = rest.slice(name.length);
-      return !isMentionNameContinuation(after);
-    });
-    if (hit && !found.includes(hit)) found.push(hit);
-  }
-  return found;
-}
+import { mentionedBots, sectionKey } from "./store-labels.ts";
+export { mentionedBots, sectionKey } from "./store-labels.ts";
 
 export function normalizeGroupDefaultResponder(
   value: unknown,

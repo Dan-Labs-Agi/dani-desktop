@@ -135,7 +135,8 @@ it("shows an agent's plan in the chat as activity only once plan lines are switc
   const planRows = async (name: string) => {
     const bot = await acpBot(name);
     await control("send", "--bot", bot.id, "--task", bot.activeTaskId, "--text", "Plan the launch.");
-    expect((await control("wait", "--bot", bot.id, "--task", bot.activeTaskId, "--timeout", "30")).status).toBe("settled");
+    // The fixture reports an unfinished plan. Rendering it is not task success.
+    expect((await control("wait", "--bot", bot.id, "--task", bot.activeTaskId, "--timeout", "30")).status).toBe("needs-user");
     const messages = (await api("GET", `/api/threads/${bot.activeTaskId}/messages?limit=100`)).body.messages as any[];
     return messages.filter((message) => message.kind === "activity" && String(message.tool?.name ?? "").startsWith("Plan:"))
       .map((message) => ({ name: message.tool.name, ok: message.tool.ok }));

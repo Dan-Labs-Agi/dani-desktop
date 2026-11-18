@@ -1,3 +1,4 @@
+import { desktopDataDir as resolveDesktopDataDir } from "./desktop-data-dir.mjs";
 import { app, autoUpdater as nativeAutoUpdater, BrowserWindow, Tray, WebContentsView, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeImage, Notification, powerMonitor, powerSaveBlocker, safeStorage, screen, session, shell, systemPreferences, utilityProcess, nativeTheme } from "electron";
 import { createRequire } from "node:module";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -336,9 +337,6 @@ const serverSupervisor = createServerSupervisor({
   log: slog,
 });
 
-function desktopDataDir() {
-  return process.env.DANI_DATA_DIR || process.env.OMB_DATA_DIR || path.join(app.getPath("home"), ".danibot");
-}
 
 async function stopUtilityServer(proc, timeoutMs = UTILITY_SERVER_STOP_TIMEOUT_MS) {
   if (!proc) return true;
@@ -398,7 +396,7 @@ async function saveSecureCredentials(credentials) {
 }
 
 async function secureComposioConfig() {
-  const dataDir = desktopDataDir();
+  const dataDir = resolveDesktopDataDir(app);
   const configPath = path.join(dataDir, "config.json");
   try {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
@@ -433,7 +431,7 @@ async function secureComposioConfig() {
 }
 
 async function secureWorkspaceConfig() {
-  const dataDir = desktopDataDir();
+  const dataDir = resolveDesktopDataDir(app);
   const configPath = path.join(dataDir, "config.json");
   try {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
@@ -917,7 +915,7 @@ function ensureManagedDesktop() {
   };
   const store = createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-connection.bin"), encryption });
   orgLibrary = createOrgLibrary({
-    dataDir: path.join(desktopDataDir(), "org-library"),
+    dataDir: path.join(resolveDesktopDataDir(app), "org-library"),
     store: createManagedDesktopStore({ file: path.join(app.getPath("userData"), "company-library.bin"), encryption }),
     fetchBytes: (route, maxBytes, options) => managedDesktop.fetchLibraryBytes(route, maxBytes, options),
     relay: library => managedDesktopRelay.sendLibrary(serverProc, library),
@@ -973,7 +971,7 @@ function companyBackupScope() {
   if (desktopShutdownStarted || desktopRemoteAccess || !serverReady || !serverProc || activeEnvironment(environmentsState)) return null;
   const client = managedDesktop, connection = client?.connection(), state = client?.state();
   if (!connection || state?.status !== "connected" || !state.cloudBackups || connection.expiresAt <= Date.now()) return null;
-  const dataDir = path.resolve(desktopDataDir());
+  const dataDir = path.resolve(resolveDesktopDataDir(app));
   return { key: JSON.stringify([connection.portalOrigin, connection.organizationId, connection.email, dataDir]),
     adopts: saved => {
       try {
@@ -1081,7 +1079,7 @@ async function runCompanyBackup(kind, input, scheduled = null) {
       localRequest: (route, init) => localBackupRequest(proc, route, init),
       portalRequest: (route, options) => client.requestBackup(route, { ...options, generation }),
       availableBytes: async temporary => {
-        const volumes = await Promise.all([fs.promises.statfs(temporary), fs.promises.statfs(desktopDataDir())]);
+        const volumes = await Promise.all([fs.promises.statfs(temporary), fs.promises.statfs(resolveDesktopDataDir(app))]);
         return Math.min(...volumes.map(volume => volume.bavail * volume.bsize));
       },
     });
@@ -1133,7 +1131,7 @@ function receivePhoneSecretSave(proc, rawMessage) {
   return true;
 }
 
-async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmentDir(environmentsState, desktopDataDir())) {
+async function startServerOn(port, dataDir = runningDataDir ?? startupEnvironmentDir(environmentsState, resolveDesktopDataDir(app))) {
   if (desktopShutdownStarted) return { proc: null, abort: true };
   const { entry, compileCacheDir } = serverChildLaunch({
     resourcesPath: process.resourcesPath,
@@ -1462,7 +1460,7 @@ function sharingController() {
   computerSharing ??= createComputerSharing({
     file: path.join(app.getPath("userData"), "computer-sharing.json"),
     // Holds provider API keys and sessions.json: a broad share must never reach it.
-    protectedPaths: [desktopDataDir()],
+    protectedPaths: [resolveDesktopDataDir(app)],
     fetch: (...args) => session.defaultSession.fetch(...args),
     environments: () => environmentsState.environments,
     enabled: refreshSharedComputersAllowed,
@@ -1592,7 +1590,7 @@ function navigateMainWindow(url) {
 let rememberedHome = null;
 
 function acquireDataDirLeaseFor(dir) {
-  return dir === desktopDataDir()
+  return dir === resolveDesktopDataDir(app)
     ? acquireDataDirLease(dir, { legacyDataDir: path.join(app.getPath("home"), ".opengrokbot") })
     : acquireDataDirLease(dir);
 }
@@ -1602,7 +1600,7 @@ async function switchLocalEnvironmentTo(targetDir, targetId) {
   if (!app.isPackaged) return { ok: false, error: "dev" };
   // A second switch would be un-paused by the first's finally mid-handoff.
   if (localSwitchInFlight) return { ok: false, error: "busy" };
-  const previousDir = runningDataDir ?? startupEnvironmentDir(environmentsState, desktopDataDir());
+  const previousDir = runningDataDir ?? startupEnvironmentDir(environmentsState, resolveDesktopDataDir(app));
   let startedProc = null;
   let switchSucceeded = false;
   const failedSwitch = () => {
@@ -1699,8 +1697,8 @@ async function switchEnvironment(id) {
   if (entry?.team || entry?.cloud) return void await showHome({ place: entry.team ? { team: entry.team.id, name: entry.name } : { cloud: entry.cloud.id, name: entry.name } });
   homePlaces.remember(null);
   if (entry?.kind === "local") return await switchLocalEnvironmentTo(entry.dataDir, entry.id);
-  if (id === LOCAL_ID && (runningDataDir ?? desktopDataDir()) !== desktopDataDir()) {
-    return await switchLocalEnvironmentTo(desktopDataDir(), LOCAL_ID);
+  if (id === LOCAL_ID && (runningDataDir ?? resolveDesktopDataDir(app)) !== resolveDesktopDataDir(app)) {
+    return await switchLocalEnvironmentTo(resolveDesktopDataDir(app), LOCAL_ID);
   }
   if (entry && entry.origin === homeWindow.cloudOrigin()) return void await showHome({ place: "cloud" });
   if (entry && cloudAccount && isCloudHomeEntry(entry, { homeOrigin: cloudAccount.homeTarget()?.origin ?? cloudAccount.state().machine?.origin, remembered: rememberedHome })) {
@@ -1733,7 +1731,7 @@ function createLocalEnvironment(name, dataDir) {
       return { ok: false, error: "path", state };
     }
   }
-  const result = withLocalEnvironment(state, { name, dataDir: candidateDir }, randomUUID, desktopDataDir());
+  const result = withLocalEnvironment(state, { name, dataDir: candidateDir }, randomUUID, resolveDesktopDataDir(app));
   if (!result.ok) return { ok: false, error: result.error, state };
   persistEnvironments(result.state);
   return { ok: true, state: environmentsState };
@@ -1950,7 +1948,7 @@ async function forgetEnvironment(id, purge = false, confirmed = false) {
     // Never rm -rf "This computer"'s dir; the entry stays until the delete has actually happened.
     if (localSwitchInFlight) return { ok: false, error: "busy" };
     const resolved = path.resolve(env.dataDir);
-    const root = path.resolve(desktopDataDir());
+    const root = path.resolve(resolveDesktopDataDir(app));
     // realpath, so a symlink named like a data dir cannot fool the guard.
     const canonical = (dir) => { try { return fs.realpathSync(dir); } catch { return dir; } };
     const resolvedCanon = canonical(resolved);
@@ -2739,7 +2737,7 @@ ipcMain.handle("sharing:save", localWorkspaceOnly("sharing:save", async (_event,
 }));
 
 const cloudSync = installCloudFiles({
-  app, ipcMain, dialog, shell, powerMonitor, localWorkspaceOnly, localDataDir: desktopDataDir(),
+  app, ipcMain, dialog, shell, powerMonitor, localWorkspaceOnly, localDataDir: resolveDesktopDataDir(app),
   fetch: (...args) => session.defaultSession.fetch(...args),
   send: (channel, value) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, value); },
   cloudOrigin: () => myCloud(), cloudAccount: () => ensureCloudAccount(), stateDir: cloudTarget(process.env).sync, power: cloudPower, lending: { environment: lendingTarget.environment, sharing: sharingController, validate: validateSharedFolders },
@@ -2928,9 +2926,9 @@ app.whenReady().then(async () => {
   });
   // Registry before lease: the lease and the child's OMB_DATA_DIR both follow a named environment.
   environmentsState = environmentsStore.read();
-  let bootDataDir = desktopDataDir();
+  let bootDataDir = resolveDesktopDataDir(app);
   if (app.isPackaged) {
-    const boot = bootEnvironmentDir(environmentsState, desktopDataDir());
+    const boot = bootEnvironmentDir(environmentsState, resolveDesktopDataDir(app));
     if (boot.fellBack) {
       slog(`boot environment ${boot.missingDir} is missing; falling back to the default data dir`);
       persistEnvironments({ ...environmentsState, activeId: LOCAL_ID });
@@ -3036,7 +3034,7 @@ app.whenReady().then(async () => {
   androidDevice.registerIpc(ipcMain);
   registerUpdaterIpc({ pageAllowed: updaterPageAllowed });
   desktopPrefs = createDesktopPrefs(jsonFile(path.join(app.getPath("userData"), "desktop-prefs.json")));
-  updatesConsent = registerDesktopPrefs({ ipcMain, cloudAccount: () => cloudAccount, prefs: desktopPrefs, localConfig: jsonFile(path.join(desktopDataDir(), "config.json")).read, cloudOffered: () => cloudAccountRestored().then(cloudOffersReady),
+  updatesConsent = registerDesktopPrefs({ ipcMain, cloudAccount: () => cloudAccount, prefs: desktopPrefs, localConfig: jsonFile(path.join(resolveDesktopDataDir(app), "config.json")).read, cloudOffered: () => cloudAccountRestored().then(cloudOffersReady),
     frame: { made: () => windowFrameMade, restarts: process.platform === "win32", changed: () => void broadcastDesktopCapabilities() },
     languageChanged: (language, sender) => {
       for (const win of appWindows()) if (!win.isDestroyed() && win.webContents !== sender) win.webContents.send("desktop-language:changed", language);
@@ -3068,7 +3066,7 @@ app.whenReady().then(async () => {
     }
   } else if (app.isPackaged) {
     const booted = await startServerPackaged();
-    if (!booted && !desktopShutdownStarted && bootDataDir !== desktopDataDir()) {
+    if (!booted && !desktopShutdownStarted && bootDataDir !== resolveDesktopDataDir(app)) {
       slog(`boot environment ${bootDataDir} did not start; falling back to the default data dir`);
       persistEnvironments({ ...environmentsState, activeId: LOCAL_ID });
       try {
@@ -3078,10 +3076,10 @@ app.whenReady().then(async () => {
       }
       desktopDataDirLease = null;
       try {
-        desktopDataDirLease = acquireDataDirLease(desktopDataDir(), {
+        desktopDataDirLease = acquireDataDirLease(resolveDesktopDataDir(app), {
           legacyDataDir: path.join(app.getPath("home"), ".opengrokbot"),
         });
-        runningDataDir = desktopDataDir();
+        runningDataDir = resolveDesktopDataDir(app);
       } catch (error) {
         dialog.showErrorBox(
           "Dani Bot could not start safely",
