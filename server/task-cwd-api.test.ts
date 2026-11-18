@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -5,6 +6,7 @@ import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.
 
 it("pins an explicitly chosen new-thread folder without moving existing sessions or the bot default", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [];
   const api = async (method: string, path: string, body?: unknown, token?: string) => {
     const response = await fetch(`${fixture.info.url}${path}`, {

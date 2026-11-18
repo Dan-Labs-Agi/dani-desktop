@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, openSync, closeSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -16,6 +17,7 @@ async function withFixture(mode: "happy" | "hang", run: (helpers: {
 }) => Promise<void>) {
   const fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_MODE: mode });
   try {
+    await disableFixtureChiefs(fixture.info.url);
     await run({
       url: fixture.info.url, dataDir: fixture.info.dataDir,
       api: async (method, path, body, headers = {}) => {

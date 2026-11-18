@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "../testing/fixture-chief.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -12,6 +13,7 @@ const CAPABILITY_KEY = "data-surface-e2e-capability";
 
 it("loads, queries, shows, pages, renders and exports through the real server", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const { dataDir, url, logPath } = fixture.info;
   let server: ChildProcess | undefined;
   const api = async (method: string, path: string, body?: unknown, status = 200, headers: Record<string, string> = {}) => {

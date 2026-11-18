@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,6 +24,7 @@ it("reviews a conversation in the background once its tool steps reach the thres
       { name: "Grep", input: { pattern: "done" }, ok: true, output: "3 matches" },
     ]),
   });
+  await disableFixtureChiefs(fixture.info.url);
   const { url } = fixture.info;
   const api = async <T = any>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {
     const response = await fetch(url + path, {
@@ -76,6 +78,7 @@ it("reviews a Codex bot's conversation through Codex's own background call", asy
   }));
   const fixture = await launchVerificationServer({ ...process.env, FAKE_CODEX_TEXT_ROUTES: routes, FAKE_CODEX_TEXT_LOG: textLog },
     undefined, undefined, undefined, undefined, undefined, ["codex"]);
+  await disableFixtureChiefs(fixture.info.url);
   const { url } = fixture.info;
   const api = async <T = any>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {
     const response = await fetch(url + path, {

@@ -1,7 +1,10 @@
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it as platformIt, vi } from "vitest";
+
+// These fixtures execute the POSIX native-runtime layout, which Hermes refuses on Windows.
+const it = platformIt.skipIf(process.platform === "win32");
 import type { ProviderInstance, SendTurnInput } from "../../contracts.ts";
 import { removeTempDir } from "../../testing/cleanup.ts";
 import { recordEvents } from "../../testing/events.ts";

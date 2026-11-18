@@ -2,7 +2,10 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it as platformIt, vi } from "vitest";
+
+// These fixtures execute the POSIX native-runtime layout, which Hermes refuses on Windows.
+const it = platformIt.skipIf(process.platform === "win32");
 import { removeTempDir } from "../../testing/cleanup.ts";
 
 const fixture = vi.hoisted(() => ({ data: "" }));

@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // A real server with two stand-in Postiz backends (Postiz Cloud, and a person's own Postiz) and the fake Claude engine:
 // both ways of connecting end to end, the bot's turn gets the postiz tools and calls one, the token and the key reach
 // Postiz and nothing else (no answer, transcript, prompt, log or data file), a refused key or address is said plainly,
@@ -70,6 +71,7 @@ beforeAll(async () => {
   scratch = mkdtempSync(join(tmpdir(), "omb-postiz-e2e-"));
   writeFileSync(join(scratch, "tool-calls.json"), "[]");
   fixture = await launchVerificationServer({ ...process.env, OMB_POSTIZ_CLOUD_URL: cloud.url, FAKE_CLAUDE_TOOL_CALLS_FILE: join(scratch, "tool-calls.json") });
+  await disableFixtureChiefs(fixture.info.url);
 }, 60_000);
 
 afterAll(async () => {
