@@ -137,7 +137,7 @@ it("keeps the sign-in failure when the bot's model is on the same signed-out eng
   await withEngines(async (fixture) => {
     const { bot, threadId, thread } = await botWithOwnModel(fixture, { instanceId: "claude", model: "claude-opus-5" });
     await fixture.restart({ claude: "signed-out" });
-    const messages = await sendAndSettle(fixture, bot.id, threadId, "SAME_ENGINE_SIGN_IN_7N", "failed");
+    const messages = await sendAndSettle(fixture, bot.id, threadId, "SAME_ENGINE_SIGN_IN_7N", "needs-user");
     expect(messages.filter(notice)).toHaveLength(0);
     expect(messages.findLast((message) => message.kind === "activity" && message.tool?.name?.startsWith("error:"))?.tool)
       .toMatchObject({ ok: false, setup: true });

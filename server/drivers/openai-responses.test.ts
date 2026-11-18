@@ -537,8 +537,9 @@ describe("what Responses can answer", () => {
     expect(quiet.end).toMatchObject({ ok: false });
     expect(failureOf(quiet.events)).toMatch(/idle timeout/i);
 
+    const before = f.calls.length;
     await f.instance.adapter.sendTurn({ threadId: f.threadId, text: "Again", model: MODEL, integrations: {}, approvalMode: "full" });
-    await vi.waitFor(() => expect(f.calls.length).toBeGreaterThan(2));
+    await vi.waitFor(() => expect(f.calls.length).toBeGreaterThan(before));
     await f.instance.adapter.interruptTurn(f.threadId);
     expect(f.recorder.events.at(-1)).toMatchObject({ type: "turn.completed", ok: false, stopReason: "interrupted" });
   });

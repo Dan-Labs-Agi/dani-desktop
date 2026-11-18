@@ -22,7 +22,7 @@ it("does not run a delivery twice after a process dies between the queue and ing
     return await response.json() as any;
   };
   try {
-    const bot = (await api("/api/bots", { name: "Delivery restart probe" })).bot;
+    const bot = (await api("/api/bots", { name: "Delivery restart probe", modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } })).bot;
     const created = await api("/api/webhooks", { name: "Only once", prompt: "Handle this event once", botId: bot.id });
     await waitForExit(fixture.child, { signal: "SIGTERM" });
 
@@ -31,7 +31,7 @@ it("does not run a delivery twice after a process dies between the queue and ing
       if (process.env[key]) env[key] = process.env[key];
     }
     Object.assign(env, {
-      HOME: dataDir, USERPROFILE: dataDir, OMB_DATA_DIR: dataDir,
+      OMB_TEST_SEALED_PATH: "1", HOME: dataDir, USERPROFILE: dataDir, OMB_DATA_DIR: dataDir,
       APPDATA: join(dataDir, "AppData", "Roaming"), LOCALAPPDATA: join(dataDir, "AppData", "Local"),
       XDG_CONFIG_HOME: join(dataDir, ".config"), XDG_CACHE_HOME: join(dataDir, ".cache"),
       XDG_DATA_HOME: join(dataDir, ".local", "share"), HERMES_HOME: join(dataDir, ".hermes"),

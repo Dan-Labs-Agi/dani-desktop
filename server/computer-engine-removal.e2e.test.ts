@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Real server, fake Claude CLI, and a loopback Boat that fails the test on any call to Boat's own agent
 // (/prompt, /prompts/{id}, /events, /interrupt).
@@ -98,6 +99,7 @@ function install(home: string, boatPort: () => number) {
       if (proc.exitCode !== null) throw new Error(`server exited during boot:\n${output}`);
       try { return (await fetch(base + "/api/health")).ok; } catch { return false; }
     }, { timeout: 20_000, interval: 50 }).toBe(true);
+    await disableFixtureChiefs(base);
   }
   async function stop() {
     if (!child) return;
