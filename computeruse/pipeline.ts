@@ -11,7 +11,7 @@ import { enablePointer } from "./stages/pointer.ts";
 import { verifiedScroll } from "./stages/scroll.ts";
 import { staleRefusal } from "./stages/stale.ts";
 import { verifiedTyping } from "./stages/typing.ts";
-import { CLICK_TOOLS, unconfirmedClickResult } from "./unconfirmed-click.ts";
+import { CLICK_TOOLS, isUnconfirmedClick, unconfirmedClickResult } from "./unconfirmed-click.ts";
 
 type Result = Record<string, unknown>;
 type Next = () => Promise<Result>;
@@ -124,6 +124,7 @@ export function createComputerPipeline(platform: string, verifyEffects = false, 
         const before = cached ?? null;
         return withVerifiedEffect(call, child, {
           act: next,
+          alreadyDoubtful: isUnconfirmedClick,
           ...(reuse ? { before } : {}),
           onObserved: (after, verdict) => {
             if (key && after) session.lastWindow.set(key, after);

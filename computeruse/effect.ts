@@ -105,9 +105,11 @@ function withNote(result: JsonObject, note: string): JsonObject {
 export async function withVerifiedEffect(
   call: ToolCall,
   child: ChildCalls,
-  { timeoutMs = READ_TIMEOUT_MS, act, before: cachedBefore, onObserved }: {
+  { timeoutMs = READ_TIMEOUT_MS, act, before: cachedBefore, onObserved, alreadyDoubtful }: {
     timeoutMs?: number;
     act?: () => Promise<JsonObject>;
+    /** True for an answer that already says what is not known, which a second note would only repeat. */
+    alreadyDoubtful?: (result: JsonObject) => boolean;
     before?: Observation | null;
     onObserved?: (after: Observation | null, verdict: EffectVerdict) => void;
   } = {},
@@ -121,6 +123,6 @@ export async function withVerifiedEffect(
   const after = await observe(child, target, timeoutMs);
   const verdict = effectVerdict(before, after);
   onObserved?.(after, verdict);
-  const note = effectNote(verdict, call.name);
+  const note = alreadyDoubtful?.(result) ? null : effectNote(verdict, call.name);
   return note ? withNote(result, note) : result;
 }

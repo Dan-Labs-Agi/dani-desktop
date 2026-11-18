@@ -260,4 +260,21 @@ describe("computer pipeline", () => {
       }
     });
   });
+
+  describe("a click whose window closed under it", () => {
+    it("is told once that it was sent and is not confirmed, not again that the window could not be read back", async () => {
+      let read = 0;
+      const after = "foreground_unavailable: exact target HWND 0x7 or a verified same-process post-action window was not foreground after the click (actual foreground HWND 0x9)";
+      const child: ChildCalls = { driverVersion: "0.28.2", call: async (name) => {
+        if (name === "get_window_state") return (read += 1) === 1 ? { structuredContent: { pid: 1, window_id: 2, app_name: "App", window_title: "Win", elements: [] } } : { isError: true, content: [{ type: "text", text: "no such window" }] };
+        return { isError: true, content: [{ type: "text", text: after }] };
+      } };
+      const relay = createComputerPipeline("win32", true, { evidence: true });
+      const answer = await relay({ name: "click", arguments: { pid: 1, window_id: 2, element_index: 3, delivery_mode: "foreground" } }, child) as { content: Array<{ text: string }> };
+      expect(answer.content).toHaveLength(1);
+      expect(answer.content[0]!.text).toMatch(/The click was sent/);
+      expect(JSON.stringify(answer)).not.toMatch(/could not be read back/);
+      expect(relay.counters()).toMatchObject({ actions: 1, unobserved: 1 });
+    });
+  });
 });

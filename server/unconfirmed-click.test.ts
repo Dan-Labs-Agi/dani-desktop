@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLICK_SENT_UNCONFIRMED, unconfirmedClickResult } from "./unconfirmed-click.ts";
+import { CLICK_SENT_UNCONFIRMED, isUnconfirmedClick, unconfirmedClickResult } from "./unconfirmed-click.ts";
 
 // cua-driver 0.28.2's own words (platform-windows/src/input/mouse.rs), with the conforming error envelope it adds.
 const failed = (text: string, extra: Record<string, unknown> = {}) => ({ content: [{ type: "text", text }], isError: true, structuredContent: { code: "tool_invocation_failed" }, ...extra });
@@ -26,5 +26,15 @@ describe("a Windows click whose after-check failed", () => {
     ]) expect(unconfirmedClickResult(failed(before))).toBeNull();
     expect(unconfirmedClickResult({ content: [{ type: "text", text: AFTER }] })).toBeNull();
     expect(unconfirmedClickResult(null)).toBeNull();
+  });
+});
+
+describe("recognising the answer given for such a click", () => {
+  it("is true for that answer and for nothing else", () => {
+    expect(isUnconfirmedClick(unconfirmedClickResult(failed(AFTER)))).toBe(true);
+    expect(isUnconfirmedClick({ content: [{ type: "text", text: "clicked" }] })).toBe(false);
+    expect(isUnconfirmedClick({ content: [{ type: "text", text: AFTER }], isError: true })).toBe(false);
+    expect(isUnconfirmedClick({})).toBe(false);
+    expect(isUnconfirmedClick({ content: "not a list" })).toBe(false);
   });
 });
