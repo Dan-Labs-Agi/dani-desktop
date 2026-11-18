@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "../server/testing/fixture-chief.ts";
 // Owns two disposable fake-engine workspaces; accepts no live URL or home.
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -28,6 +29,7 @@ async function restartFixture(fixture: VerificationServer): Promise<ChildProcess
   mkdirSync(temp, { recursive: true });
   mkdirSync(home, { recursive: true });
   Object.assign(env, {
+    OMB_TEST_SEALED_PATH: "1",
     HOME: home, USERPROFILE: home, APPDATA: join(home, "AppData", "Roaming"),
     LOCALAPPDATA: join(home, "AppData", "Local"), XDG_CONFIG_HOME: join(home, ".config"),
     XDG_CACHE_HOME: join(home, ".cache"), XDG_DATA_HOME: join(home, ".local", "share"),
@@ -62,6 +64,7 @@ async function restartFixture(fixture: VerificationServer): Promise<ChildProcess
 
 async function launchBackupFixture(): Promise<VerificationServer> {
   const fixture = await launchVerificationServer({});
+  await disableFixtureChiefs(fixture.info.url);
   try {
     // The general fixture uses DATA_DIR as HOME. Backups intentionally reject
     // auth homes among portable files, so keep this fixture's home excluded.
