@@ -100,6 +100,7 @@ beforeAll(async () => {
   upstream = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     if (req.url === "/v1/models") return res.end(JSON.stringify({ data: [{ id: "fixture-model" }] }));
+    if (req.method !== "POST") { res.statusCode = 404; return res.end("{}"); }
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const request = JSON.parse(raw || "{}") as ChatRequest;
@@ -129,7 +130,7 @@ beforeAll(async () => {
   writeFileSync(join(data, "config.json"), JSON.stringify({
     // Per-bot isolation: a fresh bot's VM is unseen until touched, so the strict pin cannot hide behind a warm cache entry.
     localVm: { mode: "per-bot" },
-    instances: { claude: {
+    instances: { openaiCompat: { driver: "openai-compat" }, claude: {
       driver: "claudeAgent",
       config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
       environment: { FAKE_CLAUDE_DUMP: dumpFile },

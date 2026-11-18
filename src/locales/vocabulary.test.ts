@@ -10,7 +10,7 @@ import { locales } from "./index";
 
 const RETIRED: ReadonlyArray<readonly [string, RegExp, string]> = [
   ["OMB Cloud", /OMB Cloud/i, "DaniBot Cloud"],
-  ["DaniBot Cloud", /DaniBot Cloud/i, "DaniBot Cloud"],
+  ["MausBot Cloud", /MausBot Cloud/i, "Dani Bot Cloud"],
   ["DaniBot Pro", /DaniBot Pro\b/, "DaniBot Cloud"],
   // \b before "_" fails, so environment names such as OMB_PUBLIC_IPV4 pass.
   ["OMB", /\bOMB\b/, "DaniBot"],
@@ -171,7 +171,7 @@ describe("one name per thing", () => {
 
   it("the check catches each retired word, and lets own-key Boat and env names through", () => {
     for (const bad of [
-      "Sign in to OMB Cloud", "Sign in to DaniBot Cloud", "Get DaniBot Pro", "DaniBot Pro plans",
+      "Sign in to OMB Cloud", "Sign in to MausBot Cloud", "Get DaniBot Pro", "DaniBot Pro plans",
       "restart OMB", "Cloud box", "Hosted desktop", "Run it in its cloud VM", "Boat cloud runner",
       "Open your Cloud dashboard", "Connect to my Cloud", "Your Cloud is ready", "Let my Cloud use this Mac",
       "Local (this computer)", "Choose Cloud to wake", "Auto, Cloud or Browser", "including one from T3",

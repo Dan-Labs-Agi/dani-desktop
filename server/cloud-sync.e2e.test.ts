@@ -181,7 +181,7 @@ it("a bot's turn wakes the desktop, and its new work comes down to Documents/Dan
     expect((await api("POST", `/api/bots/${bot.id}/messages`, { body: { text: "write the report" } })).status).toBe(202);
     expect((await woken).folderIds).toContain(`bot-${bot.id}-${bot.threadId}`);
     await service.pass();
-    const owl = join(pcHome, "Documents", "Dani", "Report Owl");
+    const owl = join(pcHome, "Documents", "Dani Bot", "Report Owl");
     const [conversation] = readdirSync(owl);
     expect(readFileSync(join(owl, conversation!, "report.md"), "utf8")).toBe("# Q3");
   } finally {

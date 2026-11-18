@@ -70,7 +70,7 @@ async function seal(
 }
 
 describe("PhoneSecretBridge", () => {
-  it("opens an envelope produced by Apple's CryptoKit HPKE implementation", async () => {
+  it("opens the RFC9180 envelope shared with the Swift CryptoKit test", async () => {
     let bridge!: PhoneSecretBridge;
     const send = vi.fn((message: { requestId: string; value: string }) => {
       expect(message.value).toBe("swift-to-node-secret");
@@ -104,8 +104,8 @@ describe("PhoneSecretBridge", () => {
       messageId: "message-1",
       target: "ttsKey",
       requestKey: "credential-request-1",
-      encapsulatedKey: "BDhy_5hMSvVIy3zGSmBwBECAedYBAwwFLvbWoXCGTJyLRH1cItoQXo9NBcEG0cTQV_VwaEf5judXcsJlh2jfW7Q",
-      ciphertext: "CjM0CnBT8NYd_BHAXJRKFrbYrSw6OgMIlJLAKs8VUPSSCsa2",
+      encapsulatedKey: "BOPacYsu-__TCQ9Cl1FRwYQpyAcfFJGDNtHJKAX9iy-_Mj_WFEsqP5tJKIY1CUqgbX5FcAB_zH8fmyOMoZii1eE",
+      ciphertext: "RxDBCvPXHqpTnRc7N_OIwg-XQ5nClPouT1rwKRvuh2USFVO9",
     })).resolves.toBeUndefined();
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -274,7 +274,7 @@ describe("phoneSecretAAD", () => {
   it("refuses an AI provider key from a phone, which only the computer's own app saves where Settings does", () => {
     const context = { deviceId: "paired-device-1", target: "anthropicApiKey", requestKey: "credential-request-1" };
     expect(() => assertPhoneSecretRequestMatches(context, "paired-device-1", { target: "anthropicApiKey", requestKey: "credential-request-1" }))
-      .toThrow("Paste this key in DaniBot on your computer, or in My Cloud: a phone cannot save it yet.");
+      .toThrow("Paste this key in Dani Bot on your computer, or in My Cloud: a phone cannot save it yet.");
     for (const target of ["composioApiKey", "customSecret"]) {
       expect(() => assertPhoneSecretRequestMatches({ ...context, target }, "paired-device-1", { target, requestKey: "credential-request-1" })).not.toThrow();
     }
@@ -284,7 +284,7 @@ describe("phoneSecretAAD", () => {
   it("refuses a 1Password token from a phone, saying where to paste it", () => {
     const context = { ...baseContext("AAAAAAAAAAAAAAAAAAAAAA"), target: "onePasswordToken" };
     expect(() => assertPhoneSecretRequestMatches(context, "paired-device-1", { target: "onePasswordToken", requestKey: "credential-request-1" }))
-      .toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/^Paste the 1Password token in DaniBot on your computer, or in My Cloud/u) }));
+      .toThrow(expect.objectContaining({ status: 409, message: expect.stringMatching(/^Paste the 1Password token in Dani Bot on your computer, or in My Cloud/u) }));
   });
 
   it("gives an exact encrypted retry one stable desktop operation id", async () => {

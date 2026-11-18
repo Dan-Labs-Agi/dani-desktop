@@ -557,7 +557,7 @@ export class RuntimeCoordinator implements Coordinator {
     const body = resumed
       ? composeResume(a, this.host.names(node, parent && this.project(parent)),
         settled.map(child => composeReport(this.readable(child, a, node), this.host.names(view(child, a), node))),
-        asked.map(child => composeQuestion(this.readable(child, a, node), this.host.names(view(child, a), node))))
+        asked.map(child => composeQuestion(this.readable(child, a, node), this.host.names(view(child, a), node))), input.partial)
       : root
         ? composeRootTurn(a, { turn: input.turn === "resume" ? "first" : input.turn, restartNote: "", ...(input.answer !== undefined ? { answer: input.answer } : {}),
           ...(input.continuation ? { continuation: input.continuation } : {}) })

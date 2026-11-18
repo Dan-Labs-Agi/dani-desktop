@@ -23,7 +23,7 @@ pnpm exec vitest run server/default-bot.test.ts server/default-bot.e2e.test.ts \
 - `server/default-bot.e2e.test.ts`: on a real fixture server, `DELETE
   /api/bots/:id` answers 409, the switch hides and shows it, and a DaniBot that
   is not the Chief creates a bot with `create_bot`.
-- `server/danibot-notifications.test.ts`, `server/drivers/agents-danibot-tools.test.ts`
+- `server/mausbot-notifications.test.ts`, `server/drivers/agents-mausbot-tools.test.ts`
   and the second case of `server/default-bot.e2e.test.ts`: DaniBot alone gets
   `list_unread_notifications` and `mark_notifications_read`, listed last.
   The list returns the unread feed (bounded, trimmed) with a lean per item;

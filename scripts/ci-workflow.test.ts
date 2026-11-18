@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 type Step = { name?: string; uses?: string; run?: string; if?: string; env?: Record<string, string>; with?: Record<string, unknown>; "continue-on-error"?: boolean };
-type Job = { steps: Step[]; needs?: string; if?: string; permissions?: unknown; strategy?: { matrix: { os: string[] } }; "runs-on": string; "timeout-minutes": number; "continue-on-error"?: boolean };
+type Job = { steps: Step[]; needs?: string; if?: string; permissions?: unknown; strategy?: { matrix: { os?: string[]; include: Array<{ os: string; shard: number; shards: number }> } }; "runs-on": string; "timeout-minutes": number; "continue-on-error"?: boolean };
 const load = (name: string) => parse(readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), "utf8"));
 const workflow = load("ci.yml");
 const jobs = workflow.jobs as Record<string, Job>;
@@ -17,9 +17,13 @@ const commands = (job: Job) => job.steps.flatMap(step => step.run ? [step.run] :
 /** Required checks cannot be made advisory, conditional or omitted. */
 function requiredChecks(job: Job) {
   if (job.if || job["continue-on-error"]) return false;
-  return ["pnpm typecheck", "pnpm test", "pnpm check:electron"].every(command => {
+  const checks: Array<[string, string | undefined]> = [
+    ["pnpm exec vitest run --shard=${{ matrix.shard }}/${{ matrix.shards }}", undefined],
+    ...["pnpm typecheck", "pnpm broker:test", "pnpm test:electron", "pnpm test:packaged-server", "pnpm check:electron"].map(command => [command, "matrix.shard == 1"] as [string, string]),
+  ];
+  return checks.every(([command, condition]) => {
     const step = job.steps.find(step => step.run === command);
-    return step && !step.if && !step["continue-on-error"];
+    return step && step.if === condition && !step["continue-on-error"];
   });
 }
 
@@ -30,16 +34,21 @@ describe("adopted portable CI contract", () => {
     expect(workflow.concurrency).toEqual({ group: "ci-${{ github.ref }}", "cancel-in-progress": "${{ github.event_name == 'pull_request' }}" });
   });
   it("runs required checks on all three supported host platforms", () => {
-    expect(jobs.test.strategy?.matrix.os).toEqual(["macos-latest", "ubuntu-latest", "windows-latest"]);
+    const matrix = jobs.test.strategy!.matrix.include;
+    expect([...new Set(matrix.map(row => row.os))].sort()).toEqual(["macos-latest", "ubuntu-latest", "windows-latest"]);
+    for (const os of ["macos-latest", "ubuntu-latest", "windows-latest"]) {
+      const shards = os === "macos-latest" ? 4 : 8;
+      expect(matrix.filter(row => row.os === os).map(row => [row.shard, row.shards])).toEqual(Array.from({length: shards}, (_, i) => [i + 1, shards]));
+    }
     expect(jobs.test["runs-on"]).toBe("${{ matrix.os }}");
-    expect(jobs.test["timeout-minutes"]).toBe(30);
+    expect(jobs.test["timeout-minutes"]).toBe(40);
     expect(requiredChecks(jobs.test)).toBe(true);
     expect(jobs.test.steps.find(step => step.run === "pnpm typecheck")?.env?.NODE_OPTIONS).toBe("--max-old-space-size=7168");
     expect(commands(jobs.test)).toContain("pnpm install --frozen-lockfile");
   });
   it.each(["omitted", "conditional", "advisory", "job-advisory"])("rejects %s required checks", mode => {
     const job: Job = structuredClone(jobs.test);
-    const step = job.steps.find(step => step.run === "pnpm test")!;
+    const step = job.steps.find(step => step.run === "pnpm exec vitest run --shard=${{ matrix.shard }}/${{ matrix.shards }}")!;
     if (mode === "omitted") job.steps = job.steps.filter(candidate => candidate !== step);
     if (mode === "conditional") step.if = "false";
     if (mode === "advisory") step["continue-on-error"] = true;
@@ -49,13 +58,13 @@ describe("adopted portable CI contract", () => {
   it("keeps the known Windows Electron canary separate from required tests and sandboxed", () => {
     const canary = jobs.test.steps.filter(step => step["continue-on-error"]);
     expect(canary).toHaveLength(1);
-    expect(canary[0]).toMatchObject({ if: "matrix.os == 'windows-latest'", run: "pnpm exec vitest run electron/browser-closed-shadow.electron.test.mjs", env: { OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: "0" } });
+    expect(canary[0]).toMatchObject({ if: "matrix.os == 'windows-latest' && matrix.shard == 1", run: "pnpm exec vitest run electron/browser-closed-shadow.electron.test.mjs", env: { OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE: "0" } });
     expect(JSON.stringify(jobs.test)).not.toMatch(/--no-sandbox|disable-gpu-sandbox|disable-setuid-sandbox/);
-    expect(jobs.test.steps.find(step => step.run === "pnpm test")?.env?.OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE).toBe("${{ matrix.os == 'windows-latest' && '1' || '0' }}");
+    expect(jobs.test.steps.find(step => step.run === "pnpm exec vitest run --shard=${{ matrix.shard }}/${{ matrix.shards }}")?.env?.OMB_SKIP_REAL_ELECTRON_BROWSER_FIXTURE).toBe("${{ matrix.os == 'windows-latest' && '1' || '0' }}");
   });
   it("validates translation catalogs and builds the full product on Linux", () => {
-    expect(jobs.test.steps).toContainEqual(expect.objectContaining({ run: "pnpm i18n:check", if: "matrix.os == 'ubuntu-latest'" }));
-    expect(jobs.test.steps).toContainEqual(expect.objectContaining({ run: "pnpm build", if: "matrix.os == 'ubuntu-latest'" }));
+    expect(jobs.test.steps).toContainEqual(expect.objectContaining({ run: "pnpm i18n:check", if: "matrix.os == 'ubuntu-latest' && matrix.shard == 1" }));
+    expect(jobs.test.steps).toContainEqual(expect.objectContaining({ run: "pnpm build", if: "matrix.os == 'ubuntu-latest' && matrix.shard == 1" }));
   });
   it("keeps package install, upgrade and lifecycle checks blocking", () => {
     const job = jobs["package-linux"];

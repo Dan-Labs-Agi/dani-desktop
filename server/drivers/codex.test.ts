@@ -1986,7 +1986,7 @@ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`)
   it("reports local ChatGPT sign-out with a warning when remote revocation is unconfirmed", async () => {
     vi.spyOn(ChatGptPlanAuthController.prototype, "models").mockResolvedValue({ default: "gpt-6.1-sol", options: [{ id: "gpt-6.1-sol", label: "GPT-6.1 Sol" }] });
     vi.spyOn(ChatGptPlanAuthController.prototype, "snapshot").mockResolvedValue({ authenticated: false });
-    const message = "Signed out locally, but remote revocation was not confirmed. Disconnect DaniBot in ChatGPT Settings → Usage to end access there.";
+    const message = "Signed out locally, but remote revocation was not confirmed. Disconnect Dani Bot in ChatGPT Settings → Usage to end access there.";
     vi.spyOn(ChatGptPlanAuthController.prototype, "signOut").mockRejectedValue(Object.assign(new Error(message), { code: "chatgpt_revocation_unconfirmed" }));
     await create({ authMode: "chatgpt-plan" });
     await expect(instance.signOut!()).resolves.toBeUndefined();

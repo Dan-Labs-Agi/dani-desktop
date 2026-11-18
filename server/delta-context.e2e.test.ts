@@ -26,7 +26,7 @@ async function fixture(test: (f: any) => Promise<void>, options: { env?: NodeJS.
   // The fixture's Claude is new enough to refresh a resumed session's recorded system prompt; a test may override it.
   const parentEnv = { ...process.env, FAKE_CLAUDE_VERSION: "2.1.270", ...options.env };
   const session = await launchVerificationServer(parentEnv, undefined, undefined, undefined, undefined,
-    { scripted: true }, options.codex ? ["codex"] : []);
+    { scripted: true }, options.codex ? ["codex", "openaiCompat"] : ["openaiCompat"]);
   const cli = (...args: string[]) => runControlOmb(args, { env: { DANIBOT_URL: session.info.url } }) as Promise<any>;
   const api = (path: string, body?: unknown, method = "POST") =>
     request(path, body === undefined ? {} : { method, body: JSON.stringify(body) }, session.info.url) as Promise<any>;

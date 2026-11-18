@@ -35,7 +35,7 @@
         }
       },
       "input": {
-        "text": "DaniBot is checking that an extraction-model key works."
+        "text": "Dani Bot is checking that an extraction-model key works."
       }
     },
     "inboxTriage": {
@@ -95,7 +95,7 @@
           }
         },
         "input": {
-          "text": "DaniBot is checking that an extraction-model key works."
+          "text": "Dani Bot is checking that an extraction-model key works."
         }
       }
     },

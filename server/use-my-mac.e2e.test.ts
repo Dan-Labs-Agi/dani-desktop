@@ -186,8 +186,11 @@ function lend(file: string, power = createCloudPowerGate()) {
 async function boot() {
   const dataDir = join(home, ".danibot");
   // Off the internet: My Cloud's own fetches go nowhere, and its own way out resolves no name, so it reaches nothing.
+  // Tiny hanging fixture engines must not wait on the CI host's real memory pressure.
+  // Engine-memory admission itself is exercised separately in engine-memory.test.ts.
   const offlinePrelude = `data:text/javascript,${encodeURIComponent([
     'import dns from "node:dns/promises"; import { syncBuiltinESMExports } from "node:module";',
+    'import fs from "node:fs"; const read = fs.readFileSync; fs.readFileSync = function(path, ...args) { if (String(path) === "/proc/meminfo") return "MemTotal: 33554432 kB\\nMemAvailable: 33554432 kB\\nSwapFree: 0 kB\\n"; return read.call(this, path, ...args); }; syncBuiltinESMExports();',
     'dns.lookup = async (host) => { throw Object.assign(new Error(`getaddrinfo ENOTFOUND ${host}`), { code: "ENOTFOUND" }); }; syncBuiltinESMExports();',
     'const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });',
   ].join("\n"))}`;
@@ -222,7 +225,7 @@ beforeAll(async () => {
   writeFileSync(cli, `#!/usr/bin/env node
 if (process.argv[2] === "auth") { console.log(JSON.stringify({ loggedIn: true, email: "person@example.test" })); process.exit(0); }
 process.env.FAKE_CLAUDE_VERSION = "2.1.284";
-if (process.argv[2] !== "--version") { process.env.FAKE_CLAUDE_DUMP = ${JSON.stringify(turnDumps())} + "/" + process.pid + ".json"; process.env.FAKE_CLAUDE_TEXT_DUMP = ${JSON.stringify(join(home, "one-shot.json"))}; process.env.FAKE_CLAUDE_MODE = "hang"; }
+if (process.argv[2] !== "--version") { process.env.FAKE_CLAUDE_DUMP = ${JSON.stringify(turnDumps())} + "/" + (await import("node:crypto")).randomUUID() + ".json"; process.env.FAKE_CLAUDE_TEXT_DUMP = ${JSON.stringify(join(home, "one-shot.json"))}; process.env.FAKE_CLAUDE_MODE = "hang"; }
 await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-claude-cli.ts")).href)});
 `, { mode: 0o755 });
   // The bot's browser engine as the server finds it: it names the Chrome its turns would drive, through the gate.

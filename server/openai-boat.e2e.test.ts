@@ -57,7 +57,7 @@ it("keeps the selected API model for direct, group and scheduled Boat turns and 
   const address = upstream.address();
   if (!address || typeof address === "string") throw new Error("fixture failed to bind");
   const origin = `http://127.0.0.1:${address.port}`;
-  const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, [], origin).catch(async error => {
+  const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, ["openaiCompat"], origin).catch(async error => {
     upstream.closeAllConnections(); await new Promise<void>(resolve => upstream.close(() => resolve())); throw error;
   });
   const api = async (method: string, path: string, body?: unknown) => {
@@ -95,11 +95,13 @@ it("keeps the selected API model for direct, group and scheduled Boat turns and 
       }
       const settled = await control(["wait", ...destination, "--timeout", "20"]);
       expect(settled.status).toBe(scenario === "held" ? "failed" : "settled");
-      expect(requests.slice(before)).toHaveLength(2);
+      // A refused computer call gets the driver's two bounded correction prompts before failure.
+      expect(requests.slice(before)).toHaveLength(scenario === "held" ? 4 : 2);
       expect(requests.slice(before).every(request => request.model === "chosen-vision-model")).toBe(true);
       const followup = requests[before + 1].messages;
       if (scenario === "held") {
         expect(followup.at(-1).content).toContain("The person has handed this computer back. This call was NOT performed");
+        expect(requests.slice(before + 2).every(request => request.messages.at(-1).content.includes("a tool call in this turn failed"))).toBe(true);
       } else {
         expect(followup.at(-1).content[1].type).toBe("image_url");
       }

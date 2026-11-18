@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -8,6 +8,9 @@ import { launchVerificationServer, runControlOmb, verificationServerEnvironment,
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
+// The hosted bridge ships in the proprietary enterprise layer; the OSS repo has no
+// enterprise/server/workspace-access.ts, so this suite runs only where the layer exists.
+const HAS_WORKSPACE_ACCESS = existsSync(join(ROOT, "enterprise/server/workspace-access.ts"));
 const TOKEN = `omb_workspace_${"s".repeat(43)}`;
 const ORIGINAL_TEXT = "Preserve this synthetic conversation through model changes.";
 const INITIAL = {
@@ -187,7 +190,7 @@ afterAll(async () => {
   if (layer) await removeTempDir(layer);
 });
 
-describe("hosted model policy in the full runtime", () => {
+describe.skipIf(!HAS_WORKSPACE_ACCESS)("hosted model policy in the full runtime", () => {
   it("advertises only assignments and reconciles saved choices without changing conversation history", async () => {
     await expectCatalog(INITIAL);
     const health = await api("GET", "/api/health/hosted");
