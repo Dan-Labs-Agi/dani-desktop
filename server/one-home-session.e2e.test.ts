@@ -32,6 +32,12 @@ function throughAdmin(fx: CloudSendFixture, device: string) {
 let laptop: CloudSendFixture, desk: CloudSendFixture;
 beforeAll(async () => {
   [laptop, desk] = await Promise.all([launchCloudSendFixture({ onePasswordToken: TOKEN }), launchCloudSendFixture({ onePasswordToken: TOKEN })]);
+  // This fixture scripts moves and ownership, not a separate Chief review.
+  for (const side of [laptop.local, laptop.onCloud, desk.local, desk.onCloud]) {
+    for (const bot of (await side("GET", "/api/bots")).body.bots) {
+      if (bot.chiefOfStaff) expect((await side("PATCH", `/api/bots/${bot.id}`, { chiefOfStaff: false })).status).toBe(200);
+    }
+  }
   throughAdmin(laptop, "laptop");
   throughAdmin(desk, "desk");
 }, hostTimeout(180_000));

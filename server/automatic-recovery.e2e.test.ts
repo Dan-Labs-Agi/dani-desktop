@@ -336,7 +336,7 @@ it("stops after one failed backup instead of looping between engines", async () 
     const threadId = bot.activeTaskId;
     await api("PATCH", `/api/bots/${bot.id}/tasks/${threadId}`, { modelSelection: primary, updateBotDefault: true });
     await control("send", "--bot", bot.id, "--task", threadId, "--text", "ONLY_ONE_BACKUP_4T");
-    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("failed");
+    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("needs-user");
     expect(backupPrompts()).toHaveLength(1);
     expect(calls().filter((call) => call.method === "initialize.error")).toHaveLength(1);
     const { messages } = await control("messages", "--bot", bot.id, "--task", threadId, "--limit", "20");
@@ -388,7 +388,7 @@ it("preserves the sign-in error when automatic recovery is disabled", async () =
     const { bot } = await control("new-bot", "--name", "Sign in manually");
     await api("PATCH", `/api/bots/${bot.id}/tasks/${bot.activeTaskId}`, { modelSelection: backup, approvalMode: "ask" });
     await control("send", "--bot", bot.id, "--text", "NO_SIGN_OUT_RECOVERY_4B");
-    expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("failed");
+    expect((await control("wait", "--bot", bot.id, "--timeout", "30")).status).toBe("needs-user");
     const { messages } = await control("messages", "--bot", bot.id, "--limit", "30");
     expect(messages.filter((message: any) => message.tool?.name?.startsWith("recovery:"))).toHaveLength(0);
     expect(messages.map((message: any) => message.tool).filter((tool: any) => tool?.ok === false))

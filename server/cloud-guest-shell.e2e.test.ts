@@ -117,7 +117,7 @@ for (const name of ["spawn", "spawnSync", "execFile", "execFileSync", "exec", "e
 syncBuiltinESMExports();
 `);
   boot = async () => {
-    child = spawnWithSecrets(process.execPath, ["--import", offlinePrelude, "--import", pathToFileURL(spawnWatch).href, join(SERVER_DIR, "index.ts")], { OMB_TEST_SEALED_PATH: "1",
+    child = spawnWithSecrets(process.execPath, ["--import", pathToFileURL(join(SERVER_DIR, "testing/synthetic-cloud-capacity.mjs")).href, "--import", offlinePrelude, "--import", pathToFileURL(spawnWatch).href, join(SERVER_DIR, "index.ts")], { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
       OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
@@ -135,6 +135,10 @@ syncBuiltinESMExports();
   };
   await boot();
   owner = await adminPairing();
+  // The confinement fixture scripts only the explicitly selected guest workers.
+  for (const bot of (await api("GET", "/api/bots", { token: owner })).body.bots) {
+    if (bot.chiefOfStaff) expect((await api("PATCH", `/api/bots/${bot.id}`, { token: owner, body: { chiefOfStaff: false } })).status).toBe(200);
+  }
 }, hostTimeout(40_000));
 
 afterAll(async () => {

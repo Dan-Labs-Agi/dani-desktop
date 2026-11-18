@@ -18,13 +18,21 @@ beforeAll(async () => {
   fx = await launchOwnHomeFixture({ env: { OMB_TEST_INTERNAL_CAPABILITY_KEY: KEY } });
   garage = await fx.addServer("Garage server", { FAKE_CLAUDE_DUMP: join(fx.root, "garage-turn.json") });
   family = await fx.addServer("Family server", { OMB_SIGNIN_MEMBER_EMAILS: "friend@example.test" });
+  // This fixture scripts moves and ownership, not a separate Chief review.
+  for (const side of [fx.local, garage.as, family.as]) {
+    for (const bot of (await side("GET", "/api/bots")).body.bots) {
+      if (bot.chiefOfStaff) expect((await side("PATCH", `/api/bots/${bot.id}`, { chiefOfStaff: false })).status).toBe(200);
+    }
+  }
 }, hostTimeout(120_000));
 afterAll(async () => { await fx?.close(); });
 
 type Side = OwnHomeFixture["local"];
 type Bot = { id: string; threadId: string };
 async function made(side: Side, name: string): Promise<Bot> {
-  const bot = (await side("POST", "/api/bots", { name })).body.bot as Bot;
+  const created = await side("POST", "/api/bots", { name, modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } });
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+  const bot = created.body.bot as Bot;
   expect((await side("PATCH", `/api/bots/${bot.id}`, { soul: `You are ${name}.` })).status).toBe(200);
   return bot;
 }
@@ -86,7 +94,8 @@ it("a bot asking for a teammate on the person's other place hears where it lives
   expect(shared.error, "never told where the person's other bots live").not.toContain("Work laptop");
 
   // The person @mentions Scout to Ledger: the turn is told where Scout lives, and a room says it once in plain words.
-  expect((await garage.as("POST", `/api/bots/${ledger.id}/messages`, { text: "@Scout can you check this month's numbers?", threadId: ledger.threadId })).status).toBe(202);
+  const direct = await garage.as("POST", `/api/bots/${ledger.id}/messages`, { text: "@Scout can you check this month's numbers?", threadId: ledger.threadId });
+  expect(direct.status, JSON.stringify(direct.body)).toBe(202);
   await expect.poll(() => { try { return JSON.parse(readFileSync(join(fx.root, "garage-turn.json"), "utf8")).systemPrompt ?? ""; } catch { return ""; } }, { timeout: 60_000, interval: 200 })
     .toContain("The user named @Scout, a bot of theirs that is not here: Scout lives on Work laptop, the person's computer, not here.");
   const idle = async () => ((await garage.as("GET", "/api/bots")).body.bots as Array<{ activity?: string; busy?: boolean }>).every((bot) => bot.activity !== "working" && !bot.busy);

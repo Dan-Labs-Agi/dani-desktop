@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 
-import { runControlOmb } from "../scripts/control-omb.ts";
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { launchRestartableServer } from "./testing/restartable-server.ts";
 
 // Automations on a real server, through the calls the Automations page makes: switched off and back on, both kinds work
@@ -11,6 +11,7 @@ import { launchRestartableServer } from "./testing/restartable-server.ts";
 // start.
 it("turns schedules and webhooks back on, removes a deleted bot's automations, and clears orphans at start", async () => {
   const server = await launchRestartableServer();
+  await disableFixtureChiefs(server.url);
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
     const response = await fetch(`${server.url}${path}`, {
       method, headers: { "content-type": "application/json", origin: server.url },
@@ -20,7 +21,7 @@ it("turns schedules and webhooks back on, removes a deleted bot's automations, a
     expect(response.status, `${method} ${path}: ${JSON.stringify(value)}`).toBe(status);
     return value;
   };
-  const newBot = async (name: string) => ((await runControlOmb(["new-bot", "--name", name, "--url", server.url])) as { bot: { id: string } }).bot.id;
+  const newBot = async (name: string) => (await api("POST", "/api/bots", { name, modelSelection: { instanceId: "claude", model: "claude-sonnet-5" } }, 201)).bot.id;
   const state = async () => ({ ...(await api("GET", "/api/routines")), ...(await api("GET", "/api/webhooks")) }) as { routines: any[]; runs: any[]; webhooks: any[] };
   const send = (address: string, body: unknown) => fetch(address, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   try {

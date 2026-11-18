@@ -11,6 +11,7 @@ import { launchVerificationServer, runControlOmb, verificationServerArgs, verifi
 import { createControlClient } from "./control-client.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
 import { freePortBlock } from "./testing/ports.ts";
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { hostTimeout } from "./testing/host-timeout.ts";
 import { ownTurnText } from "./testing/room-handoff-agent.ts";
 import { withAnswer } from "./testing/your-computer.ts";
@@ -360,6 +361,7 @@ itHost("R5 queues a member's root on the computer seat at the wait ceiling, FIFO
       try { return (await fetch(base + "/api/health")).ok; } catch { return false; }
     }, Boolean);
 
+    await disableFixtureChiefs(base);
     const { bot: holder } = await apiOk("POST", "/api/bots", { name: "Seat Holder" });
     const { task: held } = await apiOk("POST", `/api/bots/${holder.id}/tasks`, {});
     await apiOk("POST", `/api/bots/${holder.id}/messages`, { text: "Hold the screen slowly.", threadId: held.threadId });

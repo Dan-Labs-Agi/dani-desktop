@@ -94,7 +94,7 @@ function watchRoutine(id: string) {
 /** Each home seeds its Chief under a random bot name, Scout and Quill among them; these bots must be the only ones so named. */
 async function nameSeededChiefs() {
   for (const [side, name] of [[fx.onCloud, "Ada's Chief"], [onTeam("olive"), "Acme's Chief"]] as const) {
-    for (const bot of (await side("GET", "/api/bots")).body.bots as Bot[]) expect((await side("PATCH", `/api/bots/${bot.id}`, { name })).status).toBe(200);
+    for (const bot of (await side("GET", "/api/bots")).body.bots as Bot[]) expect((await side("PATCH", `/api/bots/${bot.id}`, { name, chiefOfStaff: false })).status).toBe(200);
   }
 }
 
@@ -112,7 +112,7 @@ it("moves Scout with its two chats, its routine and its files; its notes about A
   };
   await move(scout.bot);
   fx.beforeTeamJournalWrite = null;
-  expect(phaseOf(scout.bot.id)?.phase).toBe("check");
+  expect(phaseOf(scout.bot.id)?.phase, JSON.stringify(fx.teamMove.journal())).toBe("check");
   const routineOn = async (side: CloudSendFixture["onCloud"]) => ((await side("GET", "/api/routines")).body.routines as Array<{ id: string; enabled: boolean }>).find((routine) => routine.id === scout.routine)?.enabled;
   expect([await routineOn(fx.onCloud), await routineOn(onTeam("olive"))], "off on both sides until the switch").toEqual([false, false]);
   expect(fx.teamMove.view()?.phase).toBe("moving");

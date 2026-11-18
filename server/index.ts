@@ -186,6 +186,7 @@ import {
 import { serveStatic } from "./static-files.ts";
 import { startUpkeep } from "./host/start-upkeep.ts";
 import { ComputerControl } from "./computer-control.ts";
+import { runtimeWorkPending as hasRuntimeWorkPending } from "./host/runtime-work-pending.ts";
 import { resetPathCache, sealedFixture } from "./env-path.ts";
 import { registerEnginesBinDir } from "./engine-install.ts";
 import { appendUsage, flushUsageLedger, queuedTurnTrigger, usageTriggerFor, type UsageRow, type UsageTrigger } from "./usage-ledger.ts"; import { createUsageAttribution } from "./usage-attribution.ts";
@@ -4015,7 +4016,11 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
         ...(node.answeredBy?.kind === "bot" ? { answerer: store.bot(node.answeredBy.botId)?.name ?? "Teammate" } : {}),
       };
     },
-    park: (node, question, restored) => askCards.park(node, question, restored),
+    park: (node, question, restored) => {
+      // Native routine failures already have a deduplicated owner notice from RoutineManager.
+      if (!node.parentId && node.outcome && activeRoutineRunForThread(node.threadId)) return;
+      askCards.park(node, question, restored);
+    },
     levelOf: (target, source) => delegatedLevel.levelOf(target, source),
     chiefOf: address => chiefLevel(store.bot(address.botId)),
     supervisor: node => {
@@ -6854,7 +6859,7 @@ bus.subscribe((event: RuntimeEvent) => {
         afterGoalCompletion(event.threadId, completedTurnId, (verified, personVisible) => {
           if (!store.taskByThread(bot.id, event.threadId)) return;
           const owner = directRequestOwners.get(event.threadId);
-          if (!verified || !event.ok || owner?.stopped || hasQueuedSteeredMessages(bot.id, event.threadId)
+          if (!verified || !event.ok || owner?.stopped || hasQueuedPersonMessage(bot.id, event.threadId)
               || (personVisible && (!completion || !owner?.generations.has(completion.rootId)))) return;
           if (!explicitGoal && !reportedRoutine && (!routineRun || routineRun.status === "completed")
               && (!internal || reviewAnswer || personVisible) && !computerSelectionTurns.get(event.threadId)?.selected) {
@@ -6982,14 +6987,7 @@ function handoffOpener(capability: Pick<InternalCapability, "botId" | "threadId"
   return undefined;
 }
 
-/** Read before the runtime settles the run's turn (the fold runs ahead of settleDirectCoordination), so its children tell. */
-function runtimeWorkPending(threadId: string): boolean {
-  if (coordinator.outstandingFor(threadId).length > 0) return true;
-  return coordinator.active().some(root => !root.parentId && !root.groupId && root.threadId === threadId
-    && (root.status === "queued" || root.status === "waiting" || root.status === "resume"
-      || ((root.status === "source" || root.status === "running")
-        && coordinator.children(root.id).some(child => child.reply !== "none" && child.createdAt >= (root.startedAt ?? 0)))));
-}
+const runtimeWorkPending = (threadId: string) => hasRuntimeWorkPending(coordinator, threadId);
 
 
 function turnAnswers(threadId: string, opts?: {

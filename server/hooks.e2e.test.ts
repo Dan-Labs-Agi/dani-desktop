@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // POSIX-gated: the fake CLI is a shebang script.
 import { spawn, type ChildProcess } from "node:child_process";
@@ -81,6 +82,7 @@ function harness(label: string, serverEnv: Record<string, string>, instanceEnv: 
       if (child.exitCode !== null) throw new Error(`server exited ${child.exitCode}. stderr:\n${stderr}`);
       await new Promise((r) => setTimeout(r, 150));
     }
+    await disableFixtureChiefs(BASE);
   }, 30_000);
   afterAll(async () => {
     await waitForExit(child, { signal: "SIGTERM" });

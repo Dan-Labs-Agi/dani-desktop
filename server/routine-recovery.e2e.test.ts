@@ -234,7 +234,7 @@ it("never retries a signed-out engine, and tells the owner exactly once what to 
     expect(run.error).toBe(`${SIGN_IN} The AI said: “Not logged in · Please run /login”`);
     expect(run.retried).toBeUndefined();
   }
-  expect(s.notified()).toEqual([
+  expect(s.notified(), JSON.stringify(s.notified())).toEqual([
     expect.objectContaining({ kind: "routine-failed", title: "Inbox bot's routine failed", body: `Inbox brief: ${SIGN_IN}` }),
   ]);
   expect((await s.prompts(first.threadId ?? (await s.run(first.id)).threadId)).filter((text) => text.includes(ROUTINE_HEADER))).toHaveLength(1);

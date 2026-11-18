@@ -41,7 +41,8 @@ async function launch(boat?: string, enterprise?: { dir: string; licenseKey: str
       'import { existsSync, readFileSync } from "node:fs";',
       'import { join } from "node:path";',
       'const at = process.argv.indexOf("--mcp-config");',
-      'const thread = at < 0 ? "probe" : JSON.parse(readFileSync(process.argv[at + 1], "utf8")).mcpServers?.agents?.env?.OMB_THREAD_ID ?? "probe";',
+      'const env = at < 0 ? {} : JSON.parse(readFileSync(process.argv[at + 1], "utf8")).mcpServers?.agents?.env ?? {};',
+      'const thread = env.OMB_THREAD_ID ?? "probe"; const bot = env.OMB_BOT_ID;',
       `process.env.FAKE_CLAUDE_MODE = thread === "probe" ? "happy" : ${mode};`,
       `process.env.FAKE_CLAUDE_SLOW_FINISH_GATE = join(${JSON.stringify(dataDir)}, thread + ".gate");`,
       `process.env.FAKE_CLAUDE_DUMP = join(${JSON.stringify(dataDir)}, thread + ".json");`,
@@ -527,7 +528,7 @@ it("reports a routine that keeps failing the same way once, and again when the f
     await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: true });
     const ada = (await control(["new-bot", "--name", "Ada", "--section", "Ops"])).bot;
     const changedFlag = join(dataDir, "failure-changed");
-    await useCli(`thread === ${JSON.stringify(chief.activeTaskId)} ? "happy" : existsSync(${JSON.stringify(changedFlag)}) ? "error-result" : "exit-early"`);
+    await useCli(`bot !== ${JSON.stringify(ada.id)} ? "happy" : existsSync(${JSON.stringify(changedFlag)}) ? "error-result" : "exit-early"`);
     const routine = (await api("POST", "/api/routines", {
       name: "Inbox brief", prompt: "Summarise my inbox.", botId: ada.id, schedule: { type: "cron", expression: "0 7 * * *", timeZone: "Europe/London" },
     }, undefined, 201)).routine;

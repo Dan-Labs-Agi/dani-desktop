@@ -52,6 +52,12 @@ beforeAll(async () => {
   fx = await launchCloudSendFixture({ onePasswordToken: TOKEN, broker, toolCalls: 36, env: { OMB_HIGHLEVEL_RELAY_URL: relay.url, OMB_HIGHLEVEL_API_URL: hl.url },
     cloudEngine: `process.env.FAKE_CLAUDE_MODE = "hang"; process.env.FAKE_CLAUDE_RELEASE = ${JSON.stringify(release)};
 if (process.argv[2] !== "--version") { process.env.FAKE_CLAUDE_DUMP = ${JSON.stringify(join(scratch, "turns"))} + "/" + process.pid + ".json"; process.env.FAKE_CLAUDE_TEXT_DUMP = ${JSON.stringify(join(scratch, "one-shot.json"))}; }` });
+  // This fixture scripts moves and ownership, not a separate Chief review.
+  for (const side of [fx.local, fx.onCloud]) {
+    for (const bot of (await side("GET", "/api/bots")).body.bots) {
+      if (bot.chiefOfStaff) expect((await side("PATCH", `/api/bots/${bot.id}`, { chiefOfStaff: false })).status).toBe(200);
+    }
+  }
   signIns = createServer((req, res) => {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });

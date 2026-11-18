@@ -961,6 +961,7 @@ function handle(msg: any) {
       }
       if (process.env.FAKE_ACP_DUMP && process.env.FAKE_ACP_DUMP_PROMPT === "1") {
         writeFileSync(`${process.env.FAKE_ACP_DUMP}.prompt.json`, JSON.stringify(msg.params?.prompt ?? null, null, 2));
+        appendFileSync(`${process.env.FAKE_ACP_DUMP}.prompt.jsonl`, JSON.stringify(msg.params?.prompt ?? null) + "\n");
       }
       if (failRpc(msg)) return;
       if (mode === "workflow-plan") {
