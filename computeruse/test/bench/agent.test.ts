@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { runScriptedAgent, type Rpc, type RpcResult } from "./agent.ts";
-import { createDesktop, type DesktopSpec } from "./desktop.ts";
-import type { Intent } from "./task.ts";
+import { runScriptedAgent, type Rpc, type RpcResult } from "../../bench/agent.ts";
+import { createDesktop, type DesktopSpec } from "../../bench/desktop.ts";
+import type { Intent } from "../../bench/task.ts";
 
 const notes: DesktopSpec = { windows: [{ id: 1, title: "Notes", app: "Notes", elements: [
   { role: "AXTextField", label: "Body" },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guardEnv, guardsFromEnv, type ComputerGuards } from "./guards.ts";
+import { guardEnv, guardsFromEnv, type ComputerGuards } from "../guards.ts";
 
 const everything: Required<ComputerGuards> = {
   stale: true, loop: true, typing: true, anchor: true, scroll: true, untrusted: true, guidance: true,

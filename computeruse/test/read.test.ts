@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ChildCalls } from "../server/mcp-bridge.ts";
-import { bounded, readWindow } from "./read.ts";
+import type { ChildCalls } from "../../server/mcp-bridge.ts";
+import { bounded, readWindow } from "../read.ts";
 
 const child = (call: ChildCalls["call"]): ChildCalls => ({ driverVersion: "0.28.2", call });
 

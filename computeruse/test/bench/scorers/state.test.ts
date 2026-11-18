@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scoreTask, type ComputerSnapshot } from "./state.ts";
+import { scoreTask, type ComputerSnapshot } from "../../../bench/scorers/state.ts";
 
 const state: ComputerSnapshot = Object.freeze({
   files: Object.freeze({ "notes/a.txt": "done" }),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildComputerReport, renderComputerReport } from "./report.ts";
+import { buildComputerReport, renderComputerReport } from "../../bench/report.ts";
 
 describe("computer benchmark reports", () => {
   it("aggregates duration, outcomes and stage counters", () => {

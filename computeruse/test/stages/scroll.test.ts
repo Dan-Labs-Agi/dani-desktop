@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ChildCalls } from "../../server/mcp-bridge.ts";
-import { createComputerPipeline } from "../pipeline.ts";
+import type { ChildCalls } from "../../../server/mcp-bridge.ts";
+import { createComputerPipeline } from "../../pipeline.ts";
 
 function fixture(pageKeyMoves: boolean) {
   let page = 0;

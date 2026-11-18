@@ -7,8 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { describe, expect, it } from "vitest";
-import { COMPUTER_EVIDENCE_PATH } from "./evidence.ts";
-import { gatedLocalComputer } from "./local-computer.ts";
+import { COMPUTER_EVIDENCE_PATH } from "../evidence.ts";
+import { gatedLocalComputer } from "../local-computer.ts";
 
 // A disposable driver: a window whose title moves when it is clicked. It never opens a real window.
 const DRIVER = `
@@ -19,9 +19,11 @@ const text = (value) => ({ content: [{ type: "text", text: value }] });
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   const message = JSON.parse(line);
   const reply = (result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }) + "\\n");
+  if (message.method === "tools/list") return reply({ tools: [{ name: "get_window_state", description: "Read a window.", inputSchema: { type: "object", properties: {} } }] });
   if (message.method !== "tools/call") return reply({});
   const name = message.params.name;
   calls.push(name);
+  if (name === "schedule_change") { setTimeout(() => { revision += 1; }, 200); return reply(text("scheduled")); }
   if (name === "get_window_state") {
     return reply({ ...text(JSON.stringify(calls)), structuredContent: { pid: 4, window_id: 9, app_name: "Notes", window_title: "Revision " + revision,
       elements: [{ element_index: 1, role: "AXButton", label: "Save", depth: 1 }, { element_index: 2, role: "AXButton", label: "Send", depth: 1 }] } });
@@ -70,14 +72,15 @@ async function session(guards: Parameters<typeof gatedLocalComputer>[4], verifyE
     replies.delete(message.id);
   });
   let next = 0;
-  const call = (name: string, args: Record<string, unknown> = {}): Promise<any> => {
+  const request = (method: string, params: Record<string, unknown>): Promise<any> => {
     const id = ++next;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`no answer for ${name}`)), 10_000);
+      const timer = setTimeout(() => reject(new Error(`no answer for ${method}`)), 10_000);
       replies.set(id, (value) => { clearTimeout(timer); resolve(value.result); });
-      child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } }) + "\n");
+      child.stdin!.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
     });
   };
+  const call = (name: string, args: Record<string, unknown> = {}) => request("tools/call", { name, arguments: args });
   const close = async () => {
     const exited = once(child, "exit");
     child.stdin!.end();
@@ -85,18 +88,38 @@ async function session(guards: Parameters<typeof gatedLocalComputer>[4], verifyE
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(folder, { recursive: true, force: true });
   };
-  return { call, close, evidence, checks };
+  return { call, request, close, evidence, checks };
 }
 
 const window = { pid: 4, window_id: 9 };
 
 describe("the computer service with its checks on", () => {
+  it("observes a person's window change through the guarded service", async () => {
+    const run = await session({ guidance: true }, false);
+    try {
+      const tools = await run.request("tools/list", {});
+      expect(tools.tools.map((tool: { name: string }) => tool.name)).toContain("wait_for_window_change");
+      expect(tools.tools.map((tool: { name: string }) => tool.name)).toContain("find_window_target");
+      const target = await run.call("find_window_target", { ...window, label: "Save" });
+      expect(target.structuredContent).toMatchObject({ status: "found", target: { label: "Save" } });
+      await run.call("schedule_change");
+      const observed = await run.call("wait_for_window_change", { ...window, timeout_ms: 3000 });
+      expect(observed.structuredContent).toEqual({ status: "changed" });
+      expect(observed.content[0].text).toContain("does not prove success");
+      const calls = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
+      expect(calls.filter((name) => name === "get_window_state").length).toBeGreaterThanOrEqual(4);
+    } finally {
+      await run.close();
+    }
+  }, 30_000);
+
   it("shows the pointer before the first action, verifies the click, and reports the totals", async () => {
     const run = await session({ pointer: true, evidence: true, stale: true });
     try {
       await run.call("get_window_state", window);
       const clicked = await run.call("click", { ...window, element_index: 1 });
-      expect(clicked.content).toEqual([{ type: "text", text: "done:click" }]);
+      expect(clicked.content[0]).toEqual({ type: "text", text: "done:click" });
+      expect(clicked.structuredContent.actionReceipt).toMatchObject({ tool: "click", outcome: "driver-reported", observation: "changed" });
       const calls = JSON.parse((await run.call("get_window_state", window)).content[0].text) as string[];
       expect(calls.indexOf("set_agent_cursor_enabled")).toBeGreaterThan(-1);
       expect(calls.indexOf("set_agent_cursor_enabled")).toBeLessThan(calls.indexOf("click"));

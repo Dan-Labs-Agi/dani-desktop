@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ChildCalls } from "../../server/mcp-bridge.ts";
-import { verifiedTyping } from "./typing.ts";
+import type { ChildCalls } from "../../../server/mcp-bridge.ts";
+import { verifiedTyping } from "../../stages/typing.ts";
 
 const target = { name: "set_value", arguments: { pid: 10, window_id: 2, element_index: 4, value: "private phrase" } };
 const snapshot = (label: string) => ({ elements: [{ element_index: 4, role: "AXTextField", label, depth: 1 }] });

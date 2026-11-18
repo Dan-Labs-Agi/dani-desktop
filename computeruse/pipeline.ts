@@ -12,6 +12,9 @@ import { verifiedScroll } from "./stages/scroll.ts";
 import { staleRefusal } from "./stages/stale.ts";
 import { verifiedTyping } from "./stages/typing.ts";
 import { CLICK_TOOLS, isUnconfirmedClick, unconfirmedClickResult } from "./unconfirmed-click.ts";
+import { waitForWindowChange } from "./walkthrough-tool.ts";
+import { findWindowTarget } from "./walkthrough-target.ts";
+import { createReceiptWriter } from "./action-receipt.ts";
 
 type Result = Record<string, unknown>;
 type Next = () => Promise<Result>;
@@ -20,6 +23,7 @@ interface Stage { run: (next: Next) => Promise<Result> }
 const ACTION_TOOLS = new Set(["click", "double_click", "right_click", "type_text", "set_value", "press_key", "hotkey", "scroll", "drag", "move_cursor", "launch_app", "bring_to_front"]);
 
 export interface ComputerPipelineFlags {
+  guidance?: boolean;
   stale?: boolean;
   loop?: boolean;
   typing?: boolean;
@@ -64,6 +68,7 @@ function measured(child: ChildCalls, session: ComputerSession): ChildCalls {
 
 export function createComputerPipeline(platform: string, verifyEffects = false, flags: ComputerPipelineFlags = {}): ComputerPipeline {
   const session = createComputerSession();
+  const receipt = createReceiptWriter();
   const windows = platform === "win32";
   const guarding = Boolean(flags.stale || flags.anchor);
   const readBack = verifyEffects || guarding || Boolean(flags.loop);
@@ -160,9 +165,17 @@ export function createComputerPipeline(platform: string, verifyEffects = false, 
   };
 
   const relay = (call: ToolCall, child: ChildCalls): Promise<unknown> | null => {
+    if (flags.guidance && (call.name === "wait_for_window_change" || call.name === "find_window_target")) {
+      const key = windowKey(call.arguments);
+      if (key) {
+        session.staleWindows.add(key);
+        session.lastWindow.delete(key);
+      }
+      return call.name === "wait_for_window_change" ? waitForWindowChange(call, child) : findWindowTarget(call, child);
+    }
     if (recording && call.name === "get_window_state") return observed(call, child);
     const refused = refusal(call, child);
-    if (refused) return refused;
+    if (refused) return flags.evidence ? receipt(call.name, () => refused, () => snapshotCounters(session.counters), true) : refused;
     const acting = ACTION_TOOLS.has(call.name);
     if (counting && acting) {
       session.actions += 1;
@@ -170,6 +183,7 @@ export function createComputerPipeline(platform: string, verifyEffects = false, 
     }
     const counted = measured(child, session);
     const stages = stagesFor(call, counted);
+    if (flags.evidence && acting) return receipt(call.name, () => compose(call, counted, stages), () => snapshotCounters(session.counters));
     return stages.length > 0 || (counting && acting) ? compose(call, counted, stages) : null;
   };
 

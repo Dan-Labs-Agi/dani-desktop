@@ -16,7 +16,7 @@ does not measure a model, so no number from it is a model's success rate.
   field ignored is noticed; instructions on a page reach the agent marked as
   data; a form field can be read but a secret one cannot; a button that never does anything is stopped after two tries.
 - Each of those eight fails when only its own check is taken away
-  (`computeruse/bench/ablation.test.ts`), so it passes for the intended reason.
+  (`computeruse/test/bench/ablation.test.ts`), so it passes for the intended reason.
 - The gate fails a run in which a task meant to need the checks passes without
   them, or ordinary work fails without them, or a task did not run
   (`computeruse/bench/pack.ts`).

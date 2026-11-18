@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localComputerResultLine } from "../guidance.ts";
+import { localComputerResultLine } from "../../guidance.ts";
 
 describe("untrusted screen result", () => {
   it("strips values and forged role tags while retaining element identity", () => {

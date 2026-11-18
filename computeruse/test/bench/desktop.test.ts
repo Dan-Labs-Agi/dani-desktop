@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDesktop, type DesktopSpec } from "./desktop.ts";
+import { createDesktop, type DesktopSpec } from "../../bench/desktop.ts";
 
 const notes: DesktopSpec = {
   windows: [{

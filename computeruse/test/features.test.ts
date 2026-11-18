@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { computerFeatureShape, computerGuardsFrom, verifyComputerEffectsEnabled } from "./features.ts";
-import { guardEnv } from "./guards.ts";
+import { computerFeatureShape, computerGuardsFrom, verifyComputerEffectsEnabled } from "../features.ts";
+import { guardEnv } from "../guards.ts";
 
 const schema = z.object(computerFeatureShape);
 

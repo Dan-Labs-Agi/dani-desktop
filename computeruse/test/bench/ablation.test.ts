@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
-import type { ComputerGuards } from "../guards.ts";
-import { loadPack } from "./pack.ts";
-import { PROFILES, runFixtureTask, type Profile } from "./world.ts";
+import type { ComputerGuards } from "../../guards.ts";
+import { loadPack } from "../../bench/pack.ts";
+import { PROFILES, runFixtureTask, type Profile } from "../../bench/world.ts";
 
-const pack = loadPack(fileURLToPath(new URL(".", import.meta.url)));
+const pack = loadPack(fileURLToPath(new URL("../../bench/", import.meta.url)));
 const task = (id: string) => pack.tasks.find((entry) => entry.task.id === id)!.task;
 
 /** The checked profile with exactly these taken away. */

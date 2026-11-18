@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-const workflow = parse(readFileSync(new URL("../../.github/workflows/computer-bench.yml", import.meta.url), "utf8"));
+const workflow = parse(readFileSync(new URL("../../../.github/workflows/computer-bench.yml", import.meta.url), "utf8"));
 const steps = workflow.jobs["fixture-pack"].steps as Array<{ run?: string; uses?: string; if?: string; with?: Record<string, unknown> }>;
 
 describe("the computer-use benchmark workflow", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computerTaskSchema } from "./task.ts";
+import { computerTaskSchema } from "../../bench/task.ts";
 
 const valid = {
   id: "create-note", tier: 1, world: "container", setup: [{ kind: "file", path: "notes/input.txt", content: "before" }],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ChildCalls } from "../../server/mcp-bridge.ts";
-import { enablePointer, POINTER_DWELL_MS, POINTER_GLIDE_MS } from "./pointer.ts";
+import type { ChildCalls } from "../../../server/mcp-bridge.ts";
+import { enablePointer, POINTER_DWELL_MS, POINTER_GLIDE_MS } from "../../stages/pointer.ts";
 
 const driver = (answer: (name: string) => Record<string, unknown> | Promise<Record<string, unknown>>) => {
   const calls: Array<[string, Record<string, unknown>]> = [];

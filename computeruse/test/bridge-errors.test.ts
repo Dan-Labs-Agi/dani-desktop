@@ -6,7 +6,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const RELAY = fileURLToPath(new URL("./testing/throwing-relay.ts", import.meta.url));
+const RELAY = fileURLToPath(new URL("../testing/throwing-relay.ts", import.meta.url));
 
 // A disposable MCP child: it answers every tools/call with what it was asked and touches nothing.
 const DRIVER = `

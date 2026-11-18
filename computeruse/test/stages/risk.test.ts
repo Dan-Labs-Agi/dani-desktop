@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ToolCall } from "../../server/mcp-bridge.ts";
-import type { SlimStructured } from "../../server/saved-steps/driver-wire.ts";
-import { createComputerSession, windowKey } from "../session.ts";
-import { finalActionRisk, riskQuery } from "./risk.ts";
+import type { ToolCall } from "../../../server/mcp-bridge.ts";
+import type { SlimStructured } from "../../../server/saved-steps/driver-wire.ts";
+import { createComputerSession, windowKey } from "../../session.ts";
+import { finalActionRisk, riskQuery } from "../../stages/risk.ts";
 
 const WINDOW = { pid: 4, window_id: 9 };
 

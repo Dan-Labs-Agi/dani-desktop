@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ChildCalls } from "../server/mcp-bridge.ts";
-import { createComputerPipeline } from "./pipeline.ts";
-import { localComputerResultLine, COMPUTER_WORK_GUIDANCE } from "./guidance.ts";
-import { gatedLocalComputer } from "./local-computer.ts";
+import type { ChildCalls } from "../../server/mcp-bridge.ts";
+import { createComputerPipeline } from "../pipeline.ts";
+import { localComputerResultLine, COMPUTER_WORK_GUIDANCE } from "../guidance.ts";
+import { gatedLocalComputer } from "../local-computer.ts";
 
 describe("computer pipeline", () => {
   it("reuses the last read-back for the next action on the same window", async () => {
@@ -271,7 +271,7 @@ describe("computer pipeline", () => {
       } };
       const relay = createComputerPipeline("win32", true, { evidence: true });
       const answer = await relay({ name: "click", arguments: { pid: 1, window_id: 2, element_index: 3, delivery_mode: "foreground" } }, child) as { content: Array<{ text: string }> };
-      expect(answer.content).toHaveLength(1);
+      expect(answer.content).toHaveLength(2);
       expect(answer.content[0]!.text).toMatch(/The click was sent/);
       expect(JSON.stringify(answer)).not.toMatch(/could not be read back/);
       expect(relay.counters()).toMatchObject({ actions: 1, unobserved: 1 });

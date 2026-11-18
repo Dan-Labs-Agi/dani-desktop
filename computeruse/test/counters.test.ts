@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyCounters, noteRefusal, noteVerdict, snapshotCounters, summarizeCounters } from "./counters.ts";
+import { emptyCounters, noteRefusal, noteVerdict, snapshotCounters, summarizeCounters } from "../counters.ts";
 
 describe("session counters", () => {
   it("starts empty and counts verdicts and refusals by name", () => {

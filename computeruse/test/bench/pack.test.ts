@@ -3,11 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { emptyCounters } from "../counters.ts";
-import { evaluateGate, loadPack } from "./pack.ts";
-import type { ComputerTaskResult } from "./report.ts";
+import { emptyCounters } from "../../counters.ts";
+import { evaluateGate, loadPack } from "../../bench/pack.ts";
+import type { ComputerTaskResult } from "../../bench/report.ts";
 
-const REAL = fileURLToPath(new URL(".", import.meta.url));
+const REAL = fileURLToPath(new URL("../../bench/", import.meta.url));
 const folders: string[] = [];
 afterEach(() => { for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true }); });
 

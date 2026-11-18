@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { emptyCounters } from "./counters.ts";
-import { COMPUTER_EVIDENCE_PATH, createEvidenceReporter, evidenceUrl, parseEvidence, postEvidence } from "./evidence.ts";
+import { emptyCounters } from "../counters.ts";
+import { COMPUTER_EVIDENCE_PATH, createEvidenceReporter, evidenceUrl, parseEvidence, postEvidence } from "../evidence.ts";
 
 describe("parsing evidence a bridge posted", () => {
   const good = { actions: 3, changed: 2, unchanged: 1, unobserved: 0, refusals: { stale: 1 }, readBacks: 6, addedMs: 420 };
