@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // Nothing here reaches a real browser, the user's data or port 8799.
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +20,7 @@ async function signInFixture() {
   writeFileSync(binaryPath, `#!/bin/sh\nif [ "$1" = session ] && [ "$2" = list ]; then printf '{"success":true,"data":{"sessions":[]}}'; fi\nexit 0\n`, { mode: 0o755 });
   const fixture = await launchVerificationServer({}, undefined, undefined, { binaryPath, executablePath: join(tools, "chrome") }, undefined, { scripted: true });
   const url = fixture.info.url;
+  await disableFixtureChiefs(url);
   const planPath = join(fixture.info.dataDir, "room-plan.json");
   const evidence = () => existsSync(`${planPath}.evidence.jsonl`)
     ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
@@ -88,7 +90,7 @@ it.skipIf(process.platform === "win32")("asks the person to sign in from a real 
   }
 }, 90_000);
 
-it.skipIf(process.platform === "win32")("a reply in the chat answers the sign-in request: the card settles, nothing waits under Needs you, and Done no longer resumes the old turn", async () => {
+it.skipIf(process.platform === "win32")("a reply in the chat settles the sign-in card without completing an unverified browser goal or resuming the old turn twice", async () => {
   const { bot, api, evidence, messages, send, wait, close } = await signInFixture();
   const waitsHere = async () => ((await api("GET", "/api/needs-you")).body.items as any[])
     .filter((item) => item.kind === "question" && item.threadId === bot.threadId);
@@ -106,8 +108,9 @@ it.skipIf(process.platform === "win32")("a reply in the chat answers the sign-in
     const settled = (await messages()).find((message) => message.id === card.id)?.signIn;
     expect(settled).toMatchObject({ answeredInChat: true });
     expect(settled.done).toBeUndefined();
-    expect(await wait()).toBe("settled");
-    expect(await waitsHere()).toEqual([]);
+    expect(await wait()).toBe("needs-user");
+    expect(await waitsHere()).toEqual([expect.objectContaining({ text: expect.stringContaining("goal verification") })]);
+    expect((await waitsHere()).some((item) => item.text.includes("sign in to example.com"))).toBe(false);
 
     expect(await api("POST", `/api/bots/${bot.id}/sign-in-cards/${card.id}/done`, { threadId: bot.threadId }))
       .toMatchObject({ status: 409, body: { error: "this sign-in request was already answered in the chat" } });

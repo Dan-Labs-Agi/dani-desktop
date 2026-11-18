@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // Real server + injected MCP tools; only the provider's planning is scripted.
 // Persisted Full grants below belong exclusively to this stopped fixture.
 import { spawn, type ChildProcess } from "node:child_process";
@@ -13,6 +14,7 @@ import { readHandoffs } from "./testing/handoff-rows.ts";
 it("applies requested Full Access workflows through MCP without duplicate approvals, and the same changes apply in an Ask task with Undo", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, { scripted: true });
   const { url, dataDir, logPath } = fixture.info;
+  await disableFixtureChiefs(url);
   const planPath = join(dataDir, "room-plan.json");
   const plans: Record<string, { turns: any[] }> = {};
   const evidence: unknown[] = [];
@@ -77,7 +79,7 @@ it("applies requested Full Access workflows through MCP without duplicate approv
       if (["SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "TZ"].includes(key.toUpperCase()) && value) env[key.toUpperCase()] = value;
     }
     Object.assign(env, {
-      HOME: dataDir, USERPROFILE: dataDir, OMB_DATA_DIR: dataDir,
+      OMB_TEST_SEALED_PATH: "1", HOME: dataDir, USERPROFILE: dataDir, OMB_DATA_DIR: dataDir,
       APPDATA: join(dataDir, "AppData", "Roaming"), LOCALAPPDATA: join(dataDir, "AppData", "Local"),
       XDG_CONFIG_HOME: join(dataDir, ".config"), XDG_CACHE_HOME: join(dataDir, ".cache"),
       XDG_DATA_HOME: join(dataDir, ".local", "share"), HERMES_HOME: join(dataDir, ".hermes"),

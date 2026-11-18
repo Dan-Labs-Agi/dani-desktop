@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -11,6 +12,7 @@ import { waitForExit } from "./testing/cleanup.ts";
 it("survives a real server crash: queued sends keep receipts, cancellation and uncertain dispatch never replay", async () => {
   const fixture = await launchVerificationServer();
   const { url, dataDir, logPath } = fixture.info;
+  await disableFixtureChiefs(url);
   let restarted: ChildProcess | undefined;
   const evidence: unknown[] = [];
   const api = async (method: string, path: string, body?: unknown, status = 200) => {
