@@ -328,6 +328,8 @@ it("a moved conversation may use the lent Mac and feeds its bot's memory on My C
     const today = (await fx.onCloud("GET", `/api/bots/${pip.id}/memory/file?path=${encodeURIComponent((await logs())[0]!.path)}`)).body.text as string;
     expect(today.trim().length).toBeGreaterThan(0);
 
+    // Memory capture can finish before the native process releases its turn.
+    await expect.poll(() => idle(fx.onCloud), { timeout: 30_000, interval: 100 }).toBe(true);
     // Kai's conversation, there before My Cloud kept its owner's lines as theirs, may use the lent Mac too.
     rmSync(release, { force: true });
     const seenBefore = new Set(readdirSync(join(scratch, "turns")));
