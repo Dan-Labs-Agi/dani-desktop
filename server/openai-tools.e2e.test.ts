@@ -1,3 +1,5 @@
+import { CONTINUE_UNFINISHED_ACTION } from "./drivers/task-continuation.ts";
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -99,6 +101,7 @@ it.each(["openaiCompat", "groq", "meta"] as const)("%s runs structured MCP calls
     throw error;
   });
   const evidence: unknown[] = [{ fixture: fixture.info }];
+  await disableFixtureChiefs(fixture.info.url);
   const control = async (args: string[]) => {
     const result = await runControlOmb([...args, "--url", fixture.info.url]) as any;
     evidence.push({ command: args, result });
@@ -160,7 +163,7 @@ it.each(["openaiCompat", "groq", "meta"] as const)("%s runs structured MCP calls
         expect(requests).toHaveLength(before + (mode === "announced" ? 2 : 1));
         if (mode === "announced") {
           expect(requests[before + 1]!.messages.at(-2)).toEqual({ role: "assistant", content: ANNOUNCEMENT });
-          expect(requests[before + 1]!.messages.at(-1)).toMatchObject({ role: "user", content: expect.stringContaining("called no tool") });
+          expect(requests[before + 1]!.messages.at(-1)).toMatchObject({ role: "user", content: CONTINUE_UNFINISHED_ACTION });
         }
         const state = await api("GET", "/api/bots");
         const current = state.bots.find((item: any) => item.id === bot.id);
@@ -195,7 +198,7 @@ it.each(["openaiCompat", "groq", "meta"] as const)("%s runs structured MCP calls
           expect(messages.messages.some((message: any) => message.text?.includes("The artifact was created."))).toBe(true);
           if (mode === "selected") expect(requests[before]!.tools?.map((tool) => tool.function.name)).toEqual(["selected_write_file"]);
         } else {
-          expect(settled.status).toBe("failed");
+          expect(settled.status).toBe("needs-user");
           expect(result?.content).toMatch(/denied/i);
           expect(existsSync(artifact)).toBe(false);
         }
