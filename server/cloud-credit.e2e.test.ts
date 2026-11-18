@@ -176,7 +176,7 @@ afterAll(async () => {
 });
 
 type Instance = { instanceId: string; readOnly?: boolean; trialCredit?: string; snapshot: { state: string; authenticated?: boolean; reason?: string }; models: { default: string; options: Array<{ id: string }> } };
-type Message = { role: string; kind: string; tool?: { name: string; setup?: boolean; ok?: boolean } };
+type Message = { role: string; kind: string; text?: string; tool?: { name: string; setup?: boolean; ok?: boolean } };
 type Bot = { id: string; name: string; busy?: boolean; modelSelection: { instanceId: string; model: string }; messages: Message[] };
 const SONNET = { instanceId: CLOUD_CREDIT_INSTANCE, model: "claude-sonnet-5" };
 const instances = async () => (await api("GET", "/api/instances?fresh=1")).body.instances as Instance[];
@@ -188,12 +188,14 @@ const moved = () => JSON.parse(readFileSync(join(data, "providers", "trial-credi
 /** One message to `bot`, answered (or failed) and settled. */
 async function turn(text: string, bot?: Bot): Promise<Bot> {
   const target = bot ?? (await bots())[0]!;
-  const before = (await bots()).find((entry) => entry.id === target.id)!.messages.length;
   expect((await api("POST", `/api/bots/${target.id}/messages`, { body: { text } })).status).toBe(202);
   let settled: Bot | undefined;
   await expect.poll(async () => {
     settled = (await bots()).find((entry) => entry.id === target.id);
-    return Boolean(settled && !settled.busy && settled.messages.length > before + 1);
+    // The API keeps only the last 20 messages. A late turn can replace old
+    // messages without growing that window, so wait on this turn's receipt.
+    const sent = settled?.messages.findLastIndex((message) => message.role === "user" && message.text === text) ?? -1;
+    return Boolean(settled && !settled.busy && sent >= 0 && settled.messages.length > sent + 1);
   }, { timeout: 20_000, interval: 150 }).toBe(true);
   return settled!;
 }
