@@ -104,6 +104,9 @@ it("sends events without any stored or current address, polls nothing, and sends
   try {
     const analytics = await import("./analytics");
     await analytics.initAnalytics();
+    // The browser loads the document independently of PostHog's lazy import. Happy DOM's load may precede its listener.
+    document.dispatchEvent(new Event("DOMContentLoaded"));
+    window.dispatchEvent(new Event("load"));
     analytics.track("app_snapshot", { bots: 3 });
     await minutes(11);
 
