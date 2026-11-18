@@ -199,7 +199,7 @@ export interface Coordinator {
   sharedRequest(node: HandoffView): { id: string; botIds: string[] };
   cancelRoom(groupId: string, threadId?: string, reason?: string, status?: "failed" | "cancelled"): void;
   cancelDirect(threadId: string, reason?: string): void;
-  /** Retires only an isolated native provider block before a verified backup resends its request. */
+  /** Retires only an isolated native provider block for a verified backup or a newly admitted turn. */
   retireProviderBlock(id: string): boolean;
   activeDirect(threadId: string): boolean;
   assignerOf(threadId: string): HandoffView | undefined;

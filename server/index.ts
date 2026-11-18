@@ -214,6 +214,7 @@ import {
 } from "./contracts.ts";
 import { RETRY_MAX_ATTEMPTS } from "./drivers/retry.ts";
 import { recoveryCapabilityError, startupBackups } from "./automatic-recovery.ts";
+import { knownProviderPrerequisite, retirePreviousProviderBlock } from "./host/provider-block.ts";
 import { createQuotaSwitchHost } from "./host/quota-switch.ts"; import { quotaSwitchEnabled } from "./quota-switch.ts";
 import { decodeGeneratedImage } from "./generated-image.ts";
 import { createMcpServersHost } from "./host/mcp-servers-host.ts"; import { createLimitTakeover, signedOutStop } from "./host/limit-takeover.ts";
@@ -4019,6 +4020,9 @@ const handoffTicks = createHandoffTicks(), coordinator: Coordinator = createCoor
     park: (node, question, restored) => {
       // Native routine failures already have a deduplicated owner notice from RoutineManager.
       if (!node.parentId && node.outcome && activeRoutineRunForThread(node.threadId)) return;
+      const stop = turnStops.read(node.threadId, directRequestOwners.get(node.threadId)?.turnId ?? undefined);
+      if (!node.parentId && !node.cards?.length && node.outcome === "provider_error" && knownProviderPrerequisite(stop)
+          && (stop?.flags?.limit || stop?.flags?.limitResetsAt || signedOutStop(stop?.stopReason, stop?.error))) return;
       askCards.park(node, question, restored);
     },
     levelOf: (target, source) => delegatedLevel.levelOf(target, source),
@@ -7770,6 +7774,7 @@ async function beginTurn(
   directTurnGenerationByThread.set(threadId, dispatchClaimId);
   let requestMessageId = opts?.cardContinuation ? opts.requestMessageId : userMessage.id;
   const previousRequest = directRequestOwners.get(threadId);
+  if (!opts?.coordination && !opts?.compactOnly && !opts?.cardContinuation) retirePreviousProviderBlock(coordinator, threadId, previousRequest?.generations, turnStops.read(threadId, previousRequest?.turnId ?? undefined));
   // Close the previous request first, or it reads unsettled forever.
   if (previousRequest && previousRequest.messageId !== requestMessageId) {
     settleTrackedRequest(threadId, new Set([userMessage.id, ...(opts?.excludeMessageIds ?? [])])); savedSteps.requestEnded(threadId, previousRequest.generations);

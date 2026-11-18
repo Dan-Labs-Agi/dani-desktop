@@ -120,7 +120,7 @@ it("with no other AI to carry on, the stopped turn's Continue sets up a run that
     const { bot } = await control("new-bot", "--name", "Scout");
     const threadId = bot.activeTaskId;
     await control("send", "--bot", bot.id, "--task", threadId, "--text", "Write the quarterly report");
-    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("failed");
+    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("needs-user");
     const stopped = await messagesOf(api, threadId);
     const failure = stopped.find((message) => message.tool?.name?.startsWith("error:"));
     expect(failure.tool).toMatchObject({ ok: false, limitResetsAt: resetsAt * 1000 });
@@ -247,7 +247,7 @@ it("a turn that works on the engine afterwards ends a refusal's hold long before
     const { bot } = await control("new-bot", "--name", "Scout");
     const threadId = bot.activeTaskId;
     await control("send", "--bot", bot.id, "--task", threadId, "--text", "Write the report");
-    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("failed");
+    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("needs-user");
     expect((await api("GET", "/api/limit-resets")).engines).toContainEqual(expect.objectContaining({ engine: "claude", blocked: true, resetsAt: resetsAt * 1000 }));
 
     lift();
@@ -364,12 +364,12 @@ it.each([
     if (recovering) await api("PUT", "/api/config", { automaticRecovery: { enabled: true, backup: bot.modelSelection } });
     const told = "Verification fixture is signed out on this computer. Sign in again in Settings → AI to keep using it.";
     await control("send", "--bot", bot.id, "--task", threadId, "--text", "Draft the launch plan");
-    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("failed");
+    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe(recovering ? "failed" : "needs-user");
     await control("send", "--bot", bot.id, "--task", threadId, "--text", "Are you there?");
-    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe("failed");
+    expect((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status).toBe(recovering ? "failed" : "needs-user");
     const { task: other } = await api("POST", `/api/bots/${bot.id}/tasks`, { title: "Another thing" });
     await control("send", "--bot", bot.id, "--task", other.threadId, "--text", "And the budget");
-    expect((await control("wait", "--bot", bot.id, "--task", other.threadId, "--timeout", "30")).status).toBe("failed");
+    expect((await control("wait", "--bot", bot.id, "--task", other.threadId, "--timeout", "30")).status).toBe(recovering ? "failed" : "needs-user");
     expect(claudePrompts()).toHaveLength(3);
     const messages = [...await messagesOf(api, threadId), ...await messagesOf(api, other.threadId)];
     expect(messages.filter((message) => message.tool?.ok === false), "each refused turn shows it failed, with the sign-in that fixes it")

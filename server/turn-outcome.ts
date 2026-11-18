@@ -12,6 +12,7 @@ type RuntimeError = RuntimeEvent & { type: "runtime.error" };
 
 export interface TurnStop {
   turnId?: string;
+  stopReason?: string;
   cause?: string;
   error?: string;
   flags?: Pick<RuntimeError, "setup" | "stalled" | "trialCredit" | "limitResetsAt" | "limit" | "recovery"> & { toolError?: true; permissionDenied?: true };
@@ -31,8 +32,10 @@ export class TurnStops {
       this.#byThread.delete(event.threadId);
       return;
     }
-    if (event.type === "turn.completed" && event.stopReason === "cancelled") {
-      this.#turn(event.threadId, event.turnId).cancelled = true;
+    if (event.type === "turn.completed") {
+      const stop = this.#turn(event.threadId, event.turnId);
+      if (!event.ok && event.stopReason) stop.stopReason = event.stopReason;
+      if (event.stopReason === "cancelled") stop.cancelled = true;
       return;
     }
     if (event.type === "turn.work-status") {

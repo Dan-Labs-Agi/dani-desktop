@@ -697,7 +697,7 @@ export class Runtime {
     return true;
   }
 
-  /** Only a host-verified backup may replace an isolated provider block, never a denial or live delegation. */
+  /** The host may replace an isolated provider block for a backup or newly admitted turn, never a denial or live delegation. */
   retireProviderBlock(id: string): boolean {
     const n = this.store.get(id);
     if (!n || n.parentId || n.status !== "needs_input" || n.outcome !== "provider_error" || n.cards?.length

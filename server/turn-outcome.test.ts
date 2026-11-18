@@ -14,6 +14,14 @@ const tool = (name: string, ok: boolean, turnId = "turn-1"): Message =>
   ({ id: `m-${Math.random()}`, role: "bot", kind: "activity", at: 1, turnId, tool: { name, ok, itemId: `i-${Math.random()}` } }) as Message;
 
 describe("TurnStops", () => {
+  it("retains the native sign-out reason before runtime settlement, and clears it on the next turn", () => {
+    const stops = new TurnStops();
+    stops.note(event({ type: "runtime.error", turnId: "one", message: "Not logged in", setup: true }));
+    stops.note(event({ type: "turn.completed", turnId: "one", ok: false, stopReason: "auth_required" }));
+    expect(stops.read("t1", "one")).toMatchObject({ stopReason: "auth_required", flags: { setup: true } });
+    stops.note(event({ type: "turn.started", turnId: "two" }));
+    expect(stops.read("t1", "two")).toBeUndefined();
+  });
   it("retains only structured native remaining-work status for the current turn", () => {
     const stops = new TurnStops();
     stops.note(event({ type: "turn.started", turnId: "turn-1" }));
