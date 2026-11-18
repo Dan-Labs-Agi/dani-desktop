@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { request } from "node:http";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -19,6 +20,7 @@ async function withFixture(mode: string, run: (helpers: {
   evidence: unknown[];
 }) => Promise<void>) {
   const fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_MODE: mode });
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [{ fixture: fixture.info }];
   try {
     await run({

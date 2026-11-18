@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +9,7 @@ import { removeTempDir } from "./testing/cleanup.ts";
 it("runs every thread of a bot with the bot's settings, and moves its threads to the working folder it is given", async () => {
   // FAKE_CLAUDE_HOOKS: the fake engine runs the Stop hooks of its --settings file, as Claude Code does.
   const fixture = await launchVerificationServer({ FAKE_CLAUDE_HOOKS: "1" });
+  await disableFixtureChiefs(fixture.info.url);
   const project = realpathSync(mkdtempSync(join(tmpdir(), "omb-thread-settings-project-")));
   const chosen = realpathSync(mkdtempSync(join(tmpdir(), "omb-thread-settings-chosen-")));
   const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;

@@ -1,3 +1,4 @@
+import { HIGHLEVEL_TOOLS } from "./highlevel/tools.ts";
 // Every server uses a sealed temporary home and only explicitly configured fixture drivers.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -12400,7 +12401,7 @@ describe("harness HTTP API", () => {
           { name: "GMAIL_SEND_EMAIL", description: "Send an email" },
         ],
         slack: [{ name: "SLACK_POST_MESSAGE", description: "a".repeat(240) }],
-        // No HighLevel relay is configured in this fixture.
+        highlevel: HIGHLEVEL_TOOLS.map(({ name, description }) => ({ name, description: description.slice(0, 240) })),
       },
     });
   });

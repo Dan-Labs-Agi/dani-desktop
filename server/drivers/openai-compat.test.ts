@@ -1,3 +1,4 @@
+import { CONTINUE_UNFINISHED_ACTION } from "./task-continuation.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recordEvents } from "../testing/events.ts";
 import { buildTurnContext, replaysNatively } from "../turn-context.ts";
@@ -62,7 +63,7 @@ describe("OpenAICompatDriver", () => {
       if (count === 2) {
         expect(bodies[1]!.messages.slice(0, -2)).toEqual(bodies[0]!.messages);
         expect(bodies[1]!.messages.at(-2)).toEqual({ role: "assistant", content: text });
-        expect(bodies[1]!.messages.at(-1)).toMatchObject({ role: "user", content: expect.stringContaining("called no tool") });
+        expect(bodies[1]!.messages.at(-1)).toMatchObject({ role: "user", content: CONTINUE_UNFINISHED_ACTION });
       }
     } finally {
       recorder.stop();

@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -8,6 +9,7 @@ import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.
 
 it("keeps independent fixture chats and health requests usable during queued history scans", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [{ fixture: fixture.info }];
   const control = async (args: string[]) => {
     const result = await runControlOmb([...args, "--url", fixture.info.url]);

@@ -1,3 +1,4 @@
+import { CONTINUE_UNFINISHED_ACTION } from "./task-continuation.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ASK_USER_TOOL_DEFINITION } from "../../shared/ask-question.ts";
 import { recordEvents } from "../testing/events.ts";
@@ -98,7 +99,7 @@ describe("Cerebras provider", () => {
     await instance.adapter.sendTurn({ threadId: "nudge", text: "open the top story on HN" });
     expect(await recorder.until(event => event.type === "turn.completed")).toMatchObject({ ok: requests !== 2 });
     expect(bodies).toHaveLength(requests);
-    if (requests === 2) expect(bodies[1]!.messages.at(-1)).toMatchObject({ role: "user", content: expect.stringContaining("called no tool") });
+    if (requests === 2) expect(bodies[1]!.messages.at(-1)).toMatchObject({ role: "user", content: CONTINUE_UNFINISHED_ACTION });
     recorder.stop(); await instance.dispose();
   });
 

@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
@@ -33,6 +34,7 @@ it("a key the provider rejects stops showing Ready until it changes or works aga
   const address = provider.address();
   if (!address || typeof address === "string") throw new Error("fixture provider has no port");
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, ["openaiCompat"]);
+  await disableFixtureChiefs(fixture.info.url);
   const api = fixtureApi(fixture.info.url);
   const sse = await openSse(`${fixture.info.url}/api/events`);
   const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;

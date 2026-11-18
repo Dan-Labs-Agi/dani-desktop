@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -5,6 +6,7 @@ import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.
 
 it("keeps ordinary work out of setup and carries explicit bot defaults and file locations into rooms", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const evidence: unknown[] = [{ fixture: fixture.info }];
   const control = async (args: string[]) => {
     const result = await runControlOmb([...args, "--url", fixture.info.url]) as any;

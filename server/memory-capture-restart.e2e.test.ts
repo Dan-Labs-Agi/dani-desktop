@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // POSIX only: a Windows SIGTERM ends the process without its shutdown hooks.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -20,6 +21,7 @@ it.skipIf(process.platform === "win32")("captures a turn that was still waiting 
   }));
   const parentEnv = { ...process.env, FAKE_CLAUDE_TEXT_ROUTES: routes };
   const fixture = await launchVerificationServer(parentEnv);
+  await disableFixtureChiefs(fixture.info.url);
   const { url, dataDir } = fixture.info;
   let restarted: ChildProcess | undefined;
   const api = async <T = any>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {

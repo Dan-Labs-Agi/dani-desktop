@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // The model steps are scripted with FAKE_CLAUDE_TEXT_ROUTES, so this proves the plumbing, not a model's judgement.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -23,6 +24,7 @@ it("recalls, captures, suggests, forgets and tidies a bot's memory", async () =>
     [TIDY_MARKER]: '{"pairs": []}',
   }));
   const fixture = await launchVerificationServer({ ...process.env, FAKE_CLAUDE_TEXT_ROUTES: routes, FAKE_CLAUDE_PROMPTS: prompts });
+  await disableFixtureChiefs(fixture.info.url);
   const control = (...args: string[]) => runControlOmb([...args, "--url", fixture.info.url]);
   const api = async <T = any>(path: string, method = "GET", body?: unknown, status = 200): Promise<T> => {
     const response = await fetch(fixture.info.url + path, {

@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { createServer } from "node:http";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -53,6 +54,7 @@ it("applies a level picked while the bot is working to its next tool call, and l
   const address = upstream.address();
   if (!address || typeof address === "string") throw new Error("fixture provider address missing");
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, undefined, undefined, ["openaiCompat"]);
+  await disableFixtureChiefs(fixture.info.url);
   const { url, dataDir } = fixture.info;
   const control = (args: string[]) => runControlOmb([...args, "--url", url]) as Promise<any>;
   const api = async (method: string, path: string, body?: unknown) => {

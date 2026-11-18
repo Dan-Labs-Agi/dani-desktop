@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -23,6 +24,7 @@ function dailyLogs(root: string): Array<{ path: string; text: string }> {
 
 it("carries a bot's recent 1:1 work into a room turn, tells the room, logs the turn, and carries the room back", async () => {
   const fixture = await launchVerificationServer();
+  await disableFixtureChiefs(fixture.info.url);
   const env = { DANIBOT_URL: fixture.info.url };
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(`${fixture.info.url}${path}`, {

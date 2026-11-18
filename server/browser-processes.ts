@@ -39,6 +39,13 @@ function execText(file: string, args: string[]): Promise<string | null> {
 }
 
 export function processAlive(pid: number): boolean {
+  // A zombie retains its pid until reaped, but cannot own a running browser.
+  if (process.platform === "linux") {
+    try {
+      const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+      if (stat.slice(stat.lastIndexOf(")") + 2).startsWith("Z ")) return false;
+    } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; }
+  }
   try {
     process.kill(pid, 0);
     return true;

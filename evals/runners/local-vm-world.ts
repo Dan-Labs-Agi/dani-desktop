@@ -1,3 +1,5 @@
+import { fixtureProviderShadows } from "../../server/testing/fixture-providers.ts";
+import { disableFixtureChiefs } from "../../server/testing/fixture-chief.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -38,7 +40,7 @@ export class LocalVmWorld extends BaseWorld {
     mkdirSync(data, { recursive: true });
     this.vmState({});
     writeFileSync(join(data, "config.json"), JSON.stringify({
-      instances: {
+      instances: { ...fixtureProviderShadows(),
         claude: {
           driver: "claudeAgent",
           config: { cli: join(ROOT, "server", "testing", "fake-claude-cli.ts") },
@@ -49,6 +51,7 @@ export class LocalVmWorld extends BaseWorld {
     const port = await freePortBlock([0, 1]);
     const hooks = pathToFileURL(join(ROOT, "server", "testing", "group-local-vm-hooks.mjs")).href;
     const env: NodeJS.ProcessEnv = {
+      OMB_TEST_SEALED_PATH: "1",
       PATH: dirname(process.execPath),
       HOME: this.fixtureHome,
       USERPROFILE: this.fixtureHome,
@@ -92,6 +95,7 @@ export class LocalVmWorld extends BaseWorld {
     // eval-gates lives under the server's OMB_DATA_DIR so installSkill's
     // <dataRoot>/skills target is the directory index.ts hot-loads user
     // skills from; anywhere else and installed skills never reach the prompt.
+    await disableFixtureChiefs(base);
     await this.initBase(base, this.planPath + ".evidence.jsonl", join(data, "eval-gates"));
     for (const bot of scenario.bots) {
       const created = await this.api.post("/api/bots", { name: bot.name });
