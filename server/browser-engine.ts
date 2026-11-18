@@ -1,3 +1,4 @@
+import { resolveCliSpawn } from "./env-path.ts";
 // The bots' browser engine, agent-browser. Fail closed with a reason a person can act on, never a silently browserless bot.
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -86,7 +87,8 @@ function runBrowserCommand(binaryPath: string, env: NodeJS.ProcessEnv, args: str
     let output = "";
     const finish = (ok: boolean) => { if (!settled) { settled = true; done({ ok, output }); } };
     let child: ReturnType<typeof spawn>;
-    try { child = spawnBotWork(() => spawn(binaryPath, args, { env, stdio: capture ? ["ignore", "pipe", "ignore"] : "ignore", windowsHide: true })); }
+    const command = resolveCliSpawn(binaryPath, args, env);
+    try { child = spawnBotWork(() => spawn(command.command, command.args, { env, stdio: capture ? ["ignore", "pipe", "ignore"] : "ignore", windowsHide: true })); }
     catch { return finish(false); }
     let exited = false;
     let killTimer: NodeJS.Timeout | undefined;
@@ -324,7 +326,8 @@ export type BrowserEngineStatus =
 export type AgentBrowserVersionRunner = (binaryPath: string) => Promise<string>;
 
 const runVersion: AgentBrowserVersionRunner = (binaryPath) => new Promise((resolve, reject) => {
-  execFile(binaryPath, ["--version"], { encoding: "utf8", timeout: 1_500, windowsHide: true }, (error, stdout) => {
+  const command = resolveCliSpawn(binaryPath, ["--version"]);
+  execFile(command.command, command.args, { encoding: "utf8", timeout: 1_500, windowsHide: true }, (error, stdout) => {
     if (error) reject(error);
     else resolve(String(stdout));
   });
@@ -509,7 +512,8 @@ export function ensureChrome(binaryPath: string, options: { withDeps?: boolean; 
   }
   const args = ["install", ...(options.withDeps ? ["--with-deps"] : [])];
   return new Promise((done, fail) => {
-    const child = spawnBotWork(() => spawn(binaryPath, args, { env: options.env ?? process.env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true }));
+    const command = resolveCliSpawn(binaryPath, args, options.env);
+    const child = spawnBotWork(() => spawn(command.command, command.args, { env: options.env ?? process.env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true }));
     let output = "";
     const record = (chunk: Buffer) => {
       output += String(chunk);
@@ -677,7 +681,8 @@ export function setBrowserViewport(binaryPath: string, env: NodeJS.ProcessEnv, s
   if (!ownsBrowserViewport(env)) return Promise.resolve(true);
   return new Promise((settle) => {
     let child: ReturnType<typeof spawn>;
-    try { child = spawnBotWork(() => spawn(binaryPath, [...viewportArgs(size), "--json", "--no-webmcp"], { env: browserRuntimeEnv(env), stdio: ["ignore", "pipe", "ignore"], windowsHide: true })); }
+    const command = resolveCliSpawn(binaryPath, [...viewportArgs(size), "--json", "--no-webmcp"], env);
+    try { child = spawnBotWork(() => spawn(command.command, command.args, { env: browserRuntimeEnv(env), stdio: ["ignore", "pipe", "ignore"], windowsHide: true })); }
     catch { settle(false); return; }
     let output = "";
     let settled = false;

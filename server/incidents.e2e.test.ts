@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -12,6 +13,8 @@ import { openSse } from "./testing/sse.ts";
 async function launch(boat?: string, enterprise?: { dir: string; licenseKey: string }) {
   const fixture = await launchVerificationServer(process.env, undefined, undefined, undefined, enterprise, undefined, [], boat);
   const { url, dataDir } = fixture.info;
+  // Each case installs its own scripted Chief; the seeded starter is unrelated.
+  await disableFixtureChiefs(url);
   const api = async (method: string, path: string, body?: unknown, token?: string, expectedStatus = 200) => {
     const response = await fetch(url + path, {
       method,

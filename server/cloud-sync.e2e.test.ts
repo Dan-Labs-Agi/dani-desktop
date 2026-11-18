@@ -100,6 +100,9 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   ownerToken = await ownerPairing();
+  for (const bot of (await api("GET", "/api/bots?messages=0")).body.bots) {
+    if (bot.chiefOfStaff) expect((await api("PATCH", `/api/bots/${bot.id}`, { body: { chiefOfStaff: false } })).status).toBe(200);
+  }
 }, 30_000);
 
 afterAll(async () => {

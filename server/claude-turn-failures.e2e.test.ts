@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // The fake CLI replays the frames Claude Code 2.1.295 really sent (Oct 8-10): a weekly limit reported as "update required"
 // then "stop_sequence", and a session the CLI lost after a long idle ending the turn empty.
 import { spawn } from "node:child_process";
@@ -22,6 +23,7 @@ const LIMIT_WITH_RESET = /This Claude account has reached its weekly limit, whic
 async function launch() {
   const fixture = await launchVerificationServer();
   const { url, dataDir } = fixture.info;
+  await disableFixtureChiefs(url);
   const api = async (method: string, path: string, body?: unknown) => {
     const response = await fetch(url + path, {
       method,

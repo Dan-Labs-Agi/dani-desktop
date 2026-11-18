@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Turns are held open by a gated fake CLI so the slot arithmetic is observable rather than raced.
 import { spawn, type ChildProcess } from "node:child_process";
@@ -230,6 +231,7 @@ beforeAll(async () => {
     if (Date.now() >= deadline) throw new Error(`server never became healthy: ${stderr}`);
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+  await disableFixtureChiefs(base);
 }, 45_000);
 
 afterAll(async () => {
@@ -604,6 +606,10 @@ describe("a Chief of Staff tidying its team (MOCA-202)", () => {
       expect(rioRows.map((row) => row.threadId)).not.toContain(child.threadId);
       expect((await close(child.threadId, asRio)).status).toBe(403);
 
+      // The synthetic Chief's background review is unrelated to this thread-visibility check.
+      for (const task of (await botState(chief.id)).tasks.filter((task: any) => task.busy)) {
+        expect((await api("POST", `/api/bots/${chief.id}/interrupt`, { threadId: task.threadId })).status).toBe(200);
+      }
       const asChief = await heldTurn(chief, "Tidy the team's finished threads.");
       const rows = (await api("GET", "/api/internal/threads", undefined, asChief)).body.threads as any[];
       expect(rows.find((row) => row.threadId === child.threadId))
@@ -637,6 +643,9 @@ describe("a Chief of Staff tidying its team (MOCA-202)", () => {
       await expect.poll(() => handoffs().find(node => node.id === child.id)?.status, { timeout: 15_000 })
         .not.toMatch(/^(queued|running)$/);
       await expect.poll(async () => (await taskOf(qa.id, child.threadId))?.busy, { timeout: 15_000 }).toBe(false);
+      for (const task of (await botState(chief.id)).tasks.filter((task: any) => task.busy)) {
+        expect((await api("POST", `/api/bots/${chief.id}/interrupt`, { threadId: task.threadId })).status).toBe(200);
+      }
       const asChief = await heldTurn(chief, "Tidy only my reachable team's work.");
       const rows = (await api("GET", "/api/internal/threads", undefined, asChief)).body.threads as any[];
       expect(rows.map(row => row.threadId)).not.toContain(child.threadId);
