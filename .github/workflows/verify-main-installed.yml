@@ -25,6 +25,9 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y at-spi2-core dbus-x11 libxi6 libxkbcommon0 xvfb
       - name: Verify exact DEB upgrade
         run: |
+          test ! -L /opt
+          test "$(stat -c '%U:%G' /opt)" = root:root
+          sudo chmod 0755 /opt
           sha256sum release/*.deb
           sudo --preserve-env=CI,RUNNER_TEMP node scripts/smoke-deb-upgrade.mjs release/DaniBot-0.1.141-amd64.deb
       - run: npm install --prefix "$RUNNER_TEMP/smoke-tools" --no-audit --no-fund playwright-core@1.56.1
