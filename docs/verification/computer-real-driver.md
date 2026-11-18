@@ -94,6 +94,19 @@ verdict is still counted.
   closing `read_window`.
 - Not measured: whether a batch saves time. Nothing here times a model's round trips.
 
+## Guided walkthrough
+
+`--phase walkthrough` runs `start_walkthrough` on the fixture window with guidance on, and a second driver session stands in for the person, pressing Mark through UIA Invoke.
+
+- Two steps, each checked by what the window shows afterwards ("Marked" is there; "Mark" is there). Waiting with nothing done answered
+  "waiting". After the person's first press the step was checked and the second shown; after the second, "complete".
+- A step whose check cannot pass ("Never shown" is there): the person pressed Mark, the window changed, and the walkthrough stayed on the step
+  as `needs_review` with the check's own reason, then `cancel_walkthrough` stopped it. A window change alone moved nothing.
+- **Found by this run:** the first read right after the person's press can come back empty, and the watcher took one empty read for a window
+  that was gone ("unavailable"). It now rides out three in a row. A plain `get_window_state` a moment later always answered.
+- Not run: a field's value as the check on this driver (the fixture's text fields were not part of the script), and the visible pointer at a
+  step's control: `move_cursor` with `scope: "window"` moves only the overlay, but what coordinates it takes was not checked.
+
 ## Limits
 
 - One run, one machine, one driver version, one small window. A large window will cost more per read; a read is cut

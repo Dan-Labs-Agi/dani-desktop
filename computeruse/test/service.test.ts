@@ -220,6 +220,43 @@ describe("the computer service with its checks on", () => {
     }
   }, 30_000);
 
+  it("guides a person through steps over the real bridge: waits, sees each change, checks it, moves on, and can be stopped", async () => {
+    const run = await session({ guidance: true }, false);
+    try {
+      const tools = (await run.request("tools/list", {})).tools.map((tool: { name: string }) => tool.name);
+      expect(tools).toEqual(expect.arrayContaining(["start_walkthrough", "walkthrough_next", "walkthrough_confirm", "cancel_walkthrough"]));
+      const started = await run.call("start_walkthrough", { ...window, steps: [
+        { instruction: "Press Save", expect: { title_includes: "Revision 1" } },
+        { instruction: "Press Send", expect: { title_includes: "Revision 2" } },
+        { instruction: "Look at it" },
+      ] });
+      expect(started.structuredContent).toMatchObject({ status: "step", index: 0, total: 3 });
+      expect((await run.call("walkthrough_next", { wait_ms: 500 })).structuredContent).toMatchObject({ status: "waiting", index: 0 });
+      await run.call("schedule_change");
+      const first = await run.call("walkthrough_next", { wait_ms: 5000 });
+      expect(first.structuredContent).toMatchObject({ status: "step", index: 1, verified_step: 0 });
+      await run.call("schedule_change");
+      const second = await run.call("walkthrough_next", { wait_ms: 5000 });
+      expect(second.structuredContent).toMatchObject({ status: "step", index: 2, verified_step: 1 });
+      expect(second.content[0].text).toContain("no check");
+      const stopped = await run.call("cancel_walkthrough");
+      expect(stopped.structuredContent).toMatchObject({ status: "cancelled", index: 2 });
+      expect((await run.call("walkthrough_next")).structuredContent).toMatchObject({ status: "cancelled" });
+    } finally {
+      await run.close();
+    }
+  }, 60_000);
+
+  it("offers no guided-walkthrough tools without the guidance switch, and passes a call to one through to the driver", async () => {
+    const run = await session({}, false);
+    try {
+      expect((await run.request("tools/list", {})).tools.map((tool: { name: string }) => tool.name)).not.toContain("start_walkthrough");
+      expect((await run.call("walkthrough_next")).content[0].text).toBe("done:walkthrough_next");
+    } finally {
+      await run.close();
+    }
+  }, 30_000);
+
   it("offers read_window only when asked, and answers it as text alone while the driver and the journal see get_window_state", async () => {
     const plain = await session({}, false);
     try {

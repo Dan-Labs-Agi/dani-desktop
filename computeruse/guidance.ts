@@ -7,6 +7,7 @@ import { BATCH_TOOL } from "./batch-tool.ts";
 import { READ_WINDOW_TOOL } from "./read-window-tool.ts";
 import { wrapWindowResult } from "./stages/untrusted.ts";
 import { WALKTHROUGH_TOOL } from "./walkthrough-tool.ts";
+import { WALKTHROUGH_RUN_TOOLS } from "./walkthrough-run.ts";
 import { WALKTHROUGH_TARGET_TOOL } from "./walkthrough-target.ts";
 
 type JsonObject = Record<string, unknown>;
@@ -58,7 +59,7 @@ export function localComputerResultLine(line: string, wrapScreen = false, addGui
       return { ...tool, description: `${tool.description}\n\n${COMPUTER_WORK_GUIDANCE}` };
     });
     const offer = (extra: { name: string }) => { if (!tools.some((tool) => isObject(tool) && tool.name === extra.name)) tools.push(extra); };
-    if (addGuidance) { offer(WALKTHROUGH_TOOL); offer(WALKTHROUGH_TARGET_TOOL); }
+    if (addGuidance) { offer(WALKTHROUGH_TOOL); offer(WALKTHROUGH_TARGET_TOOL); WALKTHROUGH_RUN_TOOLS.forEach(offer); }
     if (offerReadWindow) offer(READ_WINDOW_TOOL);
     if (offerBatch) offer(BATCH_TOOL);
     return JSON.stringify({ ...frame, result: { ...frame.result, tools } });

@@ -1,7 +1,7 @@
 // Runs the real Windows cua-driver, through the real computer service with the checks on, against a disposable window this
 // script opens itself, and records what the driver actually answered. It acts only on a window owned by that window's own
 // process, uses background delivery so the person's mouse and keyboard are not taken over, and stops everything it started.
-//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|foreground|readwindow|batch|all] [--out FOLDER]
+//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|foreground|readwindow|batch|walkthrough|all] [--out FOLDER]
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -213,6 +213,39 @@ async function batchPhase() {
   }
 }
 
+async function walkthroughPhase() {
+  const open = () => ({ held: false, helpOpen: false });
+  const guided = await openSession("walkthrough", false, CHECKED, open);
+  const person = await openSession("walkthrough-person", false, {}, open);
+  try {
+    const target = await findWindow(guided);
+    const markOf = (state: Record<string, any>) => (state.structuredContent?.elements ?? []).find((element: any) => String(labelOf(element) ?? "").startsWith("Mark"));
+    const personPresses = async (why: string) => {
+      const state = await person.call("get_window_state", { ...target, include_screenshot: false }, "the person looks at the window");
+      await person.call("click", { ...target, element_token: markOf(state)?.element_token }, why);
+    };
+    const brief = (result: Record<string, any>) => ({ status: result.structuredContent?.status, index: result.structuredContent?.index, verified: result.structuredContent?.verified_step, reason: result.structuredContent?.reason, text: said(result, 420) });
+    const steps = [
+      { instruction: "Press Mark", target: { label: "Mark" }, expect: { present: { label: "Marked" } } },
+      { instruction: "Press it again to put it back", target: { label: "Marked" }, expect: { present: { label: "Mark", role: "Button" } } },
+    ];
+    note("walkthrough started", brief(await guided.call("start_walkthrough", { ...target, steps }, "start a guided walkthrough")));
+    note("nothing done yet", brief(await guided.call("walkthrough_next", { wait_ms: 1500 }, "wait, the person has done nothing")));
+    await personPresses("the person presses Mark (step 1)");
+    note("after the person's first step", brief(await guided.call("walkthrough_next", { wait_ms: 5000 }, "wait for step 1")));
+    await personPresses("the person presses Mark again (step 2)");
+    note("after the person's second step", brief(await guided.call("walkthrough_next", { wait_ms: 5000 }, "wait for step 2")));
+    note("a walkthrough whose check cannot pass", brief(await guided.call("start_walkthrough", { ...target, steps: [{ instruction: "Press Mark", expect: { present: { label: "Never shown" } } }] }, "start a walkthrough with a check that will fail")));
+    await personPresses("the person presses Mark (the window changes, the check cannot pass)");
+    note("the window changed, the check failed", brief(await guided.call("walkthrough_next", { wait_ms: 5000 }, "wait, then check")));
+    note("cancelled", brief(await guided.call("cancel_walkthrough", {}, "cancel")));
+    note("Mark's state at the end", String(labelOf(markOf(await person.call("get_window_state", { ...target, include_screenshot: false }, "the person looks again"))) ?? "?"));
+  } finally {
+    await person.close();
+    await guided.close();
+  }
+}
+
 const tokenOf = (state: Record<string, any>, name: string): string | undefined => elementNamed(state, name)?.element_token;
 const said = (result: Record<string, any>, length = 450) => clip((result.content ?? []).map((part: any) => part.text).join(" | "), length);
 
@@ -333,6 +366,7 @@ try {
   if (phase === "foreground") await foregroundPhase();
   if (phase === "readwindow") await readWindowPhase();
   if (phase === "batch") await batchPhase();
+  if (phase === "walkthrough") await walkthroughPhase();
 } finally {
   if (fixture && fixture.exitCode === null) spawnSync("taskkill", ["/pid", String(fixture.pid), "/t", "/f"], { stdio: "ignore" });
   if (!daemonWasRunning && daemonRunning()) {

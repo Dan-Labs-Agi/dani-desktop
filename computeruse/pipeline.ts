@@ -12,6 +12,7 @@ import { verifiedScroll } from "./stages/scroll.ts";
 import { staleRefusal } from "./stages/stale.ts";
 import { verifiedTyping } from "./stages/typing.ts";
 import { CLICK_TOOLS, isUnconfirmedClick, unconfirmedClickResult } from "./unconfirmed-click.ts";
+import { isWalkthroughRunTool, walkthroughCall } from "./walkthrough-run.ts";
 import { waitForWindowChange } from "./walkthrough-tool.ts";
 import { findWindowTarget } from "./walkthrough-target.ts";
 import { createReceiptWriter } from "./action-receipt.ts";
@@ -173,6 +174,7 @@ export function createComputerPipeline(platform: string, verifyEffects = false, 
       }
       return call.name === "wait_for_window_change" ? waitForWindowChange(call, child) : findWindowTarget(call, child);
     }
+    if (flags.guidance && isWalkthroughRunTool(call.name)) return walkthroughCall(call, child, session);
     if (recording && call.name === "get_window_state") return observed(call, child);
     const refused = refusal(call, child);
     if (refused) return flags.evidence ? receipt(call.name, () => refused, () => snapshotCounters(session.counters), true) : refused;
