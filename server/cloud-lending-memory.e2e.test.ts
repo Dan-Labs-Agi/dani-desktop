@@ -231,6 +231,11 @@ await import(${JSON.stringify(fake)});
   };
   await boot();
   owner = await adminPairing();
+  // These engines script lending and memory, not a second bot's Chief verification loop.
+  const seeded = (await api("GET", "/api/bots", { token: owner })).body.bots as Array<{ id: string; chiefOfStaff?: boolean }>;
+  for (const bot of seeded) if (bot.chiefOfStaff) {
+    expect((await api("PATCH", `/api/bots/${bot.id}`, { token: owner, body: { chiefOfStaff: false } })).status).toBe(200);
+  }
   const folderPath = realpathSync(mkdtempSync(join(tmpdir(), "omb-cloud-lent-memory-")));
   writeFileSync(join(folderPath, "plan.md"), "from the Mac");
   const env = { id: "my-cloud", name: "My Cloud", origin: base };
