@@ -185,7 +185,12 @@ LABEL ${MANAGED_LABEL}="1" \\
 }
 
 async function sh(cmd: string, args: string[], timeout = 8000): Promise<{ stdout: string }> {
-  const resolved = resolveCliSpawn(cmd, args);
+  // A sealed fixture or a GUI launch can omit System32 from PATH. Runtime discovery
+  // still needs Windows' own locator, not a shell or a similarly named PATH shim.
+  const executable = cmd === "where.exe" && process.platform === "win32" && (process.env.SystemRoot || process.env.WINDIR)
+    ? join(process.env.SystemRoot || process.env.WINDIR!, "System32", "where.exe")
+    : cmd;
+  const resolved = resolveCliSpawn(executable, args);
   const { stdout } = await run(resolved.command, resolved.args, {
     timeout,
     encoding: "utf8",

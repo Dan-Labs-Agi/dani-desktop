@@ -6974,7 +6974,13 @@ describe("harness HTTP API", () => {
         requestKey: (await raceCard(supersededRequest.messageId)).secret.requestKey,
       }, "sk-test-superseded");
       const supersededProvide = provide(raceBot.id, supersededRequest.messageId, supersededEnvelope);
-      await expect.poll(() => readdirSync(isolatedGate).filter((name) => name.endsWith(".started")).length).toBe(1);
+      let supersededEarlyStatus: number | undefined;
+      void supersededProvide.then(response => { supersededEarlyStatus = response.status; });
+      // Surface an HTTP failure instead of hiding it behind the private-save barrier.
+      await expect.poll(() => ({
+        started: readdirSync(isolatedGate).filter((name) => name.endsWith(".started")).length,
+        earlyStatus: supersededEarlyStatus,
+      })).toEqual({ started: 1, earlyStatus: undefined });
       const freshRequest = await requestCredential(raceBot.id, raceThread);
       writeFileSync(releaseFile, "release");
       const rejected = await supersededProvide;

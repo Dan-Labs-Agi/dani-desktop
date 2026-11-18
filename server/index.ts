@@ -3403,6 +3403,10 @@ function roomTurnApprovalMode(bot: BotRecord, threadId: string, orchestration?: 
 }
 
 function handleDesktopTrustedApprovalMessage(raw: unknown): boolean {
+  // Other private bootstrap messages arrive before the approval host's wire
+  // helpers are initialized. Do not read those dependencies for unrelated types.
+  const type = (raw as { type?: unknown } | null)?.type;
+  if (typeof type !== "string" || !["set", "commit", "confirm", "activate", "finalize"].some(step => type === `approval-trusted-mode-${step}`)) return false;
   return createDesktopTrustedApprovalHandler({
     store, registry, supportsApprovalMode, postDesktopPrivateMessage, wireBot, wireTrustedApprovalBot,
     stopBotForEmergencyApprovalDowngrade, checkedTaskModelSwitch, hostedModels, broadcast,
