@@ -1,7 +1,7 @@
 // Runs the real Windows cua-driver, through the real computer service with the checks on, against a disposable window this
 // script opens itself, and records what the driver actually answered. It acts only on a window owned by that window's own
 // process, uses background delivery so the person's mouse and keyboard are not taken over, and stops everything it started.
-//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|foreground|all] [--out FOLDER]
+//   node --experimental-strip-types computeruse/bench/real/windows-baseline.ts [--phase read|checked|stale|foreground|readwindow|all] [--out FOLDER]
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -163,6 +163,26 @@ async function readPhase() {
   }
 }
 
+async function readWindowPhase() {
+  const session = await openSession("readwindow", false, { readWindow: true }, () => ({ held: false, helpOpen: false }));
+  try {
+    const target = await findWindow(session);
+    const ordinary = await session.call("get_window_state", target, "read the fixture window the ordinary way, screenshot and all");
+    const plain = await session.call("read_window", target, "read_window on the fixture window");
+    const body = (plain.content ?? []).map((part: any) => part.text ?? "").join("\n");
+    const queried = await session.call("read_window", { ...target, query: "Body" }, "read_window with a query");
+    note("read_window answer shape", { isError: plain.isError === true, partTypes: (plain.content ?? []).map((part: any) => part.type), hasStructuredContent: plain.structuredContent !== undefined });
+    note("size of the answer, in characters of JSON", { readWindow: JSON.stringify(plain).length, ordinaryRead: JSON.stringify(ordinary).length, withQuery: JSON.stringify(queried).length });
+    note("the ordinary read's parts", (ordinary.content ?? []).map((part: any) => part.type));
+    const named = elementNamed(ordinary, "Body");
+    note("read_window names the Body field with the token to act on it", { named: body.includes("Body"), token: named?.element_token ? body.includes(String(named.element_token)) : "no token in the ordinary read" });
+    note("read_window text", body.length > 700 ? body.slice(0, 700) + "…" : body);
+    note("read_window with a query keeps the matching row", (queried.content ?? []).map((part: any) => part.text ?? "").join("\n").includes("Body"));
+  } finally {
+    await session.close();
+  }
+}
+
 const tokenOf = (state: Record<string, any>, name: string): string | undefined => elementNamed(state, name)?.element_token;
 const said = (result: Record<string, any>, length = 450) => clip((result.content ?? []).map((part: any) => part.text).join(" | "), length);
 
@@ -281,6 +301,7 @@ try {
   if (phase === "checked" || phase === "all") await checkedPhase();
   if (phase === "stale" || phase === "all") await stalePhase();
   if (phase === "foreground") await foregroundPhase();
+  if (phase === "readwindow") await readWindowPhase();
 } finally {
   if (fixture && fixture.exitCode === null) spawnSync("taskkill", ["/pid", String(fixture.pid), "/t", "/f"], { stdio: "ignore" });
   if (!daemonWasRunning && daemonRunning()) {

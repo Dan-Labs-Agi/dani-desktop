@@ -3,6 +3,7 @@ import { runMcpBridge } from "../server/mcp-bridge.ts";
 import { augmentedPath } from "../server/env-path.ts";
 import { createEvidenceReporter, evidenceUrl, postEvidence } from "./evidence.ts";
 import { guardsFromEnv } from "./guards.ts";
+import { READ_WINDOW_ALIAS } from "./read-window-tool.ts";
 import { localComputerCallQuery, localComputerRelay, localComputerResultLine } from "./guidance.ts";
 import { journalUrl } from "../server/saved-steps/journal-tap.ts";
 
@@ -48,7 +49,8 @@ runMcpBridge({
   label: "Local Cua Driver",
   gate: { url: url!, token: token!, describe: (frame) => ({ ...localComputerCallQuery(frame), ...pipeline.describe(frame) }) },
   ...(journal === "1" ? { journal: { url: journalUrl(url!), token: token! } } : {}),
-  rewriteResponse: (line) => localComputerResultLine(line, guards.untrusted === true, guards.guidance === true),
+  rewriteResponse: (line) => localComputerResultLine(line, guards.untrusted === true, guards.guidance === true, guards.readWindow === true),
+  ...(guards.readWindow ? { alias: READ_WINDOW_ALIAS } : {}),
   relay: (call, child) => {
     const answer = pipeline(call, child);
     return answer && reporter ? answer.finally(() => reporter.note()) : answer;

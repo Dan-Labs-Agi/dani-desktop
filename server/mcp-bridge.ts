@@ -3,6 +3,7 @@ import { StringDecoder } from "node:string_decoder";
 
 import { CONTROL_ACT_WITHIN_MS, CONTROL_UNCONFIRMED, CONTROL_WAITED, controlRefusal, createControlClient, type ControlState } from "./control-client.ts";
 import { augmentedPath, resolveCliSpawn } from "./env-path.ts";
+import { createAliases, type ToolAlias } from "./mcp-bridge-alias.ts";
 import { textOnlyErrorResultLine } from "./mcp-error-result.ts";
 import { createToolListNormalizer } from "./mcp-tool-schema.ts";
 import { createJournalTap, postJournal } from "./saved-steps/journal-tap.ts";
@@ -115,6 +116,8 @@ export interface BridgeOptions {
   gate?: { url: string; token: string; describe?: (frame: unknown) => Record<string, string> };
   journal?: { url: string; token: string };
   rewriteResponse?: (line: string) => string;
+  /** A tool the agent sees that is another of the driver's; see ToolAlias. */
+  alias?: ToolAlias;
   /** A tools/call the bridge carries out itself through the child, answering the agent with what this resolves to; null
    * forwards the frame as it came. Frames after it wait, so the agent's calls still act in order. */
   relay?: (call: ToolCall, child: ChildCalls) => Promise<unknown> | null;
@@ -332,7 +335,8 @@ export function runMcpBridge(options: BridgeOptions): void {
   const toolLists = createToolListNormalizer(toolSchemaProfileFromEnv(), (line) => process.stderr.write(`${options.label}: ${line}\n`));
   // Injected responses must never land inside one of the child's half-written frames.
   const rewrite = options.rewriteResponse ?? ((line: string) => line);
-  const respond = (line: string) => reply(line, textOnlyErrorResultLine(rewrite(toolLists.rewriteResponse(line))));
+  const aliases = createAliases(options.alias);
+  const respond = (line: string) => reply(line, textOnlyErrorResultLine(aliases.answer(rewrite(toolLists.rewriteResponse(line)))));
   const children = createChildCalls((line) => child.stdin.write(line + "\n"));
   const send = async (line: string) => {
     const frame = line.includes('"tools/call"') ? relayableCall(line) : null;
@@ -368,7 +372,8 @@ export function runMcpBridge(options: BridgeOptions): void {
     ...(client ? { gate: { check: (frame: unknown) => client.state(true, options.gate?.describe?.(frame)) } } : {}),
   });
   let pendingInput = Promise.resolve();
-  const inbound = createLineSplitter((line) => {
+  const inbound = createLineSplitter((received) => {
+    const line = aliases.request(received);
     toolLists.observeRequest(line);
     tap?.request(line);
     const completion = intercept(line);

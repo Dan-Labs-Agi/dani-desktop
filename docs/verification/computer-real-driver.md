@@ -68,6 +68,18 @@ verdict is still counted.
 - `elementPath` returns null for every element in this read, so saved steps cannot identify a target and the
   re-anchor stage cannot re-find one on this driver. Not changed.
 
+## read_window
+
+`--phase readwindow` reads the fixture window through the service with `read_window` on. It only reads: no click, no typing.
+
+- The driver accepts `include_screenshot: false` with `query` and `max_elements`; the answer is one text part, no picture, no structured copy.
+- Every element is a line with its index and a token (`s00000002:0`) the next call can use as it stands. The answer was 1,361
+  characters of JSON against 24,407 for `get_window_state` with its screenshot. The comparison is mostly the picture; the
+  text alone would be nearer.
+- `query: "Body"` kept the matching row and gave 331 characters.
+- The checked flow, secret-value removal and tag stripping are tested on a fixture driver, not on this one: this driver held
+  the card number's value back itself.
+
 ## Limits
 
 - One run, one machine, one driver version, one small window. A large window will cost more per read; a read is cut

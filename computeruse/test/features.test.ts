@@ -20,6 +20,7 @@ describe("the computer-use switches", () => {
     expect(Object.keys(guardEnv(computerGuardsFrom(every as never))).length).toBe(Object.keys(computerFeatureShape).length - outsideTheBridge.length);
     expect(verifyComputerEffectsEnabled({ verifyComputerEffects: true })).toBe(true);
     expect(guardEnv(computerGuardsFrom({ confirmComputerFinalActions: true }))).toEqual({ OMB_COMPUTER_RISK: "1" });
+    expect(guardEnv(computerGuardsFrom({ offerComputerReadWindow: true }))).toEqual({ OMB_COMPUTER_READ_WINDOW: "1" });
     expect(guardEnv(computerGuardsFrom({ showComputerPointer: true, reportComputerEvidence: true }))).toEqual({ OMB_COMPUTER_POINTER: "1", OMB_COMPUTER_EVIDENCE: "1" });
   });
 

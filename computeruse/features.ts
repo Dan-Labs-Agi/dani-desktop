@@ -29,6 +29,8 @@ export const computerFeatureShape = {
   confirmComputerFinalActions: off(),
   /** Count what a computer session did and attach one plain line about it to the turn. */
   reportComputerEvidence: off(),
+  /** Offer a bot read_window: one window as text, without a screenshot or the structured copy, wrapped as screen data. */
+  offerComputerReadWindow: off(),
   /** Send an API model only the newest two screenshots a computer returned, and a line of text for each older one. */
   capComputerScreenshots: off(),
 };
@@ -41,7 +43,7 @@ export function computerGuardsFrom(features: ComputerFeatureFlags | undefined): 
     stale: features?.guardComputerStale, loop: features?.guardComputerLoops, typing: features?.verifyComputerTyping,
     anchor: features?.anchorComputerTargets, scroll: features?.verifyComputerScroll, untrusted: features?.wrapComputerScreenData,
     guidance: features?.guideComputerUse, pointer: features?.showComputerPointer, evidence: features?.reportComputerEvidence,
-    risk: features?.confirmComputerFinalActions,
+    risk: features?.confirmComputerFinalActions, readWindow: features?.offerComputerReadWindow,
   };
 }
 
