@@ -7,6 +7,6 @@
 /server/tunnel.ts               @milind-soni
 /cloudflare/control-plane/      @milind-soni
 /LICENSE                        @milind-soni
-/LICENSING.md                   @milind-soni
+/docs/licensing.md                   @milind-soni
 /CLA.md                         @milind-soni
 /.github/                       @milind-soni

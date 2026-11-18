@@ -20,6 +20,7 @@ const page = (file: string) => fileURLToPath(new URL(file, import.meta.url));
 /** The window's rail of places loads /rail: rail.html, its own small page, in development as from the server. */
 function railPage(): Plugin {
   const rewrite: Connect.NextHandleFunction = (req, _res, next) => {
+    if (/^\/[^/?]+-preview\.html(?:\?|$)/.test(req.url ?? "")) req.url = `/previews${req.url}`;
     if (req.url === "/rail" || req.url?.startsWith("/rail?")) req.url = `/rail.html${req.url.slice("/rail".length)}`;
     next();
   };

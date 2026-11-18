@@ -3,7 +3,7 @@
 This agreement covers contributions to the `enterprise/` directory of the
 DaniBot repository, which is licensed under the DaniBot Enterprise
 License rather than Apache 2.0. Contributions anywhere else do not require
-this agreement or a DCO sign-off (see [LICENSING.md](LICENSING.md)).
+this agreement or a DCO sign-off (see [LICENSING.md](docs/licensing.md)).
 
 You sign by commenting on your pull request:
 
