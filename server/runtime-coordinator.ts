@@ -593,7 +593,7 @@ export class RuntimeCoordinator implements Coordinator {
 
   private supervisor(a: Assignment, result: HostTurnResult): SupervisionTarget | undefined {
     if (a.status !== "running" || a.parentId || a.goalRunId || a.origin.kind !== "person" || a.requester.kind !== "person" ||
-      a.requester.chief || a.reply !== "resume" || a.assignee.destination.groupId || (result.ok && !result.needsVerification) ||
+      a.requester.chief || a.reply !== "resume" || a.assignee.destination.groupId || (!result.stalled && !result.needsVerification) ||
       result.blocked || result.cards || result.cap) return undefined;
     return this.chooseSupervisor(a, result);
   }

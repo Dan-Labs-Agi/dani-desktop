@@ -1,3 +1,4 @@
+import { systemLocator } from "./system-locator.ts";
 // Cua-backed Local VM: OMB owns only the sandbox boundary; desktop automation is Cua Driver's (`cua-driver mcp` in the container).
 import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
@@ -15,7 +16,6 @@ import { SPAWNED_PROXIES } from "./proxy-paths.ts";
 
 const run = promisify(execFile);
 const SCREENSHOT_STATUS_TTL_MS = 10_000;
-
 export type CommandRunner = (
   command: string,
   args: string[],
@@ -185,12 +185,7 @@ LABEL ${MANAGED_LABEL}="1" \\
 }
 
 async function sh(cmd: string, args: string[], timeout = 8000): Promise<{ stdout: string }> {
-  // A sealed fixture or a GUI launch can omit System32 from PATH. Runtime discovery
-  // still needs Windows' own locator, not a shell or a similarly named PATH shim.
-  const executable = cmd === "where.exe" && process.platform === "win32" && (process.env.SystemRoot || process.env.WINDIR)
-    ? join(process.env.SystemRoot || process.env.WINDIR!, "System32", "where.exe")
-    : cmd;
-  const resolved = resolveCliSpawn(executable, args);
+  const resolved = resolveCliSpawn(systemLocator(cmd), args);
   const { stdout } = await run(resolved.command, resolved.args, {
     timeout,
     encoding: "utf8",

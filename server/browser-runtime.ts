@@ -1,3 +1,4 @@
+import { retireBrowserTransport } from "./browser-transport-retirement.ts";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { killCliTree, spawnCli } from "./procs.ts";
 import { scrubHeldSecrets } from "../shared/redact.ts";
@@ -260,26 +261,8 @@ class BrowserClient {
     }
   }
 
-  /** agent-browser's MCP loop exits on stdin EOF and leaves the daemon; Windows taskkill /T would kill that profile's Chrome too. */
-  private retireTransport(): Promise<void> {
-    return new Promise((resolve) => {
-      let timer: ReturnType<typeof setTimeout>;
-      const finish = () => {
-        clearTimeout(timer);
-        this.child.off("exit", finish);
-        this.terminationProved = this.child.exitCode !== null || this.child.signalCode !== null;
-        resolve();
-      };
-      timer = setTimeout(() => {
-        // kill() requests termination; only the exit event (or the bounded
-        // recheck) proves it. Windows can deliver that event after this timer.
-        try { this.child.kill("SIGKILL"); } catch {}
-        timer = setTimeout(finish, 1_000);
-      }, 1_000);
-      this.child.once("exit", finish);
-      if (this.child.exitCode !== null || this.child.signalCode !== null) finish();
-      else this.child.stdin.end();
-    });
+  private async retireTransport(): Promise<void> {
+    this.terminationProved = await retireBrowserTransport(this.child);
   }
 
   stop(error = new TransportError("Browser connection closed."), scope: "transport" | "tree" = "tree"): Promise<void> {

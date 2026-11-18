@@ -118,7 +118,7 @@ async function stopRunningTurns() {
   const running = async () => ((await api("GET", "/api/bots?messages=0", { token: owner })).body.bots as Array<{ id: string; tasks?: Array<{ threadId: string; busy?: boolean }> }>)
     .flatMap((bot) => (bot.tasks ?? []).filter((task) => task.busy).map((task) => ({ bot, threadId: task.threadId })));
   for (const { bot, threadId } of await running()) await stop(bot, threadId);
-  await expect.poll(async () => (await running()).length, { timeout: 10_000 }).toBe(0);
+  await expect.poll(async () => await running(), { timeout: 10_000 }).toEqual([]);
 }
 /** After a restart, wait for the lent Mac's connector, so what a turn is offered is never just the Mac being offline. */
 async function macOnline() {

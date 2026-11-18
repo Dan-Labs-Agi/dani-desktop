@@ -234,6 +234,7 @@ function runForget(state) {
   const calls = { dialogs: [], shares: [], persisted: [], navigated: [], rm: [] };
   const rmOptions = [];
   const ctx = {
+    app: {},
     environmentsState: state,
     localSwitchInFlight: false,
     runningDataDir: null,
@@ -250,7 +251,7 @@ function runForget(state) {
     path,
     AbortSignal,
     remoteMicrophoneRefused: new Set(),
-    desktopDataDir: () => "/Users/me/.danibot",
+    resolveDesktopDataDir: () => "/Users/me/.danibot",
     slog: () => {},
     session: { defaultSession: { fetch: async () => ({ ok: true }), clearStorageData: async () => {} } },
   };
@@ -351,7 +352,7 @@ function switchFixture(t, { startResults = [], releaseLeaseThrows = false, stopU
       return outcome === undefined ? { proc: { pid: 4000 + forkIndex } } : outcome;
     },
     environmentsState: { environments: [{ id: "l1", kind: "local", name: "Work", dataDir: targetDir }], activeId: "local" },
-    desktopDataDir: () => "/Users/me/.danibot",
+    resolveDesktopDataDir: () => "/Users/me/.danibot",
     startupEnvironmentDir: env.startupEnvironmentDir,
     withActive: env.withActive,
     persistEnvironments: (next) => { context.environmentsState = next; },

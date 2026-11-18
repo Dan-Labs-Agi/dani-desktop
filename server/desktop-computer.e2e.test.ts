@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Only the desktop app's own server may use this computer. A second DaniBot server on the same computer (a copy run
 // from source, a demo) finds the app's driver record on disk, in the folder the app keeps it in, and still never mounts
@@ -92,6 +93,7 @@ describe("this computer belongs to the desktop app's own server", () => {
       if (proc.exitCode !== null) throw new Error(`server exited during boot:\n${output}`);
       try { return (await fetch(base + "/api/health")).ok; } catch { return false; }
     }, Boolean);
+    await disableFixtureChiefs(base);
   }
   async function stop() {
     if (!child) return;

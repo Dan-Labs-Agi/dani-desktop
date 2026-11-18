@@ -1935,6 +1935,17 @@ describe("direct teammate task adoption", () => {
     w.coordinator.close();
   });
 
+  it("leaves an ordinary provider failure to incident recovery rather than adopting an unfinished goal", () => {
+    const w = world();
+    w.host.supervisor = vi.fn(() => ({ address: chief, level: "ask" as const }));
+    begun(w, builder, "provider-crash", "Finish the export");
+    w.coordinator.endTurn("provider-crash", { ok: false, text: "Provider exited before result" });
+    expect(w.host.supervisor).not.toHaveBeenCalled();
+    expect(w.coordinator.node("provider-crash")).toMatchObject({ status: "failed", outcome: "provider_error" });
+    expect(w.coordinator.children("provider-crash")).toEqual([]);
+    w.coordinator.close();
+  });
+
   it.each(["denied", "interrupted", "provider_error"] as const)("does not adopt a direct task past its trusted %s blocker", outcome => {
     const w = world();
     w.host.supervisor = vi.fn(() => ({ address: chief, level: "ask" as const }));

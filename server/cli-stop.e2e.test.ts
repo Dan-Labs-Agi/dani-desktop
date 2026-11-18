@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,6 +12,7 @@ function alive(pid: number): boolean {
 describe.skipIf(process.platform === "win32")("Stop through the isolated server", () => {
   it.each([false, true])("keeps the task busy until its stubborn helper stops (root ignores TERM: %s)", async (stubbornRoot) => {
     const fixture = await launchVerificationServer();
+    await disableFixtureChiefs(fixture.info.url);
     const evidence: unknown[] = [{ fixture: fixture.info, stubbornRoot }];
     const pids: number[] = [];
     const control = async (args: string[]) => {
