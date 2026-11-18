@@ -12,8 +12,6 @@ jobs:
         include:
           - os: macos-15-intel
             arch: x64
-          - os: macos-latest
-            arch: arm64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
     steps:

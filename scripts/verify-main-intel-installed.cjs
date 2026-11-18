@@ -45,7 +45,7 @@ const graphicsFailures=[];
 function stop() {if(launched)try{process.kill(-launched.pid,'SIGKILL')}catch{}}
 async function open() {
   const output = fs.openSync(path.join(temp,'desktop-launch.log'),'w');
-  launched=spawn(executable,['--remote-debugging-port=0'],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore',output,output],detached:true});
+  launched=spawn(executable,['--remote-debugging-port=0',...(arch==='x64'?['--enable-unsafe-swiftshader','--use-angle=swiftshader']:[])],{env:{...process.env,DANI_DATA_DIR:data,OMB_DATA_DIR:data},stdio:['ignore',output,output],detached:true});
   fs.closeSync(output);
   const deadline = Date.now() + 120000;
   let browser;
