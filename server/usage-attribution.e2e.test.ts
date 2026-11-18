@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // POSIX-gated like the other CLI e2es: the fakes are shebang scripts.
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -79,7 +80,7 @@ posixOnly("usage attribution e2e", () => {
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
-        instances: {
+        instances: { ...fixtureProviderShadows(),
           claude: { driver: "claudeAgent", config: { cli: FAKE_CLAUDE, permissionMode: "bypassPermissions" } },
           // restores a session's running cost on --resume, like the real CLI
           claudeResumed: {
@@ -105,7 +106,7 @@ posixOnly("usage attribution e2e", () => {
     );
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: { ...(process.env.PATH ? { PATH: process.env.PATH } : {}), HOME: home, USERPROFILE: home, OMB_PORT: String(PORT) },
+      env: { OMB_TEST_SEALED_PATH: "1", ...(process.env.PATH ? { PATH: process.env.PATH } : {}), HOME: home, USERPROFILE: home, OMB_PORT: String(PORT) },
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stderr!.on("data", (c) => (stderr += c));

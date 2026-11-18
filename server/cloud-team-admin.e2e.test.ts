@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // The full server as a Team Cloud: the Admin's signed Team admin read and removal, and the team's default language from
 // the Admin. Disposable home; every request but the test's own is offline.
 import { randomBytes } from "node:crypto";
@@ -42,7 +43,7 @@ if (process.argv[2] === "auth") {
 await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-claude-cli.ts")).href)});
 `, { mode: 0o755 });
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
       claude: { driver: "claudeAgent", displayName: "Claude", config: { cli } },
     },
@@ -56,7 +57,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   const prelude = `data:text/javascript,${encodeURIComponent("globalThis.fetch = async () => new Response(\"offline fixture\", { status: 503 });")}`;
   child = spawn(process.execPath, ["--import", prelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_STATIC_DIR: join(home, "web"),
       OMB_CLOUD_ROLE: "team", OMB_CLOUD_TEAM_ID: TEAM.id, OMB_CLOUD_TEAM_NAME: TEAM.name, OMB_CLOUD_TEAM_LANGUAGE: "de",

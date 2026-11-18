@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // The real server after an app update, with the Local VM's container boundary replaced (group-local-vm-hooks.mjs) and a fake
 // docker standing in for a VPS: a bot's old desktop is never swapped for the person's own computer, an old Local VM updates
 // itself while nothing uses it and keeps its sign-ins, and a turn that needs that desktop waits for it.
@@ -154,7 +155,7 @@ describe.skipIf(process.platform === "win32")("a bot's old desktop after an app 
       mode: "embedded", status: "ready", socketPath: join(home, "cua.sock"),
       mcpCommand: "/fixture/cua-driver", mcpArgs: ["mcp"], mcpEnv: {},
     }), { mode: 0o600 });
-    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
+    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(), claude: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
       environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile },
     } } }));

@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -64,7 +65,7 @@ const noPhoneConflict = async (...botIds: string[]) => {
 async function withPhoneProxy<T>(spec: any, run: (call: (name: string) => Promise<any>) => Promise<T>): Promise<T> {
   // Node acts as an inert cross-platform ADB; never discover or contact a real attached phone.
   const proxy = spawn(spec.command, spec.args, { cwd: fixtureHome,
-    env: { ...process.env, ...spec.env, HOME: fixtureHome, USERPROFILE: fixtureHome, OMB_ADB_PATH: process.execPath },
+    env: { OMB_TEST_SEALED_PATH: "1", ...process.env, ...spec.env, HOME: fixtureHome, USERPROFILE: fixtureHome, OMB_ADB_PATH: process.execPath },
     stdio: ["pipe", "pipe", "ignore"] });
   try {
     const responses = new Map<number, any>();
@@ -116,14 +117,14 @@ beforeAll(async () => {
   mkdirSync(data); mkdirSync(join(ui, "assets"), { recursive: true });
   writeFileSync(join(ui, "index.html"), "<title>Phone claim</title>");
   writeFileSync(join(ui, "assets", "test.css"), "body{}");
-  writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { claude: {
+  writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(), claude: {
     driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
     environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile },
   } } }));
   const port = await freePortBlock([0, 1]);
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
-    cwd: ROOT, env: {
+    cwd: ROOT, env: { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, HOME: fixtureHome, USERPROFILE: fixtureHome, OMB_DATA_DIR: data,
       APPDATA: join(fixtureHome, "appdata"), LOCALAPPDATA: join(fixtureHome, "localappdata"),
       TEMP: fixtureHome, TMP: fixtureHome, TMPDIR: fixtureHome,

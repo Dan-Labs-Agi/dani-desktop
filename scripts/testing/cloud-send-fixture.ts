@@ -206,7 +206,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
       cwd: join(SERVER_DIR, ".."),
       // Synthetic CLIs exchange plans and evidence in the shared fixture home, not a per-turn engine home.
       // This suite tests cloud routing; bot-box/*.linux.test.ts exercises real namespace and credential isolation.
-      env: { OMB_BOT_BOX: "0", PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir,
+      env: { OMB_TEST_SEALED_PATH: "1", OMB_BOT_BOX: "0", PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}), HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir,
         OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1), OMB_DUCKDB_DIR: fakeOnePassword(join(home, "native"), acceptedToken), ...env, ...own },
       stdio: ["ignore", "pipe", "pipe", ...(ipc ? ["ipc" as const] : [])],
     });

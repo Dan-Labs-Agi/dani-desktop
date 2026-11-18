@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Real server and connected-apps bridge, a fake Claude CLI that starts the connection as a model does, and a loopback connection service.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
@@ -66,7 +67,7 @@ describe("/setup connects an app through a Connect card, against the real server
     await new Promise<void>(resolve => broker.listen(0, "127.0.0.1", resolve));
     brokerUrl = `http://127.0.0.1:${(broker.address() as { port: number }).port}/broker`;
     writeFileSync(join(data, "config.json"), JSON.stringify({
-      instances: { claude: {
+      instances: { ...fixtureProviderShadows(), claude: {
         driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
         // Every turn with the connected-apps tools starts a Gmail connection through them, as a model told to would.
         environment: { FAKE_CLAUDE_CONNECT_APPS: "gmail", FAKE_CLAUDE_DUMP: dump },

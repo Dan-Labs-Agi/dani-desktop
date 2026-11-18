@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // One stub plays Jev (/jev, the person's own decider.baseUrl) and the Admin's relay (/relay). Disposable home; no network.
 import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -104,7 +105,7 @@ beforeAll(async () => {
   mkdirSync(data, { recursive: true });
   engineDump = join(home, "engine-dump.json");
   writeFileSync(join(data, "config.json"), JSON.stringify({
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       quick: {
         driver: "claudeAgent", displayName: "Quick fixture", config: { cli: FAKE_CLAUDE },
         environment: { FAKE_CLAUDE_MODE: "happy", FAKE_CLAUDE_DUMP: engineDump },
@@ -117,7 +118,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH,
       ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),

@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Lent folders while the computer is away, end to end: the full server as a Cloud home over its real HTTP boundary, the
 // desktop's lending connector and Files service driving it (the owner's pairing token stands in for the window's Cloud
 // cookie), and a bot's real agents MCP tools. The Mac lends a folder with editing, goes away, the bot reads the folder
@@ -72,7 +73,7 @@ if (process.argv[2] === "auth") {
 await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-claude-cli.ts")).href)});
 `, { mode: 0o755 });
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
       claude: { driver: "claudeAgent", displayName: "Claude", config: { cli } },
     },
@@ -84,7 +85,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   const offlinePrelude = `data:text/javascript,${encodeURIComponent('globalThis.fetch = async () => new Response("offline fixture", { status: 503 });')}`;
   child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH,
       ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
@@ -123,7 +124,7 @@ async function botTools(botId: string) {
   expect((await api("POST", `/api/bots/${botId}/messages`, { body: { text: "Work on my Notes folder tonight." } })).status).toBe(202);
   await vi.waitFor(() => expect(existsSync(dump)).toBe(true), { timeout: 15_000 });
   const agents = JSON.parse(readFileSync(dump, "utf8")).mcpConfig.mcpServers.agents;
-  proxy = spawn(agents.command, agents.args, { env: { PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
+  proxy = spawn(agents.command, agents.args, { env: { OMB_TEST_SEALED_PATH: "1", PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
   const replies = new Map<number, (value: any) => void>();
   createInterface({ input: proxy.stdout! }).on("line", (line) => { const message = JSON.parse(line); replies.get(message.id)?.(message.result); replies.delete(message.id); });
   let next = 0;

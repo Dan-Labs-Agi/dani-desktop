@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // The real server, the fake Claude CLI and a stub of the Admin's Boat relay, with the call wait and the start budget
 // shortened; disposable home, no network.
 import { randomUUID } from "node:crypto";
@@ -136,7 +137,7 @@ describe("a slow cloud computer start", () => {
     dumpFile = join(home, "dump.json");
     finishFile = join(home, "finish");
     mkdirSync(data, { recursive: true });
-    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: {
+    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(),
       claude: {
         driver: "claudeAgent", config: { cli: FAKE_CLAUDE },
         environment: { FAKE_CLAUDE_MODE: "slow", FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_SLOW_FINISH_GATE: finishFile },
@@ -146,7 +147,7 @@ describe("a slow cloud computer start", () => {
     base = `http://127.0.0.1:${port}`;
     child = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT,
-      env: {
+      env: { OMB_TEST_SEALED_PATH: "1",
         PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
         OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),

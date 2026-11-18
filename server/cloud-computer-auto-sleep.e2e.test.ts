@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // A cloud computer turns itself off after use. One stub plays the Admin's Boat relay and records every call, and the
 // server's idle window is cut from ten minutes to IDLE_MS, so each journey can say exactly when a computer went to sleep.
 import { randomUUID } from "node:crypto";
@@ -79,7 +80,7 @@ describe("a cloud computer goes to sleep after use and wakes on the next", () =>
     const relayBase = `http://127.0.0.1:${(relay.address() as { port: number }).port}`;
     child = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT,
-      env: {
+      env: { OMB_TEST_SEALED_PATH: "1",
         PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
         OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
@@ -161,7 +162,7 @@ describe("a cloud computer goes to sleep after use and wakes on the next", () =>
     mkdirSync(join(home, "bin"), { recursive: true });
     writeFileSync(join(home, "bin", "docker"), FAKE_DOCKER);
     chmodSync(join(home, "bin", "docker"), 0o755);
-    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: {
+    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(),
       // Every turn first takes one screenshot through the cloud computer's tools, as a model's first computer call does.
       uses: { driver: "claudeAgent", config: { cli: FAKE_CLAUDE }, environment: { FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" } },
       // Works until the gate file exists, touching no computer.

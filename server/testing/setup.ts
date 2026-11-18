@@ -14,6 +14,10 @@ process.env.USERPROFILE = home;
 delete process.env.OMB_DATA_DIR;
 // Do not let a developer's Hermes global config path leak into per-test homes.
 delete process.env.HERMES_HOME;
+// Runtime socket paths from the CI host must not escape the disposable home.
+delete process.env.XDG_RUNTIME_DIR;
+delete process.env.AGENT_BROWSER_SOCKET_DIR;
+delete process.env.AGENT_BROWSER_NAMESPACE;
 // Named explicitly although homedir() already covers it: the device tests delete this directory wholesale.
 process.env.OMB_COMPANION_DIR = join(home, ".danibot-companion");
 

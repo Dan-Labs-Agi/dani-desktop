@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // A generic `done` frame for the same failure would make two desktop notifications, so the marker PATCH below is an ordering barrier.
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -55,7 +56,7 @@ posixOnly("routine failure notification wiring", () => {
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
-        instances: {
+        instances: { ...fixtureProviderShadows(),
           grok: {
             driver: "grokAgent",
             // a partial answer before failing: with a non-empty reply only the routine-failed/done dedup suppresses the generic done
@@ -66,7 +67,7 @@ posixOnly("routine failure notification wiring", () => {
       }),
     );
 
-    const env: NodeJS.ProcessEnv = {
+    const env: NodeJS.ProcessEnv = { OMB_TEST_SEALED_PATH: "1",
       HOME: home,
       USERPROFILE: home,
       OMB_PORT: String(PORT),

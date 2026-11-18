@@ -167,3 +167,20 @@ This packet itself is documentation/research, not a current full-suite, provider
 - The fresh runtime observation is the isolated goal-versus-chat comparison recorded in `traceability.md`; its owned launcher exited0. No build/test/typecheck, real-provider/native-device qualification or installed-release promotion was performed during this planning task. Retained failing records were inspected rather than rerun for confirmation.
 
 The research deliverable is complete; the application work remains pending until its implementation and acceptance gates are actually satisfied.
+
+## Completion requirement coverage
+
+This index links the proposal to its twelve outcomes. It does not mark implementation or proof complete.
+
+- R-160-001: see the outcome and acceptance gate 01 in [the specification](spec.md).
+- R-160-002: see the outcome and acceptance gate 02 in [the specification](spec.md).
+- R-160-003: see the outcome and acceptance gate 03 in [the specification](spec.md).
+- R-160-004: see the outcome and acceptance gate 04 in [the specification](spec.md).
+- R-160-005: see the outcome and acceptance gate 05 in [the specification](spec.md).
+- R-160-006: see the outcome and acceptance gate 06 in [the specification](spec.md).
+- R-160-007: see the outcome and acceptance gate 07 in [the specification](spec.md).
+- R-160-008: see the outcome and acceptance gate 08 in [the specification](spec.md).
+- R-160-009: see the outcome and acceptance gate 09 in [the specification](spec.md).
+- R-160-010: see the outcome and acceptance gate 10 in [the specification](spec.md).
+- R-160-011: see the outcome and acceptance gate 11 in [the specification](spec.md).
+- R-160-012: see the outcome and acceptance gate 12 in [the specification](spec.md).

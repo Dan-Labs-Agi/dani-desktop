@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -95,7 +96,7 @@ beforeAll(async () => {
   writeFileSync(join(data, "config.json"), JSON.stringify({
     // These tests compare whole conversations; a setup card refreshing after a rename would change under them.
     features: { smartSetupChoices: false },
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       // answers at once; its dump is the only place to read the per-boot comms token the internal endpoints need
       quick: {
         driver: "claudeAgent",
@@ -139,7 +140,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
     cwd: ROOT,
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,

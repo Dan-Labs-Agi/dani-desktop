@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // A real server booted as a Cloud home with no maintainer flag, and the real outbound connector on the Mac side. No guest
 // can connect, so what a guest left behind is written into the records while the server is stopped.
 import { randomBytes, randomUUID } from "node:crypto";
@@ -89,7 +90,7 @@ async function agentsFor(start: () => Promise<void>, botId: string, threadId?: s
 
 async function proxyFor(start: () => Promise<void>, botId: string, threadId?: string) {
   const agents = await agentsFor(start, botId, threadId);
-  const proxy = spawn(agents.command, agents.args, { env: { PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
+  const proxy = spawn(agents.command, agents.args, { env: { OMB_TEST_SEALED_PATH: "1", PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
   proxies.push(proxy);
   const replies = new Map<number, (value: any) => void>();
   createInterface({ input: proxy.stdout! }).on("line", line => { const msg = JSON.parse(line); replies.get(msg.id)?.(msg.result); replies.delete(msg.id); });
@@ -126,7 +127,7 @@ if (process.argv[2] !== "--version") { process.env.FAKE_CLAUDE_DUMP = ${JSON.str
 await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-claude-cli.ts")).href)});
 `, { mode: 0o755 });
   // No `features` block: the maintainer flag is off, as on every Cloud home.
-  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ instances: {
+  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(),
     ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
     claude: { driver: "claudeAgent", displayName: "Claude", config: { cli } },
     // A model that uses the Mac, asks a question, and uses it again once the
@@ -147,7 +148,7 @@ async function boot() {
   const offlinePrelude = `data:text/javascript,${encodeURIComponent('import fs from "node:fs"; import { syncBuiltinESMExports } from "node:module"; const read = fs.readFileSync; fs.readFileSync = function(path, ...args) { if (String(path) === "/proc/meminfo") return "MemTotal: 33554432 kB\\nMemAvailable: 33554432 kB\\nSwapFree: 0 kB\\n"; return read.call(this, path, ...args); }; syncBuiltinESMExports(); const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
   child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
       OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",

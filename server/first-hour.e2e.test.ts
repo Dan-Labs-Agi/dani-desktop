@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // A new personal Cloud's first hour end to end on a real Cloud home (temporary home, the fake Claude CLI, a stand-in for
 // the connected-apps service): the greeting by name, the connect offer after the first answer, the first look with
 // drafts and nothing sent, the morning brief said once and timed, the phone offered, and what the Admin reads. Nothing
@@ -94,7 +95,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
 `, { mode: 0o755 });
     writeFileSync(join(dataDir, "config.json"), JSON.stringify({
       profile: { name: "Sam Lee" },
-      instances: {
+      instances: { ...fixtureProviderShadows(),
         ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
         claude: { driver: "claudeAgent", displayName: "Fixture", config: { cli } },
       },
@@ -104,7 +105,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
     const offline = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
     child = spawn(process.execPath, ["--import", offline, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: {
+      env: { OMB_TEST_SEALED_PATH: "1",
         PATH: process.env.PATH, HOME: home, USERPROFILE: home, TZ: ZONE, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
         OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: MACHINE, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
         OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`,

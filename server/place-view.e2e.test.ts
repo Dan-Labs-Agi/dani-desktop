@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Real server, fake Claude CLI and a loopback Boat whose answers each journey sets; a restartable home lets a test seed an automatic pin.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
@@ -138,7 +139,7 @@ describe("a cloud computer that can't start, against the real server", () => {
   const writeConfig = (ownKey: boolean) => writeFileSync(join(data, "config.json"), JSON.stringify({
     ...(ownKey ? { box: { token: "box_place_view_fixture" } } : {}),
     // Every turn first takes one screenshot through the cloud computer's tools: that call, not the message, starts the cloud computer.
-    instances: { claude: {
+    instances: { ...fixtureProviderShadows(), claude: {
       driver: "claudeAgent", config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
       environment: { FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
     } },

@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Real server, fake Claude CLI, and a loopback Boat that fails the test on any call to Boat's own agent
 // (/prompt, /prompts/{id}, /events, /interrupt).
 import { spawn, type ChildProcess } from "node:child_process";
@@ -80,7 +81,7 @@ function install(home: string, boatPort: () => number) {
     base = `http://127.0.0.1:${port}`;
     output = "";
     const proc = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
-      cwd: ROOT, env: {
+      cwd: ROOT, env: { OMB_TEST_SEALED_PATH: "1",
         PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: data,
         APPDATA: join(home, "appdata"), LOCALAPPDATA: join(home, "localappdata"),
@@ -178,7 +179,7 @@ describe("removing the Computer engine", () => {
       driver: "claudeAgent", displayName: ENGINE_NAME, config: { cli: FAKE_CLI },
       environment: { FAKE_CLAUDE_DUMP: dumpFile, FAKE_CLAUDE_USES_CLOUD_COMPUTER: "1" },
     });
-    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { claude: claudeEntry(server.dumpFile) } }));
+    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { ...fixtureProviderShadows(), claude: claudeEntry(server.dumpFile) } }));
     await server.start();
     const [starter] = await server.bots();
     const { task: opened } = await server.api("POST", `/api/bots/${starter.id}/tasks`, {});
@@ -192,7 +193,7 @@ describe("removing the Computer engine", () => {
     // Everything as v0.1.94 saved it. The fleet, the new-bot defaults and the
     // automatic-recovery backup name the engine.
     server.editConfig(config => Object.assign(config, {
-      instances: { claude: claudeEntry(server.dumpFile), computer: { driver: "boxAgent" } },
+      instances: { ...fixtureProviderShadows(), claude: claudeEntry(server.dumpFile), computer: { driver: "boxAgent" } },
       defaultModelSelection: { instanceId: "computer", model: "claude-fable-5" },
       newBotDefaults: { profile: { modelSelection: { instanceId: "computer", model: "claude-fable-5" } } },
       automaticRecovery: { enabled: true, backup: { instanceId: "computer", model: "sonnet" } },
@@ -291,11 +292,11 @@ describe("removing the Computer engine", () => {
     // start. (A fleet without a "claude" id is kept exactly as written.)
     const cli = join(home, "later", "claude.mjs");
     const later = { driver: "claudeAgent", displayName: ENGINE_NAME, config: { cli }, environment: { FAKE_CLAUDE_DUMP: server.dumpFile } };
-    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { later } }));
+    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { ...fixtureProviderShadows(), later } }));
     await server.start();
     const [starter] = await server.bots();
     await server.stop();
-    server.editConfig(config => Object.assign(config, { instances: { later, computer: { driver: "boxAgent" } } }));
+    server.editConfig(config => Object.assign(config, { instances: { ...fixtureProviderShadows(), later, computer: { driver: "boxAgent" } } }));
     server.editSavedBot(starter.id, saved => {
       saved.modelSelection = { instanceId: "computer", model: "claude-fable-5" };
       for (const task of saved.tasks) task.modelSelection = { instanceId: "computer", model: "claude-fable-5" };
@@ -324,11 +325,11 @@ describe("removing the Computer engine", () => {
   it("keeps serving when the move fails at start, and moves the bots on a later try", async () => {
     const { server } = fresh();
     const teams = join(server.data, "section-contexts.json");
-    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { claude: claudeEntry(server.dumpFile) } }));
+    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { ...fixtureProviderShadows(), claude: claudeEntry(server.dumpFile) } }));
     await server.start();
     const [starter] = await server.bots();
     await server.stop();
-    server.editConfig(config => Object.assign(config, { instances: { claude: claudeEntry(server.dumpFile), computer: { driver: "boxAgent" } } }));
+    server.editConfig(config => Object.assign(config, { instances: { ...fixtureProviderShadows(), claude: claudeEntry(server.dumpFile), computer: { driver: "boxAgent" } } }));
     server.editSavedBot(starter.id, savedOnEngine);
     // An unreadable teams file stops every save of the bots, the move's too.
     writeFileSync(teams, "not json");
@@ -355,11 +356,11 @@ describe("removing the Computer engine", () => {
       driver: "openai-compat", displayName: "Chat Only",
       config: { url: "http://127.0.0.1:9/v1", key: "sk-verification-fixture", tools: false, model: "chat-model" },
     };
-    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { chat } }));
+    server.editConfig(config => Object.assign(config, { box: { token: "box_verification_fixture" }, instances: { ...fixtureProviderShadows(), chat } }));
     await server.start();
     const [starter] = await server.bots();
     await server.stop();
-    server.editConfig(config => Object.assign(config, { instances: { chat, computer: { driver: "boxAgent" } } }));
+    server.editConfig(config => Object.assign(config, { instances: { ...fixtureProviderShadows(), chat, computer: { driver: "boxAgent" } } }));
     server.editSavedBot(starter.id, saved => { savedOnEngine(saved); delete saved.computer; });
 
     await server.start();

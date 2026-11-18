@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -65,7 +66,7 @@ posixOnly("conversation branching e2e (fake ACP fleet)", () => {
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
-        instances: {
+        instances: { ...fixtureProviderShadows(),
           happy: { driver: "grokAgent", config: { cli: FAKE_CLI, fullAuto: true } },
           // a second engine for the mid-thread model switch: same fake, its
           // own instance, so it starts with no session cursor for the thread
@@ -79,7 +80,7 @@ posixOnly("conversation branching e2e (fake ACP fleet)", () => {
       }),
     );
 
-    const env: NodeJS.ProcessEnv = {
+    const env: NodeJS.ProcessEnv = { OMB_TEST_SEALED_PATH: "1",
       HOME: home,
       USERPROFILE: home,
       OMB_PORT: String(PORT),
@@ -102,6 +103,10 @@ posixOnly("conversation branching e2e (fake ACP fleet)", () => {
       if (Date.now() > deadline) throw new Error(`server never came up. stderr:\n${stderr}`);
       if (child.exitCode !== null) throw new Error(`server exited ${child.exitCode}. stderr:\n${stderr}`);
       await new Promise((r) => setTimeout(r, 150));
+    }
+    // These tests exercise session history, not Chief supervision.
+    for (const bot of (await api("GET", "/api/bots")).body.bots) {
+      if (bot.chiefOfStaff) await api("PATCH", `/api/bots/${bot.id}`, { chiefOfStaff: false });
     }
   }, 30_000);
 

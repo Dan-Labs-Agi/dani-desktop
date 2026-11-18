@@ -1,10 +1,10 @@
 // Real provider adapters against the scripted ACP peer: proves OMB's flags and residual-request handling,
 // not a native engine's classifier.
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { ApprovalMode } from "../../../shared/approval-mode.ts";
 import { ensureDirs } from "../../config.ts";
@@ -19,6 +19,16 @@ import { HermesAgentDriver, HERMES_CONFIG_MODEL_ID } from "./hermes.ts";
 import { KimiAgentDriver } from "./kimi.ts";
 import { createOpenCodeDriver, openCodeOwnedDirectories } from "./opencode-go.ts";
 import { QwenAgentDriver } from "./qwen.ts";
+
+// Supply deterministic native model metadata, not a developer's credentials.
+vi.mock("./hermes-model-catalog.ts", async (original) => {
+  const catalog = await original<typeof import("./hermes-model-catalog.ts")>();
+  return { ...catalog, buildHermesModelCatalog: (...args: Parameters<typeof catalog.buildHermesModelCatalog>) => {
+    const [, ...rest] = args;
+    return catalog.buildHermesModelCatalog({ providers: [{ id: "openai-codex", label: "Fixture",
+      models: ["approval-fixture"], authenticatedModels: ["approval-fixture"], toolModels: ["approval-fixture"] }] }, ...rest);
+  } };
+});
 
 const FAKE_CLI = join(dirname(fileURLToPath(import.meta.url)), "../../testing/fake-acp-cli.ts");
 const OpenCodeDriver = createOpenCodeDriver(async () => ({
@@ -42,9 +52,38 @@ describe("remaining ACP approval mappings", () => {
     { driver: DroidAgentDriver, argv: ["exec", "-o", "acp"] },
     { driver: CustomAcpDriver, argv: [] },
   ];
-  it.each(cases)("$driver.driverKind preserves residual requests across Full → Auto → Ask", async ({ driver, argv, native, model }) => {
+  it.each(cases.filter(entry => process.platform !== "win32" || entry.driver !== HermesAgentDriver))("$driver.driverKind preserves residual requests across Full → Auto → Ask", async ({ driver, argv, native, model }) => {
     ensureDirs();
     const scratch = mkdtempSync(join(tmpdir(), "omb-approval-matrix-"));
+    let cli = FAKE_CLI;
+    if (driver === HermesAgentDriver) {
+      // The supported Hermes installation contract is POSIX-only today. Windows
+      // refusal is covered by the native installation tests, not a fake direct CLI.
+      const bin = join(scratch, "bin");
+      mkdirSync(bin);
+      mkdirSync(join(scratch, ".hermes"));
+      cli = join(bin, "hermes");
+      writeFileSync(cli, "#!/usr/bin/env node\n", { mode: 0o700 });
+      writeFileSync(join(scratch, ".hermes", "config.yaml"), "model:\n  provider: openai-codex\n  default: approval-fixture\n");
+      writeFileSync(join(bin, "python3"), `#!${process.execPath}
+import { createHash } from "node:crypto";
+const args = process.argv.slice(2);
+if (args.includes("--version")) { console.log("0.21.3"); }
+else if (args.includes("--runtime-info") || args.includes("--qualify-route")) {
+  const runtime = { version: "0.21.3", configuredProvider: "openai-codex", resolvedProvider: "openai-codex",
+    model: "approval-fixture", endpoint: "https://chatgpt.com/backend-api/codex", apiMode: "codex_responses",
+    credentialFingerprint: "a".repeat(64), credentialHeaderNames: [] };
+  const fields = ["version", "configuredProvider", "resolvedProvider", "model", "endpoint", "apiMode"];
+  const fingerprint = createHash("sha256").update(JSON.stringify(fields.map(key => runtime[key]))).digest("hex");
+  console.log(JSON.stringify(args.includes("--qualify-route") ? { schemaVersion: 1, qualified: true,
+    toolCallCount: 1, resultConsumed: true, fingerprint, credentialFingerprint: runtime.credentialFingerprint } : runtime));
+} else if (args[0]?.endsWith("hermes-model-metadata.py")) console.log('{"providers":[]}');
+else {
+  process.argv = [process.execPath, ${JSON.stringify(FAKE_CLI)}, ...args.slice(1)];
+  await import(${JSON.stringify(new URL("../../testing/fake-acp-cli.ts", import.meta.url).href)});
+}
+`, { mode: 0o700 });
+    }
     const dump = join(scratch, "spawn.json");
     const rpcDump = join(scratch, "rpc.json");
     const instance = await driver.create({
@@ -63,7 +102,7 @@ describe("remaining ACP approval mappings", () => {
         OPENCODE_API_KEY: "fixture-only",
         OPENCODE_PERMISSION: '{"external_directory":"ask"}',
       },
-      config: { cli: FAKE_CLI, fullAuto: true },
+      config: { cli, fullAuto: true },
     });
     const recorder = recordEvents(instance.adapter);
     const pidOf = () => JSON.parse(readFileSync(dump, "utf8")).pid as number;

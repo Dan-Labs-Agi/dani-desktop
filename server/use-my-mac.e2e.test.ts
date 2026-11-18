@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Use my Mac on a real server booted as a Cloud home, with the real desktop connector lending this test process as the
 // Mac. The sites that turn away data centres go out through the Mac's device link, and the Mac checks every connection
 // itself; every other site goes My Cloud's own way. "The internet" here is a web server on this machine that only the
@@ -131,7 +132,7 @@ async function botTurn(name: string) {
   expect((await api("POST", `/api/bots/${bot.id}/messages`, { token: owner, body: { text: "Open instagram and read my Mac." } })).status).toBe(202);
   const turn = await turnOf(bot.id, before);
   const agents = turn.mcpConfig.mcpServers.agents!;
-  const spawned = spawn(agents.command, agents.args, { env: { PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
+  const spawned = spawn(agents.command, agents.args, { env: { OMB_TEST_SEALED_PATH: "1", PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
   proxies.push(spawned);
   const replies = new Map<number, (value: any) => void>();
   createInterface({ input: spawned.stdout! }).on("line", (line) => { const message = JSON.parse(line); replies.get(message.id)?.(message.result); replies.delete(message.id); });
@@ -196,7 +197,7 @@ async function boot() {
   ].join("\n"))}`;
   child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
       OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
@@ -238,7 +239,7 @@ const running = require("node:fs").existsSync(${JSON.stringify(join(home, "brows
 process.stdout.write(JSON.stringify({ success: true, data: args[0] === "session" ? { sessions: running ? [process.env.AGENT_BROWSER_SESSION] : [] } : {} }));
 `, { mode: 0o755 });
   chmodSync(join(home, "agent-browser"), 0o755);
-  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ instances: {
+  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(),
     ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi", "grok"].map((id) => [id, { driver: "not-a-real-driver" }])),
     claude: { driver: "claudeAgent", displayName: "Claude", config: { cli } },
   } }));

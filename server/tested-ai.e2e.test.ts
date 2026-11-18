@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Real server, two fake Claude accounts: the first one's test message fails. One miss moves nothing; a second (here
 // the person's own Check again) moves the new-bot default and the first bot to the one that answered, and a restart
 // keeps what was learned. A saved default is never tested or moved.
@@ -29,7 +30,7 @@ function freshHome(extra: Record<string, unknown> = {}): string {
   mkdirSync(join(home, "tmp"), { recursive: true });
   mkdirSync(join(home, "spare-claude"), { recursive: true });
   writeFileSync(join(home, "config.json"), JSON.stringify({
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       claude: { driver: "claudeAgent", displayName: "Silent Claude", config: { cli: FAKE_CLI },
         environment: { FAKE_CLAUDE_CHECK: "fail", FAKE_CLAUDE_CHECK_LOG: join(home, "claude-checks.jsonl") } },
       spare: { driver: "claudeAgent", displayName: "Spare Claude", config: { cli: FAKE_CLI, configDir: join(home, "spare-claude") },

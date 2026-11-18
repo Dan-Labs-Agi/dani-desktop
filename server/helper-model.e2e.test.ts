@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // POSIX-gated like the other CLI e2es: the fakes are shebang scripts.
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -51,7 +52,7 @@ async function boot(extraConfig: Record<string, unknown>) {
     [SKILL_REVIEW_MARKER]: JSON.stringify({ changes: [{ action: "create", skill_md: SKILL_MD, gist: "Five-bullet weekly report." }] }),
   }));
   writeFileSync(join(home, ".danibot", "config.json"), JSON.stringify({
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       claude: { driver: "claudeAgent", config: { cli: fake("fake-claude-cli.ts"), permissionMode: "bypassPermissions" } },
       codex: { driver: "codex", config: { cli: fake("fake-codex-app-server.ts") } },
       pi: { driver: "piAgent", environment: { FAKE_PI_MODE: "tooluse" }, config: { cli: fake("fake-pi-cli.ts"), fullAuto: true } },
@@ -60,7 +61,7 @@ async function boot(extraConfig: Record<string, unknown>) {
     ...extraConfig,
   }));
   let stderr = "";
-  const env: NodeJS.ProcessEnv = { HOME: home, USERPROFILE: home, OMB_PORT: String(port), FAKE_CLAUDE_TEXT_ROUTES: routes };
+  const env: NodeJS.ProcessEnv = { OMB_TEST_SEALED_PATH: "1", HOME: home, USERPROFILE: home, OMB_PORT: String(port), FAKE_CLAUDE_TEXT_ROUTES: routes };
   if (process.env.PATH) env.PATH = process.env.PATH;
   const child: ChildProcess = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], { cwd: join(SERVER_DIR, ".."), env, stdio: ["ignore", "pipe", "pipe"] });
   child.stderr!.on("data", (chunk) => (stderr += chunk));

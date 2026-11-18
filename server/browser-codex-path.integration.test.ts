@@ -65,7 +65,7 @@ describe.skipIf(process.platform === "win32")("Codex browser turns with a minima
     base = `http://127.0.0.1:${port}`;
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: {
+      env: { OMB_TEST_SEALED_PATH: "1",
         PATH: FINDER_PATH, HOME: home, OMB_DATA_DIR: data, OMB_PORT: String(port),
         OMB_AGENT_BROWSER_PATH: browser, VITEST: "1",
       },

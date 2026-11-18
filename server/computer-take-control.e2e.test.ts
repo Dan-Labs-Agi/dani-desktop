@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Taking control of a cloud computer while the panel's picture of it is still on its way. One stub plays the Admin's
 // Boat relay and can hold every screen capture, so each case starts with a preview in flight.
 import { randomUUID } from "node:crypto";
@@ -113,12 +114,12 @@ describe("taking control never waits for the screen preview", () => {
     home = mkdtempSync(join(tmpdir(), "omb-take-control-"));
     const data = join(home, "data");
     mkdirSync(data, { recursive: true });
-    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { engine: { driver: "claudeAgent", config: { cli: FAKE_CLAUDE } } } }));
+    writeFileSync(join(data, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(), engine: { driver: "claudeAgent", config: { cli: FAKE_CLAUDE } } } }));
     const port = await freePortBlock([0, 1]);
     base = `http://127.0.0.1:${port}`;
     child = spawn(process.execPath, [join(ROOT, "server/index.ts")], {
       cwd: ROOT,
-      env: {
+      env: { OMB_TEST_SEALED_PATH: "1",
         PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: data, TEMP: home, TMP: home, TMPDIR: home,
         OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),

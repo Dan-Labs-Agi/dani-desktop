@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Turns are held open by a gated fake CLI so the slot arithmetic is observable rather than raced.
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -188,7 +189,7 @@ beforeAll(async () => {
     // These tests compare whole conversations; a setup card refreshing after a rename would change under them.
     features: { smartSetupChoices: false },
     threads: { maxConcurrentPerBot: 2 },
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       gated: {
         driver: "claudeAgent",
         displayName: "Gated fixture",
@@ -206,7 +207,7 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
     cwd: ROOT,
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home,

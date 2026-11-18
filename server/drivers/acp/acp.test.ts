@@ -2009,7 +2009,7 @@ describe("ACP turns (fake CLI)", () => {
     await vi.waitFor(() => expect(JSON.parse(readFileSync(rpc, "utf8"))).toContain("session/prompt"));
     await instance.adapter.interruptTurn("t-stop-end-turn");
     const done = await recorder.until((e) => e.type === "turn.completed");
-    expect(done).toMatchObject({ ok: true, stopReason: "cancelled" });
+    expect(done).toMatchObject({ ok: false, stopReason: "cancelled" });
     expect(recorder.events.filter((e) => e.type === "runtime.error")).toEqual([]);
   });
 
@@ -2019,7 +2019,7 @@ describe("ACP turns (fake CLI)", () => {
     await recorder.until((e) => e.type === "turn.started");
     await instance.adapter.interruptTurn("t-stop-startup");
     const done = await recorder.until((e) => e.type === "turn.completed");
-    expect(done).toMatchObject({ ok: true, stopReason: "cancelled" });
+    expect(done).toMatchObject({ ok: false, stopReason: "cancelled" });
     expect(recorder.events.filter((e) => e.type === "runtime.error")).toEqual([]);
   });
 
@@ -2633,7 +2633,7 @@ describe("ACP turns (fake CLI)", () => {
         release();
         const ack = await pending;
         expect(await recorder.until((event) => event.type === "turn.completed" && event.turnId === ack.turnId))
-          .toMatchObject({ ok: true, stopReason: "cancelled" });
+          .toMatchObject({ ok: false, stopReason: "cancelled" });
         expect(recorder.events.some((event) => event.type === "runtime.error")).toBe(false);
       } finally { release(); }
     });
@@ -2990,8 +2990,8 @@ describe("ACP turns (fake CLI)", () => {
         await stopping;
         await instance.adapter.interruptTurn("qwen-stop");
         release();
-        // The person's Stop ends the turn as a stop, never as an error.
-        expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === second.turnId)).toMatchObject({ ok: true, stopReason: "cancelled" });
+        // Stop is cancelled, not successful completion, and emits no runtime error.
+        expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === second.turnId)).toMatchObject({ ok: false, stopReason: "cancelled" });
         expect(recorder.events.filter((e) => e.type === "runtime.error" && e.turnId === second.turnId)).toEqual([]);
         const calls = readFileSync(appendFile, "utf8").trim().split("\n").map((line) => JSON.parse(line).method);
         expect(calls.filter((method) => method === "initialize")).toHaveLength(1);
@@ -3050,7 +3050,7 @@ describe("ACP turns (fake CLI)", () => {
           if (reason === "Stop") await instance.adapter.interruptTurn("qwen-retry");
           else release();
           expect(await recorder.until((e) => e.type === "turn.completed" && e.turnId === second.turnId))
-            .toMatchObject(reason === "Stop" ? { ok: true, stopReason: "cancelled" } : { ok: false });
+            .toMatchObject(reason === "Stop" ? { ok: false, stopReason: "cancelled" } : { ok: false });
           if (rejectCleanup) {
             expect(recorder.events.find((e) => e.type === "runtime.error" && e.turnId === second.turnId))
               .toMatchObject({ message: expect.stringMatching(/could not close its previous tool session/) });

@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // On a Cloud home nothing a guest's conversation produced may reach a bot's memory, log, recall, brief or folders. No
 // guest can connect any more, so the gates are kept for what a guest left behind, written in while the server is stopped.
 import { randomBytes, randomUUID } from "node:crypto";
@@ -70,7 +71,7 @@ async function toolsFor(start: () => Promise<void>) {
   rmSync(dumpOf("held"), { force: true });
   await start();
   const agents = (await dumped(dumpOf("held"))).mcpConfig.mcpServers.agents;
-  const proxy = spawn(agents.command, agents.args, { env: {
+  const proxy = spawn(agents.command, agents.args, { env: { OMB_TEST_SEALED_PATH: "1",
     ...verificationServerEnvironment({}, join(home, ".danibot"), Number(new URL(base).port)),
     HOME: home, USERPROFILE: home, ...agents.env,
   }, stdio: ["pipe", "pipe", "pipe"] });
@@ -191,7 +192,7 @@ await import(${JSON.stringify(fake)});
   const brief = completing("brief", ["GUEST-SAID-kiwi", "OWNER-SAID-fig"]);
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
     memory: { captureQuietMs: 1_000 },
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map((id) => [
         id, { driver: "not-a-real-driver", enabled: false },
       ])),
@@ -206,7 +207,7 @@ await import(${JSON.stringify(fake)});
   boot = async () => {
     child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: {
+      env: { OMB_TEST_SEALED_PATH: "1",
         ...verificationServerEnvironment(process.env, dataDir, port),
         HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
         OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",

@@ -26,10 +26,13 @@ it("offers configured Cline to Chief team setup and runs a Cline specialist in t
     const catalog = JSON.parse(call.response.result.content[0].text);
     expect(catalog.instances).toContainEqual(expect.objectContaining({ instanceId: "cline", driverKind: "clineAgent", state: "available",
       models: expect.objectContaining({ default: "cline-default" }) }));
+    // This checks the adapter, not an unscripted Chief supervision turn.
+    await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: false });
     const specialist = (await cli("new-bot", "--name", "Cline specialist")).bot;
     await api("PATCH", `/api/bots/${specialist.id}`, { modelSelection: { instanceId: "cline", model: "cline-default" } });
     await cli("send", "--bot", specialist.id, "--task", specialist.activeTaskId, "--text", "Hello from the Cline specialist");
-    expect((await cli("wait", "--bot", specialist.id, "--task", specialist.activeTaskId, "--timeout", "25")).status).toBe("settled");
+    const specialistStatus = await cli("wait", "--bot", specialist.id, "--task", specialist.activeTaskId, "--timeout", "25");
+    expect(specialistStatus.status, JSON.stringify({ specialistStatus, transcript: await api("GET", `/api/threads/${specialist.activeTaskId}/messages?limit=50`) })).toBe("settled");
     const messages = (await api("GET", `/api/threads/${specialist.activeTaskId}/messages?limit=50`)).messages;
     expect(messages.some((message: any) => message.role === "bot" && message.text?.includes("hello from fake acp"))).toBe(true);
     const session = JSON.parse(readFileSync(join(dataDir, "cline-launch.json.session.json"), "utf8"));

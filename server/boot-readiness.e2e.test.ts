@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, expect, it } from "vitest";
 import { runControlOmb, verificationServerEnvironment } from "../scripts/control-omb.ts";
 import { removeTempDir, waitForExit } from "./testing/cleanup.ts";
+import { BUILT_IN_INSTANCE_DRIVERS } from "../src/lib/built-in-instances.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -26,7 +27,7 @@ function freshHome(more: Record<string, unknown> = {}): string {
   homes.push(home);
   mkdirSync(join(home, "tmp"), { recursive: true });
   writeFileSync(join(home, "config.json"), JSON.stringify({
-    instances: { claude: { driver: "claudeAgent", displayName: "Verification fixture", config: { cli: FAKE_CLI } }, ...more },
+    instances: { ...Object.fromEntries(Object.keys(BUILT_IN_INSTANCE_DRIVERS).map(id => [id, { driver: "not-a-real-driver", enabled: false }])), claude: { driver: "claudeAgent", displayName: "Verification fixture", config: { cli: FAKE_CLI } }, ...more },
   }));
   return home;
 }

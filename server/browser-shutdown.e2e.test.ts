@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Real server, fake Claude CLI, and an agent-browser stub that logs each command it gets and lists the daemons the test marks running.
 import { spawn, type ChildProcess } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -40,7 +41,7 @@ function engineHome(config: Record<string, unknown> = {}) {
   ].join("\n"), { mode: 0o755 });
   writeFileSync(join(home, "config.json"), JSON.stringify({
     features: { browser: true },
-    instances: { claude: { driver: "claudeAgent", displayName: "Verification fixture", config: { cli: FAKE_CLI } } },
+    instances: { ...fixtureProviderShadows(), claude: { driver: "claudeAgent", displayName: "Verification fixture", config: { cli: FAKE_CLI } } },
     ...config,
   }));
   // Each start is a new daemon with a pid of its own, which no process has.

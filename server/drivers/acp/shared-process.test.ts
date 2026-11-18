@@ -219,7 +219,7 @@ describe("ACP threads sharing one agent process", () => {
       await new Promise((resolve) => setTimeout(resolve, 600));
       expect(f.spawned[0]!.exitCode).toBeNull();
       await f.instance.adapter.interruptTurn("thread-b");
-      expect((await long).done).toMatchObject({ ok: true, stopReason: "cancelled" });
+      expect((await long).done).toMatchObject({ ok: false, stopReason: "cancelled" });
       await exited(f.spawned[0]!);
     } finally {
       if (previous === undefined) delete process.env.OMB_ACP_SHARED_RECYCLE_MS;
@@ -292,7 +292,7 @@ describe("ACP threads sharing one agent process", () => {
         next = f.instance.adapter.sendTurn({ threadId: "thread-a", text: "fixture", cwd: join(f.scratch, "thread-a"), approvalMode: "full" });
       });
       await f.instance.adapter.interruptTurn("thread-b");
-      expect((await stopped).done).toMatchObject({ ok: true, stopReason: "cancelled" });
+      expect((await stopped).done).toMatchObject({ ok: false, stopReason: "cancelled" });
       expect(child!.exitCode !== null || child!.signalCode !== null).toBe(true);
       expect((await other).done).toMatchObject({ ok: false });
       const { turnId } = await next!;
@@ -310,11 +310,11 @@ describe("ACP threads sharing one agent process", () => {
       await f.instance.adapter.interruptTurn("thread-a");
       await new Promise((resolve) => setTimeout(resolve, 200));
       await f.instance.adapter.interruptTurn("thread-b");
-      expect((await second).done).toMatchObject({ ok: true, stopReason: "cancelled" });
+      expect((await second).done).toMatchObject({ ok: false, stopReason: "cancelled" });
       expect(child!.exitCode !== null || child!.signalCode !== null).toBe(true);
       // Its session/close went unanswered when the process ended, so it settles once that request times out.
       expect(await f.recorder.until((event) => event.type === "turn.completed" && event.threadId === "thread-a", 15_000))
-        .toMatchObject({ ok: true, stopReason: "cancelled" });
+        .toMatchObject({ ok: false, stopReason: "cancelled" });
     });
 
     it("settles Stop only once the agent confirms session/close, and keeps the process for the other threads", async () => {
@@ -325,7 +325,7 @@ describe("ACP threads sharing one agent process", () => {
       const [child] = f.spawned;
       const start = Date.now();
       await f.instance.adapter.interruptTurn("thread-b");
-      expect((await stopped).done).toMatchObject({ ok: true, stopReason: "cancelled" });
+      expect((await stopped).done).toMatchObject({ ok: false, stopReason: "cancelled" });
       expect(Date.now() - start).toBeGreaterThanOrEqual(5_500);
       expect(child!.exitCode).toBeNull();
       expect((await f.run("thread-a")).done).toMatchObject({ ok: true });
@@ -338,7 +338,7 @@ describe("ACP threads sharing one agent process", () => {
       await promptsSent(f, 1);
       const [child] = f.spawned;
       await f.instance.adapter.interruptTurn("thread-a");
-      expect((await stopped).done).toMatchObject({ ok: true, stopReason: "cancelled" });
+      expect((await stopped).done).toMatchObject({ ok: false, stopReason: "cancelled" });
       expect(child!.exitCode !== null || child!.signalCode !== null).toBe(true);
     });
 

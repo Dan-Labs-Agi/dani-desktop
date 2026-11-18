@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // The real Cloud home server with synthetic engines: a routine a Full access bot makes in the owner's own conversation
 // runs at Full access, whatever else the bot posted there, on Claude and on Codex. What a webhook's run made stays
 // confined, and what a bot asks to change in a conversation a guest left behind waits for the owner.
@@ -77,7 +78,7 @@ process.env.FAKE_CODEX_DUMP_TURNS_ONLY = "1";
 await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-codex-app-server.ts")).href)});
 `, { mode: 0o755 });
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       ...Object.fromEntries(["cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
       claude: { driver: "claudeAgent", displayName: "Claude", config: { cli: claude } },
       codex: { driver: "codex", displayName: "Codex", config: { cli: codex } },
@@ -89,9 +90,9 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-co
   const offline = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
   boot = async () => {
     // The stall clock runs only where HOME is the data dir, and a bot box would then hide the engines kept beside it.
-    const stall = stallClock ? { HOME: dataDir, USERPROFILE: dataDir, OMB_TEST_STALL_CLOCK: "1", OMB_BOT_BOX: "0" } : {};
+    const stall = stallClock ? { OMB_TEST_SEALED_PATH: "1", HOME: dataDir, USERPROFILE: dataDir, OMB_TEST_STALL_CLOCK: "1", OMB_BOT_BOX: "0" } : {};
     const hooks = stallClock ? ["--import", pathToFileURL(join(SERVER_DIR, "testing", "stall-clock-hooks.mjs")).href] : [];
-    child = spawnWithSecrets(process.execPath, ["--import", offline, ...hooks, join(SERVER_DIR, "index.ts")], {
+    child = spawnWithSecrets(process.execPath, ["--import", offline, ...hooks, join(SERVER_DIR, "index.ts")], { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
       OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: MACHINE_ID, OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
@@ -133,7 +134,7 @@ const release = async (...botIds: string[]) => {
 /** The bot's own agents tools, as its engine calls them during the turn the owner started. */
 async function agentTools(dump: string) {
   const agents = JSON.parse(readFileSync(dump, "utf8")).mcpConfig.mcpServers.agents;
-  const proxy = spawn(agents.command, agents.args, { env: { PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
+  const proxy = spawn(agents.command, agents.args, { env: { OMB_TEST_SEALED_PATH: "1", PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
   proxies.push(proxy);
   const replies = new Map<number, (value: any) => void>();
   createInterface({ input: proxy.stdout! }).on("line", (line) => { const msg = JSON.parse(line); replies.get(msg.id)?.(msg.result ?? msg); replies.delete(msg.id); });

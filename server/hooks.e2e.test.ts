@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // POSIX-gated: the fake CLI is a shebang script.
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -50,7 +51,7 @@ function harness(label: string, serverEnv: Record<string, string>, instanceEnv: 
     home = mkdtempSync(join(tmpdir(), `omb-hooks-${label}-`));
     mkdirSync(join(home, ".danibot"), { recursive: true });
     writeFileSync(join(home, ".danibot", "config.json"), JSON.stringify({
-      instances: {
+      instances: { ...fixtureProviderShadows(),
         claude: {
           driver: "claudeAgent",
           environment: {
@@ -67,7 +68,7 @@ function harness(label: string, serverEnv: Record<string, string>, instanceEnv: 
         },
       },
     }));
-    const env: NodeJS.ProcessEnv = { HOME: home, USERPROFILE: home, OMB_PORT: String(PORT), ...serverEnv };
+    const env: NodeJS.ProcessEnv = { OMB_TEST_SEALED_PATH: "1", HOME: home, USERPROFILE: home, OMB_PORT: String(PORT), ...serverEnv };
     if (process.env.PATH) env.PATH = process.env.PATH;
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], { cwd: join(SERVER_DIR, ".."), env, stdio: ["ignore", "pipe", "pipe"] });
     child.stderr!.on("data", (c) => (stderr += c));

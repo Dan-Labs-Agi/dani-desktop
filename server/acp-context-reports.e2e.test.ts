@@ -78,6 +78,10 @@ async function withAcpServer(run: () => Promise<void>): Promise<void> {
     await expect.poll(async () => {
       try { return (await fetch(url + "/api/health", { signal: AbortSignal.timeout(1_000) })).ok; } catch { return false; }
     }, { timeout: 20_000 }).toBe(true);
+    // Adapter coverage must not start unscripted supervision work.
+    for (const chief of (await api("GET", "/api/bots")).body.bots.filter((bot: any) => bot.chiefOfStaff)) {
+      await api("PATCH", `/api/bots/${chief.id}`, { chiefOfStaff: false });
+    }
     await run();
   } finally {
     await waitForExit(server, { signal: "SIGTERM" });

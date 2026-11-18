@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // A fake `docker` on OMB_EXTRA_PATH stands in for the VPS (the server runs in its own process): argv in, canned inspect JSON out, every call logged.
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -220,7 +221,7 @@ createServer(socket => socket.end()).listen(port, '127.0.0.1');
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
-        instances: {
+        instances: { ...fixtureProviderShadows(),
           vps: {
             driver: "grokAgent",
             environment: { FAKE_ACP_MODE: "echo-gated", FAKE_ACP_GATE_FILE: gateFile, FAKE_ACP_DUMP: acpDump },
@@ -235,7 +236,7 @@ createServer(socket => socket.end()).listen(port, '127.0.0.1');
       }),
     );
 
-    const env: NodeJS.ProcessEnv = {
+    const env: NodeJS.ProcessEnv = { OMB_TEST_SEALED_PATH: "1",
       HOME: home,
       USERPROFILE: home,
       OMB_PORT: String(PORT),

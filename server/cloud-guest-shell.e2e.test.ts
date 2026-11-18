@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // The real server booted the way the image's launcher boots it (secrets over a pipe, never the environment), synthetic
 // engines. No guest can connect, so what a guest left behind is written into the records while the server is stopped.
 import { randomBytes, randomUUID } from "node:crypto";
@@ -87,7 +88,7 @@ process.env.FAKE_CODEX_DUMP_TURNS_ONLY = "1";`);
 process.env.FAKE_CLAUDE_VERSION = "2.1.284";
 if (process.argv[2] !== "--version") { process.env.FAKE_CLAUDE_DUMP = ${JSON.stringify(home)} + "/${name}.json"; process.env.FAKE_CLAUDE_MODE = "hang"; process.env.FAKE_CLAUDE_RELEASE = ${JSON.stringify(join(home, "release"))}; }`);
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
-    instances: {
+    instances: { ...fixtureProviderShadows(),
       ...Object.fromEntries(["cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi", "claude"].map((id) => [id, { driver: "not-a-real-driver" }])),
       codex: { driver: "codex", displayName: "Codex", config: { cli: codex } },
       held: { driver: "claudeAgent", displayName: "Held", config: { cli: held("claude") } },
@@ -116,7 +117,7 @@ for (const name of ["spawn", "spawnSync", "execFile", "execFileSync", "exec", "e
 syncBuiltinESMExports();
 `);
   boot = async () => {
-    child = spawnWithSecrets(process.execPath, ["--import", offlinePrelude, "--import", pathToFileURL(spawnWatch).href, join(SERVER_DIR, "index.ts")], {
+    child = spawnWithSecrets(process.execPath, ["--import", offlinePrelude, "--import", pathToFileURL(spawnWatch).href, join(SERVER_DIR, "index.ts")], { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
       HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
       OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
@@ -159,7 +160,7 @@ const guestThread = async (bot: { id: string }) => {
 const ownThread = async (bot: { id: string }) => (await api("POST", `/api/bots/${bot.id}/tasks`, { token: owner, body: { title: "Mine" } })).body.task.threadId as string;
 async function agentTools(dump: string) {
   const agents = JSON.parse(readFileSync(dump, "utf8")).mcpConfig.mcpServers.agents;
-  const proxy = spawn(agents.command, agents.args, { env: { PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
+  const proxy = spawn(agents.command, agents.args, { env: { OMB_TEST_SEALED_PATH: "1", PATH: process.env.PATH, HOME: home, ...agents.env }, stdio: ["pipe", "pipe", "pipe"] });
   proxies.push(proxy);
   const replies = new Map<number, (value: any) => void>();
   createInterface({ input: proxy.stdout! }).on("line", (line) => { const msg = JSON.parse(line); replies.get(msg.id)?.(msg.result ?? msg); replies.delete(msg.id); });

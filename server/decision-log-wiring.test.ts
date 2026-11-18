@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // Rows are written at the request.opened fold or in answerRequest, and both keep working (cards appear, approvals flow)
 // while logging silently rots, so these run the real server on the fake ACP CLI and assert the rows themselves.
 import { spawn, type ChildProcess } from "node:child_process";
@@ -102,7 +103,7 @@ posixOnly("authorization decisions are logged", () => {
     writeFileSync(
       join(home, ".danibot", "config.json"),
       JSON.stringify({
-        instances: {
+        instances: { ...fixtureProviderShadows(),
           grok: {
             driver: "grokAgent",
             environment: { FAKE_ACP_MODE: "permission" },
@@ -118,7 +119,7 @@ posixOnly("authorization decisions are logged", () => {
     );
     child = spawn(process.execPath, [join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
-      env: {
+      env: { OMB_TEST_SEALED_PATH: "1",
         ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
         ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
         HOME: home,

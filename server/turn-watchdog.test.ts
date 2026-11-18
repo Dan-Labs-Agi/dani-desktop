@@ -221,6 +221,7 @@ describe("the stall handler", () => {
     const context = vm.createContext({
       process: { env },
       RoomTurnStallRegistry: class { stall() {} },
+      runtimeWorkPending: () => false,
       TurnStops, stoppedTurnOutcome, reportsToRequester: () => true, stallLimitMs,
       TurnWatchdog: class { options: unknown; constructor(options: { onStall: (turn: WatchedTurn) => void }) { this.options = options; } },
       store: { messagesFor: () => messages, activePath: () => messages, appendMessage() {} },

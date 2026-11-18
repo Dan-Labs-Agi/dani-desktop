@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // The container boundary is the group-local-vm fixture; the provider is an in-process stub recording the tool list per request.
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server } from "node:http";
@@ -130,7 +131,7 @@ beforeAll(async () => {
   writeFileSync(join(data, "config.json"), JSON.stringify({
     // Per-bot isolation: a fresh bot's VM is unseen until touched, so the strict pin cannot hide behind a warm cache entry.
     localVm: { mode: "per-bot" },
-    instances: { openaiCompat: { driver: "openai-compat" }, claude: {
+    instances: { ...fixtureProviderShadows(), openaiCompat: { driver: "openai-compat" }, claude: {
       driver: "claudeAgent",
       config: { cli: join(ROOT, "server/testing/fake-claude-cli.ts") },
       environment: { FAKE_CLAUDE_DUMP: dumpFile },
@@ -145,7 +146,7 @@ beforeAll(async () => {
     join(ROOT, "server/index.ts"),
   ], {
     cwd: ROOT,
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       PATH: [fakebin, dirname(process.execPath), "/usr/bin", "/bin"].join(delimiter),
       HOME: fixtureHome, USERPROFILE: fixtureHome, OMB_DATA_DIR: data,
       APPDATA: join(fixtureHome, "appdata"), LOCALAPPDATA: join(fixtureHome, "localappdata"),

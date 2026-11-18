@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // My Chrome on My Cloud, end to end on one machine: a real server booted as a personal Cloud home, and the real desktop
 // connector lending this test process's "Chrome" over the device link. A bot whose browser profile is My Chrome reaches
 // that Chrome only through the Cloud's per-session door, the link, and the computer's own door to the DevTools port it
@@ -84,7 +85,7 @@ if (process.argv[2] !== "--version") { process.env.FAKE_CLAUDE_DUMP = ${JSON.str
 await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-claude-cli.ts")).href)});
 `, { mode: 0o755 });
   chmodSync(cli, 0o755);
-  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ instances: {
+  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ instances: { ...fixtureProviderShadows(),
     ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "qwen", "hermes", "pi", "grok"].map((id) => [id, { driver: "not-a-real-driver" }])),
     claude: { driver: "claudeAgent", displayName: "Claude", config: { cli } },
   } }));
@@ -93,7 +94,7 @@ await import(${JSON.stringify(pathToFileURL(join(SERVER_DIR, "testing", "fake-cl
   const secret = randomBytes(32).toString("base64url");
   const child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
-    env: {
+    env: { OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH, HOME: home, USERPROFILE: home, OMB_DATA_DIR: dataDir, OMB_PORT: String(port), OMB_WEBHOOK_PORT: String(port + 1),
       OMB_CLOUD_ROLE: "home", OMB_CLOUD_MACHINE_ID: "3f9c2a4e-8b1d-4c6e-9a7f-2d5e8c1b0a93", OMB_CLOUD_ADMIN_URL: "https://cloud.example.test",
       OMB_CLOUD_BOOTSTRAP_SECRET: secret, OMB_PUBLIC_URL: `https://${HOST}`, OMB_AGENT_BROWSER_PATH: agentBrowser, ...env,
@@ -204,7 +205,7 @@ async function browserOf(cloud: Cloud, start: () => Promise<void>, botId: string
     }
     return false;
   }, "the turn's browser tools");
-  const proxy = spawn(browser!.command, browser!.args, { env: { PATH: process.env.PATH, HOME: cloud.home, ...browser!.env }, stdio: ["pipe", "pipe", "pipe"] });
+  const proxy = spawn(browser!.command, browser!.args, { env: { OMB_TEST_SEALED_PATH: "1", PATH: process.env.PATH, HOME: cloud.home, ...browser!.env }, stdio: ["pipe", "pipe", "pipe"] });
   cloud.proxies.push(proxy);
   const replies = new Map<number, (message: { result?: ToolResult; error?: { message?: string } }) => void>();
   createInterface({ input: proxy.stdout! }).on("line", (line) => { const message = JSON.parse(line); replies.get(message.id)?.(message); replies.delete(message.id); });

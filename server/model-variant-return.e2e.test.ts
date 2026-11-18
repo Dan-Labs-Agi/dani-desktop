@@ -41,7 +41,7 @@ it("blocks direct and group turns when an offline engine returns without support
       config: { cli: fileURLToPath(new URL("./testing/fake-claude-cli.ts", import.meta.url)) },
     };
     writeFileSync(configPath, JSON.stringify(config));
-    const env: NodeJS.ProcessEnv = {
+    const env: NodeJS.ProcessEnv = { OMB_TEST_SEALED_PATH: "1",
       HOME: dataDir, USERPROFILE: dataDir, OMB_DATA_DIR: dataDir,
       APPDATA: join(dataDir, "AppData", "Roaming"), LOCALAPPDATA: join(dataDir, "AppData", "Local"),
       XDG_CONFIG_HOME: join(dataDir, ".config"), XDG_CACHE_HOME: join(dataDir, ".cache"),
