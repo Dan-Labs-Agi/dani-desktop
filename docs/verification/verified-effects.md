@@ -3,7 +3,8 @@
 An action a bot takes on this computer is answered by what reading that window
 back shows it did, not by the driver's word that it sent the input. Off unless
 `features.verifyComputerEffects` is `true` in `config.json`: it costs two extra
-driver reads per action and has not been run against a real driver.
+driver reads per action (about 150 ms each on a small window on the real Windows driver) and has been run against a real driver only once, on Windows, for background clicks; see
+[`computer-real-driver.md`](computer-real-driver.md).
 
 ## Why
 
@@ -60,12 +61,15 @@ pnpm exec vitest run server/computer-effect.test.ts server/local-computer-guidan
 
 ## Limits
 
-Not verified: a real `cua-driver` on a real desktop. These checks drive a fake
-child through the bridge's own relay seam, so they prove the loop's shape, its
-bounds and its words, not what the driver answers for a real click on a real
-window. The latency of two extra accessibility reads per action is unmeasured;
-[`docs/verification/computer-wait.md`](computer-wait.md) and
-`pnpm bench:observation` are where that belongs before the switch defaults on.
+The unit checks drive a fake child through the bridge's own relay seam, so they
+prove the loop's shape, its bounds and its words. One run on the real Windows
+driver (0.28.2, background delivery, one disposable window) showed the verdicts
+behaving as described and cost about 150 ms per read; see
+[`computer-real-driver.md`](computer-real-driver.md). Not run: foreground
+delivery, macOS, Linux, a large window. The latency on a large window is
+unmeasured; `pnpm bench:observation` is where that belongs before the switch
+defaults on.
 Per [`.claude/skills/dani-integration-cua`](../../.claude/skills/dani-integration-cua/SKILL.md),
 this feature is not done until it is demonstrated on an actual target platform,
-Windows first.
+Windows first. Windows is demonstrated for background clicks only; foreground
+delivery is not.
