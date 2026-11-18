@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // The agents tool bridge on a real turn, in an isolated fixture: the saved
 // switch reaches the agents proxy a turn is launched with, the prompt says
 // so, and the proxy the engine was handed answers find_tool and use_tool
@@ -40,6 +41,7 @@ async function withFixture(run: (helpers: {
   // hang: the engine keeps its turn open until it is interrupted
 }) => Promise<void>, engine: Record<string, string> = { FAKE_CLAUDE_MODE: "hang" }) {
   const fixture = await launchVerificationServer({ ...process.env, ...engine });
+  await disableFixtureChiefs(fixture.info.url);
   try {
     await run({
       api: async (method, path, body) => {

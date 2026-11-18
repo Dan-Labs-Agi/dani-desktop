@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // @devs end to end: a fixture server with the synthetic Claude CLI and a fake Dani team endpoint on loopback. A
 // message that tags @devs sends exactly one report, with the bot's report_bug summary or, when the bot never calls it,
 // with the server's own facts; secrets are masked, the conversation itself never goes, and the person sees the line.
@@ -85,6 +86,7 @@ beforeAll(async () => {
     FAKE_CLAUDE_REPLY_FILE: join(script, "reply.txt"),
   });
   url = fixture.info.url;
+  await disableFixtureChiefs(url);
   expect((await api("PATCH", "/api/config", { profile: { name: "Ada", email: "Ada@Example.com" } })).status).toBe(200);
   const created = await api("POST", "/api/bots", { name: "Scout" });
   expect(created.status, JSON.stringify(created.body)).toBe(201);

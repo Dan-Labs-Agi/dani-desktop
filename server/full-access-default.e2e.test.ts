@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 // Real server, repository-owned fake engines only.
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
@@ -9,6 +10,7 @@ import { waitForExit } from "./testing/cleanup.ts";
 
 it("starts new bots and threads at Full access on each engine family, and keeps a person's Ask", async () => {
   const fixture = await launchVerificationServer({}, undefined, undefined, undefined, undefined, undefined, ["codex"]);
+  await disableFixtureChiefs(fixture.info.url);
   const { dataDir, url, logPath } = fixture.info;
   const codexDump = join(dataDir, "codex-dump.json");
   const droidDump = join(dataDir, "droid-dump.json");
@@ -101,7 +103,10 @@ it("starts new bots and threads at Full access on each engine family, and keeps 
     await expect.poll(() => openCard(askThread.threadId), { timeout: 20_000 }).toBeTruthy();
     const card = await openCard(askThread.threadId);
     await api("POST", `/api/threads/${askThread.threadId}/respond`, { requestId: card.requestId, behavior: "deny" });
-    expect((await wait(bots.droid.id, askThread.threadId)).status).toBe("settled");
+    // A denied action is a person-owned blocker, never successful completion.
+    const denied = await wait(bots.droid.id, askThread.threadId);
+    expect(denied.status).toBe("needs-user");
+    expect(JSON.stringify(denied)).toMatch(/denied|refused/i);
     expect(JSON.parse(readFileSync(`${droidDump}.config.json`, "utf8")).findLast((call: any) => call.method === "session/set_mode"))
       .toMatchObject({ params: { modeId: "normal" } });
   } finally {

@@ -1,3 +1,4 @@
+import { fixtureProviderShadows } from "./testing/fixture-providers.ts";
 // A stub executable records the environment the CLI probe and the Claude update hand it. Disposable home; no network.
 import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -69,7 +70,7 @@ else if (args.at(-1) === "--version") console.log("9.9.9 (Claude Code)");
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({
     instances: {
       // Pin the fleet's other defaults so this never probes an installed CLI.
-      ...Object.fromEntries(["codex", "cursor", "githubCopilot", "openaiCompat", "mistral", "qwen", "hermes", "pi"].map((id) => [id, { driver: "not-a-real-driver" }])),
+      ...fixtureProviderShadows(),
       claude: { driver: "claudeAgent", displayName: "Claude", config: { cli: stubCli() } },
     },
   }));
@@ -79,6 +80,7 @@ else if (args.at(-1) === "--version") console.log("9.9.9 (Claude Code)");
   child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
     env: {
+      OMB_TEST_SEALED_PATH: "1",
       PATH: process.env.PATH,
       ...(process.env.PATHEXT ? { PATHEXT: process.env.PATHEXT } : {}),
       ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),

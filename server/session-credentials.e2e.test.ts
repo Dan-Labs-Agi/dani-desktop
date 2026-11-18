@@ -1,3 +1,4 @@
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { spawn, type ChildProcess } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -16,6 +17,7 @@ const itAutoThisComputer = process.platform === "linux" ? it.skip : it;
 
 async function fixture(test: (f: any) => Promise<void>, { thisComputer = false } = {}) {
   const session = await launchVerificationServer();
+  await disableFixtureChiefs(session.info.url);
   const { dataDir, url, logPath } = session.info;
   let server: ChildProcess | undefined;
   try {
