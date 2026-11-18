@@ -20,7 +20,7 @@ jobs:
         with:
           name: linux-release
           path: release
-          run-id: 44368392873
+          run-id: 44379289612
           github-token: ${{ github.token }}
       - run: sudo apt-get update && sudo apt-get install -y at-spi2-core dbus-x11 libxi6 libxkbcommon0 xvfb
       - name: Verify exact DEB upgrade

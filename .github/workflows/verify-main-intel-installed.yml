@@ -28,7 +28,7 @@ jobs:
         with:
           name: macos-release
           path: release
-          run-id: 44368392873
+          run-id: 44379289612
           github-token: ${{ github.token }}
       - name: Record exact installer identity
         run: shasum -a 256 release/*.dmg
