@@ -205,7 +205,7 @@ await import(${JSON.stringify(fake)});
   base = `http://127.0.0.1:${port}`;
   const offlinePrelude = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
   boot = async () => {
-    child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
+    child = spawn(process.execPath, ["--import", pathToFileURL(join(SERVER_DIR, "testing/synthetic-cloud-capacity.mjs")).href, "--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
       cwd: join(SERVER_DIR, ".."),
       env: { OMB_TEST_SEALED_PATH: "1",
         ...verificationServerEnvironment(process.env, dataDir, port),
@@ -656,7 +656,9 @@ it("a routine a guest left behind reports into a conversation of its own, and it
   await toolsFor(async () => { expect((await api("POST", `/api/routines/${heldRoutine}/run`, { token: owner })).status).toBe(201); });
   const heldResults = await reportThread(heldRoutine);
   const tools = await toolsFor(() => say(owner, held, "Read plan.md from my Mac.", heldResults));
-  expect((await sees(tools)).unavailable).toContain("Someone else wrote in this conversation");
+  const refused = await sees(tools);
+  expect(refused.computers).toEqual([]);
+  expect(refused.unavailable).toMatch(/Someone else wrote in this conversation|Only conversations you start with a bot, and routines you wrote/);
 }, 90_000);
 
 it("an outside event's runs all report into one conversation of their own, never into the owner's chats", async () => {

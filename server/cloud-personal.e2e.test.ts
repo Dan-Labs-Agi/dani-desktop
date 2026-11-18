@@ -77,7 +77,7 @@ async function boot(asCloud: boolean) {
   log = "";
   cloud = asCloud;
   const offlinePrelude = `data:text/javascript,${encodeURIComponent('const real = globalThis.fetch; globalThis.fetch = async (url, init) => String(url).startsWith("http://127.0.0.1:") ? real(url, init) : new Response("offline fixture", { status: 503 });')}`;
-  child = spawn(process.execPath, ["--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
+  child = spawn(process.execPath, ["--import", pathToFileURL(join(SERVER_DIR, "testing/synthetic-cloud-capacity.mjs")).href, "--import", offlinePrelude, join(SERVER_DIR, "index.ts")], {
     cwd: join(SERVER_DIR, ".."),
     env: {
       OMB_TEST_SEALED_PATH: "1",

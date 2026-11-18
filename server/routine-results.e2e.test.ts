@@ -132,7 +132,12 @@ it("reports every run into the bot's main thread while fresh executions, approva
     expect((await runState(pending.id)).resultsThreadId).toBe(dedicated);
     await api("POST", `/api/bots/${bot.id}/respond`, { threadId: active.threadId, requestId: approval.card.requestId, behavior: "deny" });
     writeFileSync(gate, "complete the isolated turn");
-    await expect.poll(async () => (await runState(pending.id))?.status, { timeout: 15_000 }).toBe("completed");
+    // A denied required action is unfinished work, not a successful run. The
+    // recovered execution stays reachable until the person cancels it.
+    await expect.poll(async () => (await messages(active.threadId)).find((message) => message.id === approval.id)?.card?.answered,
+      { timeout: 15_000 }).toBe("deny");
+    await expect.poll(async () => (await runState(pending.id)).status, { timeout: 15_000 }).toBe("waiting");
+    expect((await api("POST", `/api/routine-runs/${pending.id}/cancel`)).run.status).toBe("cancelled");
     const { run: replacement } = await api("POST", `/api/routines/${routine.id}/run`, undefined, 201);
     expect(replacement.resultsThreadId).toBe(live);
     await expect.poll(async () => (await runState(replacement.id))?.status, { timeout: 15_000 }).toBe("completed");
