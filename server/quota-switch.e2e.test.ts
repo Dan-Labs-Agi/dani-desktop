@@ -86,6 +86,8 @@ async function withQuotaFixture(
         return instances.find((instance) => instance.instanceId === "codex")?.models.options.length > 0;
       }, { timeout: 30_000 }).toBe(true);
     }
+    const starter = (await api("GET", "/api/bots")).bots.find((bot: any) => bot.chiefOfStaff);
+    if (starter) await api("PATCH", `/api/bots/${starter.id}`, { chiefOfStaff: false });
     // What the other AI was sent: the fake Claude logs each prompt; the fake Codex keeps its calls in one dump.
     const sent = () => {
       if (options.otherSignInOnly) return jsonLines(backupFile);
@@ -107,10 +109,10 @@ async function withQuotaFixture(
 async function meetTheLimit(api: (method: string, path: string, body?: unknown) => Promise<any>, control: (...args: string[]) => Promise<any>, text: string, carriedOn = false) {
   const { bot } = await control("new-bot", "--name", "Out of quota");
   const threadId = bot.activeTaskId as string;
-  const limited = (await api("GET", "/api/bots")).bots.find((entry: any) => entry.id === bot.id).modelSelection;
+  const limited = { instanceId: "claude", model: "claude-sonnet-5" };
   await api("PATCH", `/api/bots/${bot.id}/tasks/${threadId}`, { modelSelection: { ...limited, instanceId: "claude" }, updateBotDefault: true });
   await control("send", "--bot", bot.id, "--task", threadId, "--text", text);
-  expect(carriedOn ? ["failed", "settled"] : ["failed"]).toContain((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status);
+  expect(carriedOn ? ["failed", "needs-user", "settled"] : ["needs-user"]).toContain((await control("wait", "--bot", bot.id, "--task", threadId, "--timeout", "30")).status);
   const messages = async () => (await api("GET", `/api/threads/${threadId}/messages?limit=100`)).messages as any[];
   const state = async () => (await api("GET", "/api/bots")).bots.find((entry: any) => entry.id === bot.id);
   return { bot, threadId, messages, state };
@@ -125,7 +127,7 @@ it("carries the request on with another AI by itself: the exact message once mor
     await expect.poll(async () => (await messages()).findLast((message) => message.role === "bot" && message.kind === "text")?.text, { timeout: 30_000 }).toBe("done from fake codex");
     const after = await messages();
     const failures = after.filter((message) => message.tool?.name?.startsWith("error:"));
-    expect(failures).toHaveLength(1);
+    expect(failures, JSON.stringify(failures)).toHaveLength(1);
     expect(failures[0].tool.name).toMatch(/This Claude account has reached its usage limit/);
     expect(after.some((message) => message.card?.quotaSwitch), "nothing to answer").toBe(false);
     expect(after.filter((message) => message.tool?.name === "notice: continuing on Codex after hitting the usage limit")).toHaveLength(1);

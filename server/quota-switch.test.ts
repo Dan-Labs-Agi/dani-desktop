@@ -335,6 +335,16 @@ describe("quota switch", () => {
       expect(resend).not.toHaveBeenCalled();
     });
 
+    it("retires only the known isolated native account block before continuing on its backup", async () => {
+      const turn = begin(bot.threadId, { messageId: said("finish the report") });
+      coordinator.endTurn(turn.id, { ok: false, text: QUOTA, blocked: { outcome: "provider_error", reason: QUOTA } });
+      deps.turnStops = { failureCause: () => QUOTA, read: () => ({ flags: { limit: "engine" } }) };
+      await ranOut(turn);
+      expect(coordinator.node(turn.id)).toMatchObject({ status: "failed", outcome: "provider_error" });
+      expect(thread().modelSelection).toEqual(CODEX);
+      expect(resend).toHaveBeenCalledTimes(1);
+    });
+
     it("moves a request the job runtime still holds but sends nothing again: the runtime resumes it", async () => {
       const turn = begin(bot.threadId, { messageId: said("ask the team for the numbers") });
       const mate = store.createBot();

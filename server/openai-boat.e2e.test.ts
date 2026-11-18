@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { expect, it } from "vitest";
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
 
 it("keeps the selected API model for direct, group and scheduled Boat turns and preserves human control", async () => {
@@ -66,6 +67,7 @@ it("keeps the selected API model for direct, group and scheduled Boat turns and 
     expect(response.ok, JSON.stringify(result)).toBe(true);
     return result;
   };
+  await disableFixtureChiefs(fixture.info.url);
   const control = (args: string[]) => runControlOmb([...args, "--url", fixture.info.url]) as Promise<any>;
   try {
     await api("PATCH", "/api/config", { openaiCompat: { key: "synthetic-model-key", url: origin + "/v1", model: "other-default" } });
@@ -95,13 +97,13 @@ it("keeps the selected API model for direct, group and scheduled Boat turns and 
       }
       const settled = await control(["wait", ...destination, "--timeout", "20"]);
       expect(settled.status).toBe(scenario === "held" ? "failed" : "settled");
-      // A refused computer call gets the driver's two bounded correction prompts before failure.
-      expect(requests.slice(before)).toHaveLength(scenario === "held" ? 4 : 2);
+      // A trusted computer refusal stops without replaying the denied call.
+      expect(requests.slice(before)).toHaveLength(2);
       expect(requests.slice(before).every(request => request.model === "chosen-vision-model")).toBe(true);
       const followup = requests[before + 1].messages;
       if (scenario === "held") {
         expect(followup.at(-1).content).toContain("The person has handed this computer back. This call was NOT performed");
-        expect(requests.slice(before + 2).every(request => request.messages.at(-1).content.includes("a tool call in this turn failed"))).toBe(true);
+        expect(settled.status).toBe("failed");
       } else {
         expect(followup.at(-1).content[1].type).toBe("image_url");
       }

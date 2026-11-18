@@ -37,7 +37,7 @@ export type SettledTurn = Parameters<TurnStops["failureCause"]>[0];
 
 export interface QuotaSwitchDeps {
   store: Store;
-  coordinator: Pick<Coordinator, "all" | "node">;
+  coordinator: Pick<Coordinator, "all" | "node" | "retireProviderBlock">;
   registry: { instances(): QuotaSwitchEngine[] };
   turnStops: Pick<TurnStops, "failureCause"> & Partial<Pick<TurnStops, "read">>;
   /** Which AIs carry on while one is limited or signed out, and the one notice for each stretch of either. */
@@ -170,7 +170,13 @@ export function createQuotaSwitch(deps: QuotaSwitchDeps): QuotaSwitch {
     deps.takeover?.moved(botId, threadId, before.modelSelection, checked.selection, resetsAt, scope);
     const name = engine.instanceId === current.instanceId ? `${nameOf(engine)} ${checked.selection.model}` : nameOf(engine);
     const why = scope === "signed-out" ? `while ${nameOf(current)} is signed out` : "after hitting the usage limit";
-    const held = heldBy(botId, threadId, rootOf(threadId, request));
+    const rootId = rootOf(threadId, request);
+    const stop = deps.turnStops.read?.(threadId, request.turnId);
+    // A known account prerequisite has no uncertain effect. Release only this isolated blocked root, so the
+    // original request can run once on the verified backup; denials, cards and live children stay parked.
+    if (rootId && !stop?.unknownEffect && stop?.flags?.recovery !== "blocked" && !stop?.flags?.permissionDenied
+        && (stop?.flags?.limit || stop?.flags?.setup || stop?.flags?.limitResetsAt)) coordinator.retireProviderBlock(rootId);
+    const held = heldBy(botId, threadId, rootId);
     const original = held ? undefined : resendable(store, threadId, request.messageId);
     if (held === "card") notice(threadId, `switched to ${name}. Your request waits on a card above and continues on ${name} once you act on it.`, true);
     else if (held === "runtime") notice(threadId, `switched to ${name}. Your request is still under way here and continues on ${name}.`, true);

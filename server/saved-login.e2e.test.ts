@@ -7,6 +7,7 @@ import { expect, it } from "vitest";
 
 import { launchVerificationServer, runControlOmb } from "../scripts/control-omb.ts";
 import { removeTempDir } from "./testing/cleanup.ts";
+import { disableFixtureChiefs } from "./testing/fixture-chief.ts";
 import { FakeLoginPage, LOGIN_FORM } from "./testing/fake-login-page.ts";
 import { freePortBlock } from "./testing/ports.ts";
 
@@ -79,6 +80,7 @@ else bridge("/engine", { args, proxy: process.env.AGENT_BROWSER_PROXY }).then((t
 
   const fixture = await launchVerificationServer(cuaRecord ? { OMB_TEST_DESKTOP_CUA_CONNECTION: cuaRecord } : {}, undefined, undefined, { binaryPath, executablePath: join(tools, "chrome") }, undefined, { scripted: true });
   const base = fixture.info.url;
+  await disableFixtureChiefs(base);
   const planPath = join(fixture.info.dataDir, "room-plan.json");
   const evidence = () => existsSync(`${planPath}.evidence.jsonl`)
     ? readFileSync(`${planPath}.evidence.jsonl`, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
@@ -175,7 +177,7 @@ it.skipIf(process.platform === "win32")("fills a login saved for example.com on 
     const turn = async (text: string, count: number) => {
       await runControlOmb(["send", "--bot", bot.id, "--task", bot.threadId, "--text", text, "--url", browser.base]);
       await expect.poll(() => evidence().length, { timeout: 20_000 }).toBe(count);
-      expect(await runControlOmb(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "20", "--url", browser.base])).toMatchObject({ status: "settled" });
+      expect(await runControlOmb(["wait", "--bot", bot.id, "--task", bot.threadId, "--timeout", "20", "--url", browser.base])).toMatchObject({ status: "needs-user" });
     };
 
     await turn("Sign in to example.com.", 1);

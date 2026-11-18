@@ -697,6 +697,15 @@ export class Runtime {
     return true;
   }
 
+  /** Only a host-verified backup may replace an isolated provider block, never a denial or live delegation. */
+  retireProviderBlock(id: string): boolean {
+    const n = this.store.get(id);
+    if (!n || n.parentId || n.status !== "needs_input" || n.outcome !== "provider_error" || n.cards?.length
+        || this.store.children(id).some(child => !isTerminal(child))) return false;
+    this.settle(n, "failed", "provider_error", n.outcomeDetail ?? n.result, true);
+    return true;
+  }
+
   /** Cancel this node and everything under it; abort running turns. */
   cancel(id: string, reason = "Stopped by user", outcome: "stopped" | "failed" = "stopped"): void {
     const n = this.store.get(id);

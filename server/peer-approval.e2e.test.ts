@@ -154,7 +154,8 @@ it("preserves peer approval outcomes through real HTTP responses and sends no wo
     expect(handoffs().filter((node) => node.parentId)).toEqual([]);
     evidence.push({ operation: "assignment-status", outstanding }, { operation: "coordinate-bots", result: batch });
     writeFileSync(gate, "finish");
-    expect((await cli("wait", "--bot", from.id, "--task", from.threadId, "--timeout", "25")).status).toBe("settled");
+    // Denied peer work stays parked; settlement must not imply the refused work was completed.
+    expect((await cli("wait", "--bot", from.id, "--task", from.threadId, "--timeout", "25")).status).toBe("needs-user");
   } finally {
     await waitForExit(child, { signal: "SIGTERM" });
     const evidencePath = `${logPath}.peer-approval.json`;

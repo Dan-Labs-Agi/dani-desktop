@@ -389,6 +389,11 @@ export class RuntimeCoordinator implements Coordinator {
     }
   }
 
+  retireProviderBlock(id: string): boolean {
+    this.ready();
+    return this.runtime.retireProviderBlock(id);
+  }
+
   cancelDirect(threadId: string, reason = "Stopped by user"): void {
     this.ready();
     for (const n of this.live()) if (this.direct(n, threadId)) this.runtime.cancel(n.id, reason, "stopped");

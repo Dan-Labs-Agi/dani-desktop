@@ -183,6 +183,29 @@ describe("needsInputQuestion", () => {
   });
 });
 
+describe("retiring an isolated native provider block for its verified backup", () => {
+  it("settles the old root without producing a second failure report", () => {
+    const w = world();
+    begun(w, chief, "limited");
+    w.coordinator.endTurn("limited", { ok: false, text: "Limit reached", blocked: { outcome: "provider_error", reason: "Limit reached" } });
+    expect(w.coordinator.retireProviderBlock("limited")).toBe(true);
+    expect(w.coordinator.node("limited")).toMatchObject({ status: "failed", outcome: "provider_error" });
+    expect(w.host.reports).toHaveLength(0);
+    expect(w.coordinator.retireProviderBlock("limited")).toBe(false);
+  });
+  it("refuses a denial, an open card, a running root and work with a live child", () => {
+    for (const kind of ["denied", "card", "running", "child"] as const) {
+      const w = world();
+      begun(w, chief, "limited");
+      if (kind === "child") send(w, chief, "limited", undefined, builder, "Still working");
+      if (kind !== "running") w.coordinator.endTurn("limited", { ok: false, text: "Blocked",
+        blocked: { outcome: kind === "denied" ? "denied" : "provider_error", reason: "Blocked" },
+        ...(kind === "card" ? { cards: { question: "Connect the app", ids: ["connect"] } } : {}) });
+      expect(w.coordinator.retireProviderBlock("limited"), kind).toBe(false);
+    }
+  });
+});
+
 describe("RuntimeCoordinator: the requesting turn and its tree", () => {
   it("creates the root under the generation, runs the child with the envelope, and resumes the root with the child's report", async () => {
     const w = world((node) => node.botId === "builder" ? { ok: true, text: "Built it on branch csv-export." } : undefined);
