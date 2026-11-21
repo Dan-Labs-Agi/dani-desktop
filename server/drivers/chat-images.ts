@@ -8,15 +8,18 @@ const IMAGE_BYTES = 20 * 1024 * 1024;
 const MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 export const CHAT_IMAGE_BUDGET = 32 * 1024 * 1024;
 
-/** Bound retained base64 before JSON serialization or another model call. */
+const encodedImages = (parts: string | ChatContentPart[] | null) =>
+  Array.isArray(parts) ? parts.reduce((total, part) => total + (part.type === "image_url" ? part.image_url.url.length : 0), 0) : 0;
+
+/** Bound retained base64 before JSON serialization or another model call. `release` gives back what a dropped screenshot held. */
 export function chatImageBudget() {
   let used = 0;
-  return (parts: string | ChatContentPart[] | null) => {
-    if (!Array.isArray(parts)) return;
-    const added = parts.reduce((total, part) => total + (part.type === "image_url" ? part.image_url.url.length : 0), 0);
+  const retain = (parts: string | ChatContentPart[] | null) => {
+    const added = encodedImages(parts);
     if (used + added > CHAT_IMAGE_BUDGET) throw new Error("Turn image budget exceeded (32 MiB encoded); screenshot cannot be retained. An operation may already have taken effect; inspect its state before retrying.");
     used += added;
   };
+  return Object.assign(retain, { release: (encoded: number) => { used = Math.max(0, used - encoded); } });
 }
 
 export function assertImageTransport(url: string) {
@@ -54,6 +57,33 @@ export function chatUserContent(turn: SendTurnInput): string | ChatContentPart[]
   })];
 }
 
+const SCREENSHOT_LEAD = "Screenshot result from tool call ";
+export const SCREENSHOT_DROPPED = "[an earlier screenshot, dropped to keep the conversation small]";
+/** A screenshot a person asked the model to look at is worth more than the newest tool one: only tool screenshots are capped. */
+export const NEWEST_SCREENSHOTS_KEPT = 2;
+
 export function chatToolImages(callId: string, images?: ChatImagePart[]): ChatContentPart[] {
-  return images?.length ? [{ type: "text", text: `Screenshot result from tool call ${callId}:` }, ...images] : [];
+  return images?.length ? [{ type: "text", text: `${SCREENSHOT_LEAD}${callId}:` }, ...images] : [];
+}
+
+const isToolScreenshots = (message: { role: string; content: string | ChatContentPart[] | null }): message is { role: string; content: ChatContentPart[] } =>
+  message.role === "user" && Array.isArray(message.content) && message.content[0]?.type === "text" && message.content[0].text.startsWith(SCREENSHOT_LEAD);
+
+/** Replaces every tool screenshot but the newest `keep` with a line of text, in place, and returns the encoded size it freed. */
+export function keepNewestScreenshots(messages: Array<{ role: string; content: string | ChatContentPart[] | null }>, keep: number): number {
+  let seen = 0;
+  let freed = 0;
+  for (let at = messages.length - 1; at >= 0; at--) {
+    const message = messages[at]!;
+    if (!isToolScreenshots(message)) continue;
+    const content = message.content.slice();
+    for (let part = content.length - 1; part >= 0; part--) {
+      const image = content[part]!;
+      if (image.type !== "image_url" || ++seen <= keep) continue;
+      freed += image.image_url.url.length;
+      content[part] = { type: "text", text: SCREENSHOT_DROPPED };
+    }
+    message.content = content;
+  }
+  return freed;
 }

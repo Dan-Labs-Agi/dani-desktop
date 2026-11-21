@@ -671,6 +671,33 @@ describe("OpenAI-compatible computer images", () => {
     ]);
   });
 
+  it.each([
+    [undefined, ["image_url", "image_url", "image_url"]],
+    [2, ["text", "image_url", "image_url"]],
+  ] as const)("with the cap at %s, the model's last request carries %j for its three screenshots", async (keep, expected) => {
+    const f = await fixture((_body, response, round) => {
+      if (round < 4) sse(response, [chunk({ tool_calls: [toolCall("computer_write", `{"name":"n${round}","value":"done"}`, `call_${round}`)] }, "tool_calls")]);
+      else answer(response);
+    });
+    writeFileSync(join(f.directory, "mcp.mjs"), MCP_SCRIPT.replace(
+      'text: "Stored " + args.name + "=" + args.value',
+      `text: "Screenshot captured" }, { type: "image", mimeType: "image/png", data: ${JSON.stringify(png)}`,
+    ));
+    const stop = f.instance.adapter.onEvent(event => {
+      if (event.type === "request.opened") void f.instance.adapter.respondToRequest(f.threadId, event.requestId!, { behavior: "allow" });
+    });
+    await f.start({
+      integrations: { localComputer: f.integrations!.custom!.audit as NonNullable<SendTurnInput["integrations"]>["localComputer"] },
+      ...(keep === undefined ? {} : { keepComputerScreenshots: keep }),
+    });
+    expect(await f.completed()).toMatchObject({ ok: true });
+    stop();
+    expect(f.requests).toHaveLength(4);
+    const shots = f.requests[3].messages.filter((message) => message.role === "user" && Array.isArray(message.content) && message.content[0]?.text?.startsWith("Screenshot result"));
+    expect(shots.map((message) => (message.content as Array<{ type: string }>)[1]!.type)).toEqual(expected);
+    expect(f.requests[3].messages.filter((message) => message.role === "tool")).toHaveLength(3);
+  });
+
   it("does not execute a denied computer action", async () => {
     const f = await fixture((_body, response, round) => {
       if (round === 1) sse(response, [chunk({ tool_calls: [{ ...toolCall(), function: { ...toolCall().function, name: "computer_write" } }] }, "tool_calls")]);

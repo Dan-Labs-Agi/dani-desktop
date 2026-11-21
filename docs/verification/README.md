@@ -79,6 +79,8 @@ Use only mapped, tested commands:
 - [Taking control of a bot's computer](take-control.md)
 - [Saved steps: repeating a computer task without AI](saved-steps.md)
 - [Verified effects: what an action on this computer actually changed](verified-effects.md)
+- [Computer-use benchmark: do the checks change outcomes](computer-bench.md)
+- [The computer-use checks against the real Windows driver](computer-real-driver.md)
 - [Native dictation retention and send-to-stop](dictation.md)
 - [Proactive routines and the brief](proactive-routines.md)
 - [Waits: tell me when, with no AI while waiting](waits.md)

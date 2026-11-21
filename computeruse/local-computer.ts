@@ -2,6 +2,7 @@ import { lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
 import type { Stats } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { SPAWNED_PROXIES } from "../server/proxy-paths.ts";
+import { type ComputerGuards, guardEnv } from "./guards.ts";
 
 export const REQUIRED_LINUX_TOOLS = ["click", "get_window_state", "list_apps", "type_text"];
 // Electron publishes this identity in its Linux descriptor; the service revalidates it.
@@ -31,6 +32,7 @@ export function gatedLocalComputer(
   control: { url: string; token: string },
   journal = false,
   verifyEffects = false,
+  guards: ComputerGuards = {},
 ): LocalComputerConnection {
   return {
     ...connection,
@@ -47,6 +49,7 @@ export function gatedLocalComputer(
       OMB_CONTROL_TOKEN: control.token,
       OMB_COMPUTER_JOURNAL: journal ? "1" : "0",
       OMB_COMPUTER_VERIFY: verifyEffects ? "1" : "0",
+      ...guardEnv(guards),
     },
   };
 }

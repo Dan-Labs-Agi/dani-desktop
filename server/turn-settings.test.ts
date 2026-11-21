@@ -68,4 +68,9 @@ describe("turn fields from Settings", () => {
     expect(settingsTurnFields(on, temp(), true, temp()).mcpFromUserConfig).toBe(false);
     expect(settingsTurnFields(on, temp(), false, temp())).not.toHaveProperty("userSkillsDir");
   });
+
+  it("keeps the newest two computer screenshots only when its switch is on", () => {
+    expect(settingsTurnFields({} as AppConfig, temp(), false, temp())).not.toHaveProperty("keepComputerScreenshots");
+    expect(settingsTurnFields({ features: { capComputerScreenshots: true } } as AppConfig, temp(), false, temp()).keepComputerScreenshots).toBe(2);
+  });
 });

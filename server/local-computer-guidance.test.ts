@@ -129,7 +129,7 @@ describe("localComputerRelay", () => {
       const still = child((name) => (name === "get_window_state" ? window("Untitled") : typed));
       const held = await localComputerRelay("darwin", true)(clicked, still.relayed) as { content: unknown[] };
       expect(held.content).toHaveLength(2);
-      expect(JSON.stringify(held.content)).toMatch(/did not change/);
+      expect(JSON.stringify(held.content)).toMatch(/shows no change/);
       let reads = 0;
       const moved = child((name) => (name === "get_window_state" ? window(`Untitled ${++reads}`) : typed));
       expect(await localComputerRelay("darwin", true)(clicked, moved.relayed)).toEqual(typed);
@@ -147,8 +147,8 @@ describe("localComputerRelay", () => {
     it("leaves an action with no window to read back, and every observation, to the driver", async () => {
       const { calls, relayed } = child(() => typed);
       expect(localComputerRelay("darwin", true)({ name: "click", arguments: { x: 1, y: 2 } }, relayed)).toBeNull();
-      expect(localComputerRelay("darwin", true)({ name: "get_window_state", arguments: { pid: 4242, window_id: 7 } }, relayed)).toBeNull();
-      expect(calls).toEqual([]);
+      expect(await localComputerRelay("darwin", true)({ name: "get_window_state", arguments: { pid: 4242, window_id: 7 } }, relayed)).toEqual(typed);
+      expect(calls).toEqual([["get_window_state", { pid: 4242, window_id: 7 }]]);
     });
   });
 });

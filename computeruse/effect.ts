@@ -4,14 +4,15 @@
 import { createHash } from "node:crypto";
 import type { ChildCalls, ToolCall } from "../server/mcp-bridge.ts";
 import { slimResponse, type SlimStructured } from "../server/saved-steps/driver-wire.ts";
+import { READ_TIMEOUT_MS, readWindow } from "./read.ts";
 
 type JsonObject = Record<string, unknown>;
 
-const OBSERVE_TIMEOUT_MS = 4_000;
-
-/** The actions that change a window, so an answer about them is worth no more than a read-back of what they changed. */
+/** The actions that change a window, so an answer about them is worth no more than a read-back of what they changed.
+ * Typing is not among them: the fingerprint leaves out what a field holds, so it would call typing that worked
+ * "unchanged" and send the bot to type it again; typing is checked by reading the field itself. */
 export const VERIFIED_ACTIONS: ReadonlySet<string> = new Set([
-  "click", "double_click", "right_click", "type_text", "set_value", "press_key", "hotkey",
+  "click", "double_click", "right_click", "press_key", "hotkey",
 ]);
 
 export type EffectVerdict = "changed" | "unchanged" | "unobserved";
@@ -56,13 +57,18 @@ export function effectVerdict(before: Observation | null, after: Observation | n
 }
 
 /** What the bot is told beside the driver's own answer, in plain words; nothing when the window moved.
- * It never says to send the action again: a second click pays twice, and whether the first one acted is the open question. */
+ * No change is ordinary for an action whose effect the window cannot show, so it is never put as a failure, and it never
+ * says to send the action again: a second click pays twice, and whether the first one acted is the open question. */
 export function effectNote(verdict: EffectVerdict, tool: string): string | null {
   if (verdict === "changed") return null;
-  const opening = verdict === "unchanged"
-    ? `The ${tool} was sent and the window did not change afterwards, so it may have landed on nothing.`
-    : `The ${tool} was sent, but the window could not be read back afterwards, so whether it landed is unknown.`;
-  return `${opening} Read the window with get_window_state and decide from what it shows now: act on what is there, ` +
+  if (verdict === "unchanged") {
+    return `The ${tool} was sent, and the window shows no change afterwards. That is normal when its effect is somewhere this window does not show ` +
+      `(a file saved, a setting changed, another window opened), and it is also how a ${tool} that landed on nothing looks. ` +
+      `Read the window with get_window_state, and check wherever the effect should have appeared, before acting on it a second time: ` +
+      `nothing moving here is not a reason by itself.`;
+  }
+  return `The ${tool} was sent, but the window could not be read back afterwards, so whether it landed is unknown. ` +
+    `Read the window with get_window_state and decide from what it shows now: act on what is there, ` +
     `and only do this again if the window shows the work still has to be done.`;
 }
 
@@ -78,17 +84,10 @@ export function canVerifyEffect(call: ToolCall): boolean {
   return VERIFIED_ACTIONS.has(call.name) && readBackTarget(call.arguments) !== null;
 }
 
-function observe(child: ChildCalls, target: JsonObject, timeoutMs: number): Promise<Observation | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+async function observe(child: ChildCalls, target: JsonObject, timeoutMs: number): Promise<Observation | null> {
   // A driver that never answers the read-back must not hold the turn open: the action has already gone out.
-  const expired = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), timeoutMs);
-    timer.unref?.();
-  });
-  return Promise.race([child.call("get_window_state", { ...target, include_screenshot: false }), expired])
-    .then((result) => (result ? observationOf(result) : null))
-    .catch(() => null)
-    .finally(() => clearTimeout(timer));
+  const result = await readWindow(child, target, timeoutMs);
+  return result ? observationOf(result) : null;
 }
 
 function withNote(result: JsonObject, note: string): JsonObject {
@@ -106,14 +105,24 @@ function withNote(result: JsonObject, note: string): JsonObject {
 export async function withVerifiedEffect(
   call: ToolCall,
   child: ChildCalls,
-  { timeoutMs = OBSERVE_TIMEOUT_MS, act }: { timeoutMs?: number; act?: () => Promise<JsonObject> } = {},
+  { timeoutMs = READ_TIMEOUT_MS, act, before: cachedBefore, onObserved, alreadyDoubtful }: {
+    timeoutMs?: number;
+    act?: () => Promise<JsonObject>;
+    /** True for an answer that already says what is not known, which a second note would only repeat. */
+    alreadyDoubtful?: (result: JsonObject) => boolean;
+    before?: Observation | null;
+    onObserved?: (after: Observation | null, verdict: EffectVerdict) => void;
+  } = {},
 ): Promise<unknown> {
   const target = readBackTarget(call.arguments);
   if (!target) return null;
-  const before = await observe(child, target, timeoutMs);
+  const before = cachedBefore === undefined ? await observe(child, target, timeoutMs) : cachedBefore;
   const result = await (act ? act() : child.call(call.name, call.arguments));
   // The driver refused or failed: it sent nothing, and its own words are the whole answer.
   if (result.isError === true) return result;
-  const note = effectNote(effectVerdict(before, await observe(child, target, timeoutMs)), call.name);
+  const after = await observe(child, target, timeoutMs);
+  const verdict = effectVerdict(before, after);
+  onObserved?.(after, verdict);
+  const note = alreadyDoubtful?.(result) ? null : effectNote(verdict, call.name);
   return note ? withNote(result, note) : result;
 }

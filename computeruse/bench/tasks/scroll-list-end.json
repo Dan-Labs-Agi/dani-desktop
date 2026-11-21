@@ -1,0 +1,63 @@
+{
+  "id": "scroll-list-end",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Read the last entry of a log that is already at its end.",
+  "ask": "What is the last entry in the Log window?",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "extracted",
+      "key": "last",
+      "value": "Zed"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "state"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Log",
+        "app": "Console",
+        "elements": [
+          {
+            "role": "AXStaticText",
+            "label": "Log"
+          }
+        ],
+        "scroll": {
+          "rows": [
+            "r1",
+            "r2",
+            "r3",
+            "r4",
+            "r5",
+            "r6",
+            "Zed"
+          ],
+          "page": 3,
+          "offset": 4
+        }
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "scroll",
+      "window": "Log",
+      "direction": "down",
+      "times": 3
+    },
+    {
+      "do": "extract",
+      "window": "Log",
+      "last": true,
+      "as": "last"
+    }
+  ]
+}

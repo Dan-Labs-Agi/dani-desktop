@@ -1,0 +1,68 @@
+{
+  "id": "edit-file",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Add 'and eggs' to the shopping note and save it.",
+  "ask": "Add \"and eggs\" to the shopping note and save it.",
+  "timeoutMs": 30000,
+  "setup": [
+    {
+      "kind": "file",
+      "path": "todo.txt",
+      "content": "buy milk"
+    }
+  ],
+  "requiredEndState": [
+    {
+      "kind": "file",
+      "path": "todo.txt",
+      "exists": true,
+      "content": "buy milk and eggs"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "todo.txt"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Editor",
+        "app": "Editor",
+        "elements": [
+          {
+            "role": "AXTextField",
+            "label": "Body",
+            "value": "buy milk"
+          },
+          {
+            "role": "AXButton",
+            "label": "Save",
+            "on": [
+              {
+                "do": "writeFile",
+                "path": "todo.txt",
+                "content": "{Body}"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "set",
+      "window": "Editor",
+      "label": "Body",
+      "value": "buy milk and eggs"
+    },
+    {
+      "do": "click",
+      "window": "Editor",
+      "label": "Save"
+    }
+  ]
+}

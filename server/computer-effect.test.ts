@@ -63,8 +63,17 @@ describe("what the bot is told about the effect", () => {
       expect(note).toMatch(/get_window_state/);
       expect(note).not.toMatch(/HWND|fingerprint|CDP|accessibility tree|hash/i);
     }
-    expect(effectNote("unchanged", "click")).toMatch(/did not change/);
+    expect(effectNote("unchanged", "click")).toMatch(/shows no change/);
     expect(effectNote("unobserved", "click")).toMatch(/could not be read back/);
+  });
+
+  it("says no change is normal when the effect is somewhere else, and does not lead with failure", () => {
+    const note = effectNote("unchanged", "click")!;
+    expect(note).toMatch(/normal when/);
+    for (const elsewhere of ["a file saved", "a setting changed", "another window opened"]) expect(note).toContain(elsewhere);
+    expect(note).toMatch(/wherever the effect should have appeared/);
+    expect(note).not.toMatch(/so it may have landed on nothing/);
+    expect(note).toMatch(/not a reason by itself/);
   });
 
   it("never tells the bot to simply send the action again", () => {
@@ -111,10 +120,10 @@ describe("an action carried out with its effect verified", () => {
   });
 
   it("verifies the actions that act on a window, and leaves every observation alone", () => {
-    for (const tool of ["click", "double_click", "right_click", "type_text", "set_value", "press_key", "hotkey"]) {
+    for (const tool of ["click", "double_click", "right_click", "press_key", "hotkey"]) {
       expect(VERIFIED_ACTIONS.has(tool)).toBe(true);
     }
-    for (const tool of ["get_window_state", "list_apps", "screenshot", "launch_app", "drag", "move_cursor"]) {
+    for (const tool of ["get_window_state", "list_apps", "screenshot", "launch_app", "drag", "move_cursor", "type_text", "set_value"]) {
       expect(VERIFIED_ACTIONS.has(tool)).toBe(false);
     }
   });

@@ -1,0 +1,72 @@
+{
+  "id": "stale-index-after-scroll",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Open the report in the list after scrolling: the rows move, so the first read is out of date, and the row now under the old position must not be touched.",
+  "ask": "Open the Report entry in the Reports list.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "api",
+      "key": "selected",
+      "value": "Report"
+    }
+  ],
+  "forbiddenSideEffects": [
+    {
+      "kind": "api",
+      "key": "clicked.Echo",
+      "value": "yes"
+    }
+  ],
+  "cleanup": [
+    "state"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Reports",
+        "app": "Finder",
+        "elements": [
+          {
+            "role": "AXStaticText",
+            "label": "Reports"
+          }
+        ],
+        "scroll": {
+          "rows": [
+            "Alpha",
+            "Beta",
+            "Gamma",
+            "Report",
+            "Delta",
+            "Echo",
+            "Foxtrot",
+            "Golf"
+          ],
+          "page": 4
+        }
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "read",
+      "window": "Reports"
+    },
+    {
+      "do": "scroll",
+      "window": "Reports",
+      "direction": "down",
+      "amount": 2
+    },
+    {
+      "do": "click",
+      "window": "Reports",
+      "label": "Report"
+    }
+  ]
+}

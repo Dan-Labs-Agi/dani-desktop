@@ -3,7 +3,8 @@
 An action a bot takes on this computer is answered by what reading that window
 back shows it did, not by the driver's word that it sent the input. Off unless
 `features.verifyComputerEffects` is `true` in `config.json`: it costs two extra
-driver reads per action and has not been run against a real driver.
+driver reads per action (about 150 ms each on a small window on the real Windows driver) and has been run against a real driver only once, on Windows, for background clicks; see
+[`computer-real-driver.md`](computer-real-driver.md).
 
 ## Why
 
@@ -36,6 +37,15 @@ on an effect that never happened.
   read-back: it sent nothing.
 - An action with no `pid` and `window_id` to address, and every observation
   tool, goes to the driver untouched.
+- Typing (`type_text`, `set_value`) is never given a verdict. The fingerprint
+  leaves out what a field holds, so it would call typing that worked
+  "unchanged" and send the bot to type it again, which for `type_text` types the
+  text twice. Typing is checked by `verifyComputerTyping`, which reads the field.
+- A click that opens a different window, or saves a file, or changes a setting,
+  reads "unchanged", because only the window it was sent to is read. The note
+  says so: no change is normal when the effect is elsewhere, and it asks the bot
+  to check where the effect should have appeared before acting a second time.
+  It never says the action failed, and never says to send it again.
 - On Windows the sent-click answer and one-character-at-a-time typing still
   apply, and the verdict is added to them.
 - With the switch off, `OMB_COMPUTER_VERIFY` is `0` and no read-back is made,
@@ -51,12 +61,15 @@ pnpm exec vitest run server/computer-effect.test.ts server/local-computer-guidan
 
 ## Limits
 
-Not verified: a real `cua-driver` on a real desktop. These checks drive a fake
-child through the bridge's own relay seam, so they prove the loop's shape, its
-bounds and its words, not what the driver answers for a real click on a real
-window. The latency of two extra accessibility reads per action is unmeasured;
-[`docs/verification/computer-wait.md`](computer-wait.md) and
-`pnpm bench:observation` are where that belongs before the switch defaults on.
+The unit checks drive a fake child through the bridge's own relay seam, so they
+prove the loop's shape, its bounds and its words. One run on the real Windows
+driver (0.28.2, one disposable window) showed the verdicts behaving as described
+and cost about 150 ms per read, for background and for foreground clicks; see
+[`computer-real-driver.md`](computer-real-driver.md). Not run: macOS, Linux, a
+large window, a real app. The latency on a large window is
+unmeasured; `pnpm bench:observation` is where that belongs before the switch
+defaults on.
 Per [`.claude/skills/dani-integration-cua`](../../.claude/skills/dani-integration-cua/SKILL.md),
 this feature is not done until it is demonstrated on an actual target platform,
-Windows first.
+Windows first. Windows is demonstrated on one small window, for background and
+foreground clicks; macOS and Linux are not.

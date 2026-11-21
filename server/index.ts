@@ -43,7 +43,7 @@ import {
 } from "../shared/approval-mode.ts";
 import { createApprovalModeSupport } from "./harness-capabilities.ts";
 import { escapeAttribute } from "../src/lib/composer-attachments.ts";
-import { isPendingSignInRequest, normalizeSignInSite, signInOutcome, signInResumePrompt } from "../shared/sign-in-request.ts";
+import { declinedSinceLastRequest, isPendingSignInRequest, normalizeSignInSite, SIGN_IN_DECLINED, signInOutcome, signInResumePrompt } from "../shared/sign-in-request.ts";
 
 import { createRoomTurnLevels } from "./room-turn-level.ts";
 import { createSignInSettle } from "./host/sign-in-settle.ts"; import { createPersonLanguages, THIS_COMPUTER } from "./host/person-languages.ts"; import "./server-line-packs.ts"; import { serverLine, setConversationLanguage } from "./server-lines.ts";
@@ -81,7 +81,7 @@ import {
   avatarImageStatus,
 } from "./avatar-image.ts";
 import { fitsOnOneLine, parseBotProfilePatch } from "./bot-profile.ts";
-import { routeDirectTurn } from "./turn-route.ts"; import { QuickModelFallback } from "./quick-model-fallback.ts"; import { COMPUTER_JOURNAL_PATH, createSavedSteps, personRequest, savedStepsEnabled } from "./saved-steps/saved-steps.ts";
+import { routeDirectTurn } from "./turn-route.ts"; import { QuickModelFallback } from "./quick-model-fallback.ts"; import { COMPUTER_JOURNAL_PATH, createSavedSteps, personRequest, savedStepsEnabled } from "./saved-steps/saved-steps.ts"; import { COMPUTER_EVIDENCE_PATH } from "../computeruse/evidence.ts"; import { computerGuardsFrom, verifyComputerEffectsEnabled } from "../computeruse/features.ts"; import { finalActionFrom } from "../shared/computer-final-action.ts"; import { createComputerChecks } from "./computer-checks.ts";
 import { groupTurnCwd } from "./room-cwd.ts";
 import { RoomTurnDeadline, RoomTurnStallRegistry, effectiveRoomTurnTimeoutMinutes, parseConversationTurnTimeout, roomTurnTimeoutMessage } from "./room-turn-timeout.ts";
 import { roomTurnEnd, type RoomClaimEnd } from "./room-turn-end.ts";
@@ -150,7 +150,6 @@ import {
   ensureDirs,
   instanceConfigs,
   loadConfig,
-  verifyComputerEffectsEnabled,
   changedInstanceIds,
   engineLaunches,
   localVmIdleTimeoutMinutes,
@@ -2360,7 +2359,7 @@ function claimTurnResource(owner: TurnOwner, resource: string): boolean {
 function releaseTurnResources(owner: TurnOwner | undefined): void {
   if (!owner) return;
   if (autoVmClaims.get(owner.threadId)?.owner.generation === owner.generation) autoVmClaims.delete(owner.threadId);
-  cancelYourComputerAsks(owner.threadId, owner.generation);
+  cancelYourComputerAsks(owner.threadId, owner.generation); computerChecks.release(owner);
   if (settlingResourceOwners.get(owner.threadId) === owner.generation) settlingResourceOwners.delete(owner.threadId);
   cloudComputerPower.released(owner);
   turnResources.release(owner);
@@ -5283,7 +5282,7 @@ async function respondToCard(input: {
 function closeOpenApprovals(threadId: string): void {
   for (const key of pendingCommandRules.keys()) if (key.startsWith(`${threadId}:`)) pendingCommandRules.delete(key);
   // Resolve peer approvals' in-memory promises first; patching their cards alone leaves the queue waiting.
-  cancelPeerApprovalsForThread(threadId); cancelYourComputerAsks(threadId); computerAsks?.asks.cancel(threadId);
+  cancelPeerApprovalsForThread(threadId); cancelYourComputerAsks(threadId); computerChecks.cancel(threadId); computerAsks?.asks.cancel(threadId);
   for (const message of store.messagesFor(threadId)) {
     const card = message.card;
     if (!card?.requestId || card.answered || card.dismissed) continue;
@@ -6035,7 +6034,7 @@ function botComputerControlKey(bot: BotRecord): string {
 }
 
 /** Waits here up to COMPUTER_CALL_WAIT_MS; a call that waited through a person's hold, or whose turn ended, is never performed. */
-async function computerCallGate(internalCapability: InternalCapability, signal?: AbortSignal, call?: ReturnType<typeof yourComputerCallFrom>): Promise<ControlState> {
+async function computerCallGate(internalCapability: InternalCapability, signal?: AbortSignal, call?: ReturnType<typeof yourComputerCallFrom>, finalAction?: ReturnType<typeof finalActionFrom>): Promise<ControlState> {
   const { botId, threadId, generation } = internalCapability;
   const askedAt = Date.now();
   const deadline = askedAt + COMPUTER_CALL_WAIT_MS;
@@ -6075,7 +6074,7 @@ async function computerCallGate(internalCapability: InternalCapability, signal?:
       } else if (personHeld) {
         return { held: true, helpOpen, blockedReason: CONTROL_HANDED_BACK };
       } else {
-        return Date.now() - askedAt > COMPUTER_CALL_ACT_WITHIN_MS ? { held: true, helpOpen, blockedReason: CONTROL_WAITED } : { held: false, helpOpen };
+        return Date.now() - askedAt > COMPUTER_CALL_ACT_WITHIN_MS ? { held: true, helpOpen, blockedReason: CONTROL_WAITED } : await computerChecks.holdFinalAction({ owner: { threadId, generation }, botId, call: finalAction, helpOpen, waitMs: Math.max(0, deadline - Date.now()), signal }) ?? { held: false, helpOpen };
       }
     }
     if (Date.now() >= deadline || signal?.aborted || !internalCapabilityIsActive(internalCapability)) return held;
@@ -6196,7 +6195,7 @@ async function mountHostComputer(owner: TurnOwner, botId: string, providerSuppor
     owner, lazy: true, label: "this computer", onRejected,
     claim: async (call) => { if (ask) await askToUseYourComputer(approvalBus, store.bot(botId) ?? undefined, owner, call); await bindTurnComputer(owner, "computer:host", true); },
   });
-  return gatedLocalComputer(cua, controlIntegration(botId, owner.threadId, owner.generation, "this computer"), journal, verifyComputerEffectsEnabled(cfg));
+  return gatedLocalComputer(cua, controlIntegration(botId, owner.threadId, owner.generation, "this computer"), journal, verifyComputerEffectsEnabled(cfg.features), computerGuardsFrom(cfg.features));
 }
 
 /** Checked and started at dispatch, unlike the Boat: the VPS bridge execs into the container as soon as the engine launches and dies if it is not up. */
@@ -8672,7 +8671,7 @@ async function beginTurn(
               pinAutoSurface("local"); recordTurnPlace(bot.id, threadId, "local");
             },
           });
-          integrations.localComputer = gatedLocalComputer(cua, controlIntegration(bot.id, threadId, dispatchClaimId, "this computer"), savedSteps.journals(directRequestOwners.get(threadId)), verifyComputerEffectsEnabled(cfg));
+          integrations.localComputer = gatedLocalComputer(cua, controlIntegration(bot.id, threadId, dispatchClaimId, "this computer"), savedSteps.journals(directRequestOwners.get(threadId)), verifyComputerEffectsEnabled(cfg.features), computerGuardsFrom(cfg.features));
           computerKind = "local";
         }
       }
@@ -10034,12 +10033,12 @@ const ROOM_POST_MAX_CHARS = 4_000;
 const approvalBus: ApprovalBus = { store, broadcast, notify, autoApply: fullAccessForSource,
   onPeerApprovalPending: (from, target, action, sourceThreadId, message) => void reportEscalation({
     kind: "peer-approval", bot: from, threadId: sourceThreadId, gate: peerApprovalGate(action, target.name), reason: message, alreadyNotified: true }) };
-
-const { quotaSwitch, harnessCardOutcome } = createQuotaSwitchHost({ store, coordinator, registry, turnStops, approvalBus, hostedModels, providerConfigs, policyModelRefusal, checkedTaskModelSwitch, threadBusy, directRequestOwners, startOrQueueDirectMessage, takeover: limitTakeover, ownCards: (requestId, behavior) => computerAsks?.asks.answer(requestId, behavior) ?? false });
+const computerChecks = createComputerChecks({ store, notify, audit: (row) => appendDecision(DATA_DIR, row), features: () => cfg.features });
+const { quotaSwitch, harnessCardOutcome } = createQuotaSwitchHost({ store, coordinator, registry, turnStops, approvalBus, hostedModels, providerConfigs, policyModelRefusal, checkedTaskModelSwitch, threadBusy, directRequestOwners, startOrQueueDirectMessage, takeover: limitTakeover, ownCards: (requestId, behavior) => computerChecks.resolve(requestId, behavior) || (computerAsks?.asks.answer(requestId, behavior) ?? false) });
 
 // Peer approvals live only in memory: settle every peer card still open on disk, or it locks the composer forever.
 {
-  const stale = dismissStalePeerCards(approvalBus) + dismissStaleYourComputerCards(store) + (computerAsks?.asks.dismissStale() ?? 0);
+  const stale = dismissStalePeerCards(approvalBus) + dismissStaleYourComputerCards(store) + computerChecks.dismissStale() + (computerAsks?.asks.dismissStale() ?? 0);
   if (stale) console.log(`approvals: dismissed ${stale} card(s) left by a previous run`);
 }
 
@@ -12006,6 +12005,7 @@ function requestSignIn(from: BotRecord, threadId: string, rawSite: unknown, rawR
   if (!target) return { status: 400, error: "site must be a web address or a domain, such as example.com" };
   const place = signInPlace(from, threadId);
   if (!place) return { status: 409, error: "this conversation has no browser or computer for the person to sign in on" };
+  if (cfg.features?.holdDeclinedSignIn === true && declinedSinceLastRequest(store.activePath(threadId), target.site, from.id, Boolean(owner.group))) return { status: 409, error: SIGN_IN_DECLINED };
   const reason = typeof rawReason === "string" ? rawReason.trim().slice(0, 240) : "";
   const message = store.appendMessage(threadId, {
     role: "bot",
@@ -13455,7 +13455,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         ? "phone"
         : path.startsWith("/api/internal/connectors/")
         ? "connectors"
-        : path === "/api/internal/computer-control" || path === "/api/internal/computer/mcp" || path === COMPUTER_JOURNAL_PATH
+        : path === "/api/internal/computer-control" || path === "/api/internal/computer/mcp" || path === COMPUTER_JOURNAL_PATH || path === COMPUTER_EVIDENCE_PATH
           ? "computer"
           : "agents";
       if (internalCapability.kind !== requiredCapabilityKind) {
@@ -13688,7 +13688,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         finally { res.off("close", disconnected); }
       }
       // The turn's capability names its Boat; the Boat credential stays here.
-      if (await dispatchRoutes([savedSteps.journalRoutes({ capability: internalCapability, readBody: readInternalBody })], { req, res, url, path, method, auth, json, readBody })) return; if (method === "POST" && path === "/api/internal/computer/mcp") {
+      if (await dispatchRoutes([savedSteps.journalRoutes({ capability: internalCapability, readBody: readInternalBody }), computerChecks.routes({ capability: internalCapability, readBody: readInternalBody })], { req, res, url, path, method, auth, json, readBody })) return; if (method === "POST" && path === "/api/internal/computer/mcp") {
         const body = await readInternalBody();
         if (internalCapability.boxId === undefined) return json(res, 403, { error: "this turn has no cloud computer" });
         const abort = new AbortController();
@@ -15129,7 +15129,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         if (method === "GET") { savedSteps.gateChecked(internalCapability);
           const abort = new AbortController();
           res.once("close", () => { if (!res.writableEnded) abort.abort(); });
-          return json(res, 200, await computerCallGate(internalCapability, abort.signal, yourComputerCallFrom(url.searchParams)));
+          return json(res, 200, await computerCallGate(internalCapability, abort.signal, yourComputerCallFrom(url.searchParams), finalActionFrom(url.searchParams)));
         }
         return json(res, 405, { error: "method not allowed" });
       }

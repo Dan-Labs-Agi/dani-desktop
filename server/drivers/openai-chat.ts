@@ -15,7 +15,7 @@ import { redactSecretsInText } from "../redact.ts";
 import { toolDetailPreview } from "../tool-summary.ts";
 import { ChatToolSessionError, chatToolNotices, mountChatTools, type ChatToolDefinition, type ChatToolSession, type ChatToolResult } from "./chat-mcp-tools.ts";
 import { noteToolBudget } from "../tool-budgets.ts";
-import { assertImageTransport, chatImageBudget, chatToolImages, chatUserContent, type ChatContentPart } from "./chat-images.ts";
+import { assertImageTransport, chatImageBudget, chatToolImages, chatUserContent, keepNewestScreenshots, type ChatContentPart } from "./chat-images.ts";
 import { promptHalves, volatileContextNote, withContextNote } from "./prompt-split.ts";
 import { createChatToolApproval, refusal } from "./chat-tool-approval.ts";
 import { ChatProtocolError, ChatReasoningDetails, ChatToolCalls, object, type ChatToolCall } from "./openai-chat-protocol.ts";
@@ -859,7 +859,10 @@ export function createOpenAIChatRuntime<Config>(options: RuntimeOptions<Config>)
             if (fatal) throw fatal;
             if (repeats?.stopped) { stopReason = "incomplete_action"; throw new ChatProtocolError(repeats.stopped); }
           }
-          if (screenshotParts.length) messages.push({ role: "user", content: screenshotParts });
+          if (screenshotParts.length) {
+            messages.push({ role: "user", content: screenshotParts });
+            if (turn.keepComputerScreenshots !== undefined) retainImages.release(keepNewestScreenshots(messages, turn.keepComputerScreenshots));
+          }
         }
         if (!ok) throw new ChatProtocolError(stoppedAfter(`${TASK_ROUND_LIMIT} steps`));
       } catch (value) {

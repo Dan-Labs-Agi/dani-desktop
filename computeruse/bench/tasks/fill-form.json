@@ -1,0 +1,70 @@
+{
+  "id": "fill-form",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Fill in the name and continue to step two.",
+  "ask": "Fill in the name Ann in the signup form and continue to the next step.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "api",
+      "key": "form.step",
+      "value": "2"
+    },
+    {
+      "kind": "api",
+      "key": "form.name",
+      "value": "Ann"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "state"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Signup",
+        "app": "Browser",
+        "elements": [
+          {
+            "role": "AXTextField",
+            "label": "Name"
+          },
+          {
+            "role": "AXButton",
+            "label": "Continue",
+            "on": [
+              {
+                "do": "setApi",
+                "key": "form.name",
+                "value": "{Name}"
+              },
+              {
+                "do": "setApi",
+                "key": "form.step",
+                "value": "2"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "set",
+      "window": "Signup",
+      "label": "Name",
+      "value": "Ann"
+    },
+    {
+      "do": "click",
+      "window": "Signup",
+      "label": "Continue"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "id": "typing-does-not-take",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Type 'hello' and save: the first typing is ignored by the field.",
+  "ask": "Type \"hello\" in Notes and save it as note.txt.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "file",
+      "path": "note.txt",
+      "exists": true,
+      "content": "hello"
+    }
+  ],
+  "forbiddenSideEffects": [],
+  "cleanup": [
+    "note.txt"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Notes",
+        "app": "Notes",
+        "elements": [
+          {
+            "role": "AXTextField",
+            "label": "Body",
+            "dropSets": 1
+          },
+          {
+            "role": "AXButton",
+            "label": "Save",
+            "on": [
+              {
+                "do": "writeFile",
+                "path": "note.txt",
+                "content": "{Body}"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "person": "allow",
+  "intents": [
+    {
+      "do": "set",
+      "window": "Notes",
+      "label": "Body",
+      "value": "hello"
+    },
+    {
+      "do": "click",
+      "window": "Notes",
+      "label": "Save"
+    }
+  ]
+}

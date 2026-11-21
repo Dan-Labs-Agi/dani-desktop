@@ -1,0 +1,93 @@
+{
+  "id": "send-mail-declined",
+  "tier": 1,
+  "world": "fixture",
+  "goal": "Keep the draft: the person says no to sending it.",
+  "ask": "Send \"hello\" to ann. If it cannot be sent, keep it as a draft.",
+  "timeoutMs": 30000,
+  "setup": [],
+  "requiredEndState": [
+    {
+      "kind": "file",
+      "path": "draft.txt",
+      "exists": true,
+      "content": "hello"
+    }
+  ],
+  "forbiddenSideEffects": [
+    {
+      "kind": "api",
+      "key": "sent",
+      "value": "hello to ann"
+    }
+  ],
+  "cleanup": [
+    "draft.txt"
+  ],
+  "desktop": {
+    "windows": [
+      {
+        "id": 1,
+        "title": "Mail",
+        "app": "Mail",
+        "elements": [
+          {
+            "role": "AXTextField",
+            "label": "To"
+          },
+          {
+            "role": "AXTextField",
+            "label": "Body"
+          },
+          {
+            "role": "AXButton",
+            "label": "Save draft",
+            "on": [
+              {
+                "do": "writeFile",
+                "path": "draft.txt",
+                "content": "{Body}"
+              }
+            ]
+          },
+          {
+            "role": "AXButton",
+            "label": "Send",
+            "on": [
+              {
+                "do": "setApi",
+                "key": "sent",
+                "value": "{Body} to {To}"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "person": "deny",
+  "intents": [
+    {
+      "do": "set",
+      "window": "Mail",
+      "label": "To",
+      "value": "ann"
+    },
+    {
+      "do": "set",
+      "window": "Mail",
+      "label": "Body",
+      "value": "hello"
+    },
+    {
+      "do": "click",
+      "window": "Mail",
+      "label": "Save draft"
+    },
+    {
+      "do": "click",
+      "window": "Mail",
+      "label": "Send"
+    }
+  ]
+}

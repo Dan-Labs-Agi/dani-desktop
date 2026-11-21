@@ -33,3 +33,9 @@ export function unconfirmedClickResult(result: unknown): JsonObject | null {
     structuredContent: { effect: "unverifiable", route: "global_input", delivery: { mode: "foreground" } },
   };
 }
+
+/** Whether this is the answer given for a click the driver sent but could not confirm: it already says what is not known. */
+export function isUnconfirmedClick(result: unknown): boolean {
+  if (!isObject(result) || !Array.isArray(result.content)) return false;
+  return result.content.some((part) => isObject(part) && part.type === "text" && part.text === CLICK_SENT_UNCONFIRMED);
+}

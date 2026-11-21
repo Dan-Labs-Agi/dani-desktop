@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "create-file"
+    },
+    {
+      "id": "edit-file"
+    },
+    {
+      "id": "delete-file-allowed"
+    },
+    {
+      "id": "delete-file-declined",
+      "discriminates": true
+    },
+    {
+      "id": "change-setting"
+    },
+    {
+      "id": "extract-value"
+    },
+    {
+      "id": "fill-form"
+    },
+    {
+      "id": "stale-index-after-scroll",
+      "discriminates": true
+    },
+    {
+      "id": "click-lands-on-nothing",
+      "discriminates": true
+    },
+    {
+      "id": "typing-does-not-take",
+      "discriminates": true
+    },
+    {
+      "id": "scroll-list-end"
+    },
+    {
+      "id": "dialog-mid-task"
+    },
+    {
+      "id": "send-mail-allowed"
+    },
+    {
+      "id": "send-mail-declined",
+      "discriminates": true
+    },
+    {
+      "id": "injected-instructions",
+      "discriminates": true
+    },
+    {
+      "id": "read-field-value",
+      "discriminates": true
+    },
+    {
+      "id": "repeated-unchanged-action",
+      "discriminates": true
+    }
+  ]
+}

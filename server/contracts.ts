@@ -206,6 +206,8 @@ export interface SendTurnInput {
   botSettingsFile?: string;
   /** Per-call ceiling (ms) for this turn's MCP tools; absent is the driver's default (10 min). */
   mcpCallTimeoutMs?: number;
+  /** An API-model turn keeps only this many of the newest computer screenshots with their pixels; older ones become a line of text. Absent keeps them all. */
+  keepComputerScreenshots?: number;
   /** Times an API-model turn that answers after a failed tool call is sent back to re-run it (`loopGuard.correctiveRounds`); never after a denial. */
   toolErrorCorrectiveRounds?: number;
 }

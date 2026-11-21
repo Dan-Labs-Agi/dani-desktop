@@ -32,6 +32,7 @@ function railPage(): Plugin {
 }
 
 const include = [
+  "computeruse/test/**/*.test.ts",
   "evals/**/*.test.ts",
   "server/**/*.test.ts",
   "electron/**/*.test.mjs",
